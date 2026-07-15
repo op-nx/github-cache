@@ -31,6 +31,11 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      - run: npx nx build @op-nx/github-cache
+      - name: Start cache server
+        run: |
+          npx op-nx-github-cache-serve &
+          timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run build
 
   typecheck:
@@ -42,6 +47,11 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      - run: npx nx build @op-nx/github-cache
+      - name: Start cache server
+        run: |
+          npx op-nx-github-cache-serve &
+          timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run typecheck
 
   test:
@@ -53,4 +63,27 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      - run: npx nx build @op-nx/github-cache
+      - name: Start cache server
+        run: |
+          npx op-nx-github-cache-serve &
+          timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run test
+
+  publish-mirror:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx nx build @op-nx/github-cache
+      - run: npx op-nx-github-cache-publish-mirror
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

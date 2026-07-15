@@ -49,8 +49,9 @@ export function createReleaseMirrorBackend(
 
   async function findAssetId(hash: string): Promise<number | null> {
     const assetName = `${hash}.tar.gz`;
+    const at = now();
 
-    for (const tag of [monthTag(now()), previousMonthTag(now())]) {
+    for (const tag of [monthTag(at), previousMonthTag(at)]) {
       try {
         const release = await octokit.rest.repos.getReleaseByTag({
           owner,

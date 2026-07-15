@@ -31,14 +31,20 @@ const locks = new Map<string, Promise<unknown>>();
 function withHashLock<T>(hash: string, run: () => Promise<T>): Promise<T> {
   const previous = locks.get(hash) ?? Promise.resolve();
   const next = previous.then(run, run);
-
-  locks.set(
-    hash,
-    next.then(
-      () => undefined,
-      () => undefined,
-    ),
+  const tail = next.then(
+    () => undefined,
+    () => undefined,
   );
+
+  locks.set(hash, tail);
+
+  // Bound the map's lifetime growth: only remove the entry if no newer
+  // operation chained onto it while this one was in flight.
+  void tail.then(() => {
+    if (locks.get(hash) === tail) {
+      locks.delete(hash);
+    }
+  });
 
   return next;
 }

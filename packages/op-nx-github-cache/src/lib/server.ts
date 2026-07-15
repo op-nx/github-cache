@@ -4,13 +4,9 @@ import {
   type Server,
 } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import type { CacheBackend } from './types.js';
+import { HASH_PATTERN, type CacheBackend } from './types.js';
 import { isWriteTrusted } from './trust.js';
 
-// Nx hashes are lowercase hex (verified pv-1). Validated before the hash ever
-// reaches a backend, temp-file path, or asset name -- closes a path-traversal
-// risk that would otherwise exist at every one of those call sites.
-const HASH_PATTERN = /^[a-f0-9]+$/;
 const CACHE_PATH_PATTERN = /^\/v1\/cache\/([^/]+)$/;
 
 export interface ServerOptions {
@@ -33,11 +29,26 @@ function isAuthorized(authHeader: string | undefined, token: string): boolean {
   return timingSafeEqual(provided, expected);
 }
 
+// Default 2GB cap: generous for Nx task-output tarballs, but bounds memory
+// use for a PUT body that's otherwise fully buffered before any backend call.
+const MAX_BODY_BYTES = Number(
+  process.env.MAX_CACHE_BODY_BYTES ?? 2 * 1024 * 1024 * 1024,
+);
+
+class PayloadTooLargeError extends Error {}
+
 async function readBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
+  let total = 0;
 
-  for await (const chunk of req) {
-    chunks.push(chunk as Buffer);
+  for await (const chunk of req as AsyncIterable<Buffer>) {
+    total += chunk.length;
+
+    if (total > MAX_BODY_BYTES) {
+      throw new PayloadTooLargeError();
+    }
+
+    chunks.push(chunk);
   }
 
   return Buffer.concat(chunks);
@@ -115,6 +126,12 @@ async function handleRequest(
 
     res.writeHead(405).end();
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      res.writeHead(413).end();
+
+      return;
+    }
+
     // Backends only throw for input validation (e.g. @actions/cache's
     // ValidationError); anything else is an unexpected backend fault.
     const status =

@@ -6,6 +6,7 @@ import { restoreCache } from '@actions/cache';
 import { cacheArchivePath } from '../lib/backends/actions-cache-backend.js';
 import { selectAssetsToDelete, type ReleaseAsset } from '../lib/cleanup.js';
 import { isWriteTrusted } from '../lib/trust.js';
+import { HASH_PATTERN } from '../lib/types.js';
 
 const exec = promisify(execFile);
 
@@ -85,10 +86,14 @@ async function listActionsCacheHashes(
     '.actions_caches[].key',
   ]);
 
+  // The Actions cache namespace is repo-wide, not Nx-owned: other workflow
+  // steps (e.g. actions/setup-node's own npm cache) create entries here too,
+  // and their keys are neither guaranteed Nx-shaped nor safe to interpolate
+  // into a filesystem path / asset name. Only forward genuine Nx hashes.
   return output
     .split('\n')
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((key) => HASH_PATTERN.test(key));
 }
 
 async function ensureShardExists(
@@ -272,16 +277,32 @@ async function main(): Promise<void> {
   }
 
   const hashes = await listActionsCacheHashes(repo, defaultBranch);
-  const currentShard = monthTag(new Date());
+  const now = new Date();
+  const currentShard = monthTag(now);
 
   await ensureShardExists(repo, currentShard);
 
+  const failures: string[] = [];
+
   for (const hash of hashes) {
-    await uploadHash(currentShard, repo, hash);
+    try {
+      await uploadHash(currentShard, repo, hash);
+    } catch (error) {
+      // One hash's upload failure must not block the rest, or skip cleanup
+      // for both shards below -- report all failures at the end instead.
+      console.error(`Failed to upload ${hash}:`, error);
+      failures.push(hash);
+    }
   }
 
   await cleanupShard(repo, currentShard, false);
-  await cleanupShard(repo, previousMonthTag(new Date()), true);
+  await cleanupShard(repo, previousMonthTag(now), true);
+
+  if (failures.length > 0) {
+    throw new Error(
+      `${failures.length} hash(es) failed to upload: ${failures.join(', ')}`,
+    );
+  }
 }
 
 main().catch((error: unknown) => {

@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from './server.js';
 import type { CacheBackend, PutResult } from './types.js';
 
@@ -138,5 +138,55 @@ describe('server', () => {
     });
 
     expect(response.status).toBe(400);
+  });
+});
+
+describe('server PUT body size cap', () => {
+  it('rejects a PUT body larger than MAX_CACHE_BODY_BYTES with 413', async () => {
+    const previous = process.env.MAX_CACHE_BODY_BYTES;
+
+    process.env.MAX_CACHE_BODY_BYTES = '10';
+    vi.resetModules();
+
+    const { createServer: createLimitedServer } = await import('./server.js');
+    const backend = createInMemoryBackend();
+    const server = createLimitedServer({ backend, token: TOKEN });
+
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+
+    const address = server.address() as AddressInfo;
+
+    process.env.GITHUB_ACTIONS = 'true';
+    process.env.GITHUB_EVENT_NAME = 'push';
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/v1/cache/${HASH}`,
+        {
+          method: 'PUT',
+          headers: {
+            authorization: `Bearer ${TOKEN}`,
+            'content-type': 'application/octet-stream',
+          },
+          body: Buffer.alloc(1024, 'x'),
+        },
+      );
+
+      expect(response.status).toBe(413);
+    } finally {
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITHUB_EVENT_NAME;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+
+      if (previous === undefined) {
+        delete process.env.MAX_CACHE_BODY_BYTES;
+      } else {
+        process.env.MAX_CACHE_BODY_BYTES = previous;
+      }
+
+      vi.resetModules();
+    }
   });
 });

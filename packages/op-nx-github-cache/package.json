@@ -21,7 +21,6 @@
   "nx": {
     "release": {
       "version": {
-        "manifestRootsToUpdate": ["{projectRoot}/dist"],
         "currentVersionResolver": "git-tag",
         "fallbackCurrentVersionResolver": "disk"
       }

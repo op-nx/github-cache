@@ -6,6 +6,12 @@
 // look" from drifting apart.
 export const DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS = 30;
 
+// ~10 years: shardTagsForWindow scans roughly one shard per month of this
+// value, and each shard costs a GitHub API call on every read/cleanup run --
+// a fat-fingered CACHE_MIRROR_MAX_AGE_DAYS (e.g. accidentally in some other
+// unit) must not translate into thousands of API calls.
+export const MAX_CACHE_MIRROR_MAX_AGE_DAYS = 3650;
+
 export function monthTag(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -17,13 +23,17 @@ export function monthTag(date: Date): string {
 // window (Number(bad) is NaN, and a NaN/zero/negative retention would either
 // compare false against every asset age or delete everything immediately) --
 // fall back to the default instead, matching resolveMaxBodyBytes's
-// fail-closed shape in server.ts.
+// fail-closed shape in server.ts. An excessively large override is clamped
+// rather than rejected, since the operator's intent (a long retention
+// window) is still honored -- just bounded to a sane worst-case shard count.
 export function resolveMaxAgeDays(envValue: string | undefined): number {
   const configured = Number(envValue);
 
-  return Number.isFinite(configured) && configured > 0
-    ? configured
-    : DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS;
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS;
+  }
+
+  return Math.min(configured, MAX_CACHE_MIRROR_MAX_AGE_DAYS);
 }
 
 // Returns shard month-tags from the current month back through the month

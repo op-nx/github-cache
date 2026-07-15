@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS,
+  MAX_CACHE_MIRROR_MAX_AGE_DAYS,
   resolveMaxAgeDays,
   shardTagsForWindow,
 } from './shard.js';
@@ -8,6 +9,10 @@ import {
 describe('resolveMaxAgeDays', () => {
   it('uses the configured value when it is a finite positive number', () => {
     expect(resolveMaxAgeDays('90')).toBe(90);
+  });
+
+  it('clamps an excessively large value instead of scanning thousands of shards', () => {
+    expect(resolveMaxAgeDays('100000')).toBe(MAX_CACHE_MIRROR_MAX_AGE_DAYS);
   });
 
   it('falls back to the default on a non-numeric value', () => {
@@ -71,5 +76,16 @@ describe('shardTagsForWindow', () => {
       'cache-mirror-202612',
       'cache-mirror-202611',
     ]);
+  });
+
+  it('stays bounded (roughly one shard per month) even at the clamped maximum window', () => {
+    const now = new Date('2026-07-15T00:00:00Z');
+    const tags = shardTagsForWindow(now, MAX_CACHE_MIRROR_MAX_AGE_DAYS);
+
+    expect(tags[0]).toBe('cache-mirror-202607');
+    // ~10 years / ~30 days-per-month, plus a couple months of slack for
+    // calendar-length variance -- guards against an unbounded/runaway loop.
+    expect(tags.length).toBeGreaterThan(115);
+    expect(tags.length).toBeLessThan(130);
   });
 });

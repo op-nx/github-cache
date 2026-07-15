@@ -157,6 +157,17 @@ automatically; set it yourself locally, e.g. `export
 GITHUB_REPOSITORY=op-nx/github-cache`). A malformed value (missing the `/`)
 is rejected up front with a clear error.
 
+**Working in this monorepo (not as an installed dependency):** `npx
+op-nx-github-cache-serve` only resolves once npm has linked the bin shim,
+which it does at `npm install` time based on whether `dist/bin/serve.js`
+already exists -- so on a fresh clone, before the first `nx build
+@op-nx/github-cache`, `npx` falls through to the (unpublished) npm registry
+and 404s. Run `nx build @op-nx/github-cache` first, then invoke
+`node packages/op-nx-github-cache/dist/bin/serve.js` directly instead of
+`npx`, matching this repo's own CI wiring. This only applies to this
+source-workspace checkout; consumers installing the published package
+never hit it, since `dist/` ships pre-built in the npm tarball.
+
 **Rate limits:** the mirror reads the public repo anonymously by default, which
 GitHub caps at **60 requests/hour per IP**. Each shard's asset list is fetched
 once per `serve` process and cached in-memory, so a normal `nx affected` stays

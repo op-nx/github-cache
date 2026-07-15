@@ -5,6 +5,10 @@ on:
     branches:
       - main
   pull_request:
+  # Temporary: lets us dispatch a trusted-event run on this feature branch to
+  # validate the real cache write/read round-trip pre-merge. Removed once
+  # verified (see plans/verify-dogfooding-e2e.plan.md Step 5).
+  workflow_dispatch:
 
 permissions:
   actions: read

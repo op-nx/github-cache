@@ -20,9 +20,23 @@ export function selectBackend(env: NodeJS.ProcessEnv): CacheBackend {
   }
 
   const [owner, repo] = repository.split('/');
+
+  // Reject a malformed value up front: without both halves octokit would hit
+  // `/repos/<owner>/undefined/...` and surface a confusing false-404/500 with
+  // no hint the env var is the problem.
+  if (!owner || !repo) {
+    throw new Error(
+      `GITHUB_REPOSITORY must be "owner/repo"; got "${repository}".`,
+    );
+  }
+
   // Same env var publish-mirror.ts's cleanup reads -- keeps the read
   // lookback and the cleanup/retention window coupled to one setting.
   const maxAgeDays = resolveMaxAgeDays(env.CACHE_MIRROR_MAX_AGE_DAYS);
+  // Optional: an anonymous client is capped at 60 req/hr, which a real
+  // `nx affected` blows through; a token lifts it to 5000/hr. Anonymous stays
+  // the zero-config default for public-repo reads when neither is set.
+  const auth = env.GH_TOKEN ?? env.GITHUB_TOKEN;
 
-  return createReleaseMirrorBackend({ owner, repo, maxAgeDays });
+  return createReleaseMirrorBackend({ owner, repo, maxAgeDays, auth });
 }

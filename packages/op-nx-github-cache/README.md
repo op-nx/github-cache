@@ -64,6 +64,12 @@ also checks out or runs untrusted PR-controlled code (no `pull_request_target`
 job that also builds PR code -- the classic "pwn request" pattern), and grant
 `contents: write` only to that isolated post-build job, never workflow-wide.
 
+**MUST:** if you set the optional `DEFAULT_BRANCH` env var (to skip the
+`gh repo view` lookup), its value must be a literal you control -- never a
+GitHub Actions expression interpolating PR-controlled data (e.g. a PR title
+or body). `publish-mirror` compares `GITHUB_REF` against it as its
+(defense-in-depth-only) ref check.
+
 **Known limitation:** the Actions-cache backend and `publish-mirror` both
 stage a hash's archive at the same deterministic per-hash temp path (required
 so `@actions/cache` can match a save to a later restore -- see
@@ -82,6 +88,12 @@ npx op-nx-github-cache-serve
 #   export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=...
 # eval those, then run nx as usual -- reads hit the public mirror, writes 403.
 ```
+
+Note: "anonymous" describes the mirror backend's own reads from the public
+GitHub repo (no PAT needed there) -- the local server itself still requires
+the printed bearer token on every request, GET included, matching Nx's
+self-hosted remote-cache contract. The token is a shared secret between your
+own `serve` process and your own `nx` client; it never leaves your machine.
 
 Requires `GITHUB_REPOSITORY=owner/repo` to be set (CI sets this
 automatically; set it yourself locally, e.g. `export

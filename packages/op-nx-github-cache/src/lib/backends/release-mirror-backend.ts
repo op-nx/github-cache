@@ -5,11 +5,6 @@ import {
   shardTagsForWindow,
 } from '../shard.js';
 
-// Re-exported so callers (and release-mirror-backend.spec.ts) keep importing
-// it from here; the single source of truth lives in shard.ts alongside
-// resolveMaxAgeDays/shardTagsForWindow.
-export { monthTag } from '../shard.js';
-
 export interface ReleaseMirrorBackendOptions {
   owner: string;
   repo: string;
@@ -21,6 +16,10 @@ export interface ReleaseMirrorBackendOptions {
   // assets that are still retained become unreadable via GET, or assets
   // past the read window never get cleaned up.
   maxAgeDays?: number;
+  // Optional GitHub token. Anonymous (unset) is fine for public-repo reads but
+  // is rate-limited to 60 req/hr; a token lifts that to 5000/hr. Ignored when
+  // an explicit octokit is injected (tests).
+  auth?: string;
 }
 
 function isNotFound(error: unknown): boolean {
@@ -43,35 +42,72 @@ function isNotFound(error: unknown): boolean {
 export function createReleaseMirrorBackend(
   options: ReleaseMirrorBackendOptions,
 ): CacheBackend {
-  const octokit = options.octokit ?? new Octokit();
+  const octokit =
+    options.octokit ?? new Octokit(options.auth ? { auth: options.auth } : {});
   const { owner, repo } = options;
   const now = options.now ?? (() => new Date());
   const maxAgeDays = options.maxAgeDays ?? DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS;
+
+  // Per-shard, in-process cache of the asset-name -> id map (null = shard does
+  // not exist yet). `serve` is long-lived and the mirror is only ever written
+  // by CI, so caching each shard's asset list for the process lifetime turns
+  // an `nx affected`'s N cache lookups from ~2N GitHub API calls into a handful
+  // (one per shard in the window), which keeps an anonymous client under the
+  // 60 req/hr limit. Trade-off: a hash published mid-session isn't seen until
+  // `serve` restarts -- an acceptable extra miss, never a wrong result.
+  const shardCache = new Map<string, Map<string, number> | null>();
+
+  async function loadShard(tag: string): Promise<Map<string, number> | null> {
+    const cached = shardCache.get(tag);
+
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    let assetsByName: Map<string, number> | null;
+
+    try {
+      const release = await octokit.rest.repos.getReleaseByTag({
+        owner,
+        repo,
+        tag,
+      });
+      // The `assets` array embedded in a release response is a non-paginated
+      // snapshot (~first page only); a shard is expected to approach the
+      // 1000-asset cap, so page through the dedicated endpoint instead --
+      // mirroring publish-mirror.ts's write side. Otherwise any asset past the
+      // first page is invisible to reads and Nx rebuilds a cached task.
+      const assets = await octokit.paginate(
+        octokit.rest.repos.listReleaseAssets,
+        { owner, repo, release_id: release.data.id, per_page: 100 },
+      );
+
+      assetsByName = new Map(
+        assets.map((asset): [string, number] => [asset.name, asset.id]),
+      );
+    } catch (error) {
+      if (isNotFound(error)) {
+        assetsByName = null;
+      } else {
+        throw error;
+      }
+    }
+
+    shardCache.set(tag, assetsByName);
+
+    return assetsByName;
+  }
 
   async function findAssetId(hash: string): Promise<number | null> {
     const assetName = `${hash}.tar.gz`;
     const at = now();
 
     for (const tag of shardTagsForWindow(at, maxAgeDays)) {
-      try {
-        const release = await octokit.rest.repos.getReleaseByTag({
-          owner,
-          repo,
-          tag,
-        });
-        const asset = release.data.assets.find(
-          (candidate) => candidate.name === assetName,
-        );
+      const assets = await loadShard(tag);
+      const assetId = assets?.get(assetName);
 
-        if (asset) {
-          return asset.id;
-        }
-      } catch (error) {
-        if (isNotFound(error)) {
-          continue;
-        }
-
-        throw error;
+      if (assetId !== undefined) {
+        return assetId;
       }
     }
 

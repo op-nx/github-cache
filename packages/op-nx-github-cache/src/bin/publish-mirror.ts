@@ -349,14 +349,38 @@ async function main(): Promise<void> {
   // CACHE_MIRROR_MAX_AGE_DAYS doesn't leave older shards permanently
   // unpruned (release-mirror-backend.ts's read side walks the same window).
   // Never allow deleting the current shard: it was just uploaded to above.
+  //
+  // Isolate each shard the same way the upload loop above does: one shard's
+  // non-404 fault (rate-limit, network, an unexpected gh error) must not abort
+  // pruning the remaining shards, nor short-circuit past the upload-failure
+  // report below. Collect both classes of failure and surface them together.
+  const cleanupFailures: string[] = [];
+
   for (const shardTag of shardTagsForWindow(now, MAX_AGE_DAYS)) {
-    await cleanupShard(repo, shardTag, shardTag !== currentShard);
+    try {
+      await cleanupShard(repo, shardTag, shardTag !== currentShard);
+    } catch (error) {
+      console.error(`Failed to clean up shard ${shardTag}:`, error);
+      cleanupFailures.push(shardTag);
+    }
   }
 
+  const problems: string[] = [];
+
   if (failures.length > 0) {
-    throw new Error(
+    problems.push(
       `${failures.length} hash(es) failed to upload: ${failures.join(', ')}`,
     );
+  }
+
+  if (cleanupFailures.length > 0) {
+    problems.push(
+      `${cleanupFailures.length} shard(s) failed to clean up: ${cleanupFailures.join(', ')}`,
+    );
+  }
+
+  if (problems.length > 0) {
+    throw new Error(problems.join('; '));
   }
 }
 

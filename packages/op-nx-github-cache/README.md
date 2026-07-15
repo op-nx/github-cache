@@ -18,8 +18,13 @@ or pay for.
 - **CREEP mitigation**: writes are additionally gated by `isWriteTrusted()`,
   which only allows GitHub Actions' own trusted trigger events (`push`,
   `schedule`, `workflow_dispatch`, `repository_dispatch`, `delete`,
-  `registry_package`, `page_build`). A PR-triggered run can never write to
-  either the Actions cache or the mirror through this server.
+  `registry_package`, `page_build`, `merge_group`). A PR-triggered run
+  (`pull_request` / `pull_request_target`) can never write to either the
+  Actions cache or the mirror through this server. `pull_request` runs still
+  read the cache (GET is always allowed); only the PUT is refused with `403`.
+  Nx treats a refused cache store as a non-fatal warning (its native HTTP cache
+  `store()` reports failure by return value, not by throwing), so PR builds
+  still pass -- `npm run test:act:untrusted` exercises this end to end.
 
 ## Prerequisites
 
@@ -131,7 +136,33 @@ own `serve` process and your own `nx` client; it never leaves your machine.
 
 Requires `GITHUB_REPOSITORY=owner/repo` to be set (CI sets this
 automatically; set it yourself locally, e.g. `export
-GITHUB_REPOSITORY=op-nx/github-cache`).
+GITHUB_REPOSITORY=op-nx/github-cache`). A malformed value (missing the `/`)
+is rejected up front with a clear error.
+
+**Rate limits:** the mirror reads the public repo anonymously by default, which
+GitHub caps at **60 requests/hour per IP**. Each shard's asset list is fetched
+once per `serve` process and cached in-memory, so a normal `nx affected` stays
+well under that -- but a very large workspace, or several parallel runs sharing
+an IP, can still exhaust it. To lift the cap to 5000/hour, export a token
+before `serve`: `GH_TOKEN` (or `GITHUB_TOKEN`) is picked up automatically. When
+the limit is hit, cache reads fail _open_ (treated as a miss, build continues),
+never as an error.
+
+## Configuration
+
+All optional; sensible defaults apply when unset. A non-numeric, zero, or
+negative value on any numeric knob falls back to its default rather than
+misbehaving.
+
+| Env var                                   | Applies to                     | Default                | Purpose                                                                   |
+| ----------------------------------------- | ------------------------------ | ---------------------- | ------------------------------------------------------------------------- |
+| `PORT`                                    | `serve`                        | `0` (random free port) | Port for the loopback cache server.                                       |
+| `MAX_CACHE_BODY_BYTES`                    | `serve`                        | `2147483648` (2 GB)    | Max `PUT` body size; larger bodies get `413`.                             |
+| `GH_TOKEN` / `GITHUB_TOKEN`               | `serve` (local mirror)         | unset (anonymous)      | Lifts the mirror's read rate limit from 60 to 5000 req/hr.                |
+| `GITHUB_REPOSITORY`                       | `serve` (local mirror)         | (required locally)     | `owner/repo` the mirror reads from.                                       |
+| `CACHE_MIRROR_MAX_AGE_DAYS`               | `publish-mirror`, mirror reads | `30`                   | Retention window; couples cleanup and read lookback.                      |
+| `CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP` | `publish-mirror`               | `0` (off)              | Popularity floor that protects old-but-downloaded assets from cleanup.    |
+| `DEFAULT_BRANCH`                          | `publish-mirror`               | (looked up via `gh`)   | Skips the default-branch lookup; must be a maintainer-controlled literal. |
 
 ## Mirror cleanup
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomBytes } from 'node:crypto';
 import { appendFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { selectBackend } from '../lib/backends/index.js';
 import { createServer } from '../lib/server.js';
 
@@ -46,7 +47,10 @@ async function main(): Promise<void> {
 }
 
 // Only run as a CLI entry point, not if ever imported by a test.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;

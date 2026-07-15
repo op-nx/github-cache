@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
 import { rm } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { restoreCache } from '@actions/cache';
 import { cacheArchivePath } from '../lib/backends/actions-cache-backend.js';
@@ -318,7 +319,10 @@ async function main(): Promise<void> {
 }
 
 // Only run as a CLI entry point, not when imported (e.g. by publish-mirror.spec.ts).
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;

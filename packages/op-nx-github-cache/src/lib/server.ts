@@ -154,8 +154,17 @@ async function handleRequest(
         res.writeHead(409).end();
       } else if (result === 'forbidden') {
         res.writeHead(403).end();
-      } else {
+      } else if (result === 'stored') {
         res.writeHead(200).end();
+      } else {
+        // Exhaustiveness guard: a future PutResult variant must be mapped
+        // explicitly here. Without this, a new state would fall through to a
+        // 200 and tell Nx a write succeeded when it didn't. `never` turns that
+        // omission into a compile error.
+        const unhandled: never = result;
+
+        console.error(`cache PUT ${req.url}: unhandled put result`, unhandled);
+        res.writeHead(500).end();
       }
 
       return;
@@ -178,6 +187,10 @@ async function handleRequest(
     const status =
       error instanceof Error && error.name === 'ValidationError' ? 400 : 500;
 
+    // Mirror the GET path's server-side logging: a systematic write fault (a
+    // saveCache internal error, an fs/stream fault) must not be invisible just
+    // because Nx treats a failed store as a non-fatal warning.
+    console.error(`cache ${req.method} ${req.url} failed:`, error);
     res.writeHead(status).end();
   }
 }

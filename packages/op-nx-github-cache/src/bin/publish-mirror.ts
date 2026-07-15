@@ -87,6 +87,19 @@ async function resolveDefaultBranch(repo: string): Promise<string> {
   return output.trim();
 }
 
+// The Actions cache namespace is repo-wide, not Nx-owned: other workflow steps
+// (e.g. actions/setup-node's own npm cache) create entries here too, and their
+// keys are neither guaranteed Nx-shaped nor safe to interpolate into a
+// filesystem path / asset name. Only genuine Nx hashes pass. Extracted as a
+// pure function so this path-traversal/injection guard is unit-testable
+// without the `gh` dependency.
+export function filterNxCacheKeys(newlineSeparatedKeys: string): string[] {
+  return newlineSeparatedKeys
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((key) => HASH_PATTERN.test(key));
+}
+
 async function listActionsCacheHashes(
   repo: string,
   defaultBranch: string,
@@ -101,14 +114,7 @@ async function listActionsCacheHashes(
     '.actions_caches[].key',
   ]);
 
-  // The Actions cache namespace is repo-wide, not Nx-owned: other workflow
-  // steps (e.g. actions/setup-node's own npm cache) create entries here too,
-  // and their keys are neither guaranteed Nx-shaped nor safe to interpolate
-  // into a filesystem path / asset name. Only forward genuine Nx hashes.
-  return output
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((key) => HASH_PATTERN.test(key));
+  return filterNxCacheKeys(output);
 }
 
 async function ensureShardExists(

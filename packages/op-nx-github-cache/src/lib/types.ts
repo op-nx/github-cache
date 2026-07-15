@@ -3,7 +3,10 @@
 // and publish-mirror.ts (filters Actions-cache keys, which may belong to
 // unrelated caching steps in the same repo -- e.g. actions/setup-node -- and
 // are not guaranteed to be Nx-shaped or path-traversal-safe).
-export const HASH_PATTERN = /^[a-f0-9]+$/;
+// Length is bounded so an over-long hash yields a uniform 400 rather than an
+// ENAMETOOLONG 500 when interpolated into a temp-file path; 512 matches
+// @actions/cache's own key-length ceiling and is far above any real Nx hash.
+export const HASH_PATTERN = /^[a-f0-9]{1,512}$/;
 
 export type PutResult = 'stored' | 'conflict' | 'forbidden';
 

@@ -31,9 +31,18 @@ function isAuthorized(authHeader: string | undefined, token: string): boolean {
 
 // Default 2GB cap: generous for Nx task-output tarballs, but bounds memory
 // use for a PUT body that's otherwise fully buffered before any backend call.
-const MAX_BODY_BYTES = Number(
-  process.env.MAX_CACHE_BODY_BYTES ?? 2 * 1024 * 1024 * 1024,
-);
+// A non-numeric override must not silently disable the cap: Number(bad) is
+// NaN, and `total > NaN` is always false (fail-open), so fall back to the
+// default instead of trusting an unparseable value.
+export const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024 * 1024;
+
+export function resolveMaxBodyBytes(envValue: string | undefined): number {
+  const configured = Number(envValue);
+
+  return Number.isFinite(configured) ? configured : DEFAULT_MAX_BODY_BYTES;
+}
+
+const MAX_BODY_BYTES = resolveMaxBodyBytes(process.env.MAX_CACHE_BODY_BYTES);
 
 class PayloadTooLargeError extends Error {}
 
@@ -133,6 +142,9 @@ async function handleRequest(
     res.writeHead(405, { Allow: 'GET, PUT' }).end();
   } catch (error) {
     if (error instanceof PayloadTooLargeError) {
+      // Don't leave unread body bytes on the socket -- a keep-alive
+      // connection would otherwise misparse the next request as more body.
+      req.destroy();
       res.writeHead(413).end();
 
       return;

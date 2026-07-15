@@ -1,7 +1,25 @@
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createServer } from './server.js';
+import {
+  createServer,
+  DEFAULT_MAX_BODY_BYTES,
+  resolveMaxBodyBytes,
+} from './server.js';
 import type { CacheBackend, PutResult } from './types.js';
+
+describe('resolveMaxBodyBytes', () => {
+  it('uses the configured value when it is a finite number', () => {
+    expect(resolveMaxBodyBytes('1024')).toBe(1024);
+  });
+
+  it('falls back to the default instead of failing open on a non-numeric value', () => {
+    expect(resolveMaxBodyBytes('not-a-number')).toBe(DEFAULT_MAX_BODY_BYTES);
+  });
+
+  it('falls back to the default when unset', () => {
+    expect(resolveMaxBodyBytes(undefined)).toBe(DEFAULT_MAX_BODY_BYTES);
+  });
+});
 
 const TOKEN = 'test-token';
 const HASH = 'abc123';

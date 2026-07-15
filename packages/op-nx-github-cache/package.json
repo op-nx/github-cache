@@ -18,6 +18,14 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
+  "bin": {
+    "op-nx-github-cache-serve": "./dist/bin/serve.js",
+    "op-nx-github-cache-publish-mirror": "./dist/bin/publish-mirror.js"
+  },
+  "scripts": {
+    "test:act": "cd ../.. && act push --cache-server-path=packages/op-nx-github-cache/.act-cache --artifact-server-path=packages/op-nx-github-cache/.act-artifacts -W packages/op-nx-github-cache/__fixtures__/act-workflow.yml",
+    "test:act:untrusted": "cd ../.. && act pull_request_target --cache-server-path=packages/op-nx-github-cache/.act-cache --artifact-server-path=packages/op-nx-github-cache/.act-artifacts -W packages/op-nx-github-cache/__fixtures__/act-workflow.yml -e packages/op-nx-github-cache/__fixtures__/pull_request_target-event.json"
+  },
   "nx": {
     "release": {
       "version": {
@@ -27,6 +35,8 @@
     }
   },
   "dependencies": {
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "@actions/cache": "^6.2.0",
+    "@octokit/rest": "^22.0.1"
   }
 }

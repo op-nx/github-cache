@@ -40,6 +40,10 @@ Thumbs.db
 
 .nx/cache
 .nx/workspace-data
+
+# op-nx/github-cache act test harness (test-only, never a runtime dep)
+.act-cache
+.act-artifacts
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 

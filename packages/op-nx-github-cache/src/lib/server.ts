@@ -46,6 +46,11 @@ const MAX_BODY_BYTES = resolveMaxBodyBytes(process.env.MAX_CACHE_BODY_BYTES);
 
 class PayloadTooLargeError extends Error {}
 
+// Nx's self-hosted-cache contract documents Content-Length as a required PUT
+// header, but this reads the body from the stream and caps it against
+// MAX_BODY_BYTES regardless of what (or whether) Content-Length declares --
+// intentionally lenient, since the size cap above already bounds worst-case
+// memory use without needing to trust a client-supplied header.
 async function readBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let total = 0;

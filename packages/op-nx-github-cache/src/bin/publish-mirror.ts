@@ -6,30 +6,20 @@ import { promisify } from 'node:util';
 import { restoreCache } from '@actions/cache';
 import { cacheArchivePath } from '../lib/backends/actions-cache-backend.js';
 import { selectAssetsToDelete, type ReleaseAsset } from '../lib/cleanup.js';
+import {
+  monthTag,
+  resolveMaxAgeDays,
+  shardTagsForWindow,
+} from '../lib/shard.js';
 import { isWriteTrusted } from '../lib/trust.js';
 import { HASH_PATTERN } from '../lib/types.js';
 
 const exec = promisify(execFile);
 
-const MAX_AGE_DAYS = Number(process.env.CACHE_MIRROR_MAX_AGE_DAYS ?? 30);
+const MAX_AGE_DAYS = resolveMaxAgeDays(process.env.CACHE_MIRROR_MAX_AGE_DAYS);
 const MIN_DOWNLOAD_COUNT_TO_KEEP = Number(
   process.env.CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP ?? 0,
 );
-
-function monthTag(date: Date): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-
-  return `cache-mirror-${year}${month}`;
-}
-
-function previousMonthTag(date: Date): string {
-  const previous = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - 1, 1),
-  );
-
-  return monthTag(previous);
-}
 
 interface ExecFailure {
   stderr?: string;
@@ -302,14 +292,20 @@ async function main(): Promise<void> {
       await uploadHash(currentShard, repo, hash);
     } catch (error) {
       // One hash's upload failure must not block the rest, or skip cleanup
-      // for both shards below -- report all failures at the end instead.
+      // for the shard window below -- report all failures at the end instead.
       console.error(`Failed to upload ${hash}:`, error);
       failures.push(hash);
     }
   }
 
-  await cleanupShard(repo, currentShard, false);
-  await cleanupShard(repo, previousMonthTag(now), true);
+  // Walk every shard the retention window (MAX_AGE_DAYS) could still hold a
+  // live asset in -- not just current + previous month -- so raising
+  // CACHE_MIRROR_MAX_AGE_DAYS doesn't leave older shards permanently
+  // unpruned (release-mirror-backend.ts's read side walks the same window).
+  // Never allow deleting the current shard: it was just uploaded to above.
+  for (const shardTag of shardTagsForWindow(now, MAX_AGE_DAYS)) {
+    await cleanupShard(repo, shardTag, shardTag !== currentShard);
+  }
 
   if (failures.length > 0) {
     throw new Error(

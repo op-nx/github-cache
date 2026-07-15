@@ -1,4 +1,5 @@
 import type { CacheBackend } from '../types.js';
+import { resolveMaxAgeDays } from '../shard.js';
 import { createActionsCacheBackend } from './actions-cache-backend.js';
 import { createReleaseMirrorBackend } from './release-mirror-backend.js';
 
@@ -19,6 +20,9 @@ export function selectBackend(env: NodeJS.ProcessEnv): CacheBackend {
   }
 
   const [owner, repo] = repository.split('/');
+  // Same env var publish-mirror.ts's cleanup reads -- keeps the read
+  // lookback and the cleanup/retention window coupled to one setting.
+  const maxAgeDays = resolveMaxAgeDays(env.CACHE_MIRROR_MAX_AGE_DAYS);
 
-  return createReleaseMirrorBackend({ owner, repo });
+  return createReleaseMirrorBackend({ owner, repo, maxAgeDays });
 }

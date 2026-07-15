@@ -1,5 +1,14 @@
 import { Octokit } from '@octokit/rest';
 import type { CacheBackend, PutResult } from '../types.js';
+import {
+  DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS,
+  shardTagsForWindow,
+} from '../shard.js';
+
+// Re-exported so callers (and release-mirror-backend.spec.ts) keep importing
+// it from here; the single source of truth lives in shard.ts alongside
+// resolveMaxAgeDays/shardTagsForWindow.
+export { monthTag } from '../shard.js';
 
 export interface ReleaseMirrorBackendOptions {
   owner: string;
@@ -7,21 +16,11 @@ export interface ReleaseMirrorBackendOptions {
   octokit?: Octokit;
   // Injectable for tests; defaults to the real clock.
   now?: () => Date;
-}
-
-export function monthTag(date: Date): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-
-  return `cache-mirror-${year}${month}`;
-}
-
-function previousMonthTag(date: Date): string {
-  const previous = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - 1, 1),
-  );
-
-  return monthTag(previous);
+  // How far back reads look for a hash. Must track the same retention
+  // window publish-mirror.ts's cleanup uses (see shard.ts) -- otherwise
+  // assets that are still retained become unreadable via GET, or assets
+  // past the read window never get cleaned up.
+  maxAgeDays?: number;
 }
 
 function isNotFound(error: unknown): boolean {
@@ -35,23 +34,25 @@ function isNotFound(error: unknown): boolean {
 
 // Read-only, get-only backend (verified pv-1/pv-10): mirror releases are
 // sharded by calendar month (cache-mirror-<yyyymm>) to stay under GitHub's
-// 1000-asset-per-release cap. There is no manifest/index, so a lookup checks
-// the current month's shard, then the prior month's -- bounded to exactly 2
-// requests because the 30-day cleanup window (see cleanup.ts) means a hash
-// can't realistically live in any older shard. Writing only ever happens via
-// the trusted-CI-only publish-mirror script, never through this backend.
+// 1000-asset-per-release cap. There is no manifest/index, so a lookup walks
+// shardTagsForWindow() -- current month back through however many prior
+// months the configured retention window (maxAgeDays, defaulting to the same
+// value publish-mirror.ts's cleanup uses) can still hold a live asset in.
+// Writing only ever happens via the trusted-CI-only publish-mirror script,
+// never through this backend.
 export function createReleaseMirrorBackend(
   options: ReleaseMirrorBackendOptions,
 ): CacheBackend {
   const octokit = options.octokit ?? new Octokit();
   const { owner, repo } = options;
   const now = options.now ?? (() => new Date());
+  const maxAgeDays = options.maxAgeDays ?? DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS;
 
   async function findAssetId(hash: string): Promise<number | null> {
     const assetName = `${hash}.tar.gz`;
     const at = now();
 
-    for (const tag of [monthTag(at), previousMonthTag(at)]) {
+    for (const tag of shardTagsForWindow(at, maxAgeDays)) {
       try {
         const release = await octokit.rest.repos.getReleaseByTag({
           owner,

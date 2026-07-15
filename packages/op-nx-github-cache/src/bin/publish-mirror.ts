@@ -91,13 +91,18 @@ async function listActionsCacheHashes(
     .filter(Boolean);
 }
 
-async function ensureShardExists(shardTag: string): Promise<void> {
+async function ensureShardExists(
+  repo: string,
+  shardTag: string,
+): Promise<void> {
   const result = await ghAllowFailure([
     'release',
     'create',
     shardTag,
     '--notes',
     'Cache mirror shard',
+    '--repo',
+    repo,
   ]);
 
   if (!result.ok && !/already exists/i.test(result.stderr)) {
@@ -213,7 +218,11 @@ async function cleanupShard(
 
   const remaining = assets.length - toDelete.length;
 
-  if (allowShardDeletion && remaining === 0 && assets.length > 0) {
+  // No `assets.length > 0` guard: an already-empty release (e.g. a prior
+  // run's delete-release attempt failed) must still be retried, not left
+  // orphaned forever. `gh release delete` on an already-gone release is a
+  // harmless no-op via ghAllowFailure.
+  if (allowShardDeletion && remaining === 0) {
     await ghAllowFailure([
       'release',
       'delete',
@@ -253,7 +262,7 @@ async function main(): Promise<void> {
   const hashes = await listActionsCacheHashes(repo, defaultBranch);
   const currentShard = monthTag(new Date());
 
-  await ensureShardExists(currentShard);
+  await ensureShardExists(repo, currentShard);
 
   for (const hash of hashes) {
     await uploadHash(currentShard, repo, hash);

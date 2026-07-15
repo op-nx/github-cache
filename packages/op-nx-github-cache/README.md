@@ -64,6 +64,15 @@ also checks out or runs untrusted PR-controlled code (no `pull_request_target`
 job that also builds PR code -- the classic "pwn request" pattern), and grant
 `contents: write` only to that isolated post-build job, never workflow-wide.
 
+**Known limitation:** the Actions-cache backend and `publish-mirror` both
+stage a hash's archive at the same deterministic per-hash temp path (required
+so `@actions/cache` can match a save to a later restore -- see
+`cacheArchivePath`'s doc comment), serialized only within one process via an
+in-process lock. This is safe in the CI wiring above, where `build` and
+`publish-mirror` are separate jobs on separate (ephemeral, GitHub-hosted)
+runner VMs. It is NOT safe if you run `serve` and `publish-mirror` concurrently
+on the same self-hosted runner host -- don't do that.
+
 ## Local usage
 
 ```bash

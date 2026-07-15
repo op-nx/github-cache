@@ -36,7 +36,10 @@ export function selectBackend(env: NodeJS.ProcessEnv): CacheBackend {
   // Optional: an anonymous client is capped at 60 req/hr, which a real
   // `nx affected` blows through; a token lifts it to 5000/hr. Anonymous stays
   // the zero-config default for public-repo reads when neither is set.
-  const auth = env.GH_TOKEN ?? env.GITHUB_TOKEN;
+  // `||` not `??`: a set-but-empty GH_TOKEN (e.g. `GH_TOKEN=${UNSET_VAR}`)
+  // must fall through to GITHUB_TOKEN, not shadow it and silently drop back to
+  // the anonymous limit -- an empty string is not a usable token.
+  const auth = env.GH_TOKEN || env.GITHUB_TOKEN;
 
   return createReleaseMirrorBackend({ owner, repo, maxAgeDays, auth });
 }

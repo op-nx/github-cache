@@ -116,6 +116,43 @@ describe('createReleaseMirrorBackend', () => {
     expect(result).toBeNull();
   });
 
+  it('rethrows a non-404 error instead of masking it as a cache miss', async () => {
+    // A rate-limit/5xx must propagate (fail-open-to-miss happens one layer up
+    // in server.ts). It must NEVER be cached as a null shard, which would
+    // poison every later read for the process lifetime.
+    const serverError = Object.assign(new Error('boom'), { status: 500 });
+    const getReleaseByTag = vi.fn().mockRejectedValue(serverError);
+    const octokit = makeOctokit({ getReleaseByTag });
+
+    const backend = createReleaseMirrorBackend({
+      owner: 'op-nx',
+      repo: 'github-cache',
+      octokit,
+      now: () => NOW,
+    });
+
+    await expect(backend.get('abc123')).rejects.toThrow('boom');
+  });
+
+  it('caches a missing shard as null so repeated lookups do not re-hit the API', async () => {
+    const getReleaseByTag = vi.fn().mockRejectedValue(notFoundError());
+    const octokit = makeOctokit({ getReleaseByTag });
+
+    const backend = createReleaseMirrorBackend({
+      owner: 'op-nx',
+      repo: 'github-cache',
+      octokit,
+      now: () => NOW,
+    });
+
+    await backend.get('aaa');
+    await backend.get('bbb');
+
+    // The window is two shards (current + prior). Each is resolved once total
+    // across both lookups, not once per lookup -- the null is cached.
+    expect(getReleaseByTag).toHaveBeenCalledTimes(2);
+  });
+
   it('finds an asset returned only by the paginated list, not the embedded snapshot', async () => {
     // getReleaseByTag's embedded `assets` is empty (a truncated snapshot); the
     // real asset only comes back through the paginated listReleaseAssets call.

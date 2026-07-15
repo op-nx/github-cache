@@ -1,4 +1,6 @@
+import { writeFile } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
+import { restoreCache, saveCache } from '@actions/cache';
 
 const events: string[] = [];
 
@@ -29,6 +31,51 @@ describe('cacheArchivePath', () => {
 
   it('differs across hashes', () => {
     expect(cacheArchivePath('abc123')).not.toBe(cacheArchivePath('def456'));
+  });
+});
+
+describe('createActionsCacheBackend return contracts', () => {
+  it('put returns "stored" when saveCache reports a real cache id', async () => {
+    vi.mocked(saveCache).mockResolvedValueOnce(1);
+
+    const backend = createActionsCacheBackend();
+
+    await expect(backend.put('feed01', Buffer.from('x'))).resolves.toBe(
+      'stored',
+    );
+  });
+
+  it('put returns "conflict" when saveCache returns -1 (already cached or write denied)', async () => {
+    vi.mocked(saveCache).mockResolvedValueOnce(-1);
+
+    const backend = createActionsCacheBackend();
+
+    await expect(backend.put('feed02', Buffer.from('x'))).resolves.toBe(
+      'conflict',
+    );
+  });
+
+  it('get returns the archive bytes on a restore hit', async () => {
+    // @actions/cache downloads the matched archive to the path on a hit and
+    // returns the matched key; emulate both so the readFile branch runs.
+    vi.mocked(restoreCache).mockImplementationOnce(async (paths: string[]) => {
+      await writeFile(paths[0], Buffer.from('cached-bytes'));
+
+      return 'feed03';
+    });
+
+    const backend = createActionsCacheBackend();
+    const result = await backend.get('feed03');
+
+    expect(result?.toString()).toBe('cached-bytes');
+  });
+
+  it('get returns null on a restore miss', async () => {
+    vi.mocked(restoreCache).mockResolvedValueOnce(undefined);
+
+    const backend = createActionsCacheBackend();
+
+    await expect(backend.get('feed04')).resolves.toBeNull();
   });
 });
 

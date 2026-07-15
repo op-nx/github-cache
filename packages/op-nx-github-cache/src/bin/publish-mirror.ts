@@ -5,7 +5,11 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { restoreCache } from '@actions/cache';
 import { cacheArchivePath } from '../lib/backends/actions-cache-backend.js';
-import { selectAssetsToDelete, type ReleaseAsset } from '../lib/cleanup.js';
+import {
+  planShardCleanup,
+  resolveMinDownloadCount,
+  type ReleaseAsset,
+} from '../lib/cleanup.js';
 import {
   monthTag,
   resolveMaxAgeDays,
@@ -17,9 +21,17 @@ import { HASH_PATTERN } from '../lib/types.js';
 const exec = promisify(execFile);
 
 const MAX_AGE_DAYS = resolveMaxAgeDays(process.env.CACHE_MIRROR_MAX_AGE_DAYS);
-const MIN_DOWNLOAD_COUNT_TO_KEEP = Number(
-  process.env.CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP ?? 0,
+const MIN_DOWNLOAD_COUNT_TO_KEEP = resolveMinDownloadCount(
+  process.env.CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP,
 );
+
+// `gh` reports these conditions only as human-readable stderr, not structured
+// exit codes; matching the text is brittle across gh versions but is the only
+// signal the CLI gives here. Hoisted so both fragile sentinels live in one
+// place. (release-mirror-backend.ts discriminates the same 404 structurally via
+// error.status, which is why only the CLI path needs these.)
+const GH_ALREADY_EXISTS_PATTERN = /already exists/i;
+const GH_NOT_FOUND_MARKER = 'HTTP 404';
 
 interface ExecFailure {
   stderr?: string;
@@ -113,7 +125,7 @@ async function ensureShardExists(
     repo,
   ]);
 
-  if (!result.ok && !/already exists/i.test(result.stderr)) {
+  if (!result.ok && !GH_ALREADY_EXISTS_PATTERN.test(result.stderr)) {
     throw new Error(
       `Failed to create mirror shard ${shardTag}: ${result.stderr}`,
     );
@@ -150,7 +162,7 @@ async function uploadHash(
       repo,
     ]);
 
-    if (!result.ok && !/already exists/i.test(result.stderr)) {
+    if (!result.ok && !GH_ALREADY_EXISTS_PATTERN.test(result.stderr)) {
       throw new Error(
         `Failed to upload ${hash} to ${shardTag}: ${result.stderr}`,
       );
@@ -172,13 +184,19 @@ async function getReleaseId(
       '.id',
     ]);
 
-    return Number(result.stdout.trim());
+    const releaseId = Number(result.stdout.trim());
+
+    // A successful lookup should yield a numeric id; guard the pathological
+    // case (empty/non-numeric stdout) so a NaN never slips past the
+    // `releaseId === null` check in cleanupShard and reaches a
+    // `/releases/NaN/assets` call that would crash the whole run.
+    return Number.isNaN(releaseId) ? null : releaseId;
   } catch (error) {
     // Only a real 404 (shard doesn't exist yet) is a legitimate "no cleanup
     // needed" case -- matches release-mirror-backend.ts's isNotFound
     // discrimination. Any other failure (auth, rate-limit, network) must
     // surface, not be silently treated as "nothing to clean up".
-    if ((error as ExecFailure)?.stderr?.includes('HTTP 404')) {
+    if ((error as ExecFailure)?.stderr?.includes(GH_NOT_FOUND_MARKER)) {
       return null;
     }
 
@@ -219,12 +237,16 @@ async function cleanupShard(
   }
 
   const assets = await listShardAssets(repo, releaseId);
-  const toDelete = selectAssetsToDelete(assets, {
-    maxAgeDays: MAX_AGE_DAYS,
-    minDownloadCountToKeep: MIN_DOWNLOAD_COUNT_TO_KEEP,
-  });
+  const { assetsToDelete, deleteRelease } = planShardCleanup(
+    assets,
+    {
+      maxAgeDays: MAX_AGE_DAYS,
+      minDownloadCountToKeep: MIN_DOWNLOAD_COUNT_TO_KEEP,
+    },
+    allowShardDeletion,
+  );
 
-  for (const asset of toDelete) {
+  for (const asset of assetsToDelete) {
     await ghAllowFailure([
       'release',
       'delete-asset',
@@ -236,13 +258,11 @@ async function cleanupShard(
     ]);
   }
 
-  const remaining = assets.length - toDelete.length;
-
-  // No `assets.length > 0` guard: an already-empty release (e.g. a prior
-  // run's delete-release attempt failed) must still be retried, not left
-  // orphaned forever. `gh release delete` on an already-gone release is a
-  // harmless no-op via ghAllowFailure.
-  if (allowShardDeletion && remaining === 0) {
+  // planShardCleanup applies no `assets.length > 0` guard by design: an
+  // already-empty release (e.g. a prior run's delete-release attempt failed)
+  // must still be retried, not left orphaned forever. `gh release delete` on an
+  // already-gone release is a harmless no-op via ghAllowFailure.
+  if (deleteRelease) {
     await ghAllowFailure([
       'release',
       'delete',

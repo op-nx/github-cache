@@ -98,7 +98,12 @@ async function handleRequest(
         return;
       }
 
-      res.writeHead(200, { 'Content-Length': body.length }).end(body);
+      res
+        .writeHead(200, {
+          'Content-Length': body.length,
+          'Content-Type': 'application/octet-stream',
+        })
+        .end(body);
 
       return;
     }
@@ -124,7 +129,8 @@ async function handleRequest(
       return;
     }
 
-    res.writeHead(405).end();
+    // RFC 7231 requires an Allow header on 405; only GET/PUT are defined here.
+    res.writeHead(405, { Allow: 'GET, PUT' }).end();
   } catch (error) {
     if (error instanceof PayloadTooLargeError) {
       res.writeHead(413).end();

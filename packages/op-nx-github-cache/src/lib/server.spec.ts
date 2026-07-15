@@ -109,6 +109,9 @@ describe('server', () => {
     const hitResponse = await request('GET', HASH);
 
     expect(hitResponse.status).toBe(200);
+    expect(hitResponse.headers.get('content-type')).toBe(
+      'application/octet-stream',
+    );
     expect(await hitResponse.text()).toBe('payload');
 
     const duplicateResponse = await request('PUT', HASH, {
@@ -138,6 +141,16 @@ describe('server', () => {
     });
 
     expect(response.status).toBe(400);
+  });
+
+  it('rejects an unsupported method with 405 and an Allow header', async () => {
+    const response = await fetch(`${baseUrl}/v1/cache/${HASH}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('GET, PUT');
   });
 });
 

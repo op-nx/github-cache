@@ -6,11 +6,7 @@ import { promisify } from 'node:util';
 import { restoreCache } from '@actions/cache';
 import { cacheArchivePath } from '../lib/backends/actions-cache-backend.js';
 import { planShardCleanup, type ReleaseAsset } from '../lib/cleanup.js';
-import {
-  monthTag,
-  resolveMaxAgeDays,
-  shardTagsForWindow,
-} from '../lib/shard.js';
+import { monthTag, resolveMaxAgeDays } from '../lib/shard.js';
 import { isWriteTrusted } from '../lib/trust.js';
 import { HASH_PATTERN } from '../lib/types.js';
 
@@ -93,6 +89,20 @@ export function filterNxCacheKeys(newlineSeparatedKeys: string): string[] {
     .filter((key) => HASH_PATTERN.test(key));
 }
 
+// A repo's releases include this mirror's own month-shards AND any unrelated
+// product releases; only `cache-mirror-YYYYMM` tags (what monthTag emits) are
+// ours to prune. This guard keeps cleanup from ever touching a release we don't
+// own. Extracted as a pure function (like filterNxCacheKeys) so it is
+// unit-testable without the `gh` dependency.
+export const MIRROR_SHARD_PATTERN = /^cache-mirror-\d{6}$/;
+
+export function filterMirrorShardTags(newlineSeparatedTags: string): string[] {
+  return newlineSeparatedTags
+    .split('\n')
+    .map((tag) => tag.trim())
+    .filter((tag) => MIRROR_SHARD_PATTERN.test(tag));
+}
+
 async function listActionsCacheHashes(
   repo: string,
   defaultBranch: string,
@@ -108,6 +118,21 @@ async function listActionsCacheHashes(
   ]);
 
   return filterNxCacheKeys(output);
+}
+
+// Every mirror shard that currently exists, so cleanup can visit shards that
+// have aged out of the read window -- not just the window itself -- and prune
+// them before they orphan toward the 1000-asset-per-release cap.
+async function listMirrorShards(repo: string): Promise<string[]> {
+  const output = await gh([
+    'api',
+    `repos/${repo}/releases`,
+    '--paginate',
+    '-q',
+    '.[].tag_name',
+  ]);
+
+  return filterMirrorShardTags(output);
 }
 
 async function ensureShardExists(
@@ -334,11 +359,13 @@ async function main(): Promise<void> {
     }
   }
 
-  // Walk every shard the retention window (MAX_AGE_DAYS) could still hold a
-  // live asset in -- not just current + previous month -- so raising
-  // CACHE_MIRROR_MAX_AGE_DAYS doesn't leave older shards permanently
-  // unpruned (release-mirror-backend.ts's read side walks the same window).
-  // Never allow deleting the current shard: it was just uploaded to above.
+  // Prune every mirror shard that actually exists -- not just the current read
+  // window -- so a shard that has aged out of the window (e.g. after a gap in
+  // publish runs, or a shortened CACHE_MIRROR_MAX_AGE_DAYS) is still visited and
+  // cannot orphan toward the 1000-asset-per-release cap. Reads still walk only
+  // the window (release-mirror-backend.ts); cleanup runs in trusted CI where the
+  // wider enumeration is affordable. Never allow deleting the current shard: it
+  // was just uploaded to above.
   //
   // Isolate each shard the same way the upload loop above does: one shard's
   // non-404 fault (rate-limit, network, an unexpected gh error) must not abort
@@ -346,7 +373,7 @@ async function main(): Promise<void> {
   // report below. Collect both classes of failure and surface them together.
   const cleanupFailures: string[] = [];
 
-  for (const shardTag of shardTagsForWindow(now, MAX_AGE_DAYS)) {
+  for (const shardTag of await listMirrorShards(repo)) {
     try {
       await cleanupShard(repo, shardTag, shardTag !== currentShard);
     } catch (error) {

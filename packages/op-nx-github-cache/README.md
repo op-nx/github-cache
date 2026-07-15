@@ -172,14 +172,14 @@ All optional; sensible defaults apply when unset. A non-numeric, zero, or
 negative value on any numeric knob falls back to its default rather than
 misbehaving.
 
-| Env var                                   | Applies to                     | Default                | Purpose                                                                   |
-| ----------------------------------------- | ------------------------------ | ---------------------- | ------------------------------------------------------------------------- |
-| `PORT`                                    | `serve`                        | `0` (random free port) | Port for the loopback cache server.                                       |
-| `MAX_CACHE_BODY_BYTES`                    | `serve`                        | `2147483648` (2 GB)    | Max `PUT` body size; larger bodies get `413`.                             |
-| `GH_TOKEN` / `GITHUB_TOKEN`               | `serve` (local mirror)         | unset (anonymous)      | Lifts the mirror's read rate limit from 60 to 5000 req/hr.                |
-| `GITHUB_REPOSITORY`                       | `serve` (local mirror)         | (required locally)     | `owner/repo` the mirror reads from.                                       |
-| `CACHE_MIRROR_MAX_AGE_DAYS`               | `publish-mirror`, mirror reads | `30`                   | Retention window; couples cleanup and read lookback.                      |
-| `DEFAULT_BRANCH`                          | `publish-mirror`               | (looked up via `gh`)   | Skips the default-branch lookup; must be a maintainer-controlled literal. |
+| Env var                     | Applies to                     | Default                | Purpose                                                                   |
+| --------------------------- | ------------------------------ | ---------------------- | ------------------------------------------------------------------------- |
+| `PORT`                      | `serve`                        | `0` (random free port) | Port for the loopback cache server.                                       |
+| `MAX_CACHE_BODY_BYTES`      | `serve`                        | `2147483648` (2 GB)    | Max `PUT` body size; larger bodies get `413`.                             |
+| `GH_TOKEN` / `GITHUB_TOKEN` | `serve` (local mirror)         | unset (anonymous)      | Lifts the mirror's read rate limit from 60 to 5000 req/hr.                |
+| `GITHUB_REPOSITORY`         | `serve` (local mirror)         | (required locally)     | `owner/repo` the mirror reads from.                                       |
+| `CACHE_MIRROR_MAX_AGE_DAYS` | `publish-mirror`, mirror reads | `30`                   | Retention window; couples cleanup and read lookback.                      |
+| `DEFAULT_BRANCH`            | `publish-mirror`               | (looked up via `gh`)   | Skips the default-branch lookup; must be a maintainer-controlled literal. |
 
 ## Mirror cleanup
 
@@ -188,7 +188,10 @@ Cache data auto-cleans by age in both backends:
 - **Local mirror (GitHub Releases):** `op-nx-github-cache-publish-mirror` prunes
   the mirror after each upload -- assets older than `CACHE_MIRROR_MAX_AGE_DAYS`
   (default 30) are deleted, and a month-shard release with nothing left is
-  removed. Retention is age-only: the Release Asset API exposes no last-accessed
+  removed. Cleanup visits every existing `cache-mirror-*` shard, not just the
+  current read window, so a shard that has aged out (e.g. after a gap in publish
+  runs) is still pruned and can't orphan toward the 1000-asset-per-release cap.
+  Retention is age-only: the Release Asset API exposes no last-accessed
   timestamp (only a cumulative `download_count`, which never decays), so there
   is no true-LRU signal to key off -- `created_at` age is the reliable one.
   Retention is bounded by the same window reads walk (`CACHE_MIRROR_MAX_AGE_DAYS`),

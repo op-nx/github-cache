@@ -177,6 +177,39 @@ describe('server', () => {
   });
 });
 
+describe('server GET fails open', () => {
+  it('returns 404 (cache miss), not 500, when the backend GET throws', async () => {
+    // A remote-cache read is best-effort: a rate-limit/network/backend fault
+    // must degrade to a miss so the build continues, never a 500.
+    const throwingBackend: CacheBackend = {
+      async get() {
+        throw new Error('simulated backend fault');
+      },
+      async put(): Promise<PutResult> {
+        return 'stored';
+      },
+    };
+    const server = createServer({ backend: throwingBackend, token: TOKEN });
+
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+
+    const address = server.address() as AddressInfo;
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/v1/cache/${HASH}`,
+        { method: 'GET', headers: { authorization: `Bearer ${TOKEN}` } },
+      );
+
+      expect(response.status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
 describe('server PUT body size cap', () => {
   it('rejects a PUT body larger than MAX_CACHE_BODY_BYTES with 413', async () => {
     const previous = process.env.MAX_CACHE_BODY_BYTES;

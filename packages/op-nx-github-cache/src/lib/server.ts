@@ -109,7 +109,20 @@ async function handleRequest(
 
   try {
     if (req.method === 'GET') {
-      const body = await backend.get(hash);
+      let body: Buffer | null;
+
+      try {
+        body = await backend.get(hash);
+      } catch (error) {
+        // A remote-cache read is best-effort: any retrieval fault (rate-limit,
+        // network, a TOCTOU asset-delete, a transient backend error) must
+        // degrade to a cache MISS so the build continues, never a 500. Log
+        // server-side for visibility, then fall through to the 404 below.
+        console.error(`cache GET ${hash} failed:`, error);
+        res.writeHead(404).end();
+
+        return;
+      }
 
       if (!body) {
         res.writeHead(404).end();

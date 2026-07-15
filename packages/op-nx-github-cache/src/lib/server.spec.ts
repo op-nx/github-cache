@@ -19,6 +19,11 @@ describe('resolveMaxBodyBytes', () => {
   it('falls back to the default when unset', () => {
     expect(resolveMaxBodyBytes(undefined)).toBe(DEFAULT_MAX_BODY_BYTES);
   });
+
+  it('falls back to the default on zero or negative values instead of 413-ing every PUT', () => {
+    expect(resolveMaxBodyBytes('0')).toBe(DEFAULT_MAX_BODY_BYTES);
+    expect(resolveMaxBodyBytes('-5')).toBe(DEFAULT_MAX_BODY_BYTES);
+  });
 });
 
 const TOKEN = 'test-token';

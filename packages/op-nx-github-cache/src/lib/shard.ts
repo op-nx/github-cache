@@ -22,9 +22,9 @@ export function monthTag(date: Date): string {
 // A non-numeric or non-positive override must not silently disable the
 // window (Number(bad) is NaN, and a NaN/zero/negative retention would either
 // compare false against every asset age or delete everything immediately) --
-// fall back to the default instead, matching resolveMaxBodyBytes's
-// fail-closed shape in server.ts. An excessively large override is clamped
-// rather than rejected, since the operator's intent (a long retention
+// fall back to the default instead, the same fall-back-to-default shape
+// resolveMaxBodyBytes uses in server.ts. An excessively large override is
+// clamped rather than rejected, since the operator's intent (a long retention
 // window) is still honored -- just bounded to a sane worst-case shard count.
 export function resolveMaxAgeDays(envValue: string | undefined): number {
   const configured = Number(envValue);
@@ -60,7 +60,11 @@ export function shardTagsForWindow(now: Date, maxAgeDays: number): string[] {
     tags.push(monthTag(new Date(cursor)));
     const cursorDate = new Date(cursor);
 
-    cursor = Date.UTC(cursorDate.getUTCFullYear(), cursorDate.getUTCMonth() - 1, 1);
+    cursor = Date.UTC(
+      cursorDate.getUTCFullYear(),
+      cursorDate.getUTCMonth() - 1,
+      1,
+    );
   }
 
   return tags;

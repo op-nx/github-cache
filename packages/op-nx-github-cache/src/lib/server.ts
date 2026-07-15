@@ -31,15 +31,20 @@ function isAuthorized(authHeader: string | undefined, token: string): boolean {
 
 // Default 2GB cap: generous for Nx task-output tarballs, but bounds memory
 // use for a PUT body that's otherwise fully buffered before any backend call.
-// A non-numeric override must not silently disable the cap: Number(bad) is
-// NaN, and `total > NaN` is always false (fail-open), so fall back to the
-// default instead of trusting an unparseable value.
+// Both failure modes fall back to the default (matching resolveMaxAgeDays):
+// a non-numeric override would leave `total > NaN` always false (fail-open,
+// cap disabled), while a zero/negative override would make `total > cap` true
+// for the first byte (every non-empty PUT 413s -- a silent write outage). A
+// large finite value is honored as-is: unlike the shard window it carries no
+// per-unit API cost, so there's nothing to clamp.
 export const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024 * 1024;
 
 export function resolveMaxBodyBytes(envValue: string | undefined): number {
   const configured = Number(envValue);
 
-  return Number.isFinite(configured) ? configured : DEFAULT_MAX_BODY_BYTES;
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_MAX_BODY_BYTES;
 }
 
 const MAX_BODY_BYTES = resolveMaxBodyBytes(process.env.MAX_CACHE_BODY_BYTES);

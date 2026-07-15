@@ -5,8 +5,31 @@ import { pathToFileURL } from 'node:url';
 import { selectBackend } from '../lib/backends/index.js';
 import { createServer } from '../lib/server.js';
 
+// PORT follows the same set-but-invalid -> fall back to default contract as
+// the other numeric knobs (resolveMaxBodyBytes/resolveMaxAgeDays): a
+// non-integer or out-of-range value falls back to 0 -- an ephemeral free
+// port, the documented default -- rather than crashing server.listen() with
+// ERR_SOCKET_BAD_PORT. `Number(undefined)`/`Number('')` need distinct
+// handling: unset is the normal path and must not warn, so only a set,
+// non-empty, invalid value is surfaced.
+export function resolvePort(envValue: string | undefined): number {
+  const configured = Number(envValue);
+
+  if (Number.isInteger(configured) && configured >= 0 && configured <= 65535) {
+    return configured;
+  }
+
+  if (envValue !== undefined) {
+    console.warn(
+      `PORT="${envValue}" is not an integer in [0, 65535]; using an ephemeral port.`,
+    );
+  }
+
+  return 0;
+}
+
 async function main(): Promise<void> {
-  const port = Number(process.env.PORT ?? 0);
+  const port = resolvePort(process.env.PORT);
   // CSPRNG local-only shared secret: this sidecar never receives traffic
   // beyond loopback, so there's no benefit to a GitHub-issued token here.
   const token = randomBytes(32).toString('hex');

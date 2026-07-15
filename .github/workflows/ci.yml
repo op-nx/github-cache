@@ -52,9 +52,17 @@ jobs:
       # package with dist/ already built), so the README's own `npx <bin>`
       # snippet stays correct for consumers -- only this repo's own dogfood
       # wiring needs the direct node invocation.
+      # setsid detaches the server into its own session so it survives this
+      # step's exit -- GitHub Actions' runner kills a step's whole process
+      # group when the step's script finishes, and a plain `cmd &` background
+      # job stays in that group. Without setsid, the server was silently dead
+      # before any later step could reach it (verified: zero requests ever
+      # arrived at the real server in CI, despite the same code working
+      # locally every time -- a local shell doesn't tear down process groups
+      # between commands the way Actions does between steps).
       - name: Start cache server
         run: |
-          node packages/op-nx-github-cache/dist/bin/serve.js &
+          setsid node packages/op-nx-github-cache/dist/bin/serve.js > /tmp/cache-server.log 2>&1 < /dev/null &
           timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run build
 
@@ -74,7 +82,7 @@ jobs:
       - run: npx nx build @op-nx/github-cache
       - name: Start cache server
         run: |
-          node packages/op-nx-github-cache/dist/bin/serve.js &
+          setsid node packages/op-nx-github-cache/dist/bin/serve.js > /tmp/cache-server.log 2>&1 < /dev/null &
           timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run typecheck
 
@@ -94,7 +102,7 @@ jobs:
       - run: npx nx build @op-nx/github-cache
       - name: Start cache server
         run: |
-          node packages/op-nx-github-cache/dist/bin/serve.js &
+          setsid node packages/op-nx-github-cache/dist/bin/serve.js > /tmp/cache-server.log 2>&1 < /dev/null &
           timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run test
 

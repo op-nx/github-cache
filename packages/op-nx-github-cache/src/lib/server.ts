@@ -95,6 +95,7 @@ async function handleRequest(
   backend: CacheBackend,
   token: string,
 ): Promise<void> {
+  console.error(`DEBUG incoming request: ${req.method} ${req.url}`);
   const match = CACHE_PATH_PATTERN.exec(req.url ?? '');
 
   if (!match) {
@@ -152,6 +153,9 @@ async function handleRequest(
 
     if (req.method === 'PUT') {
       if (!isWriteTrusted(process.env)) {
+        console.error(
+          `DEBUG PUT rejected by isWriteTrusted; GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS} GITHUB_EVENT_NAME=${process.env.GITHUB_EVENT_NAME}`,
+        );
         res.writeHead(403).end();
 
         return;
@@ -159,6 +163,7 @@ async function handleRequest(
 
       const body = await readBody(req);
       const result = await backend.put(hash, body);
+      console.error(`DEBUG PUT result: ${result}`);
 
       if (result === 'conflict') {
         res.writeHead(409).end();

@@ -69,6 +69,24 @@ describe('selectAssetsToDelete', () => {
     expect(result.map((asset) => asset.name)).toEqual(['unpopular-old.tar.gz']);
   });
 
+  it('keeps an asset exactly maxAgeDays old (age check is strict >, not >=)', () => {
+    const result = selectAssetsToDelete(
+      [{ name: 'exact.tar.gz', createdAt: daysAgo(30), downloadCount: 0 }],
+      { maxAgeDays: 30, minDownloadCountToKeep: 0, now },
+    );
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('protects an old asset whose downloadCount equals the floor (>= boundary)', () => {
+    const result = selectAssetsToDelete(
+      [{ name: 'at-floor.tar.gz', createdAt: daysAgo(60), downloadCount: 50 }],
+      { maxAgeDays: 30, minDownloadCountToKeep: 50, now },
+    );
+
+    expect(result).toHaveLength(0);
+  });
+
   it('never deletes a young asset regardless of download count', () => {
     const assets = [
       {

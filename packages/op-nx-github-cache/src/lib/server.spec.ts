@@ -151,8 +151,24 @@ describe('server', () => {
     expect(untrustedResponse.status).toBe(403);
   });
 
-  it('rejects a missing or invalid bearer token with 401', async () => {
+  it('rejects a wrong bearer token with 401', async () => {
     const response = await request('GET', HASH, { auth: 'Bearer wrong-token' });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects a same-length but wrong token with 401 (constant-time compare returns false, not just the length short-circuit)', async () => {
+    const response = await request('GET', HASH, {
+      auth: `Bearer ${'x'.repeat(TOKEN.length)}`,
+    });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects a request with no authorization header with 401', async () => {
+    const response = await fetch(`${baseUrl}/v1/cache/${HASH}`, {
+      method: 'GET',
+    });
 
     expect(response.status).toBe(401);
   });
@@ -257,5 +273,67 @@ describe('server PUT body size cap', () => {
 
       vi.resetModules();
     }
+  });
+});
+
+describe('server PUT error mapping', () => {
+  async function putStatusFor(backend: CacheBackend): Promise<number> {
+    const server = createServer({ backend, token: TOKEN });
+
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+
+    const address = server.address() as AddressInfo;
+
+    process.env.GITHUB_ACTIONS = 'true';
+    process.env.GITHUB_EVENT_NAME = 'push';
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/v1/cache/${HASH}`,
+        {
+          method: 'PUT',
+          headers: { authorization: `Bearer ${TOKEN}` },
+          body: Buffer.from('x'),
+        },
+      );
+
+      return response.status;
+    } finally {
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITHUB_EVENT_NAME;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+
+  it('maps a backend ValidationError to 400', async () => {
+    const backend: CacheBackend = {
+      async get() {
+        return null;
+      },
+      async put(): Promise<PutResult> {
+        const error = new Error('malformed key');
+
+        error.name = 'ValidationError';
+
+        throw error;
+      },
+    };
+
+    expect(await putStatusFor(backend)).toBe(400);
+  });
+
+  it('maps an unexpected backend fault to 500', async () => {
+    const backend: CacheBackend = {
+      async get() {
+        return null;
+      },
+      async put(): Promise<PutResult> {
+        throw new Error('boom');
+      },
+    };
+
+    expect(await putStatusFor(backend)).toBe(500);
   });
 });

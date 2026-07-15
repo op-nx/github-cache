@@ -56,47 +56,61 @@ export function createReleaseMirrorBackend(
   // listReleaseAssets), which keeps an anonymous client under the 60 req/hr
   // limit. Trade-off: a hash published mid-session isn't seen until
   // `serve` restarts -- an acceptable extra miss, never a wrong result.
-  const shardCache = new Map<string, Map<string, number> | null>();
+  //
+  // The value is the in-flight Promise, not the resolved map, so a burst of
+  // concurrent cold GETs for the same shard (the normal `nx affected` startup
+  // pattern) coalesces onto one API round-trip instead of stampeding it once
+  // per lookup -- which would blow the very rate limit this cache protects.
+  const shardCache = new Map<string, Promise<Map<string, number> | null>>();
 
-  async function loadShard(tag: string): Promise<Map<string, number> | null> {
+  function loadShard(tag: string): Promise<Map<string, number> | null> {
     const cached = shardCache.get(tag);
 
     if (cached !== undefined) {
       return cached;
     }
 
-    let assetsByName: Map<string, number> | null;
+    const pending = (async (): Promise<Map<string, number> | null> => {
+      try {
+        const release = await octokit.rest.repos.getReleaseByTag({
+          owner,
+          repo,
+          tag,
+        });
+        // The `assets` array embedded in a release response is a non-paginated
+        // snapshot (~first page only); a shard is expected to approach the
+        // 1000-asset cap, so page through the dedicated endpoint instead --
+        // mirroring publish-mirror.ts's write side. Otherwise any asset past
+        // the first page is invisible to reads and Nx rebuilds a cached task.
+        const assets = await octokit.paginate(
+          octokit.rest.repos.listReleaseAssets,
+          { owner, repo, release_id: release.data.id, per_page: 100 },
+        );
 
-    try {
-      const release = await octokit.rest.repos.getReleaseByTag({
-        owner,
-        repo,
-        tag,
-      });
-      // The `assets` array embedded in a release response is a non-paginated
-      // snapshot (~first page only); a shard is expected to approach the
-      // 1000-asset cap, so page through the dedicated endpoint instead --
-      // mirroring publish-mirror.ts's write side. Otherwise any asset past the
-      // first page is invisible to reads and Nx rebuilds a cached task.
-      const assets = await octokit.paginate(
-        octokit.rest.repos.listReleaseAssets,
-        { owner, repo, release_id: release.data.id, per_page: 100 },
-      );
+        return new Map(
+          assets.map((asset): [string, number] => [asset.name, asset.id]),
+        );
+      } catch (error) {
+        if (isNotFound(error)) {
+          return null;
+        }
 
-      assetsByName = new Map(
-        assets.map((asset): [string, number] => [asset.name, asset.id]),
-      );
-    } catch (error) {
-      if (isNotFound(error)) {
-        assetsByName = null;
-      } else {
         throw error;
       }
-    }
+    })();
 
-    shardCache.set(tag, assetsByName);
+    // A 404 resolves to a cached null (a missing shard stays missing for the
+    // process lifetime, as before). Any other fault rejects: evict it so the
+    // next lookup retries rather than caching the error -- a rate-limit/5xx
+    // must never poison every later read (see the "rethrows a non-404" spec).
+    shardCache.set(tag, pending);
+    void pending.catch(() => {
+      if (shardCache.get(tag) === pending) {
+        shardCache.delete(tag);
+      }
+    });
 
-    return assetsByName;
+    return pending;
   }
 
   async function findAssetId(hash: string): Promise<number | null> {

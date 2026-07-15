@@ -214,6 +214,42 @@ describe('createReleaseMirrorBackend', () => {
     expect(getReleaseAsset).toHaveBeenCalledTimes(2);
   });
 
+  it('coalesces concurrent cold-shard lookups into one API round-trip', async () => {
+    // Both hashes live in the current shard, and both GETs are launched via
+    // Promise.all -- i.e. the second starts before the first has resolved the
+    // shard. Without in-flight coalescing each would independently fetch the
+    // shard, stampeding the rate limit this cache exists to stay under. The
+    // sequential-await spec above cannot catch this; this one must.
+    const getReleaseByTag = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 100, assets: [] } });
+    const paginate = vi.fn().mockResolvedValue([
+      { id: 1, name: 'aaa.tar.gz' },
+      { id: 2, name: 'bbb.tar.gz' },
+    ]);
+    const getReleaseAsset = vi
+      .fn()
+      .mockResolvedValue({ data: Buffer.from('x') });
+    const octokit = makeOctokit({ getReleaseByTag, paginate, getReleaseAsset });
+
+    const backend = createReleaseMirrorBackend({
+      owner: 'op-nx',
+      repo: 'github-cache',
+      octokit,
+      now: () => NOW,
+    });
+
+    const [aaa, bbb] = await Promise.all([
+      backend.get('aaa'),
+      backend.get('bbb'),
+    ]);
+
+    expect(getReleaseByTag).toHaveBeenCalledTimes(1);
+    expect(paginate).toHaveBeenCalledTimes(1);
+    expect(aaa?.toString()).toBe('x');
+    expect(bbb?.toString()).toBe('x');
+  });
+
   it('always refuses writes', async () => {
     const octokit = makeOctokit({ getReleaseByTag: vi.fn() });
     const backend = createReleaseMirrorBackend({

@@ -186,11 +186,11 @@ async function getReleaseId(
 
     const releaseId = Number(result.stdout.trim());
 
-    // A successful lookup should yield a numeric id; guard the pathological
-    // case (empty/non-numeric stdout) so a NaN never slips past the
-    // `releaseId === null` check in cleanupShard and reaches a
-    // `/releases/NaN/assets` call that would crash the whole run.
-    return Number.isNaN(releaseId) ? null : releaseId;
+    // A valid release id is a positive integer. Guard the pathological cases so
+    // nothing bogus slips past the `releaseId === null` check in cleanupShard:
+    // non-numeric stdout is NaN, and -- crucially -- empty/whitespace stdout is
+    // Number('') === 0, which would otherwise reach a `/releases/0/assets` call.
+    return Number.isInteger(releaseId) && releaseId > 0 ? releaseId : null;
   } catch (error) {
     // Only a real 404 (shard doesn't exist yet) is a legitimate "no cleanup
     // needed" case -- matches release-mirror-backend.ts's isNotFound
@@ -247,7 +247,7 @@ async function cleanupShard(
   );
 
   for (const asset of assetsToDelete) {
-    await ghAllowFailure([
+    const result = await ghAllowFailure([
       'release',
       'delete-asset',
       shardTag,
@@ -256,6 +256,17 @@ async function cleanupShard(
       repo,
       '--yes',
     ]);
+
+    // Surface a failed prune. This path was previously fire-and-forget, so a
+    // persistent problem (e.g. the mirror token losing contents:write) let
+    // stale assets accumulate silently toward GitHub's 1000-asset-per-release
+    // cap until, far downstream, uploads start failing. Not fatal: a transient
+    // failure is retried by the next run's cleanup pass.
+    if (!result.ok) {
+      console.error(
+        `Failed to delete stale asset ${asset.name} from ${shardTag}: ${result.stderr}`,
+      );
+    }
   }
 
   // planShardCleanup applies no `assets.length > 0` guard by design: an
@@ -285,6 +296,15 @@ async function main(): Promise<void> {
 
   if (!repo) {
     throw new Error('GITHUB_REPOSITORY is required.');
+  }
+
+  // Match selectBackend's format check: a malformed value (missing the `/`)
+  // would otherwise be interpolated mid-path into `gh api repos/<repo>/...`
+  // and surface as a confusing GitHub error with no hint the env var is wrong.
+  const [owner, repoName] = repo.split('/');
+
+  if (!owner || !repoName) {
+    throw new Error(`GITHUB_REPOSITORY must be "owner/repo"; got "${repo}".`);
   }
 
   const defaultBranch = await resolveDefaultBranch(repo);

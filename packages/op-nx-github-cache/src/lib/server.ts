@@ -42,9 +42,19 @@ export const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024 * 1024;
 export function resolveMaxBodyBytes(envValue: string | undefined): number {
   const configured = Number(envValue);
 
-  return Number.isFinite(configured) && configured > 0
-    ? configured
-    : DEFAULT_MAX_BODY_BYTES;
+  if (Number.isFinite(configured) && configured > 0) {
+    return configured;
+  }
+
+  // Warn only when the operator set something we then ignored, so a typo isn't
+  // silently absorbed. An unset value is the normal path -- no warning.
+  if (envValue !== undefined) {
+    console.warn(
+      `MAX_CACHE_BODY_BYTES="${envValue}" is not a positive number; using default ${DEFAULT_MAX_BODY_BYTES}.`,
+    );
+  }
+
+  return DEFAULT_MAX_BODY_BYTES;
 }
 
 const MAX_BODY_BYTES = resolveMaxBodyBytes(process.env.MAX_CACHE_BODY_BYTES);

@@ -30,6 +30,12 @@ export function resolveMaxAgeDays(envValue: string | undefined): number {
   const configured = Number(envValue);
 
   if (!Number.isFinite(configured) || configured <= 0) {
+    if (envValue !== undefined) {
+      console.warn(
+        `CACHE_MIRROR_MAX_AGE_DAYS="${envValue}" is not a positive number; using default ${DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS}.`,
+      );
+    }
+
     return DEFAULT_CACHE_MIRROR_MAX_AGE_DAYS;
   }
 

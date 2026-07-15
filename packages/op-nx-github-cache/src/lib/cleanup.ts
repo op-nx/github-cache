@@ -44,9 +44,21 @@ export function selectAssetsToDelete(
 export function resolveMinDownloadCount(envValue: string | undefined): number {
   const configured = Number(envValue);
 
-  return Number.isFinite(configured) && configured > 0
-    ? Math.floor(configured)
-    : 0;
+  if (Number.isFinite(configured) && configured > 0) {
+    return Math.floor(configured);
+  }
+
+  // Unlike the other resolvers, this one's fallback (0) DISABLES a safety
+  // margin (the popularity floor), so a typo silently reverting protection to
+  // off is worth surfacing. `0`/`-0` is the documented explicit-off value --
+  // don't warn on it, only on genuinely unparseable/negative input.
+  if (envValue !== undefined && configured !== 0) {
+    console.warn(
+      `CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP="${envValue}" is not a positive number; popularity floor disabled.`,
+    );
+  }
+
+  return 0;
 }
 
 export interface ShardCleanupPlan {

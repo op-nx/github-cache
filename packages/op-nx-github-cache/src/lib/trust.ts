@@ -10,6 +10,10 @@ const TRUSTED_EVENTS = new Set([
   'delete',
   'registry_package',
   'page_build',
+  // Merge-queue runs: default-branch-adjacent, write-scoped, never fork-
+  // controlled. Omitting it silently disables cache writes on the merge queue
+  // -- the one workflow whose entire point is fast CI.
+  'merge_group',
 ]);
 
 export function isWriteTrusted(env: NodeJS.ProcessEnv): boolean {

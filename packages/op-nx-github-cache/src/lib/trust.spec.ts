@@ -9,6 +9,7 @@ const TRUSTED_EVENTS = [
   'delete',
   'registry_package',
   'page_build',
+  'merge_group',
 ];
 
 const UNTRUSTED_EVENTS = [

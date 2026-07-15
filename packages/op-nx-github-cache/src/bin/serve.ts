@@ -13,11 +13,22 @@ async function main(): Promise<void> {
   const backend = selectBackend(process.env);
   const server = createServer({ backend, token });
 
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
+    // A bind failure (EADDRINUSE, EACCES) fires 'error' on the server; without
+    // a listener it becomes an uncaught exception and this promise never
+    // settles. Route it to main().catch instead, then drop the listener once
+    // bound so a later runtime error keeps its default (crash) behavior.
+    const onError = (error: Error): void => reject(error);
+
+    server.once('error', onError);
+
     // Loopback only (never 0.0.0.0/all-interfaces) -- this is a write-capable
     // CI sidecar and must not be reachable from co-tenant processes sharing
     // the runner's network namespace.
-    server.listen(port, '127.0.0.1', resolve);
+    server.listen(port, '127.0.0.1', () => {
+      server.removeListener('error', onError);
+      resolve();
+    });
   });
 
   const address = server.address();

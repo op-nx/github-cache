@@ -1,9 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  planShardCleanup,
-  resolveMinDownloadCount,
-  selectAssetsToDelete,
-} from './cleanup.js';
+import { describe, expect, it } from 'vitest';
+import { planShardCleanup, selectAssetsToDelete } from './cleanup.js';
 
 const NOW = new Date('2026-07-15T00:00:00Z');
 const now = () => NOW;
@@ -15,144 +11,52 @@ function daysAgo(days: number): string {
 describe('selectAssetsToDelete', () => {
   it('deletes assets older than maxAgeDays and keeps newer ones', () => {
     const assets = [
-      { name: 'old.tar.gz', createdAt: daysAgo(31), downloadCount: 0 },
-      { name: 'new.tar.gz', createdAt: daysAgo(1), downloadCount: 0 },
+      { name: 'old.tar.gz', createdAt: daysAgo(31) },
+      { name: 'new.tar.gz', createdAt: daysAgo(1) },
     ];
 
-    const result = selectAssetsToDelete(assets, {
-      maxAgeDays: 30,
-      minDownloadCountToKeep: 0,
-      now,
-    });
+    const result = selectAssetsToDelete(assets, { maxAgeDays: 30, now });
 
     expect(result.map((asset) => asset.name)).toEqual(['old.tar.gz']);
   });
 
-  it('deletes all old assets by default (minDownloadCountToKeep 0 disables the popularity floor)', () => {
-    const assets = [
-      {
-        name: 'popular-old.tar.gz',
-        createdAt: daysAgo(60),
-        downloadCount: 10_000,
-      },
-    ];
-
-    const result = selectAssetsToDelete(assets, {
-      maxAgeDays: 30,
-      minDownloadCountToKeep: 0,
-      now,
-    });
-
-    expect(result).toHaveLength(1);
-  });
-
-  it('protects an old-but-popular asset once minDownloadCountToKeep is configured', () => {
-    const assets = [
-      {
-        name: 'popular-old.tar.gz',
-        createdAt: daysAgo(60),
-        downloadCount: 100,
-      },
-      {
-        name: 'unpopular-old.tar.gz',
-        createdAt: daysAgo(60),
-        downloadCount: 5,
-      },
-    ];
-
-    const result = selectAssetsToDelete(assets, {
-      maxAgeDays: 30,
-      minDownloadCountToKeep: 50,
-      now,
-    });
-
-    expect(result.map((asset) => asset.name)).toEqual(['unpopular-old.tar.gz']);
-  });
-
   it('keeps an asset exactly maxAgeDays old (age check is strict >, not >=)', () => {
     const result = selectAssetsToDelete(
-      [{ name: 'exact.tar.gz', createdAt: daysAgo(30), downloadCount: 0 }],
-      { maxAgeDays: 30, minDownloadCountToKeep: 0, now },
+      [{ name: 'exact.tar.gz', createdAt: daysAgo(30) }],
+      { maxAgeDays: 30, now },
     );
 
     expect(result).toHaveLength(0);
   });
 
-  it('protects an old asset whose downloadCount equals the floor (>= boundary)', () => {
+  it('never deletes a young asset', () => {
     const result = selectAssetsToDelete(
-      [{ name: 'at-floor.tar.gz', createdAt: daysAgo(60), downloadCount: 50 }],
-      { maxAgeDays: 30, minDownloadCountToKeep: 50, now },
+      [{ name: 'young.tar.gz', createdAt: daysAgo(1) }],
+      { maxAgeDays: 30, now },
     );
 
     expect(result).toHaveLength(0);
   });
 
-  it('never deletes a young asset regardless of download count', () => {
-    const assets = [
-      {
-        name: 'young-unpopular.tar.gz',
-        createdAt: daysAgo(1),
-        downloadCount: 0,
-      },
-    ];
-
-    const result = selectAssetsToDelete(assets, {
-      maxAgeDays: 30,
-      minDownloadCountToKeep: 50,
-      now,
-    });
+  it('keeps an asset with an unparseable createdAt rather than deleting it', () => {
+    // new Date('nonsense').getTime() is NaN, so ageMs is NaN and `NaN > max`
+    // is false -- the fail-safe direction is to keep, never to delete.
+    const result = selectAssetsToDelete(
+      [{ name: 'weird.tar.gz', createdAt: 'not-a-date' }],
+      { maxAgeDays: 30, now },
+    );
 
     expect(result).toHaveLength(0);
-  });
-});
-
-describe('resolveMinDownloadCount', () => {
-  it('uses a finite positive value, floored to whole downloads', () => {
-    expect(resolveMinDownloadCount('50')).toBe(50);
-    expect(resolveMinDownloadCount('5.9')).toBe(5);
-  });
-
-  it('falls back to 0 (floor off) on non-numeric, negative, or unset values', () => {
-    expect(resolveMinDownloadCount('not-a-number')).toBe(0);
-    expect(resolveMinDownloadCount('-5')).toBe(0);
-    expect(resolveMinDownloadCount('0')).toBe(0);
-    expect(resolveMinDownloadCount(undefined)).toBe(0);
-  });
-
-  describe('warnings (surface a typo that disables protection)', () => {
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
-
-    it('warns and disables the floor on a positive value below one whole download', () => {
-      // "0.5" floors to 0, i.e. protects nothing. It must not be silently
-      // accepted as a valid floor -- the resolver exists to surface exactly
-      // this kind of disabling typo.
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      expect(resolveMinDownloadCount('0.5')).toBe(0);
-      expect(warn).toHaveBeenCalledOnce();
-    });
-
-    it('does not warn on the explicit-off values 0 or a usable floor', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      resolveMinDownloadCount('0');
-      resolveMinDownloadCount('50');
-      resolveMinDownloadCount(undefined);
-
-      expect(warn).not.toHaveBeenCalled();
-    });
   });
 });
 
 describe('planShardCleanup', () => {
-  const options = { maxAgeDays: 30, minDownloadCountToKeep: 0, now };
+  const options = { maxAgeDays: 30, now };
 
   it('selects old assets for deletion and keeps young ones', () => {
     const assets = [
-      { name: 'old.tar.gz', createdAt: daysAgo(31), downloadCount: 0 },
-      { name: 'new.tar.gz', createdAt: daysAgo(1), downloadCount: 0 },
+      { name: 'old.tar.gz', createdAt: daysAgo(31) },
+      { name: 'new.tar.gz', createdAt: daysAgo(1) },
     ];
 
     const plan = planShardCleanup(assets, options, true);
@@ -164,17 +68,13 @@ describe('planShardCleanup', () => {
   });
 
   it('deletes the release when the shard is emptied and deletion is allowed', () => {
-    const assets = [
-      { name: 'old.tar.gz', createdAt: daysAgo(31), downloadCount: 0 },
-    ];
+    const assets = [{ name: 'old.tar.gz', createdAt: daysAgo(31) }];
 
     expect(planShardCleanup(assets, options, true).deleteRelease).toBe(true);
   });
 
   it('never deletes the release when deletion is disallowed (the just-uploaded current shard)', () => {
-    const assets = [
-      { name: 'old.tar.gz', createdAt: daysAgo(31), downloadCount: 0 },
-    ];
+    const assets = [{ name: 'old.tar.gz', createdAt: daysAgo(31) }];
 
     expect(planShardCleanup(assets, options, false).deleteRelease).toBe(false);
   });
@@ -185,8 +85,8 @@ describe('planShardCleanup', () => {
 
   it('does not delete the release while assets remain', () => {
     const assets = [
-      { name: 'old.tar.gz', createdAt: daysAgo(31), downloadCount: 0 },
-      { name: 'young.tar.gz', createdAt: daysAgo(1), downloadCount: 0 },
+      { name: 'old.tar.gz', createdAt: daysAgo(31) },
+      { name: 'young.tar.gz', createdAt: daysAgo(1) },
     ];
 
     expect(planShardCleanup(assets, options, true).deleteRelease).toBe(false);

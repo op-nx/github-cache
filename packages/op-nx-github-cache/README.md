@@ -179,21 +179,26 @@ misbehaving.
 | `GH_TOKEN` / `GITHUB_TOKEN`               | `serve` (local mirror)         | unset (anonymous)      | Lifts the mirror's read rate limit from 60 to 5000 req/hr.                |
 | `GITHUB_REPOSITORY`                       | `serve` (local mirror)         | (required locally)     | `owner/repo` the mirror reads from.                                       |
 | `CACHE_MIRROR_MAX_AGE_DAYS`               | `publish-mirror`, mirror reads | `30`                   | Retention window; couples cleanup and read lookback.                      |
-| `CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP` | `publish-mirror`               | `0` (off)              | Popularity floor that protects old-but-downloaded assets from cleanup.    |
 | `DEFAULT_BRANCH`                          | `publish-mirror`               | (looked up via `gh`)   | Skips the default-branch lookup; must be a maintainer-controlled literal. |
 
 ## Mirror cleanup
 
-`op-nx-github-cache-publish-mirror` also prunes the mirror after each upload:
-assets older than `CACHE_MIRROR_MAX_AGE_DAYS` (default 30) are deleted, unless
-`download_count` is at or above `CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP`
-(default `0`, i.e. off, so cleanup is age-only). `download_count` is a lifetime
-total, not a recency signal (the Release Asset API has no last-accessed
-field), so this is an explicit popularity _floor_, not true LRU. A hash cached
-late in a month whose shard is later pruned yields a cache miss (rebuild) on
-next read, not corruption. That's expected sharding/retention behavior, not a bug.
-The GitHub Actions cache backend needs no cleanup code at all: GitHub's own
-10GB/7-day eviction already covers it.
+Cache data auto-cleans by age in both backends:
+
+- **Local mirror (GitHub Releases):** `op-nx-github-cache-publish-mirror` prunes
+  the mirror after each upload -- assets older than `CACHE_MIRROR_MAX_AGE_DAYS`
+  (default 30) are deleted, and a month-shard release with nothing left is
+  removed. Retention is age-only: the Release Asset API exposes no last-accessed
+  timestamp (only a cumulative `download_count`, which never decays), so there
+  is no true-LRU signal to key off -- `created_at` age is the reliable one.
+  Retention is bounded by the same window reads walk (`CACHE_MIRROR_MAX_AGE_DAYS`),
+  so nothing is kept that a read could not reach anyway. A hash cached late in a
+  month whose shard is later pruned yields a cache miss (rebuild) on next read,
+  not corruption -- expected sharding/retention behavior.
+- **CI (GitHub Actions cache):** needs no cleanup code. GitHub evicts natively
+  by both age and true LRU -- entries unused for 7 days are removed, and at the
+  per-repo size cap (10 GB by default) it evicts by last-access date, oldest
+  first.
 
 ## `act`-based local integration test harness (opt-in, test-only)
 

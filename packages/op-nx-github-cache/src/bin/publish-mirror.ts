@@ -5,11 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { restoreCache } from '@actions/cache';
 import { cacheArchivePath } from '../lib/backends/actions-cache-backend.js';
-import {
-  planShardCleanup,
-  resolveMinDownloadCount,
-  type ReleaseAsset,
-} from '../lib/cleanup.js';
+import { planShardCleanup, type ReleaseAsset } from '../lib/cleanup.js';
 import {
   monthTag,
   resolveMaxAgeDays,
@@ -21,9 +17,6 @@ import { HASH_PATTERN } from '../lib/types.js';
 const exec = promisify(execFile);
 
 const MAX_AGE_DAYS = resolveMaxAgeDays(process.env.CACHE_MIRROR_MAX_AGE_DAYS);
-const MIN_DOWNLOAD_COUNT_TO_KEEP = resolveMinDownloadCount(
-  process.env.CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP,
-);
 
 // `gh` reports these conditions only as human-readable stderr, not structured
 // exit codes; matching the text is brittle across gh versions but is the only
@@ -219,7 +212,7 @@ async function listShardAssets(
     `repos/${repo}/releases/${releaseId}/assets`,
     '--paginate',
     '-q',
-    '.[] | {name: .name, createdAt: .created_at, downloadCount: .download_count}',
+    '.[] | {name: .name, createdAt: .created_at}',
   ]);
 
   return output
@@ -245,10 +238,7 @@ async function cleanupShard(
   const assets = await listShardAssets(repo, releaseId);
   const { assetsToDelete, deleteRelease } = planShardCleanup(
     assets,
-    {
-      maxAgeDays: MAX_AGE_DAYS,
-      minDownloadCountToKeep: MIN_DOWNLOAD_COUNT_TO_KEEP,
-    },
+    { maxAgeDays: MAX_AGE_DAYS },
     allowShardDeletion,
   );
 

@@ -66,10 +66,21 @@ async function main(): Promise<void> {
     console.log(`::add-mask::${token}`);
 
     if (process.env.GITHUB_ENV) {
-      await appendFile(
-        process.env.GITHUB_ENV,
-        `NX_SELF_HOSTED_REMOTE_CACHE_SERVER=${url}\nNX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}\n`,
-      );
+      try {
+        await appendFile(
+          process.env.GITHUB_ENV,
+          `NX_SELF_HOSTED_REMOTE_CACHE_SERVER=${url}\nNX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}\n`,
+        );
+      } catch (error) {
+        // The server is already listening, which keeps the event loop alive.
+        // Without closing it here, main().catch's `process.exitCode = 1` never
+        // takes effect -- the process hangs instead of exiting, and the CI
+        // step that polls $GITHUB_ENV blocks until its own timeout. Close the
+        // socket so the non-zero exit is reached.
+        server.close();
+
+        throw error;
+      }
     }
 
     console.log(`@op-nx/github-cache listening on ${url}`);

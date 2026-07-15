@@ -54,8 +54,20 @@ async function ghAllowFailure(
   }
 }
 
+const BRANCH_NAME_PATTERN = /^[\w./-]+$/;
+
 async function resolveDefaultBranch(repo: string): Promise<string> {
   if (process.env.DEFAULT_BRANCH) {
+    // Hardens nothing exploitable on its own (README already documents this
+    // as maintainer-controlled, and its only use -- the GITHUB_REF equality
+    // check below -- is defense-in-depth, not the load-bearing control), but
+    // rejecting whitespace/control characters is a free correctness guard.
+    if (!BRANCH_NAME_PATTERN.test(process.env.DEFAULT_BRANCH)) {
+      throw new Error(
+        `DEFAULT_BRANCH "${process.env.DEFAULT_BRANCH}" is not a plausible branch name.`,
+      );
+    }
+
     return process.env.DEFAULT_BRANCH;
   }
 

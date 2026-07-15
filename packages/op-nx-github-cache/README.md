@@ -68,7 +68,8 @@ job that also builds PR code -- the classic "pwn request" pattern), and grant
 `gh repo view` lookup), its value must be a literal you control -- never a
 GitHub Actions expression interpolating PR-controlled data (e.g. a PR title
 or body). `publish-mirror` compares `GITHUB_REF` against it as its
-(defense-in-depth-only) ref check.
+(defense-in-depth-only) ref check. `publish-mirror` also rejects a
+`DEFAULT_BRANCH` containing whitespace or control characters outright.
 
 **Known limitation:** the Actions-cache backend and `publish-mirror` both
 stage a hash's archive at the same deterministic per-hash temp path (required

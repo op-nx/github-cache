@@ -54,7 +54,7 @@ async function ghAllowFailure(
   }
 }
 
-const BRANCH_NAME_PATTERN = /^[\w./-]+$/;
+export const BRANCH_NAME_PATTERN = /^[\w./-]+$/;
 
 async function resolveDefaultBranch(repo: string): Promise<string> {
   if (process.env.DEFAULT_BRANCH) {
@@ -317,7 +317,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+// Only run as a CLI entry point, not when imported (e.g. by publish-mirror.spec.ts).
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

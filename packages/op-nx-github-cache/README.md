@@ -46,11 +46,10 @@ jobs:
       - uses: actions/checkout@v4
       - run: npm ci
       - name: Start cache server
-        run: npx op-nx-github-cache-serve
+        run: |
+          npx op-nx-github-cache-serve &
+          timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npx nx affected -t build test
-        env:
-          NX_SELF_HOSTED_REMOTE_CACHE_SERVER: ${{ env.NX_SELF_HOSTED_REMOTE_CACHE_SERVER }}
-          NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN: ${{ env.NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN }}
 
   publish-mirror:
     needs: build
@@ -72,10 +71,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-`serve` appends the two `NX_SELF_HOSTED_REMOTE_CACHE_*` vars straight to
-`$GITHUB_ENV`, which GitHub Actions auto-exports to every later step in the
-same job. The `env:` block above just forwards them into `nx affected`'s
-process; no extra plumbing needed.
+`serve` never exits on its own: `server.listen()` keeps the process alive for
+the rest of the job, so the CI step above backgrounds it with `&` and polls
+`$GITHUB_ENV` until `serve` has appended its two `NX_SELF_HOSTED_REMOTE_CACHE_*`
+vars (GitHub Actions auto-exports those to every later step in the same job,
+so `nx affected` picks them up with no further plumbing). Running `serve` in
+the foreground instead would hang the step forever.
 
 **MUST:** never invoke `op-nx-github-cache-publish-mirror` from a job that
 also checks out or runs untrusted PR-controlled code (no `pull_request_target`

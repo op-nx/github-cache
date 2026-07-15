@@ -52,8 +52,9 @@ export function createReleaseMirrorBackend(
   // not exist yet). `serve` is long-lived and the mirror is only ever written
   // by CI, so caching each shard's asset list for the process lifetime turns
   // an `nx affected`'s N cache lookups from ~2N GitHub API calls into a handful
-  // (one per shard in the window), which keeps an anonymous client under the
-  // 60 req/hr limit. Trade-off: a hash published mid-session isn't seen until
+  // (about two per shard in the window -- getReleaseByTag plus a paginated
+  // listReleaseAssets), which keeps an anonymous client under the 60 req/hr
+  // limit. Trade-off: a hash published mid-session isn't seen until
   // `serve` restarts -- an acceptable extra miss, never a wrong result.
   const shardCache = new Map<string, Map<string, number> | null>();
 

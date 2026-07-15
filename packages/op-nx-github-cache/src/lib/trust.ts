@@ -10,8 +10,12 @@ const TRUSTED_EVENTS = new Set([
   'delete',
   'registry_package',
   'page_build',
-  // Merge-queue runs: default-branch-adjacent, write-scoped, never fork-
-  // controlled. Omitting it silently disables cache writes on the merge queue
+  // Merge-queue runs: the TRIGGER is collaborator-gated (only a maintainer can
+  // enqueue a PR), so it correctly keeps write access under GitHub's model. The
+  // executed code is the speculative base+PR merge -- so it may be PR-authored,
+  // but only post-approval, and Nx entries are content-addressed over the full
+  // merged source, so a dropped merge just leaves an inert wrong-key entry.
+  // Omitting merge_group would silently disable cache writes on the merge queue
   // -- the one workflow whose entire point is fast CI.
   'merge_group',
 ]);

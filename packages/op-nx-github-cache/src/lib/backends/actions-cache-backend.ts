@@ -93,7 +93,8 @@ export function createActionsCacheBackend(): CacheBackend {
 
           // ponytail: -1 collapses "already exists" and "write denied" into
           // one case (see module doc comment); treat as an idempotent no-op
-          // (409), matching the mirror backend's own catch-and-no-op pattern.
+          // (409), matching publish-mirror.ts's "already exists" -> no-op
+          // handling, for the same content-addressed-immutability reason.
           return cacheId === -1 ? 'conflict' : 'stored';
         } finally {
           await rm(filePath, { force: true });

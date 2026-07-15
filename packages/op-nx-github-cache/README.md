@@ -26,6 +26,19 @@ or pay for.
   `store()` reports failure by return value, not by throwing), so PR builds
   still pass -- `npm run test:act:untrusted` exercises this end to end.
 
+> **Why this holds, and its one assumption.** `isWriteTrusted()` keys off
+> `GITHUB_EVENT_NAME`, which a fork `pull_request` can set itself (it controls
+> its own workflow file), so this in-process gate is defense-in-depth, not a
+> boundary. The load-bearing control against a spoofed event is GitHub's own
+> server-side cache token: since 2026-06-26 GitHub issues a **read-only** cache
+> token to untrusted triggers, so `@actions/cache`'s `saveCache` is denied at
+> the service regardless of what `isWriteTrusted()` returns. This posture
+> therefore assumes a GitHub deployment that ships that enforcement (github.com,
+> or a GHES / data-residency version new enough to have it). On an older runner
+> talking to a cache service without it, the env-spoof would flip both the gate
+> and the token open -- so keep untrusted PR code out of any job that can reach
+> a write-scoped token, exactly as the mirror guidance below already requires.
+
 ## Prerequisites
 
 - Node.js + npm to run the `npx` commands below.
@@ -102,7 +115,12 @@ so `@actions/cache` can match a save to a later restore, see
 in-process lock. This is safe in the CI wiring above, where `build` and
 `publish-mirror` are separate jobs on separate (ephemeral, GitHub-hosted)
 runner VMs. It is NOT safe if you run `serve` and `publish-mirror` concurrently
-on the same self-hosted runner host, so don't do that.
+on the same self-hosted runner host, so don't do that. For the same reason (the
+per-hash temp path under `tmpdir()` is predictable and shared), avoid a
+persistent runner shared with untrusted jobs: a co-tenant could pre-create that
+path as a symlink and turn a cache write into an arbitrary-file overwrite.
+Ephemeral, single-tenant GitHub-hosted runners -- the documented deployment --
+are unaffected.
 
 ## How Nx targets this server
 

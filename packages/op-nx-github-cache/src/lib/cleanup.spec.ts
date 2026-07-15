@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   planShardCleanup,
   resolveMinDownloadCount,
@@ -117,6 +117,32 @@ describe('resolveMinDownloadCount', () => {
     expect(resolveMinDownloadCount('-5')).toBe(0);
     expect(resolveMinDownloadCount('0')).toBe(0);
     expect(resolveMinDownloadCount(undefined)).toBe(0);
+  });
+
+  describe('warnings (surface a typo that disables protection)', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('warns and disables the floor on a positive value below one whole download', () => {
+      // "0.5" floors to 0, i.e. protects nothing. It must not be silently
+      // accepted as a valid floor -- the resolver exists to surface exactly
+      // this kind of disabling typo.
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      expect(resolveMinDownloadCount('0.5')).toBe(0);
+      expect(warn).toHaveBeenCalledOnce();
+    });
+
+    it('does not warn on the explicit-off values 0 or a usable floor', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      resolveMinDownloadCount('0');
+      resolveMinDownloadCount('50');
+      resolveMinDownloadCount(undefined);
+
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 });
 

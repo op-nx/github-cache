@@ -39,22 +39,26 @@ export function selectAssetsToDelete(
 // The popularity-floor env knob's resolver. A non-numeric or negative value
 // must not silently become a trap -- fall back to 0 (floor off, age-only
 // cleanup, the documented default), the same fall-back shape resolveMaxAgeDays
-// and resolveMaxBodyBytes use. Fractional values are floored to whole
-// downloads.
+// and resolveMaxBodyBytes use. A value of 1 or more is floored to whole
+// downloads (5.9 -> 5); a positive value below 1 rounds to 0, which would
+// silently mean "off", so it is warned like any other disabling typo.
 export function resolveMinDownloadCount(envValue: string | undefined): number {
   const configured = Number(envValue);
 
-  if (Number.isFinite(configured) && configured > 0) {
+  // `>= 1`, not `> 0`: a sub-1 positive (e.g. "0.5") floors to 0 and so cannot
+  // protect anything -- fall through to the warn path rather than returning a
+  // misleading 0 as if it were a valid configured floor.
+  if (Number.isFinite(configured) && configured >= 1) {
     return Math.floor(configured);
   }
 
   // Unlike the other resolvers, this one's fallback (0) DISABLES a safety
   // margin (the popularity floor), so a typo silently reverting protection to
   // off is worth surfacing. `0`/`-0` is the documented explicit-off value --
-  // don't warn on it, only on genuinely unparseable/negative input.
+  // don't warn on it, only on genuinely unparseable/negative/sub-1 input.
   if (envValue !== undefined && configured !== 0) {
     console.warn(
-      `CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP="${envValue}" is not a positive number; popularity floor disabled.`,
+      `CACHE_MIRROR_MIN_DOWNLOAD_COUNT_TO_KEEP="${envValue}" is not a positive whole number of downloads; popularity floor disabled.`,
     );
   }
 

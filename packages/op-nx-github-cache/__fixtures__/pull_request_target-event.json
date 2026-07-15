@@ -2,7 +2,10 @@
   "action": "opened",
   "pull_request": {
     "number": 1,
-    "head": { "ref": "untrusted-branch", "sha": "0000000000000000000000000000000000000000" },
+    "head": {
+      "ref": "untrusted-branch",
+      "sha": "0000000000000000000000000000000000000000"
+    },
     "base": { "ref": "main" }
   }
 }

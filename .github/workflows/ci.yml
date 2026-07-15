@@ -20,7 +20,9 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      - run: npm run format:check
+      # --all: pull_request checkouts don't have a local `main` ref for Nx's
+      # default git-diff base, so diff-based format:check always fails here.
+      - run: npx nx format:check --all
 
   build:
     runs-on: ubuntu-latest
@@ -32,6 +34,13 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx nx build @op-nx/github-cache
+      # node, not `npx op-nx-github-cache-serve`: npm only links a workspace
+      # bin shim if its target exists at `npm ci` time, and dist/bin/*.js
+      # doesn't exist until the build step above runs. This is a
+      # self-consumption-only quirk (consuming repos install the published
+      # package with dist/ already built), so the README's own `npx <bin>`
+      # snippet stays correct for consumers -- only this repo's own dogfood
+      # wiring needs the direct node invocation.
       - name: Start cache server
         run: |
           node packages/op-nx-github-cache/dist/bin/serve.js &

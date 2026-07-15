@@ -84,6 +84,9 @@ jobs:
         run: |
           setsid node packages/op-nx-github-cache/dist/bin/serve.js < /dev/null &
           timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
+      # DEBUG (TEMPORARY): direct reachability probe, bypassing Nx entirely.
+      - name: Debug curl probe
+        run: curl -v "$NX_SELF_HOSTED_REMOTE_CACHE_SERVER/v1/cache/deadbeefdeadbeef"
       - run: npm run typecheck
 
   test:

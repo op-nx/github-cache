@@ -2,7 +2,13 @@
   "name": "@op-nx/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "build": "nx run-many -t build",
+    "typecheck": "nx run-many -t typecheck",
+    "test": "nx run-many -t test-ci",
+    "format": "nx format:write",
+    "format:check": "nx format:check"
+  },
   "private": true,
   "dependencies": {},
   "devDependencies": {

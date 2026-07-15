@@ -30,6 +30,13 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    # GitHub's cache-save API requires `actions: write` on the job token;
+    # `actions: read` (the workflow-level default) only permits restores, so
+    # every write attempt from the self-hosted cache server here silently
+    # no-ops without this override.
+    permissions:
+      actions: write
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -53,6 +60,10 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    # See build job's comment: actions: write is required for cache saves.
+    permissions:
+      actions: write
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -69,6 +80,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # See build job's comment: actions: write is required for cache saves.
+    permissions:
+      actions: write
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

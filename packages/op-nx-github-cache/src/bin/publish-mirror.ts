@@ -156,14 +156,26 @@ async function getReleaseId(
   repo: string,
   shardTag: string,
 ): Promise<number | null> {
-  const result = await exec('gh', [
-    'api',
-    `repos/${repo}/releases/tags/${shardTag}`,
-    '-q',
-    '.id',
-  ]).catch(() => null);
+  try {
+    const result = await exec('gh', [
+      'api',
+      `repos/${repo}/releases/tags/${shardTag}`,
+      '-q',
+      '.id',
+    ]);
 
-  return result ? Number(result.stdout.trim()) : null;
+    return Number(result.stdout.trim());
+  } catch (error) {
+    // Only a real 404 (shard doesn't exist yet) is a legitimate "no cleanup
+    // needed" case -- matches release-mirror-backend.ts's isNotFound
+    // discrimination. Any other failure (auth, rate-limit, network) must
+    // surface, not be silently treated as "nothing to clean up".
+    if ((error as ExecFailure)?.stderr?.includes('HTTP 404')) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 async function listShardAssets(

@@ -34,7 +34,7 @@ jobs:
       - run: npx nx build @op-nx/github-cache
       - name: Start cache server
         run: |
-          npx op-nx-github-cache-serve &
+          node packages/op-nx-github-cache/dist/bin/serve.js &
           timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run build
 
@@ -50,7 +50,7 @@ jobs:
       - run: npx nx build @op-nx/github-cache
       - name: Start cache server
         run: |
-          npx op-nx-github-cache-serve &
+          node packages/op-nx-github-cache/dist/bin/serve.js &
           timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run typecheck
 
@@ -66,7 +66,7 @@ jobs:
       - run: npx nx build @op-nx/github-cache
       - name: Start cache server
         run: |
-          npx op-nx-github-cache-serve &
+          node packages/op-nx-github-cache/dist/bin/serve.js &
           timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
       - run: npm run test
 
@@ -84,6 +84,6 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx nx build @op-nx/github-cache
-      - run: npx op-nx-github-cache-publish-mirror
+      - run: node packages/op-nx-github-cache/dist/bin/publish-mirror.js
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

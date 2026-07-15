@@ -18,6 +18,31 @@ export function cacheArchivePath(hash: string): string {
   return join(tmpdir(), 'op-nx-github-cache', `${hash}.tar.gz`);
 }
 
+// Sharing one deterministic path per hash (above) means concurrent requests
+// for the SAME hash now share one file on disk -- a PUT's writeFile/rm could
+// otherwise interleave with a concurrent GET's restoreCache/readFile for that
+// hash, risking a truncated read. This per-hash lock serializes only same-hash
+// operations (chaining onto the previous promise for that key); different
+// hashes still run fully concurrently.
+// ponytail: in-process lock only; fine for one server instance, drop if this
+// backend is ever run single-flight behind a queue instead.
+const locks = new Map<string, Promise<unknown>>();
+
+function withHashLock<T>(hash: string, run: () => Promise<T>): Promise<T> {
+  const previous = locks.get(hash) ?? Promise.resolve();
+  const next = previous.then(run, run);
+
+  locks.set(
+    hash,
+    next.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+
+  return next;
+}
+
 // @actions/cache's public saveCache()/restoreCache() are best-effort by
 // design (verified against actions/toolkit source): they catch reservation
 // and read/write-policy denials internally, log a warning, and return a
@@ -30,40 +55,44 @@ export function cacheArchivePath(hash: string): string {
 // the sole in-code write control.
 export function createActionsCacheBackend(): CacheBackend {
   return {
-    async get(hash: string): Promise<Buffer | null> {
-      const filePath = cacheArchivePath(hash);
+    get(hash: string): Promise<Buffer | null> {
+      return withHashLock(hash, async () => {
+        const filePath = cacheArchivePath(hash);
 
-      await mkdir(join(filePath, '..'), { recursive: true });
+        await mkdir(join(filePath, '..'), { recursive: true });
 
-      try {
-        const hit = await restoreCache([filePath], hash, []);
+        try {
+          const hit = await restoreCache([filePath], hash, []);
 
-        if (!hit) {
-          return null;
+          if (!hit) {
+            return null;
+          }
+
+          return await readFile(filePath);
+        } finally {
+          await rm(filePath, { force: true });
         }
-
-        return await readFile(filePath);
-      } finally {
-        await rm(filePath, { force: true });
-      }
+      });
     },
 
-    async put(hash: string, body: Buffer): Promise<PutResult> {
-      const filePath = cacheArchivePath(hash);
+    put(hash: string, body: Buffer): Promise<PutResult> {
+      return withHashLock(hash, async () => {
+        const filePath = cacheArchivePath(hash);
 
-      await mkdir(join(filePath, '..'), { recursive: true });
+        await mkdir(join(filePath, '..'), { recursive: true });
 
-      try {
-        await writeFile(filePath, body);
-        const cacheId = await saveCache([filePath], hash);
+        try {
+          await writeFile(filePath, body);
+          const cacheId = await saveCache([filePath], hash);
 
-        // ponytail: -1 collapses "already exists" and "write denied" into one
-        // case (see module doc comment); treat as an idempotent no-op (409),
-        // matching the mirror backend's own catch-and-no-op pattern.
-        return cacheId === -1 ? 'conflict' : 'stored';
-      } finally {
-        await rm(filePath, { force: true });
-      }
+          // ponytail: -1 collapses "already exists" and "write denied" into
+          // one case (see module doc comment); treat as an idempotent no-op
+          // (409), matching the mirror backend's own catch-and-no-op pattern.
+          return cacheId === -1 ? 'conflict' : 'stored';
+        } finally {
+          await rm(filePath, { force: true });
+        }
+      });
     },
   };
 }

@@ -88,6 +88,8 @@ jobs:
       - name: Debug curl probe
         run: curl -v "$NX_SELF_HOSTED_REMOTE_CACHE_SERVER/v1/cache/deadbeefdeadbeef"
       - run: npm run typecheck
+        env:
+          NX_VERBOSE_LOGGING: 'true'
 
   test:
     runs-on: ubuntu-latest

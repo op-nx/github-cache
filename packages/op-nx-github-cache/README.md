@@ -92,10 +92,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
-      - run: npx nx build @op-nx/github-cache
-      - run: npx op-nx-github-cache-publish-mirror
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # A JS action: @actions/cache's restoreCache (which downloads the cache
+      # content to mirror) needs the Actions runtime env, injected only into JS
+      # actions -- there is no gh/REST download for cache content. token
+      # defaults to the job's GITHUB_TOKEN; the job grants actions:read (list
+      # the caches) + contents:write (upload/prune the mirror).
+      - uses: op-nx/github-cache/publish-mirror@main # pin a SHA or release tag
 ```
 
 `serve` never exits on its own: `server.listen()` keeps the process alive for

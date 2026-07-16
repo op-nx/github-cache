@@ -106,7 +106,12 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Bootstrap so dist/bin/publish-mirror.js exists for the action to run.
       - run: npx nx build @op-nx/github-cache
-      - run: node packages/op-nx-github-cache/dist/bin/publish-mirror.js
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # A JS action so @actions/cache's restoreCache is handed the Actions cache
+      # runtime env (there is no gh/REST download for cache content). command
+      # points at the built bin directly (the bin shim isn't linked until dist/
+      # exists at install time); token defaults to the job's GITHUB_TOKEN.
+      - uses: ./publish-mirror
+        with:
+          command: node packages/op-nx-github-cache/dist/bin/publish-mirror.js

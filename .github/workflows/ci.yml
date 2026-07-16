@@ -5,6 +5,10 @@ on:
     branches:
       - main
   pull_request:
+  # TEMPORARY: pre-merge verification of the start-cache-server refactor.
+  # workflow_dispatch is a trusted write event, so dispatching twice on the same
+  # commit exercises the real Actions-cache round-trip. Remove before merge.
+  workflow_dispatch:
 
 permissions:
   actions: read

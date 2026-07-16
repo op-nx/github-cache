@@ -32,6 +32,28 @@
         "currentVersionResolver": "git-tag",
         "fallbackCurrentVersionResolver": "disk"
       }
+    },
+    "targets": {
+      "typecheck": {
+        "outputs": [
+          "{projectRoot}/tsconfig.tsbuildinfo",
+          "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}",
+          "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}.map",
+          "{projectRoot}/dist/tsconfig.lib.tsbuildinfo",
+          "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}",
+          "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}.map",
+          "{projectRoot}/out-tsc/vitest/tsconfig.spec.tsbuildinfo"
+        ]
+      },
+      "integration": {
+        "command": "vitest --config vitest.integration.config.mts",
+        "options": {
+          "cwd": "packages/op-nx-github-cache"
+        },
+        "outputs": [
+          "{projectRoot}/test-output/vitest/coverage-integration"
+        ]
+      }
     }
   },
   "dependencies": {

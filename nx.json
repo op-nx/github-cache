@@ -28,7 +28,6 @@
       "plugin": "@nx/vitest",
       "options": {
         "testTargetName": "test",
-        "ciTargetName": "test-ci",
         "testMode": "watch"
       }
     }
@@ -58,6 +57,22 @@
         { "dependentTasksOutputFiles": "**/*.js", "transitive": true }
       ]
     },
+    "integration": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": [
+        "default",
+        "^production",
+        { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
+        {
+          "json": "{workspaceRoot}/tsconfig.json",
+          "fields": ["compilerOptions"]
+        },
+        { "externalDependencies": ["vitest"] },
+        { "dependentTasksOutputFiles": "**/*.js", "transitive": true },
+        { "env": "RUNNER_OS" }
+      ]
+    },
     "build": {
       "inputs": [
         "{projectRoot}/package.json",
@@ -77,7 +92,7 @@
         "!{projectRoot}/src/**/*.test.jsx",
         "!{projectRoot}/src/**/*.spec.jsx",
         {
-          "dependentTasksOutputFiles": "**/*.{d.ts,d.cts,d.mts,tsbuildinfo}",
+          "dependentTasksOutputFiles": "**/*.{d.ts,d.cts,d.mts}",
           "transitive": true
         },
         {
@@ -99,7 +114,7 @@
       "inputs": [
         "production",
         {
-          "dependentTasksOutputFiles": "**/*.{d.ts,d.cts,d.mts,tsbuildinfo}",
+          "dependentTasksOutputFiles": "**/*.{d.ts,d.cts,d.mts}",
           "transitive": true
         },
         {

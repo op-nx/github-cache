@@ -29,12 +29,11 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    # GitHub's cache-save API requires `actions: write` on the job token;
-    # `actions: read` (the workflow-level default) only permits restores, so
-    # every write attempt from the self-hosted cache server here silently
-    # no-ops without this override.
+    # contents: read only. @actions/cache authenticates to the cache service
+    # with ACTIONS_RUNTIME_TOKEN (exported below), not the GITHUB_TOKEN, so no
+    # actions:write scope is needed; cache writes are gated to trusted events by
+    # GitHub server-side regardless.
     permissions:
-      actions: write
       contents: read
     steps:
       - uses: actions/checkout@v7
@@ -55,6 +54,31 @@ jobs:
       # step's exit -- GitHub Actions' runner kills a step's whole process
       # group when the step's script finishes, and a plain `cmd &` background
       # job stays in that group.
+      # See the typecheck job: expose @actions/cache's runtime env to the
+      # run:-spawned server (trusted events only) so save/restore work.
+      - name: Export Actions cache runtime env
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            for (const key of [
+              'ACTIONS_RESULTS_URL',
+              'ACTIONS_CACHE_URL',
+              'ACTIONS_RUNTIME_TOKEN',
+              'ACTIONS_CACHE_SERVICE_V2',
+            ]) {
+              const value = process.env[key];
+
+              if (!value) {
+                continue;
+              }
+
+              if (key === 'ACTIONS_RUNTIME_TOKEN') {
+                core.setSecret(value);
+              }
+
+              core.exportVariable(key, value);
+            }
       - name: Start cache server
         run: |
           setsid node packages/op-nx-github-cache/dist/bin/serve.js < /dev/null &
@@ -63,9 +87,8 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
-    # See build job's comment: actions: write is required for cache saves.
+    # See build job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
     permissions:
-      actions: write
       contents: read
     steps:
       - uses: actions/checkout@v7
@@ -114,9 +137,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    # See build job's comment: actions: write is required for cache saves.
+    # See build job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
     permissions:
-      actions: write
       contents: read
     steps:
       - uses: actions/checkout@v7
@@ -126,6 +148,31 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx nx build @op-nx/github-cache
+      # See the typecheck job: expose @actions/cache's runtime env to the
+      # run:-spawned server (trusted events only) so save/restore work.
+      - name: Export Actions cache runtime env
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            for (const key of [
+              'ACTIONS_RESULTS_URL',
+              'ACTIONS_CACHE_URL',
+              'ACTIONS_RUNTIME_TOKEN',
+              'ACTIONS_CACHE_SERVICE_V2',
+            ]) {
+              const value = process.env[key];
+
+              if (!value) {
+                continue;
+              }
+
+              if (key === 'ACTIONS_RUNTIME_TOKEN') {
+                core.setSecret(value);
+              }
+
+              core.exportVariable(key, value);
+            }
       - name: Start cache server
         run: |
           setsid node packages/op-nx-github-cache/dist/bin/serve.js < /dev/null &

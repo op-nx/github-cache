@@ -103,19 +103,34 @@ export function filterMirrorShardTags(newlineSeparatedTags: string): string[] {
     .filter((tag) => MIRROR_SHARD_PATTERN.test(tag));
 }
 
-async function listActionsCacheHashes(
+// `gh api` switches the HTTP method to POST as soon as any -f/-F field is
+// present unless the method is set explicitly. This endpoint is GET-only, so an
+// unqualified `-f ref=...` POSTs to it and returns 404 ("Not Found"), which
+// looks like a permissions problem but isn't. Force GET. Extracted pure (like
+// filterNxCacheKeys) so the method choice stays asserted without the `gh`
+// dependency -- the mocked-gh spec could never have caught this.
+export function actionsCachesListArgs(
   repo: string,
   defaultBranch: string,
-): Promise<string[]> {
-  const output = await gh([
+): string[] {
+  return [
     'api',
+    '-X',
+    'GET',
     `repos/${repo}/actions/caches`,
     '--paginate',
     '-f',
     `ref=refs/heads/${defaultBranch}`,
     '-q',
     '.actions_caches[].key',
-  ]);
+  ];
+}
+
+async function listActionsCacheHashes(
+  repo: string,
+  defaultBranch: string,
+): Promise<string[]> {
+  const output = await gh(actionsCachesListArgs(repo, defaultBranch));
 
   return filterNxCacheKeys(output);
 }

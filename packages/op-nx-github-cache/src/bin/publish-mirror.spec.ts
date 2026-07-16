@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  actionsCachesListArgs,
   BRANCH_NAME_PATTERN,
   filterMirrorShardTags,
   filterNxCacheKeys,
 } from './publish-mirror.js';
+
+describe('actionsCachesListArgs (forces GET so gh does not POST on -f)', () => {
+  it('sets the method to GET before the caches endpoint', () => {
+    const args = actionsCachesListArgs('owner/repo', 'main');
+
+    // gh flips to POST when a -f field is present unless the method is forced;
+    // the caches endpoint is GET-only, so -X GET must precede everything else.
+    expect(args.slice(0, 3)).toEqual(['api', '-X', 'GET']);
+    expect(args).toContain('repos/owner/repo/actions/caches');
+    expect(args).toContain('ref=refs/heads/main');
+  });
+});
 
 describe('BRANCH_NAME_PATTERN (DEFAULT_BRANCH validation)', () => {
   it.each(['main', 'release/2026.07', 'feature-branch', 'v1.2.3'])(

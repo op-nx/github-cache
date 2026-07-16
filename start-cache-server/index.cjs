@@ -1,7 +1,9 @@
 'use strict';
 
 const { spawn } = require('node:child_process');
-const { existsSync, readFileSync } = require('node:fs');
+const { existsSync, readFileSync, openSync } = require('node:fs');
+const { join } = require('node:path');
+const { tmpdir } = require('node:os');
 
 // Mirrors packages/op-nx-github-cache/src/lib/trust.ts (TRUSTED_EVENTS) -- keep
 // in sync. These are GitHub's write-scoped trigger events. On anything else the
@@ -80,16 +82,28 @@ async function main() {
   const command = env.INPUT_COMMAND || 'npx op-nx-github-cache-serve';
 
   // Detached so the server outlives this action -- later steps read its
-  // NX_SELF_HOSTED_REMOTE_CACHE_* vars from $GITHUB_ENV. stdout is INHERITED,
-  // never redirected: serve prints `::add-mask::<token>` at startup and that
-  // must reach the runner's command processor to mask its bearer token;
-  // redirecting stdout to a file would leak the token unmasked into later steps.
-  // The child inherits `env` -- including ACTIONS_RUNTIME_TOKEN -- directly, so
-  // the token never touches $GITHUB_ENV (where every later step would see it).
+  // NX_SELF_HOSTED_REMOTE_CACHE_* vars from $GITHUB_ENV. The child inherits `env`
+  // -- including ACTIONS_RUNTIME_TOKEN -- directly, so the token never touches
+  // $GITHUB_ENV (where every later step would see it).
+  //
+  // stdout handling is platform-split. On POSIX we INHERIT it: serve prints
+  // `::add-mask::<token>` at startup, and inheriting sends it straight to the
+  // runner's command processor so the bearer token is masked. On Windows that
+  // same inheritance is fatal -- the child holds the step's stdout PIPE, which
+  // the runner closes at step end; the next write kills the detached server
+  // (verified on windows-11-arm: "cache server is ready", then unreachable in
+  // the next step). So on Windows the child writes to its own file, decoupled
+  // from the step pipe, and we re-emit that file below to preserve the mask.
+  const isWindows = process.platform === 'win32';
+  const serverLogPath = isWindows
+    ? join(tmpdir(), `op-nx-cache-server-${process.pid}.log`)
+    : undefined;
+  const serverStdio = isWindows ? openSync(serverLogPath, 'a') : 'inherit';
+
   const child = spawn(command, {
     shell: true,
     detached: true,
-    stdio: ['ignore', 'inherit', 'inherit'],
+    stdio: ['ignore', serverStdio, serverStdio],
     env,
   });
 
@@ -105,6 +119,22 @@ async function main() {
       const contents = readFileSync(githubEnv, 'utf8');
 
       if (contents.includes('NX_SELF_HOSTED_REMOTE_CACHE_SERVER')) {
+        // Windows only: serve's own `::add-mask::<token>` went to the detached
+        // child's log file, not this step's console, so the bearer token handed
+        // to later steps via $GITHUB_ENV would print unmasked. Re-register the
+        // mask here, reading the token straight from the $GITHUB_ENV line serve
+        // just wrote (robust -- no cross-process stdout capture). POSIX inherits
+        // serve's stdout, so its ::add-mask:: already reached the runner.
+        if (isWindows) {
+          const tokenMatch = contents.match(
+            /NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=(\S+)/,
+          );
+
+          if (tokenMatch) {
+            console.log(`::add-mask::${tokenMatch[1]}`);
+          }
+        }
+
         console.log('@op-nx/github-cache: cache server is ready.');
 
         return;

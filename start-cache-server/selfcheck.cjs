@@ -39,8 +39,10 @@ function makeFakeServe(pidfile) {
   const src = [
     "const fs = require('node:fs');",
     `fs.writeFileSync(${JSON.stringify(pidfile)}, String(process.pid));`,
+    // serve emits ::add-mask:: on stdout (POSIX inherits it) AND writes the
+    // token to $GITHUB_ENV; on Windows the action re-masks from that env line.
     "console.log('::add-mask::deadbeefsecret');",
-    "fs.appendFileSync(process.env.GITHUB_ENV, 'NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:12345\\n');",
+    "fs.appendFileSync(process.env.GITHUB_ENV, 'NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:12345\\nNX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=deadbeefsecret\\n');",
     // Safety net: self-exit so a failed cleanup can't orphan this forever.
     'setTimeout(() => process.exit(0), 30000);',
     'setInterval(() => {}, 1 << 30);',
@@ -95,13 +97,13 @@ function check(name, fn) {
 }
 
 try {
-  // Case 1: happy path. On POSIX (the action's target -- CI is ubuntu) this
-  // asserts the full spawn/survival/handoff. On Windows `detached: true` +
-  // `stdio: 'inherit'` is a documented quirk (a detached process gets its own
-  // console and can't cleanly inherit the parent's handles), so the detached
-  // child is flaky to observe; there we only confirm the action passed gate +
-  // guard and entered the start phase. The end-to-end path is proven for real
-  // by the CI cross-run cache hit.
+  // Case 1: happy path -- gate + guard pass, the server spawns, and the DETACHED
+  // server SURVIVES this action's exit (the whole point: later steps use it).
+  // Asserted on every platform. Windows relies on index.cjs writing the child's
+  // stdout to a file instead of inheriting: this selfcheck's spawnSync closes its
+  // stdout pipe when the action exits, exactly as the runner closes the step pipe
+  // at step end -- inheriting that pipe is what killed the detached server on
+  // windows-11-arm.
   check(
     'trusted + env present: gate+guard pass, server starts and survives',
     () => {
@@ -124,14 +126,6 @@ try {
         /missing Actions cache runtime env/,
         'guard must not fire when the env is present',
       );
-
-      if (process.platform === 'win32') {
-        console.log(
-          '  (win32: detached-spawn path deferred to the CI cross-run check)',
-        );
-
-        return;
-      }
 
       assert.strictEqual(
         result.status,

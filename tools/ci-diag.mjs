@@ -46,3 +46,7 @@ const taskGraph = createTaskGraph(
 const task = taskGraph.tasks[project + ':integration'];
 await hashTask(hasher, graph, taskGraph, task, process.env, getTaskDetails());
 console.log('CIDIAG integration-hash=%s', task.hash);
+const nodes = task.hashDetails?.nodes ?? {};
+for (const k of Object.keys(nodes).sort()) {
+  console.log('CIDIAGNODE %s %s', nodes[k], JSON.stringify(k));
+}

@@ -81,7 +81,12 @@ jobs:
     # the in-process trust.ts/GITHUB_REF checks (which are defense-in-depth
     # only and cannot stop an attacker with code execution inside a
     # write-scoped job from calling `gh release upload` directly).
+    # actions: read lets it list the Actions cache entries it mirrors
+    # (GET /repos/.../actions/caches); contents: write uploads/prunes the
+    # Release-asset mirror. Job-level permissions replace the workflow block, so
+    # actions: read must be listed here or the caches API returns 404.
     permissions:
+      actions: read
       contents: write
     runs-on: ubuntu-latest
     steps:

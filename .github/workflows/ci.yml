@@ -91,7 +91,12 @@ jobs:
   publish-mirror:
     needs: build
     if: github.ref == 'refs/heads/main'
+    # actions: read to list the Actions cache entries being mirrored
+    # (GET /repos/.../actions/caches); contents: write to upload/prune the
+    # Release-asset mirror. Job-level permissions replace the workflow block
+    # wholesale, so actions: read must be restated here or the caches API 404s.
     permissions:
+      actions: read
       contents: write
     runs-on: ubuntu-latest
     steps:

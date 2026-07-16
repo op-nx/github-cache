@@ -22,8 +22,12 @@ async function main() {
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
   const envFileContent = await readFile(process.env.GITHUB_ENV, 'utf-8');
-  const url = envFileContent.match(/NX_SELF_HOSTED_REMOTE_CACHE_SERVER=(.*)/)?.[1]?.trim();
-  const token = envFileContent.match(/NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=(.*)/)?.[1]?.trim();
+  const url = envFileContent
+    .match(/NX_SELF_HOSTED_REMOTE_CACHE_SERVER=(.*)/)?.[1]
+    ?.trim();
+  const token = envFileContent
+    .match(/NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=(.*)/)?.[1]
+    ?.trim();
 
   if (!url || !token) {
     server.kill();

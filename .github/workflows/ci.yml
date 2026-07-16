@@ -20,10 +20,14 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      - run: npm run format:check
+      # --all: pull_request checkouts don't have a local `main` ref for Nx's
+      # default git-diff base, so diff-based format:check always fails here.
+      - run: npx nx format:check --all
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -31,10 +35,21 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # No cache server here on purpose: this job's bootstrap build would run
+      # cold before any server could start, so `npm run build` is always a local
+      # cache hit and never issues a remote GET/PUT -- a server would be inert.
+      # The remote cache round-trip is dogfooded by the typecheck/test jobs,
+      # whose targets are NOT pre-populated by a bootstrap build.
       - run: npm run build
 
   typecheck:
     runs-on: ubuntu-latest
+    # contents: read only. The Actions-cache backend authenticates with
+    # ACTIONS_RUNTIME_TOKEN (handed to the server by the start-cache-server
+    # action, a JS action), not GITHUB_TOKEN, so no actions:write is needed;
+    # writes are gated to trusted events by GitHub server-side regardless.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -42,9 +57,42 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
+      - run: npx nx build @op-nx/github-cache
+      # A JS action so GitHub hands it the Actions cache runtime env
+      # (ACTIONS_RUNTIME_TOKEN / ACTIONS_RESULTS_URL), which it passes to the
+      # server by inheritance. Self-gates to trusted events; fails loudly if that
+      # env is missing. `command` points at the built bin directly because npm
+      # only links the bin shim when dist/ exists at install time.
+      - uses: ./start-cache-server
+        with:
+          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run typecheck
 
   test:
+    runs-on: ubuntu-latest
+    # See typecheck job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
+      - run: npx nx build @op-nx/github-cache
+      - uses: ./start-cache-server
+        with:
+          command: node packages/op-nx-github-cache/dist/bin/serve.js
+      - run: npm run test
+
+  publish-mirror:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -53,4 +101,7 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      - run: npm run test
+      - run: npx nx build @op-nx/github-cache
+      - run: node packages/op-nx-github-cache/dist/bin/publish-mirror.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

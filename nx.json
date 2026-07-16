@@ -7,7 +7,7 @@
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
       "!{projectRoot}/tsconfig.spec.json"
     ],
-    "sharedGlobals": []
+    "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json"]
   },
   "plugins": [
     {
@@ -41,7 +41,83 @@
   },
   "targetDefaults": {
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "inputs": [
+        "default",
+        "^production",
+        { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
+        {
+          "fileset": "{projectRoot}/tsconfig.storybook.json",
+          "dependencies": true
+        },
+        {
+          "json": "{workspaceRoot}/tsconfig.json",
+          "fields": ["compilerOptions"]
+        },
+        { "externalDependencies": ["vitest"] },
+        { "dependentTasksOutputFiles": "**/*.js", "transitive": true }
+      ]
+    },
+    "build": {
+      "inputs": [
+        "{projectRoot}/package.json",
+        "{workspaceRoot}/tsconfig.base.json",
+        "{projectRoot}/tsconfig.lib.json",
+        "{projectRoot}/src/**/*.ts",
+        "!{projectRoot}/vite.config.ts",
+        "!{projectRoot}/vite.config.mts",
+        "!{projectRoot}/vitest.config.ts",
+        "!{projectRoot}/vitest.config.mts",
+        "!{projectRoot}/src/**/*.test.ts",
+        "!{projectRoot}/src/**/*.spec.ts",
+        "!{projectRoot}/src/**/*.test.tsx",
+        "!{projectRoot}/src/**/*.spec.tsx",
+        "!{projectRoot}/src/**/*.test.js",
+        "!{projectRoot}/src/**/*.spec.js",
+        "!{projectRoot}/src/**/*.test.jsx",
+        "!{projectRoot}/src/**/*.spec.jsx",
+        {
+          "dependentTasksOutputFiles": "**/*.{d.ts,d.cts,d.mts,tsbuildinfo}",
+          "transitive": true
+        },
+        {
+          "fileset": "{projectRoot}/**/*.{d.ts,d.cts,d.mts}",
+          "dependencies": true
+        },
+        {
+          "externalDependencies": [
+            "typescript",
+            "tslib",
+            "@types/node",
+            "@actions/cache",
+            "@octokit/rest"
+          ]
+        }
+      ]
+    },
+    "typecheck": {
+      "inputs": [
+        "production",
+        {
+          "dependentTasksOutputFiles": "**/*.{d.ts,d.cts,d.mts,tsbuildinfo}",
+          "transitive": true
+        },
+        {
+          "fileset": "{projectRoot}/**/*.{d.ts,d.cts,d.mts}",
+          "dependencies": true
+        },
+        "^{projectRoot}/../../../../../../../packages/op-nx-github-cache/tsconfig.lib.json",
+        "^{projectRoot}/../../../../../../../packages/op-nx-github-cache/tsconfig.spec.json",
+        {
+          "externalDependencies": [
+            "typescript",
+            "tslib",
+            "@types/node",
+            "@actions/cache",
+            "@octokit/rest"
+          ]
+        }
+      ]
     }
   }
 }

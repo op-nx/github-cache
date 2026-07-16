@@ -141,8 +141,6 @@ jobs:
       - uses: ./start-cache-server
         with:
           command: node packages/op-nx-github-cache/dist/bin/serve.js
-      # TEMP diagnostic (remove): dump platform + runtime value + integration hash.
-      - run: node tools/ci-diag.mjs
       - run: npm run integration
 
   # The two JS actions are otherwise exercised only on Ubuntu. These standalone

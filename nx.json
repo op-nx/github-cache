@@ -70,7 +70,7 @@
         },
         { "externalDependencies": ["vitest"] },
         { "dependentTasksOutputFiles": "**/*.js", "transitive": true },
-        { "env": "RUNNER_OS" }
+        { "runtime": "node -p process.platform" }
       ]
     },
     "build": {

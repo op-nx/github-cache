@@ -106,16 +106,21 @@ jobs:
       - run: npm run test
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
-  # so their hash carries an `env:RUNNER_OS` discriminator (see nx.json's integration
-  # inputs): "Linux" vs "Windows" -> a Linux cache never satisfies a Windows run, so
-  # BOTH legs actually run. RUNNER_OS is read from process.env (no command execution)
-  # and is set reliably per-OS by the runner -- unlike a `runtime` command (evaluated
-  # to the linux value inside Nx's hasher on the arm64 Windows runner) or `env:OS`
-  # (empty on the GitHub Windows runner). Trade-off: RUNNER_OS is unset off-CI, so a
-  # local `nx integration` runs fresh rather than hitting this cache; the fast unit
-  # `test` tier is the cross-OS-hittable one. fail-fast off so a Windows-only failure
-  # never hides the Ubuntu result. windows-11-arm also exercises start-cache-server's
-  # detached-spawn path (deferred by the selfcheck on win32).
+  # so their hash carries a `{ runtime: "node -p process.platform" }` discriminator
+  # (see nx.json's integration inputs): "win32" on any Windows, "linux" on Linux, so
+  # (a) the Linux and Windows hashes differ -> BOTH matrix legs run and a Linux cache
+  # never satisfies a Windows run, and (b) a local Windows `nx integration` computes
+  # the SAME "win32" hash and HITS this cache. process.platform is compiled into node,
+  # so it is "win32" regardless of shell (PowerShell/Git-Bash/cmd) and regardless of
+  # x64-vs-arm64 or the arm64 runner's x86-64 emulation -- unlike `env:RUNNER_OS`
+  # (unset off-CI, so a local run never hits) or a plain `env` var (whose key
+  # MSYS/Git-Bash uppercases while Nx's env hasher is case-sensitive, so it would miss
+  # from a bash-launched run). Requires the Nx runtime-input cache fix (nrwl/nx#34971,
+  # in 22.7.0+; this repo is on 23.1.0) -- before it, the hasher-level cache returned
+  # a stale runtime value whenever the daemon was disabled (as it is on CI). fail-fast
+  # off so a Windows-only failure never hides the Ubuntu result. windows-11-arm also
+  # exercises start-cache-server's detached-spawn path (deferred by the selfcheck on
+  # win32).
   integration:
     strategy:
       fail-fast: false

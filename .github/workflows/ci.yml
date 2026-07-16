@@ -128,10 +128,10 @@ jobs:
       - run: node publish-mirror/selfcheck.cjs
 
   publish-mirror:
-    # Needs test too so this run mirrors the test caches (both OS legs) it just
-    # produced; without it the slow Windows leg's cache would only be mirrored on
-    # the next push.
-    needs: [build, test]
+    # Only needs build: it lists and mirrors whatever cache entries exist at run
+    # time, so it must not be gated on the (slower, cross-OS) test matrix -- a
+    # single failing test leg must never block mirroring build/typecheck.
+    needs: build
     if: github.ref == 'refs/heads/main'
     # actions: read to list the Actions cache entries being mirrored
     # (GET /repos/.../actions/caches); contents: write to upload/prune the

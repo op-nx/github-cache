@@ -129,7 +129,7 @@ the foreground instead would hang the step forever.
 **MUST (Actions-cache backend):** the `Export Actions cache runtime env` step
 above is required, not optional. `@actions/cache` resolves the cache service
 from `ACTIONS_RESULTS_URL` (v2) / `ACTIONS_CACHE_URL` (v1), and GitHub injects
-those (plus `ACTIONS_RUNTIME_TOKEN`) only into JavaScript *actions* -- never
+those (plus `ACTIONS_RUNTIME_TOKEN`) only into JavaScript _actions_ -- never
 into `run:` shell steps. Since `serve` runs as a child of a `run:` step, without
 that re-export it sees neither URL, so every `saveCache`/`restoreCache` fails
 with `Cache Service Url not found` and returns silently (the backend is

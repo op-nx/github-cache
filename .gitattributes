@@ -1,0 +1,7 @@
+# Normalize line endings to LF on checkout across every platform. Nx task hashes
+# hash file CONTENTS, so a Windows checkout (GitHub runners default to
+# core.autocrlf=true) would get CRLF and compute different hashes than Linux/macOS
+# -- breaking cross-OS cache hits and local cache hits for any target that runs on
+# Windows CI (e.g. the `integration` matrix leg). Forcing LF keeps the bytes -- and
+# therefore the hashes -- identical everywhere.
+* text=auto eol=lf

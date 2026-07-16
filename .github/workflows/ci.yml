@@ -81,15 +81,13 @@ jobs:
           command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run typecheck
 
+  # Unit tests are OS-portable by construction (pure logic / mocked IO), so their
+  # Nx hash is byte-identical on every OS. Running them on a single OS seeds ONE
+  # cache entry that both Linux and Windows devs hit locally -- running the matrix
+  # here would just make the second leg a redundant cache hit. OS-specific behavior
+  # lives in test-integration below.
   test:
-    strategy:
-      # Both OSes must report independently; a Windows-only failure must not hide
-      # the Ubuntu result (or vice versa). windows-11-arm matches the maintainer's
-      # dev box (arm64) so its cache is locally hittable; it is slower than x64.
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04-arm, windows-11-arm]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04-arm
     # See typecheck job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
     permissions:
       contents: read
@@ -102,15 +100,43 @@ jobs:
       - run: npm ci
       # Bootstrap the package so dist/bin/serve.js exists for the action to run.
       - run: npx nx build @op-nx/github-cache
-      # Cache server on BOTH OSes: each seeds its own os+arch `test` hash into the
-      # mirror, so a dev on that platform gets local `test` hits (`test` stays
-      # OS-sensitive by design -- a Linux cache must not satisfy a Windows run).
-      # On Windows this is also the first real exercise of start-cache-server's
-      # detached-spawn path, which the selfcheck defers on win32.
       - uses: ./start-cache-server
         with:
           command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run test
+
+  # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
+  # so their hash carries an `env:RUNNER_OS` discriminator (see nx.json's integration
+  # inputs): "Linux" vs "Windows" -> a Linux cache never satisfies a Windows run, so
+  # BOTH legs actually run. RUNNER_OS is read from process.env (no command execution)
+  # and is set reliably per-OS by the runner -- unlike a `runtime` command (evaluated
+  # to the linux value inside Nx's hasher on the arm64 Windows runner) or `env:OS`
+  # (empty on the GitHub Windows runner). Trade-off: RUNNER_OS is unset off-CI, so a
+  # local `nx integration` runs fresh rather than hitting this cache; the fast unit
+  # `test` tier is the cross-OS-hittable one. fail-fast off so a Windows-only failure
+  # never hides the Ubuntu result. windows-11-arm also exercises start-cache-server's
+  # detached-spawn path (deferred by the selfcheck on win32).
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
+      - run: npx nx build @op-nx/github-cache
+      - uses: ./start-cache-server
+        with:
+          command: node packages/op-nx-github-cache/dist/bin/serve.js
+      - run: npm run integration
 
   # The two JS actions are otherwise exercised only on Ubuntu. These standalone
   # self-checks cover their gate/guard/skip logic (and publish-mirror's exit-status
@@ -128,11 +154,15 @@ jobs:
       - run: node publish-mirror/selfcheck.cjs
 
   publish-mirror:
-    # Only needs build: it lists and mirrors whatever cache entries exist at run
-    # time, so it must not be gated on the (slower, cross-OS) test matrix -- a
-    # single failing test leg must never block mirroring build/typecheck.
-    needs: build
-    if: github.ref == 'refs/heads/main'
+    # WAIT for every cache-producing job so their hashes are already in the Actions
+    # cache when this mirrors -- otherwise the slow Windows/arm64 `integration` hash
+    # lands AFTER this job and is only mirrored a run later (its os+arch-sensitive
+    # hash would never be locally hittable until then). But do NOT let a test/
+    # integration FAILURE block mirroring: `!cancelled()` + an explicit build-success
+    # gate keeps this running whenever build passed, regardless of the other legs
+    # (34de6eb's concern -- a single failing leg must never block build/typecheck).
+    needs: [build, typecheck, test, integration]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' }}
     # actions: read to list the Actions cache entries being mirrored
     # (GET /repos/.../actions/caches); contents: write to upload/prune the
     # Release-asset mirror. Job-level permissions replace the workflow block

@@ -63,40 +63,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
-      # @actions/cache reads ACTIONS_RESULTS_URL / ACTIONS_RUNTIME_TOKEN, which
-      # GitHub exposes to JavaScript actions but NOT to `run:` shell steps -- so
-      # the `run:`-spawned server below can't reach the cache service and every
-      # save/restore silently no-ops. Re-export them from a JS action so the
-      # server inherits them. Gated to trusted events (the cache is write-gated
-      # to those anyway), which also keeps ACTIONS_RUNTIME_TOKEN out of
-      # untrusted PR run steps.
-      - name: Export Actions cache runtime env
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            for (const key of [
-              'ACTIONS_RESULTS_URL',
-              'ACTIONS_CACHE_URL',
-              'ACTIONS_RUNTIME_TOKEN',
-              'ACTIONS_CACHE_SERVICE_V2',
-            ]) {
-              const value = process.env[key];
-
-              if (!value) {
-                continue;
-              }
-
-              if (key === 'ACTIONS_RUNTIME_TOKEN') {
-                core.setSecret(value);
-              }
-
-              core.exportVariable(key, value);
-            }
-      - name: Start cache server
-        run: |
-          npx op-nx-github-cache-serve &
-          timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
+      # Starts the cache server as a JavaScript action so GitHub hands it the
+      # Actions cache runtime env (ACTIONS_RUNTIME_TOKEN / ACTIONS_RESULTS_URL),
+      # which it never injects into `run:` shell steps (see MUST below). The
+      # action passes that env to the server by process inheritance, so the token
+      # is never re-exported into $GITHUB_ENV. It self-gates to trusted write
+      # events; on a pull_request it no-ops (the cache is read-only there anyway)
+      # and the build just runs without a remote cache.
+      - uses: op-nx/github-cache/start-cache-server@main # pin a SHA or release tag
       - run: npx nx affected -t build test
 
   publish-mirror:
@@ -120,24 +94,28 @@ jobs:
 ```
 
 `serve` never exits on its own: `server.listen()` keeps the process alive for
-the rest of the job, so the CI step above backgrounds it with `&` and polls
-`$GITHUB_ENV` until `serve` has appended its two `NX_SELF_HOSTED_REMOTE_CACHE_*`
-vars (GitHub Actions auto-exports those to every later step in the same job,
-so `nx affected` picks them up with no further plumbing). Running `serve` in
-the foreground instead would hang the step forever.
+the rest of the job. The `start-cache-server` action backgrounds it (detached,
+so it survives the action's own exit) and polls `$GITHUB_ENV` until `serve` has
+appended its two `NX_SELF_HOSTED_REMOTE_CACHE_*` vars (GitHub Actions
+auto-exports those to every later step in the same job, so `nx affected` picks
+them up with no further plumbing).
 
-**MUST (Actions-cache backend):** the `Export Actions cache runtime env` step
-above is required, not optional. `@actions/cache` resolves the cache service
-from `ACTIONS_RESULTS_URL` (v2) / `ACTIONS_CACHE_URL` (v1), and GitHub injects
-those (plus `ACTIONS_RUNTIME_TOKEN`) only into JavaScript _actions_ -- never
-into `run:` shell steps. Since `serve` runs as a child of a `run:` step, without
-that re-export it sees neither URL, so every `saveCache`/`restoreCache` fails
-with `Cache Service Url not found` and returns silently (the backend is
-fail-open), i.e. the remote cache is a no-op that looks like it's working. Keep
-the step gated to trusted events: the cache is write-gated to those regardless,
-and gating avoids exposing `ACTIONS_RUNTIME_TOKEN` to untrusted PR `run:` steps.
-`contents: read` is sufficient -- the cache backend does not use the
-`GITHUB_TOKEN`, so no `actions:` scope is required.
+**MUST (Actions-cache backend):** start the server via the `start-cache-server`
+action, not a bare `run: npx op-nx-github-cache-serve &`. `@actions/cache`
+resolves the cache service from `ACTIONS_RESULTS_URL` (v2) / `ACTIONS_CACHE_URL`
+(v1) and authenticates with `ACTIONS_RUNTIME_TOKEN`, and GitHub injects all of
+these only into JavaScript _actions_ -- never into `run:` shell steps. A server
+spawned from a `run:` step sees no service URL, so every
+`saveCache`/`restoreCache` fails with `Cache Service Url not found` and returns
+silently (the backend is fail-open), i.e. the remote cache is a no-op that looks
+like it's working. The action, being a JS action, is handed that env and passes
+it to the server by process inheritance -- the token is never re-exported into
+`$GITHUB_ENV`, where every later step would otherwise see it. The action
+self-gates to trusted write events (the cache is write-gated to those
+regardless) and **fails the job** if the runtime env is missing on a trusted
+event, so a silently-inert cache becomes a loud error. `contents: read` is
+sufficient -- the cache backend does not use the `GITHUB_TOKEN`, so no
+`actions:` scope is required.
 
 **MUST:** never invoke `op-nx-github-cache-publish-mirror` from a job that
 also checks out or runs untrusted PR-controlled code (no `pull_request_target`

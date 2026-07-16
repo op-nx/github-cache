@@ -26,10 +26,6 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    # contents: read only. @actions/cache authenticates to the cache service
-    # with ACTIONS_RUNTIME_TOKEN (exported below), not the GITHUB_TOKEN, so no
-    # actions:write scope is needed; cache writes are gated to trusted events by
-    # GitHub server-side regardless.
     permissions:
       contents: read
     steps:
@@ -39,52 +35,19 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      - run: npx nx build @op-nx/github-cache
-      # node, not `npx op-nx-github-cache-serve`: npm only links a workspace
-      # bin shim if its target exists at `npm ci` time, and dist/bin/*.js
-      # doesn't exist until the build step above runs. This is a
-      # self-consumption-only quirk (consuming repos install the published
-      # package with dist/ already built), so the README's own `npx <bin>`
-      # snippet stays correct for consumers -- only this repo's own dogfood
-      # wiring needs the direct node invocation.
-      # setsid detaches the server into its own session so it survives this
-      # step's exit -- GitHub Actions' runner kills a step's whole process
-      # group when the step's script finishes, and a plain `cmd &` background
-      # job stays in that group.
-      # See the typecheck job: expose @actions/cache's runtime env to the
-      # run:-spawned server (trusted events only) so save/restore work.
-      - name: Export Actions cache runtime env
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            for (const key of [
-              'ACTIONS_RESULTS_URL',
-              'ACTIONS_CACHE_URL',
-              'ACTIONS_RUNTIME_TOKEN',
-              'ACTIONS_CACHE_SERVICE_V2',
-            ]) {
-              const value = process.env[key];
-
-              if (!value) {
-                continue;
-              }
-
-              if (key === 'ACTIONS_RUNTIME_TOKEN') {
-                core.setSecret(value);
-              }
-
-              core.exportVariable(key, value);
-            }
-      - name: Start cache server
-        run: |
-          setsid node packages/op-nx-github-cache/dist/bin/serve.js < /dev/null &
-          timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
+      # No cache server here on purpose: this job's bootstrap build would run
+      # cold before any server could start, so `npm run build` is always a local
+      # cache hit and never issues a remote GET/PUT -- a server would be inert.
+      # The remote cache round-trip is dogfooded by the typecheck/test jobs,
+      # whose targets are NOT pre-populated by a bootstrap build.
       - run: npm run build
 
   typecheck:
     runs-on: ubuntu-latest
-    # See build job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
+    # contents: read only. The Actions-cache backend authenticates with
+    # ACTIONS_RUNTIME_TOKEN (handed to the server by the start-cache-server
+    # action, a JS action), not GITHUB_TOKEN, so no actions:write is needed;
+    # writes are gated to trusted events by GitHub server-side regardless.
     permissions:
       contents: read
     steps:
@@ -94,47 +57,21 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
       - run: npx nx build @op-nx/github-cache
-      # @actions/cache (the cache server's Actions-cache backend) reads
-      # ACTIONS_RESULTS_URL / ACTIONS_RUNTIME_TOKEN, which GitHub injects into
-      # JavaScript actions but NOT into `run:` shell steps -- so the
-      # run:-spawned server can't reach the cache service and every save/restore
-      # silently no-ops (verified: "Cache Service Url not found"). Re-export them
-      # from a JS action into $GITHUB_ENV so the server inherits them. Gated to
-      # trusted events: the cache is write-gated to those anyway, and this keeps
-      # ACTIONS_RUNTIME_TOKEN out of untrusted PR jobs' run-step environment.
-      - name: Export Actions cache runtime env
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group'
-        uses: actions/github-script@v7
+      # A JS action so GitHub hands it the Actions cache runtime env
+      # (ACTIONS_RUNTIME_TOKEN / ACTIONS_RESULTS_URL), which it passes to the
+      # server by inheritance. Self-gates to trusted events; fails loudly if that
+      # env is missing. `command` points at the built bin directly because npm
+      # only links the bin shim when dist/ exists at install time.
+      - uses: ./start-cache-server
         with:
-          script: |
-            for (const key of [
-              'ACTIONS_RESULTS_URL',
-              'ACTIONS_CACHE_URL',
-              'ACTIONS_RUNTIME_TOKEN',
-              'ACTIONS_CACHE_SERVICE_V2',
-            ]) {
-              const value = process.env[key];
-
-              if (!value) {
-                continue;
-              }
-
-              if (key === 'ACTIONS_RUNTIME_TOKEN') {
-                core.setSecret(value);
-              }
-
-              core.exportVariable(key, value);
-            }
-      - name: Start cache server
-        run: |
-          setsid node packages/op-nx-github-cache/dist/bin/serve.js < /dev/null &
-          timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
+          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run typecheck
 
   test:
     runs-on: ubuntu-latest
-    # See build job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
+    # See typecheck job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
     permissions:
       contents: read
     steps:
@@ -144,36 +81,11 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
       - run: npx nx build @op-nx/github-cache
-      # See the typecheck job: expose @actions/cache's runtime env to the
-      # run:-spawned server (trusted events only) so save/restore work.
-      - name: Export Actions cache runtime env
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group'
-        uses: actions/github-script@v7
+      - uses: ./start-cache-server
         with:
-          script: |
-            for (const key of [
-              'ACTIONS_RESULTS_URL',
-              'ACTIONS_CACHE_URL',
-              'ACTIONS_RUNTIME_TOKEN',
-              'ACTIONS_CACHE_SERVICE_V2',
-            ]) {
-              const value = process.env[key];
-
-              if (!value) {
-                continue;
-              }
-
-              if (key === 'ACTIONS_RUNTIME_TOKEN') {
-                core.setSecret(value);
-              }
-
-              core.exportVariable(key, value);
-            }
-      - name: Start cache server
-        run: |
-          setsid node packages/op-nx-github-cache/dist/bin/serve.js < /dev/null &
-          timeout 10 bash -c 'until grep -q NX_SELF_HOSTED_REMOTE_CACHE_SERVER "$GITHUB_ENV" 2>/dev/null; do sleep 0.2; done'
+          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run test
 
   publish-mirror:

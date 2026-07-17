@@ -103,6 +103,23 @@ export function filterMirrorShardTags(newlineSeparatedTags: string): string[] {
     .filter((tag) => MIRROR_SHARD_PATTERN.test(tag));
 }
 
+// publish-mirror runs one matrix leg per OS, because a leg can only restore
+// (and therefore mirror) the Actions-cache entries saved on ITS OWN platform:
+// @actions/cache's version folds in the os.tmpdir() path, a `windows-only`
+// salt, AND the compression method -- and windows-11-arm omits zstd (falls back
+// to gzip) while ubuntu uses zstd, so a Windows-saved entry is unrestorable
+// from ubuntu even with enableCrossOsArchive (actions/cache#1622). Uploads
+// partition themselves by that restore-ability, but CLEANUP is global: if every
+// leg pruned, the legs would race on delete-asset. So exactly one leg cleans up
+// and the others set CACHE_MIRROR_SKIP_CLEANUP. Default (unset) runs cleanup, so
+// a manual or local `publish-mirror` still prunes. Extracted pure (like
+// filterNxCacheKeys) so the gate is unit-testable without the `gh` dependency.
+export function shouldRunCleanup(env: NodeJS.ProcessEnv): boolean {
+  const optOut = env.CACHE_MIRROR_SKIP_CLEANUP?.trim().toLowerCase();
+
+  return optOut !== 'true' && optOut !== '1';
+}
+
 // `gh api` switches the HTTP method to POST as soon as any -f/-F field is
 // present unless the method is set explicitly. This endpoint is GET-only, so an
 // unqualified `-f ref=...` POSTs to it and returns 404 ("Not Found"), which
@@ -388,12 +405,17 @@ async function main(): Promise<void> {
   // report below. Collect both classes of failure and surface them together.
   const cleanupFailures: string[] = [];
 
-  for (const shardTag of await listMirrorShards(repo)) {
-    try {
-      await cleanupShard(repo, shardTag, shardTag !== currentShard);
-    } catch (error) {
-      console.error(`Failed to clean up shard ${shardTag}:`, error);
-      cleanupFailures.push(shardTag);
+  // Only the designated leg prunes (see shouldRunCleanup): the other matrix
+  // legs upload their OS's entries and stop, so the legs never race on
+  // delete-asset.
+  if (shouldRunCleanup(process.env)) {
+    for (const shardTag of await listMirrorShards(repo)) {
+      try {
+        await cleanupShard(repo, shardTag, shardTag !== currentShard);
+      } catch (error) {
+        console.error(`Failed to clean up shard ${shardTag}:`, error);
+        cleanupFailures.push(shardTag);
+      }
     }
   }
 

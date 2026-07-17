@@ -160,12 +160,24 @@ jobs:
 
   publish-mirror:
     # WAIT for every cache-producing job so their hashes are already in the Actions
-    # cache when this mirrors -- otherwise the slow Windows/arm64 `integration` hash
-    # lands AFTER this job and is only mirrored a run later (its os+arch-sensitive
-    # hash would never be locally hittable until then). But do NOT let a test/
-    # integration FAILURE block mirroring: `!cancelled()` + an explicit build-success
-    # gate keeps this running whenever build passed, regardless of the other legs
-    # (34de6eb's concern -- a single failing leg must never block build/typecheck).
+    # cache when this mirrors. But do NOT let a test/integration FAILURE block
+    # mirroring: `!cancelled()` + an explicit build-success gate keeps this running
+    # whenever build passed, regardless of the other legs (34de6eb's concern -- a
+    # single failing leg must never block build/typecheck).
+    #
+    # One leg per OS: a leg can only restore -- and therefore mirror -- the
+    # Actions-cache entries saved on ITS OWN platform. @actions/cache's version
+    # folds in the os.tmpdir() path, a `windows-only` salt, AND the compression
+    # method -- and windows-11-arm omits zstd (falls back to gzip) while ubuntu
+    # uses zstd -- so a Windows-saved entry (e.g. the OS-sensitive `integration`
+    # hash a local Windows dev is meant to hit) is unrestorable from ubuntu even
+    # with enableCrossOsArchive (actions/cache#1622). An ubuntu-only publish-mirror
+    # therefore NEVER mirrors the Windows hash; the Windows leg does. fail-fast off
+    # so one leg's failure never cancels the other's mirroring.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
     needs: [build, typecheck, test, integration]
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' }}
     # actions: read to list the Actions cache entries being mirrored
@@ -175,7 +187,13 @@ jobs:
     permissions:
       actions: read
       contents: write
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    # Every leg uploads its OS's entries, but only ONE prunes -- else the legs
+    # race on delete-asset. Gate cleanup to the ubuntu leg (see shouldRunCleanup
+    # in publish-mirror.ts); the Windows leg opts out. The expression yields the
+    # literal string "true"/"false".
+    env:
+      CACHE_MIRROR_SKIP_CLEANUP: ${{ matrix.os == 'windows-11-arm' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

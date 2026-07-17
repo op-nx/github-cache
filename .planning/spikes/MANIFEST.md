@@ -46,7 +46,7 @@ Releases-side burdens: 1000 assets/release (sharding); ~2 GiB/asset ceiling vs t
 |---|------|------|-----------|---------|------|
 | 001a | ghcr-oci-roundtrip | comparison | Private keyed lookup by digest via OCI registry API, authenticated, byte-identical, latency | VALIDATED | ghcr, oci, reader |
 | 001b | releases-roundtrip | comparison | Release-asset keyed lookup, authenticated private + public, byte-identical, latency | VALIDATED | releases, reader |
-| 002 | cold-read-fan-out | comparison | API-call fan-out per `nx affected` cold read vs 60/hr anon + 5000/hr auth | PENDING | rate-limit, reader |
+| 002 | cold-read-fan-out | comparison | API-call fan-out per `nx affected` cold read vs 60/hr anon + 5000/hr auth | WASH (required case); GHCR edge for anon-public | rate-limit, reader |
 | 003 | size-ceiling | comparison | True per-primitive size ceiling + failure mode vs the 2 GB body cap (ROBUST-02) | PENDING | size, robustness |
 | 004 | ghcr-hazards | standard | Child-manifest cleanup, cleanup credential (GITHUB_TOKEN vs PAT), overwrite, >5000 gap | PENDING | ghcr, cleanup, security |
 | 005 | cross-os-roundtrip | standard | Cross-OS round-trip (OS-invariant + OS-sensitive hash) from ubuntu + windows CI | PENDING | cross-os, correctness, ci |

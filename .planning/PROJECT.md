@@ -30,7 +30,7 @@ never a broken build) and writes must stay gated.
 
 ### Validated
 
-<!-- Inferred from the existing codebase (.planning/codebase/) - shipped and dogfooded in this repo, not yet fully test-covered. Describes the CURRENT implementation; the storage-primitive choice itself is being re-verified (see Key Decisions). -->
+<!-- Inferred from the existing codebase (.planning/codebase/) - shipped and dogfooded in this repo, not yet fully test-covered. Describes the CURRENT spike/PoC implementation; the storage-primitive choice is being re-verified (see Key Decisions). Reconciliation: the PoC mirror serves anonymous reads, but FOUND-02 supersedes it - the forward requirement is authenticated, private-repo-capable local read, with anonymous public read demoted to an optional OSS bonus (not a dependency). -->
 
 - [x] Nx self-hosted remote-cache HTTP server: loopback bind, timing-safe bearer auth, hash validation, body-size cap, best-effort read degradation - existing
 - [x] Runtime-context backend selection (no caller-facing mode flag) - existing
@@ -108,9 +108,9 @@ never a broken build) and writes must stay gated.
 |----------|-----------|---------|
 | **One backend per process, context-selected** (`selectBackend`); default = Actions-cache CI-RW only; opt-in reader store + its publish/cleanup are a separate reader-specific step | Matches the ecosystem norm; minimal default, pay-as-you-compose; the publisher/cleanup subsystem is reader-specific (not port-isolated) | [OK] Decided (see ARCHITECTURE-DECISION.md) |
 | Reader / cross-context adapter: **GHCR/OCI vs GitHub Releases** | Decided on **forward merits only** (impl is a spike/PoC; sunk cost void) - ~even: GHCR carries digest-pin + atomic-no-overwrite + child-manifest + >5000-undeletable; Releases carries the 1000-asset + ~2 GiB ceilings | - Pending spike (FOUND-01) |
-| **Write-trust = allowlist-only** (default-deny; no denylist); `pull_request`/`release` on **only when the server-side read-only-token backstop is detected** (else off) | In-code gate is fork-spoofable defense-in-depth; GitHub-side scoping is what refuses; a denylist would silently miss dangerous events | [OK] Decided |
+| **Write-trust = allowlist-only** (default-deny; no denylist); `pull_request`/`release` on **only when the server-side backstop is present via a runtime-derived, fail-closed check** (default OFF on uncertainty; never a caller flag) | In-code gate is fork-spoofable defense-in-depth; a fail-open detection would leave no real control; a denylist would silently miss dangerous events | [OK] Decided |
 | **Sync gate = a separate predicate = `{push, schedule}` only**, test-locked to reject all other events + non-default refs | Syncing a PR- or dispatch-influenced entry into a shared store recreates the CREEP precondition | [OK] Decided (load-bearing) |
-| **Shipped installable PPE-hygiene gate** + default-branch-protection prerequisite | The sole containment for the residual pwn-request surface; heuristic linters alone are defense-in-depth | [OK] Decided |
+| **Shipped installable PPE-hygiene gate** (best-effort/advisory) + default-branch-protection prerequisite | Heuristic linters can't catch novel evasions, so the load-bearing containment is the `{push,schedule}` sync gate + branch protection; the gate is defense-in-depth | [OK] Decided |
 | **No content signing as a CREEP control**; digest-pin iff GHCR | CVE-2025-36852: poison precedes hashing, so signing is ineffective; CREEP is defended at the write/sync gates | [OK] Decided |
 | Retention: native Actions LRU (CI tier) + age-only (RO tier); **no LRU manifest** | A manifest adds mutable retention state (security-negative); GHCR exposes no last-accessed signal | [OK] Decided |
 | **OS-namespace the store by default** (or documented consumer OS-discrimination) | Cross-OS cache hit must never serve a wrong-OS artifact (Core Value: never a wrong result) | [OK] Decided |
@@ -135,4 +135,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-17 after applying the 6-panel triage survivors (spike/PoC framing; one-backend-per-process reframe; {push,schedule} sync gate; backstop-gated write-trust; shipped PPE gate; OS-namespacing; governance); reader adapter pending spike. See ARCHITECTURE-DECISION.md.*
+*Last updated: 2026-07-17 after the 6-panel triage survivors + an independent Sonnet `/lz-security-review` (fail-closed runtime-derived write-trust detection; PPE gate relabeled advisory; PoC/anonymous-vs-FOUND-02 reconciliation); reader adapter pending spike. See ARCHITECTURE-DECISION.md.*

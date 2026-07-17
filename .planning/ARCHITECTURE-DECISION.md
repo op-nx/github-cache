@@ -27,7 +27,7 @@ The current self-hosted path is the **"Nx custom remote cache specification"** e
 ## Decision 2 — Write-trust = allowlist-only; sync gate is separate and minimal
 
 - **Write-trust = an allowlist** (configured replaces default; else the default implicit allowlist); default-deny; **no denylist**. The dangerous shared-default-scope events (`pull_request_target`, `issue_comment`, fork-`workflow_run`, `discussion_comment`, `fork`, `watch`, …) are refused by construction.
-- **`pull_request`/`release` are in the default allowlist ONLY when GitHub's server-side read-only-cache-token backstop is detected** (github.com / Data Residency); on GHES below the enforcement floor they default **OFF**. The in-code allowlist is **defense-in-depth only** — it is fork-spoofable and has **no standalone security value**; GitHub's server-side ref-scoping is what actually refuses. (Nuance: `pull_request` scope isolation is activity-type-dependent — `[closed]` etc. run in the base scope with a read-only token; PR write *success* is therefore activity-type-dependent, and a blocked write is a benign 409/no-op.)
+- **`pull_request`/`release` are in the default allowlist ONLY when GitHub's server-side read-only-cache-token backstop is present.** Presence is decided by a **runtime-derived check** (github.com / Data Residency vs GHES below the enforcement floor) — **never an adopter/caller flag** (which would violate the no-mode-flag property). The check **fails closed**: on any uncertainty (undetectable, unknown GHES version, error) the widened events default **OFF**. The in-code allowlist is **defense-in-depth only** — fork-spoofable, no standalone value; GitHub's server-side ref-scoping is what actually refuses, so a detection that **failed open** would leave *no* real control (a direct CREEP path). (Nuance: `pull_request` scope isolation is activity-type-dependent — `[closed]` etc. run in the base scope with a read-only token; PR write *success* is activity-type-dependent, a blocked write is a benign 409/no-op.)
 - **Sync gate = a separate, narrower predicate = literally `{push, schedule}`** on the default branch. It is **not** the write allowlist. Test-lock it to **reject** `pull_request`, `release`, `repository_dispatch`, `workflow_dispatch`, `merge_group`, `delete`, `registry_package`, `page_build`, and non-default refs — because `repository_dispatch`/`workflow_dispatch` carry attacker-influenced inputs into trusted default-branch code whose output would then be laundered into a shared store.
 
 ## Decision 3 — Storage primitives (reader spike-gated, forward-only)
@@ -45,23 +45,24 @@ CVE-2025-36852 (CVSS 9.4, CWE-829, GHSA-rrr2-jcr8-7q3x, no patched version): poi
 
 | # | Control |
 |---|---------|
-| C1 | Write-trust allowlist (default-deny); `pull_request`/`release` included **only when the server-side backstop is detected**, else off; dangerous set refused by construction |
+| C1 | Write-trust allowlist (default-deny); `pull_request`/`release` included **only when the server-side backstop is present — via a runtime-derived, fail-closed check (default OFF on any uncertainty; never a caller flag)**; dangerous set refused by construction |
 | C2 | Sync gate = separate predicate = `{push, schedule}` only; test-locked to reject all other events + non-default refs |
 | C3 | No-overwrite/409 per adapter — **contract-mandated**, and its CREEP value is **conditional on C1/C2** (not standalone). Actions cache native; GHCR requires atomic create-if-absent (GO/NO-GO) |
-| C4 | Repo-wide PPE hygiene: **shipped installable gate** (reusable workflow / composite action) + **default-branch-protection prerequisite**; heuristic linters (`zizmor`/`actionlint`) are defense-in-depth, not a complete control |
+| C4 | Repo-wide PPE hygiene: a **shipped installable gate** (reusable workflow / composite action) running `zizmor`/`actionlint` for named patterns (no `pull_request_target`+PR-checkout; no `issue_comment`/`workflow_run` executing PR code). **Best-effort/advisory** — heuristic linters cannot verify novel/obfuscated evasions, so it is NOT load-bearing; containment is **C2 (untrusted writers kept out of the shared store) + default-branch protection** |
 | C5 | No content signing for CREEP (ineffective — trusted producer signs poisoned bytes) |
 | C6 | Pull-by-digest mandatory iff GHCR; the `{hash}→digest` map is **designed out** (tag == hash) or its single writer + concurrency pinned — never a mutable shared index |
 | C7 | Deferred (v2): asymmetric provenance attestation (cosign keyless), reader-verified — never HMAC |
 | C8 | Retention: native Actions LRU + age-only RO + **no manifest** (no mutable retention state) |
 | C9 | Cleanup delete path: **list phase aborts with zero deletions on any non-404 fault / incomplete pagination**; delete phase isolates per item |
 | C10 | GHCR >5000-download refusal handled non-fatally; documented age-floor exception; recorded as a **poison-remediation gap** (weighs in Decision 3) |
-| C11 | Cleanup credential: job-scoped `GITHUB_TOKEN` where sufficient (package repo-linked + admin); org-owned/unlinked needs a classic PAT (`delete:packages`) **behind an Actions Environment with required reviewers**, or keep GHCR in-repo; never referenced in a PR-triggered workflow |
+| C11 | Cleanup credential: **prefer keeping GHCR in-repo so a job-scoped `GITHUB_TOKEN` suffices** (no long-lived PAT). Fine-grained PATs / GitHub App tokens are **unsupported for GHCR deletion**, so an org-owned/unlinked package forces a **classic PAT (`delete:packages`)** — gate it **behind an Actions Environment with required reviewers** and **document its org-wide-package-deletion blast radius** as an accepted trade-off. Never referenced in a PR-triggered workflow |
 | C12 | First-party Octokit cleanup (the delete credential never enters a third-party action) |
 | C13 | GHCR child-manifest cleanup gated on a reference check (fail-closed); reader degrades a missing/partial child to MISS, never truncated bytes |
 | C14 | Docs: github.com-only backstop + GHES floor; **never enable fork-PR "send write tokens"/"send secrets"**; default-branch-protection + ephemeral-single-tenant-runner prerequisites |
 | C15 | Docs: retention is storage-hygiene, **not** poison-containment |
-| C16 | Mirror filter admits **only server-produced keys** (distinguishing namespace/prefix), not "any 1-512 hex"; docs warn every mirrored key is anonymously public |
+| C16 | Mirror filter admits **only server-produced keys** (distinguishing namespace/prefix), not "any 1-512 hex" — **must ship before/with** enabling the mirror for any private repo (else unrelated hex-keyed CI artifacts leak); docs warn every mirrored key is world-readable |
 | C17 | Observability: a whole-run sync/publish failure **fails loud** (annotation + non-zero exit); ship a "how do I know the cache is working" signal |
+| C18 | (GHCR) Publish-time **package-visibility fail-closed assert**: the publish pipeline verifies package visibility matches the repo (private repo → private package) and **fails the run** on mismatch — not a docs-only step |
 
 ## Decision 5 — Retention / LRU
 
@@ -83,4 +84,4 @@ The cache keys on the opaque Nx **input** hash; Nx does not include the runner O
 CVE-2025-36852 / GHSA-rrr2-jcr8-7q3x / NVD (CVSS 9.4, CWE-829); Nx blog + HeroDevs `nx.app/files/cve-2025-06`; Nx self-hosted caching + the 2026-06-26 read-only-cache changelog; GitHub dependency-caching (scope isolation); CodeQL cache-poisoning; Adnan Khan "Cacheract"; Wiz PPE; OCI distribution spec (tag mutability); GHCR has no immutable tags; sccache/bazel-remote/Turborepo; `nixcite/nixcache-oci`. Full corpus: `.planning/research/*`.
 
 ---
-*Recorded: 2026-07-17*
+*Recorded: 2026-07-17. Rev after an independent Sonnet `/lz-security-review`: C1 capability-gate is runtime-derived + fail-closed; C4 PPE gate relabeled advisory (containment = C2 + branch protection); C11 prefers in-repo GHCR (fine-grained/App tokens unsupported for GHCR delete); C16 sequenced before private mirror; added C18 (publish-time visibility fail-closed assert).*

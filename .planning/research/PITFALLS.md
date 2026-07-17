@@ -313,6 +313,17 @@ Optimizations for rate-limit avoidance (process-lifetime shard cache) and simpli
 | 8. Fault-as-absence | Octokit migration (req 7) + test coverage (req 4) | Mocked partial-listing test asserts no deletion; structural 404 only |
 | 9. Silent MISS -> wrong result | Test coverage (req 4) | Assert MISS-not-wrong-result under eviction/staleness/rate-limit |
 
+## Empirically-Verified Platform Facts (rebuild carry-forward)
+
+Platform/tooling truths verified by the PoC + the FOUND-01 spike - true regardless of implementation, and the most expensive to rediscover. Carry them into the greenfield rebuild; they prime no particular design (the implementation SHAPE that produced them is intentionally left in git history, not carried forward).
+
+- **Nx OS-sensitive hashing recipe.** To make a task's Nx hash differ by OS (so a Linux-produced entry never serves a Windows reader, and a local run on each OS still hits its own entry), add a runtime input `{ "runtime": "node -p process.platform" }` to that task's `inputs` in `nx.json`. Rejected alternatives and WHY: `env:RUNNER_OS` is unset off-CI, so local runs never hit; a plain `env` var fails because MSYS/Git-Bash uppercases the variable name while Nx's env hasher is case-sensitive, so a bash-launched local run misses. `process.platform` is compiled into node -> stable across shell (PowerShell/Git-Bash/cmd) and across x64/arm64/emulation. REQUIRES Nx >= 22.7.0 (nrwl/nx#34971 runtime-input cache fix); older Nx returns a stale runtime value when the daemon is disabled (as it is on CI).
+- **`@actions/cache` `saveCache` returns `-1` for BOTH "entry already exists" AND "write denied by a read-only token"** - indistinguishable via the public API (the distinguishing errors are caught internally). A systematically denied write looks identical to a benign idempotent write at the backend layer; only the write-trust gate keeps that from masking a real outage.
+- **A Windows detached background process must NOT inherit the runner's stdio.** On windows-11-arm a backgrounded server that inherits the step's stdout is killed when the runner closes the step pipe (verified); it must detach (e.g. log to a temp file) and re-register any secret masks out of band. POSIX may inherit safely. Relevant to running `serve` as a background step and the DOCS-06 `cancel` teardown.
+- **`ACTIONS_RUNTIME_TOKEN` / `ACTIONS_RESULTS_URL` (required by the Actions-cache backend) were observed injected only into JS actions, not plain `run:` steps** - and are passed to a child only by process inheritance, never via `$GITHUB_ENV`. OPEN VERIFICATION for the rebuild (Phase 2 / DOCS-06): confirm whether a background / `run:` step receives them, because the server-launch mechanism (background step vs JS action) depends on it.
+
+Everything else in this doc (Pitfall 7's cross-OS `@actions/cache` version hashing incl. zstd-vs-gzip + `.gitattributes eol=lf`; the `gh` no-structured-errors + `-f`-flips-to-POST gotchas; no Release last-accessed signal; the 60/5000 rate limits; the 2 GiB / 1000-asset / 10 GB caps; the Nx PUT `202->200` drift; the github.com-only CREEP backstop) is also implementation-independent and carries forward.
+
 ## Sources
 
 - CVE-2025-36852 / CREEP (Nx blog, 2025-06-12): https://nx.dev/blog/cve-2025-36852-critical-cache-poisoning-vulnerability-creep -- mechanism, first-to-cache-wins race, why checksums don't help, Nx Cloud's trust-boundary mitigation. Confidence HIGH.

@@ -31,6 +31,13 @@ Reader spike (FOUND-01, Releases chosen): `.planning/spikes/001-005`.
 
 **Granularity:** standard (7 phases: 1 teardown + 6 build slices).
 
+**De-priming gate (Phase 0 -> Phase 1):** after teardown, run `/gsd:map-codebase` on the
+torn-down (shell-only) workspace so `.planning/codebase/*` no longer describes the deleted PoC,
+and scrub PoC-implementation references (function/file names, old-milestone Active reqs) out of
+`.planning/research/*` (esp. PITFALLS.md) while KEEPING the implementation-independent platform
+facts (see PITFALLS.md "Empirically-Verified Platform Facts"). The rebuild phases then plan with
+zero old-implementation priming. The codebase map re-populates as the slices land.
+
 ## Phases
 
 - [ ] **Phase 0: Teardown** - Strip the PoC + its cache-coupled CI; leave the Nx workspace green with a lean, cache-independent baseline CI.
@@ -67,9 +74,11 @@ requirement is delivered here).
   4. The Nx workspace shell is intact (nx.json, root tsconfigs, vitest.workspace, root
      package.json, `.gitattributes eol=lf`) and `nx build`/`nx test` across the remaining
      projects is green.
-  5. Planning docs are reconciled: PROJECT.md "Validated" items are annotated as
-     PoC-to-be-rebuilt, and the `.planning/codebase/*` map is annotated as a historical PoC
-     spec (not current state).
+  5. De-priming is done: `/gsd:map-codebase` has regenerated `.planning/codebase/*` against the
+     torn-down workspace (no PoC trace); PoC-implementation references are scrubbed from
+     `.planning/research/*` (esp. PITFALLS.md) with the implementation-independent platform facts
+     kept; PROJECT.md "Validated" items stay annotated as PoC-to-be-rebuilt. No rebuild-priming
+     artifact remains.
 
 **Plans**: TBD
 

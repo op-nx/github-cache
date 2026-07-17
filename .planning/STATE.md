@@ -79,5 +79,5 @@ Items acknowledged and carried forward:
 
 Last session: 2026-07-18
 Stopped at: ROADMAP.md regenerated + approved; REQUIREMENTS.md (SRV-01..05 added, traceability populated), PROJECT.md, config.json (granularity=standard), STATE.md finalized. new-project Step 8 complete.
-Resume file: .planning/STATE.md (canonical; .planning/.continue-here.md is a stale pre-spike handoff, superseded)
+Resume file: .planning/STATE.md (canonical)
 Next: plan Phase 0 (Teardown) - `/gsd:plan-phase 0`

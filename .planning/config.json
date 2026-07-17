@@ -87,7 +87,7 @@
     "source_grounding_authority": "grep"
   },
   "mode": "yolo",
-  "granularity": "coarse",
+  "granularity": "standard",
   "context_window": 1000000,
   "quick_branch_template": null,
   "model_overrides": {

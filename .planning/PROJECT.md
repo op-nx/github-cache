@@ -33,6 +33,8 @@ never a broken build) and writes must stay gated.
 
 <!-- Inferred from the existing codebase (.planning/codebase/) - shipped and dogfooded in this repo, not yet fully test-covered. Describes the CURRENT spike/PoC implementation; the storage-primitive choice is being re-verified (see Key Decisions). Reconciliation: the PoC mirror serves anonymous reads, but FOUND-02 supersedes it - the forward requirement is authenticated, private-repo-capable local read, with anonymous public read demoted to an optional OSS bonus (not a dependency). -->
 
+> **These describe the spike/PoC that is being deleted and rebuilt greenfield** (ROADMAP Phase 0-1, MVP/vertical). They are the **target spec** the rebuild re-establishes test-first, not shipped current state.
+
 - [x] Nx self-hosted remote-cache HTTP server: loopback bind, timing-safe bearer auth, hash validation, body-size cap, best-effort read degradation - existing
 - [x] Runtime-context backend selection (no caller-facing mode flag) - existing
 - [x] Read-write cache in CI on trusted events (Actions cache backend) - existing

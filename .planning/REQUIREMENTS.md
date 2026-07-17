@@ -15,10 +15,20 @@
 
 Grounded in `.planning/ARCHITECTURE-DECISION.md` (control ledger C1-C18). Most controls attach to the opt-in RO-store / sync / cleanup layers; the default (Actions-cache CI-RW only) carries only C1 + C4 + docs. **Reader = GitHub Releases (LOCKED):** the GHCR-conditional controls/requirements (C6/C10/C11-GHCR/C13/C18; TRUST-07-GHCR, TRUST-09, RETAIN-02, RETAIN-03-GHCR) drop out of v1 and move to the v2 GHCR revisit trigger.
 
+### Server / Protocol Security
+
+Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properties of the Nx-contract HTTP server, now independently traceable.
+
+- [ ] **SRV-01** (loopback bind): the HTTP server binds `127.0.0.1` only and is never reachable on a routable interface
+- [ ] **SRV-02** (timing-safe auth): bearer-token auth uses a per-process CSPRNG token compared in constant time; unauthenticated or mismatched requests are rejected (401)
+- [ ] **SRV-03** (hash validation): the `{hash}` path segment is validated (bounded-length hex) and malformed hashes are rejected before any backend call
+- [ ] **SRV-04** (body-size cap): request bodies are capped at `MAX_CACHE_BODY_BYTES` (2 GB); oversized bodies are rejected per contract, never buffered unbounded
+- [ ] **SRV-05** (best-effort read): a read fault degrades to a MISS (never a 5xx that breaks the build); writes fail closed
+
 ### Testing & Safety Net
 - [ ] **TEST-01**: `selectBackend` unit specs (CI-vs-local, `GITHUB_REPOSITORY` validation, `GH_TOKEN||GITHUB_TOKEN` fallthrough, malformed-repo rejection, explicit `env` param)
 - [ ] **TEST-02**: `withHashLock` concurrency spec (same-hash serializes; different concurrent; entry evicted; rejected op doesn't wedge)
-- [ ] **TEST-03**: the **publish + cleanup orchestration** (the currently-untested `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is tested behind an injected client, with already-exists / not-found / other-fault branches
+- [ ] **TEST-03**: the **publish + cleanup orchestration** (the `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is **built behind an injected client and tested**, with already-exists / not-found / other-fault branches
 - [ ] **TEST-04**: cleanup bin wrapper spec (per-item isolation + non-zero exit on aggregated failure) — paired with RETAIN-01's list-phase-abort test
 - [ ] **TEST-05**: regression guards for the must-not-reopen cross-OS invariants **and** a cross-OS round-trip through the chosen reader adapter (OS-invariant + OS-sensitive hash, from each CI OS)
 - [ ] **TEST-06**: date-cleanup + read-only-local covered (expired pruned; within-window retained; local `put()` always 403)
@@ -35,7 +45,7 @@ Grounded in `.planning/ARCHITECTURE-DECISION.md` (control ledger C1-C18). Most c
 - [ ] **TRUST-01**: write-trust = **allowlist** (configured replaces default; else default implicit); default-deny; **no denylist**. `pull_request`/`release` are safe by GitHub scope-isolation, but the default allowlist enables them **only where GitHub's untrusted-default-branch cache guard exists**, detected from **`GITHUB_SERVER_URL`** (`github.com`/`*.ghe.com` → ON; **every GHES host → OFF, fail-closed**; no caller flag). No GA GHES has the guard today (floor unpublished); a dormant version-gate knob stays OFF until one is published. Optional spoof cross-check: `/meta` `installed_version` + `X-GitHub-Enterprise-Version` absence. The in-code gate is fork-spoofable defense-in-depth only
 - [ ] **TRUST-02**: the sync/publish gate is a **separate predicate = `{push, schedule}`** (not the write allowlist), test-locked to **reject** `pull_request`, `release`, `repository_dispatch`, `workflow_dispatch`, `merge_group`, `delete`, `registry_package`, `page_build`, and non-default refs
 - [ ] **TRUST-03**: dangerous shared-default-scope events (`pull_request_target`, `issue_comment`, fork-`workflow_run`, and any non-allowlisted trigger) are refused on the write gate; asserted by test
-- [ ] **TRUST-04**: the trusted-event allowlist has a **single source of truth** (the pre-`npm ci` action copy is generated from / shares it — eliminate the dual copy at root), with a `selfcheck.cjs` assertion
+- [ ] **TRUST-04**: the trusted-event allowlist has a **single source of truth**; the pre-`npm ci` dependency-free action copy is generated from / shares it (no dual root copy), with a `selfcheck.cjs` parity assertion
 - [ ] **TRUST-05**: the runtime-context-derived RW-vs-RO mode is **documented and test-covered** (do NOT introduce a caller-facing mode surface — the no-flag safety property is load-bearing)
 - [ ] **TRUST-06**: a **shipped installable PPE-hygiene gate** (reusable workflow / composite action) running `zizmor`/`actionlint` for named patterns (no `pull_request_target`+PR-checkout; no `issue_comment`/`workflow_run` executing PR code). It is **best-effort/advisory** (cannot verify novel/obfuscated evasions), NOT the load-bearing control - containment is TRUST-02 + **default-branch protection** (both stated as adopter prerequisites)
 - [ ] **TRUST-07**: first-write-wins/no-overwrite (409) — CREEP value **conditional on TRUST-02**; Actions cache native. **Releases (LOCKED):** the server returns 409 on an existing record and the mirror never overwrites an existing hash-named asset (immutable-by-convention; a same-hash trusted write is byte-identical under CORR-01, so a benign no-op). *(The GHCR best-effort check-then-write variant — low-severity, C2-covered — moves to the v2 GHCR trigger.)*
@@ -89,12 +99,20 @@ Grounded in `.planning/ARCHITECTURE-DECISION.md` (control ledger C1-C18). Most c
 
 ## Traceability
 
-Populated during roadmap creation (after the FOUND-01 reader spike).
+Derived from `.planning/ROADMAP.md` (per-requirement detail + coverage validation live there). Every v1 requirement maps to exactly one phase.
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| (populated by roadmap) | - | Pending |
+| Phase | Requirements |
+|-------|--------------|
+| 0 - Teardown | (prep - delivers none) |
+| 1 - Walking Skeleton | SRV-01, SRV-02, SRV-03, SRV-04, SRV-05, TEST-07 |
+| 2 - Default Cache in CI | TEST-01, TEST-02, ROBUST-03, ROBUST-04, TRUST-03, TRUST-05 |
+| 3 - Cross-Context Read | FOUND-02, CORR-01, TEST-05 |
+| 4 - Publish + Retention + Obs | TEST-03, TEST-04, TEST-06, ROBUST-01, ROBUST-02, ROBUST-05, TRUST-02, TRUST-07, RETAIN-01, RETAIN-03, OBS-01 |
+| 5 - Trust-Widening + PPE | TRUST-01, TRUST-04, TRUST-06, TRUST-08 |
+| 6 - Distribution + Docs + Gov | DOCS-01, DOCS-02, DOCS-03, DOCS-04, DOCS-05, DOCS-06, GOV-01, GOV-02, GOV-03 |
+| LOCKED (grounding) | FOUND-01 (reader = Releases), FOUND-03 (npm + JS Action) |
+| v2 / deferred | TRUST-09, RETAIN-02, PROV-01, GHCR-01 |
 
 ---
 *Requirements defined: 2026-07-17*
-*Last updated: 2026-07-17 - FOUND-01/03 LOCKED after the reader spike (`.planning/spikes/001-005`): FOUND-01 = GitHub Releases, FOUND-03 = Docker deferred to v2. Releases-conditional bind (ROBUST-02/05, TRUST-07-Releases, RETAIN-03-Releases); GHCR-conditional -> v2 (GHCR-01: TRUST-07-GHCR/09, RETAIN-02/03-GHCR, C6/C10/C13/C18). New: ROBUST-04 (SIGTERM graceful shutdown), ROBUST-05 (1000-asset skip-and-warn), DOCS-06 (background-step CI pattern). Prior: 6-panel triage + Sonnet `/lz-security-review` + targeted research (TRUST-01 host-based fail-closed; TEST-07 hard `200`/Nx-21+). See ARCHITECTURE-DECISION.md.*
+*Last updated: 2026-07-18 - greenfield MVP/vertical rebuild locked: added SRV-01..05 (P1 server-security), re-scoped TEST-03/TRUST-04 forward, populated the phase traceability from ROADMAP.md (7 phases, standard granularity). Prior: 2026-07-17 - FOUND-01/03 LOCKED after the reader spike (`.planning/spikes/001-005`): FOUND-01 = GitHub Releases, FOUND-03 = Docker deferred to v2. Releases-conditional bind (ROBUST-02/05, TRUST-07-Releases, RETAIN-03-Releases); GHCR-conditional -> v2 (GHCR-01: TRUST-07-GHCR/09, RETAIN-02/03-GHCR, C6/C10/C13/C18). New: ROBUST-04 (SIGTERM graceful shutdown), ROBUST-05 (1000-asset skip-and-warn), DOCS-06 (background-step CI pattern). Prior: 6-panel triage + Sonnet `/lz-security-review` + targeted research (TRUST-01 host-based fail-closed; TEST-07 hard `200`/Nx-21+). See ARCHITECTURE-DECISION.md.*

@@ -49,4 +49,4 @@ Releases-side burdens: 1000 assets/release (sharding); ~2 GiB/asset ceiling vs t
 | 002 | cold-read-fan-out | comparison | API-call fan-out per `nx affected` cold read vs 60/hr anon + 5000/hr auth | WASH (required case); GHCR edge for anon-public | rate-limit, reader |
 | 003 | size-ceiling | comparison | True per-primitive size ceiling + failure mode vs the 2 GB body cap (ROBUST-02) | GHCR headroom edge (mild) | size, robustness |
 | 004 | ghcr-hazards | standard | Child-manifest cleanup, cleanup credential (GITHUB_TOKEN vs PAT), overwrite, >5000 gap | GHCR carries real cleanup burden (strongest pro-Releases dim) | ghcr, cleanup, security |
-| 005 | cross-os-roundtrip | standard | Cross-OS round-trip (OS-invariant + OS-sensitive hash) from ubuntu + windows CI | PENDING | cross-os, correctness, ci |
+| 005 | cross-os-roundtrip | standard | Cross-OS round-trip (OS-invariant + OS-sensitive hash) from ubuntu + windows CI | CORR-01 store-agnostic (OS-namespace fixes both); C11 GITHUB_TOKEN deletes same-owner pkg | cross-os, correctness, ci |

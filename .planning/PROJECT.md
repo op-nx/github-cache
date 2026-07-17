@@ -10,10 +10,11 @@ the **GitHub Actions cache** (read-write, in CI) and a **read-only GitHub Releas
 mirror** (for local reads). It is meant for **other projects to adopt** - across **both
 public and private** GitHub repositories - not only for dogfooding in this repo.
 
-**Under active verification (gates the roadmap):** which GitHub / Git primitive(s) are the
-best storage/distribution backends is being re-opened via `/gsd:explore` + `/gsd:spike`
-before any roadmap is formed (see Key Decisions). The current Actions-cache + Releases pair
-is the incumbent, not a locked choice.
+**Architecture decided; one primitive choice pending a spike.** The storage model is a
+**pluggable multi-store** (mandatory Actions-cache CI-RW core; opt-in read-only stores;
+allowlist write-trust; a CREEP control ledger) - recorded in
+`.planning/ARCHITECTURE-DECISION.md`. The single open choice is the reader / cross-context
+adapter (GHCR/OCI vs Releases), resolved by `/gsd:spike`.
 
 ## Core Value
 
@@ -43,11 +44,11 @@ never a broken build) and writes must stay gated.
 
 <!-- New scope for this milestone. Hypotheses until shipped and validated. -->
 
-**FOUNDATION (P0 - gates the roadmap):**
+**FOUNDATION (P0):**
 
-- [ ] **Verify the best GitHub / Git storage primitive(s)** for both public and private repos, before committing to a roadmap. The anonymous-read assumption that favored Release assets is **retracted** (authenticated local read is now the baseline), so the candidate field is re-opened. Candidates to research, explore, and analyze (**including but not limited to**): GitHub Actions cache; GitHub Releases; GitHub Packages; GHCR (OCI container registry); GitHub Actions build artifacts; Git LFS; a separate Nx-cache Git repo; a separate Nx-cache Git branch. Resolve via `/gsd:explore` -> `/gsd:spike`.
+- [ ] **Reader / cross-context storage adapter (spike-gated):** GHCR/OCI vs GitHub Releases. Actions cache is the decided CI-RW default; git-native and Actions artifacts are out. The security review reweighted GHCR vs Releases to ~even for public OSS (GHCR needs digest-pin + app-enforced no-overwrite + child-manifest cleanup and hits the >5000-download-undeletable wall; Releases sidesteps it). Resolve via `/gsd:spike`. See `.planning/ARCHITECTURE-DECISION.md`.
 - [ ] **Local read uses the developer's existing GitHub authentication** (git credential helper and/or `gh` CLI, or `GH_TOKEN`/`GITHUB_TOKEN`) and MUST work for **private repositories**. Anonymous zero-credential read is an optional convenience for public repos only - never a design driver.
-- [ ] **Distribution forms:** consumers can use the project via published **Docker containers** and **npm packages** (both usable in local and CI environments), and via published **GitHub Actions** (CI, where relevant). Docker distribution is new; npm + Actions exist.
+- [ ] **Distribution forms:** published **Docker containers** and **npm packages** (local + CI) and **GitHub Actions** (CI). The JS Action is mandatory for the Actions-cache CI-RW role; the Docker container is clean for the reader role only.
 
 **Feature work (may be reshaped by the primitive verification above):**
 
@@ -102,13 +103,15 @@ never a broken build) and writes must stay gated.
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| **Storage primitive(s): incumbent = Actions cache (RW/CI) + Release-asset mirror (RO/local)** | GitHub-native, zero extra hosting | **UNVERIFIED - foundational.** Being re-verified via `/gsd:explore` + `/gsd:spike` BEFORE any roadmap. The anonymous-read assumption that favored Releases is retracted; candidates widened (ghcr.io/OCI, git-native, Packages). |
-| Local read requires the developer's existing GitHub auth; support public AND private repos | We assume GitHub, so auth is free; anonymous access excludes private repos | [OK] Good (user-confirmed) |
-| Distribution forms: Docker containers + npm packages (local & CI) + GitHub Actions (CI) | Meet consumers where they run; Docker container is a new form | [OK] Good (user-confirmed) |
+| **Pluggable multi-store**: mandatory Actions-cache CI-RW core; opt-in CI-RO / local-RO; async write-sync; local-RW deferred | Matches the ecosystem norm + Nx Cloud's CREEP fix; minimal default, pay-as-you-compose | [OK] Decided (see ARCHITECTURE-DECISION.md) |
+| Reader / cross-context adapter: **GHCR/OCI vs GitHub Releases** | Security review reweighted them to ~even for public OSS (GHCR: digest-pin + no-overwrite + child-manifest cleanup + >5000-undeletable; Releases sidesteps) | - Pending spike (FOUND-01) |
+| **Write-trust = allowlist-only** (default-deny; no denylist); default includes `pull_request`+`release` (scope-isolated), refuses the dangerous set by construction | Allowlist is complete-by-construction; resolves "why not pull_request?"; a denylist would silently miss dangerous events | [OK] Decided |
+| **Narrow sync gate**, a separate predicate from the write gate (default-branch push/schedule only) | Syncing a PR-scoped entry into a shared store recreates the CREEP precondition | [OK] Decided (load-bearing) |
+| **Repo-wide PPE hygiene CI check** (`zizmor`/`actionlint`) | Backstops the sync gate's residual (a pwn-request poisoning main's cache directly); currently unasserted | [OK] Decided (new control) |
+| **No content signing as a CREEP control**; digest-pin iff GHCR | CVE-2025-36852: poison precedes hashing, so signing is ineffective; CREEP is defended at the write/sync gates | [OK] Decided |
+| Retention: native Actions LRU (CI tier) + age-only (RO tier); **no LRU manifest** | A manifest adds mutable retention state (security-negative); GHCR exposes no last-accessed signal | [OK] Decided |
 | Runtime-context backend selection instead of a mode flag | No caller can misconfigure read-write vs read-only | [OK] Good |
-| Write-trust gate currently omits `pull_request` and `release` | CREEP precaution: the event name is fork-spoofable | [WARN] Revisit - GitHub's 2026-06-26 read-only-cache-token change backstops forks server-side, making these events safe to add |
-| Age-based retention is the mandatory floor; LRU optional | LRU approach depends on the chosen primitive's last-accessed signal | - Pending (revisit after primitive verification) |
-| `gh` CLI (stderr text-matching) for publish/cleanup | `gh` handles auth/pagination for free on runners | [WARN] Revisit - migrate to Octokit for structural error discrimination |
+| `gh` CLI (stderr text-matching) for publish/cleanup | Fragile across `gh` versions | [WARN] Revisit - migrate publish AND cleanup to Octokit structural errors |
 
 ## Evolution
 
@@ -128,4 +131,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-17 after auth-baseline correction + primitive-selection re-opened (roadmap + Phase-1 discussion rewound)*
+*Last updated: 2026-07-17 after the D1-D4 security review - architecture + CREEP posture decided (see ARCHITECTURE-DECISION.md); reader adapter pending spike*

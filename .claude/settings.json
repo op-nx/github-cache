@@ -5,14 +5,26 @@
         "source": "github",
         "repo": "nrwl/nx-ai-agents-config"
       }
+    },
+    "opengsd-local": {
+      "source": {
+        "source": "directory",
+        "path": ".gsd-opengsd/1.6.1/package"
+      }
     }
   },
   "enabledPlugins": {
-    "nx@nx-claude-plugins": true
+    "nx@nx-claude-plugins": true,
+    "gsd-core@opengsd-local": true
   },
   "sandbox": {
     "network": {
-      "allowedDomains": ["www.google-analytics.com"]
+      "allowedDomains": [
+        "www.google-analytics.com"
+      ]
     }
+  },
+  "env": {
+    "RUNTIME_DIR": ".gsd-opengsd/1.6.1/package"
   }
 }

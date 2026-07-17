@@ -172,8 +172,10 @@ jobs:
     # uses zstd -- so a Windows-saved entry (e.g. the OS-sensitive `integration`
     # hash a local Windows dev is meant to hit) is unrestorable from ubuntu even
     # with enableCrossOsArchive (actions/cache#1622). An ubuntu-only publish-mirror
-    # therefore NEVER mirrors the Windows hash; the Windows leg does. fail-fast off
-    # so one leg's failure never cancels the other's mirroring.
+    # therefore NEVER mirrors the Windows hash; the Windows leg does. Both legs are
+    # UPLOAD-ONLY -- pruning is a separate daily workflow (mirror-cleanup.yml), so
+    # there is no cross-leg cleanup coordination here. fail-fast off so one leg's
+    # failure never cancels the other's mirroring.
     strategy:
       fail-fast: false
       matrix:
@@ -181,19 +183,13 @@ jobs:
     needs: [build, typecheck, test, integration]
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' }}
     # actions: read to list the Actions cache entries being mirrored
-    # (GET /repos/.../actions/caches); contents: write to upload/prune the
+    # (GET /repos/.../actions/caches); contents: write to upload the
     # Release-asset mirror. Job-level permissions replace the workflow block
     # wholesale, so actions: read must be restated here or the caches API 404s.
     permissions:
       actions: read
       contents: write
     runs-on: ${{ matrix.os }}
-    # Every leg uploads its OS's entries, but only ONE prunes -- else the legs
-    # race on delete-asset. Gate cleanup to the ubuntu leg (see shouldRunCleanup
-    # in publish-mirror.ts); the Windows leg opts out. The expression yields the
-    # literal string "true"/"false".
-    env:
-      CACHE_MIRROR_SKIP_CLEANUP: ${{ matrix.os == 'windows-11-arm' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

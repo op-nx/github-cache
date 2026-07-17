@@ -20,7 +20,8 @@
   ],
   "bin": {
     "op-nx-github-cache-serve": "./dist/bin/serve.js",
-    "op-nx-github-cache-publish-mirror": "./dist/bin/publish-mirror.js"
+    "op-nx-github-cache-publish-mirror": "./dist/bin/publish-mirror.js",
+    "op-nx-github-cache-publish-mirror-cleanup": "./dist/bin/publish-mirror-cleanup.js"
   },
   "scripts": {
     "test:act": "cd ../.. && act push --cache-server-path=packages/op-nx-github-cache/.act-cache --artifact-server-path=packages/op-nx-github-cache/.act-artifacts -W packages/op-nx-github-cache/__fixtures__/act-workflow.yml",

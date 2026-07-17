@@ -103,23 +103,6 @@ export function filterMirrorShardTags(newlineSeparatedTags: string): string[] {
     .filter((tag) => MIRROR_SHARD_PATTERN.test(tag));
 }
 
-// publish-mirror runs one matrix leg per OS, because a leg can only restore
-// (and therefore mirror) the Actions-cache entries saved on ITS OWN platform:
-// @actions/cache's version folds in the os.tmpdir() path, a `windows-only`
-// salt, AND the compression method -- and windows-11-arm omits zstd (falls back
-// to gzip) while ubuntu uses zstd, so a Windows-saved entry is unrestorable
-// from ubuntu even with enableCrossOsArchive (actions/cache#1622). Uploads
-// partition themselves by that restore-ability, but CLEANUP is global: if every
-// leg pruned, the legs would race on delete-asset. So exactly one leg cleans up
-// and the others set CACHE_MIRROR_SKIP_CLEANUP. Default (unset) runs cleanup, so
-// a manual or local `publish-mirror` still prunes. Extracted pure (like
-// filterNxCacheKeys) so the gate is unit-testable without the `gh` dependency.
-export function shouldRunCleanup(env: NodeJS.ProcessEnv): boolean {
-  const optOut = env.CACHE_MIRROR_SKIP_CLEANUP?.trim().toLowerCase();
-
-  return optOut !== 'true' && optOut !== '1';
-}
-
 // `gh api` switches the HTTP method to POST as soon as any -f/-F field is
 // present unless the method is set explicitly. This endpoint is GET-only, so an
 // unqualified `-f ref=...` POSTs to it and returns 404 ("Not Found"), which
@@ -338,10 +321,20 @@ async function cleanupShard(
   }
 }
 
-async function main(): Promise<void> {
+// Shared preamble for both mirror entry points (upload here, cleanup in
+// publish-mirror-cleanup.ts): refuse unless running under a trusted,
+// write-scoped GitHub Actions trigger, then resolve the repo + default branch.
+// isWriteTrusted is the load-bearing write control (see trust.ts); the
+// GITHUB_REF equality below is defense-in-depth only and does NOT close the
+// "attacker with a write-scoped token invokes gh directly" bypass --
+// workflow-level permission scoping (see README) is the real control.
+export async function resolveTrustedRepo(): Promise<{
+  repo: string;
+  defaultBranch: string;
+}> {
   if (!isWriteTrusted(process.env)) {
     throw new Error(
-      'publish-mirror refused: not running under a trusted GitHub Actions trigger.',
+      'cache mirror refused: not running under a trusted GitHub Actions trigger.',
     );
   }
 
@@ -363,18 +356,52 @@ async function main(): Promise<void> {
   const defaultBranch = await resolveDefaultBranch(repo);
   const trustedRef = `refs/heads/${defaultBranch}`;
 
-  // Defense-in-depth only: does NOT close the "attacker with a write-scoped
-  // token invokes gh directly" bypass -- workflow-level permission scoping
-  // (see README) is the load-bearing control.
   if (process.env.GITHUB_REF !== trustedRef) {
     throw new Error(
-      `publish-mirror refused: GITHUB_REF "${process.env.GITHUB_REF}" is not "${trustedRef}".`,
+      `cache mirror refused: GITHUB_REF "${process.env.GITHUB_REF}" is not "${trustedRef}".`,
     );
   }
 
+  return { repo, defaultBranch };
+}
+
+// Prune every mirror shard that actually exists -- not just the current read
+// window -- so a shard that has aged out of the window (e.g. after a shortened
+// CACHE_MIRROR_MAX_AGE_DAYS) is still visited and cannot orphan toward the
+// 1000-asset-per-release cap. Reads still walk only the window
+// (release-mirror-backend.ts). `currentShard` is never release-deleted -- the
+// current month is live. Isolate each shard: one shard's non-404 fault
+// (rate-limit, network, an unexpected gh error) must not abort pruning the
+// rest; the failed tags are returned so the caller can surface them. Runs from
+// a single daily scheduled job (mirror-cleanup.yml), so concurrent-cleanup
+// delete-asset races are structurally impossible -- this is the single-writer
+// home for the mirror's future optional LRU manifest.
+export async function cleanupMirror(
+  repo: string,
+  currentShard: string,
+): Promise<string[]> {
+  const cleanupFailures: string[] = [];
+
+  for (const shardTag of await listMirrorShards(repo)) {
+    try {
+      await cleanupShard(repo, shardTag, shardTag !== currentShard);
+    } catch (error) {
+      console.error(`Failed to clean up shard ${shardTag}:`, error);
+      cleanupFailures.push(shardTag);
+    }
+  }
+
+  return cleanupFailures;
+}
+
+// Upload-only. Every publish-mirror matrix leg (one per OS) runs this to mirror
+// the Actions-cache entries it can restore on its platform. Pruning is a
+// separate daily workflow (see cleanupMirror / mirror-cleanup.yml), so nothing
+// here deletes.
+async function main(): Promise<void> {
+  const { repo, defaultBranch } = await resolveTrustedRepo();
   const hashes = await listActionsCacheHashes(repo, defaultBranch);
-  const now = new Date();
-  const currentShard = monthTag(now);
+  const currentShard = monthTag(new Date());
 
   await ensureShardExists(repo, currentShard);
 
@@ -384,57 +411,17 @@ async function main(): Promise<void> {
     try {
       await uploadHash(currentShard, repo, hash);
     } catch (error) {
-      // One hash's upload failure must not block the rest, or skip cleanup
-      // for the shard window below -- report all failures at the end instead.
+      // One hash's upload failure must not block the rest -- report all at the
+      // end instead.
       console.error(`Failed to upload ${hash}:`, error);
       failures.push(hash);
     }
   }
 
-  // Prune every mirror shard that actually exists -- not just the current read
-  // window -- so a shard that has aged out of the window (e.g. after a gap in
-  // publish runs, or a shortened CACHE_MIRROR_MAX_AGE_DAYS) is still visited and
-  // cannot orphan toward the 1000-asset-per-release cap. Reads still walk only
-  // the window (release-mirror-backend.ts); cleanup runs in trusted CI where the
-  // wider enumeration is affordable. Never allow deleting the current shard: it
-  // was just uploaded to above.
-  //
-  // Isolate each shard the same way the upload loop above does: one shard's
-  // non-404 fault (rate-limit, network, an unexpected gh error) must not abort
-  // pruning the remaining shards, nor short-circuit past the upload-failure
-  // report below. Collect both classes of failure and surface them together.
-  const cleanupFailures: string[] = [];
-
-  // Only the designated leg prunes (see shouldRunCleanup): the other matrix
-  // legs upload their OS's entries and stop, so the legs never race on
-  // delete-asset.
-  if (shouldRunCleanup(process.env)) {
-    for (const shardTag of await listMirrorShards(repo)) {
-      try {
-        await cleanupShard(repo, shardTag, shardTag !== currentShard);
-      } catch (error) {
-        console.error(`Failed to clean up shard ${shardTag}:`, error);
-        cleanupFailures.push(shardTag);
-      }
-    }
-  }
-
-  const problems: string[] = [];
-
   if (failures.length > 0) {
-    problems.push(
+    throw new Error(
       `${failures.length} hash(es) failed to upload: ${failures.join(', ')}`,
     );
-  }
-
-  if (cleanupFailures.length > 0) {
-    problems.push(
-      `${cleanupFailures.length} shard(s) failed to clean up: ${cleanupFailures.join(', ')}`,
-    );
-  }
-
-  if (problems.length > 0) {
-    throw new Error(problems.join('; '));
   }
 }
 

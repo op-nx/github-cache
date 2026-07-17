@@ -4,7 +4,6 @@ import {
   BRANCH_NAME_PATTERN,
   filterMirrorShardTags,
   filterNxCacheKeys,
-  shouldRunCleanup,
 } from './publish-mirror.js';
 
 describe('actionsCachesListArgs (forces GET so gh does not POST on -f)', () => {
@@ -75,22 +74,4 @@ describe("filterMirrorShardTags (only this mirror's own cache-mirror-YYYYMM rele
   it('returns an empty array when the repo has no mirror shards', () => {
     expect(filterMirrorShardTags('v1.0.0\nlatest\n')).toEqual([]);
   });
-});
-
-describe('shouldRunCleanup (exactly one matrix leg prunes)', () => {
-  it('runs cleanup by default so a manual/local publish-mirror still prunes', () => {
-    expect(shouldRunCleanup({})).toBe(true);
-    expect(shouldRunCleanup({ CACHE_MIRROR_SKIP_CLEANUP: '' })).toBe(true);
-    expect(shouldRunCleanup({ CACHE_MIRROR_SKIP_CLEANUP: 'false' })).toBe(true);
-    expect(shouldRunCleanup({ CACHE_MIRROR_SKIP_CLEANUP: '0' })).toBe(true);
-  });
-
-  it.each(['true', 'TRUE', ' True ', '1'])(
-    'skips cleanup when the opt-out is set to "%s"',
-    (value) => {
-      expect(shouldRunCleanup({ CACHE_MIRROR_SKIP_CLEANUP: value })).toBe(
-        false,
-      );
-    },
-  );
 });

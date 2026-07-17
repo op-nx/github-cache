@@ -10,11 +10,13 @@ the **GitHub Actions cache** (read-write, in CI) and a **read-only GitHub Releas
 mirror** (for local reads). It is meant for **other projects to adopt** - across **both
 public and private** GitHub repositories - not only for dogfooding in this repo.
 
-**Architecture decided; one primitive choice pending a spike.** The storage model is a
-**pluggable multi-store** (mandatory Actions-cache CI-RW core; opt-in read-only stores;
-allowlist write-trust; a CREEP control ledger) - recorded in
-`.planning/ARCHITECTURE-DECISION.md`. The single open choice is the reader / cross-context
-adapter (GHCR/OCI vs Releases), resolved by `/gsd:spike`.
+**Architecture decided; one primitive choice pending a spike.** `selectBackend` returns
+**one backend per process, chosen by runtime context** (default: Actions-cache CI-RW only);
+an opt-in reader/cross-context store and its publish/cleanup are a separate, reader-specific
+step. Write-trust is an allowlist; the full CREEP control ledger is in
+`.planning/ARCHITECTURE-DECISION.md`. **The current implementation is a spike/PoC (reference,
+rebuildable; sunk cost = 0).** The single open choice is the reader adapter (GHCR/OCI vs
+Releases), resolved by `/gsd:spike` on forward merits.
 
 ## Core Value
 
@@ -50,14 +52,15 @@ never a broken build) and writes must stay gated.
 - [ ] **Local read uses the developer's existing GitHub authentication** (git credential helper and/or `gh` CLI, or `GH_TOKEN`/`GITHUB_TOKEN`) and MUST work for **private repositories**. Anonymous zero-credential read is an optional convenience for public repos only - never a design driver.
 - [ ] **Distribution forms:** published **Docker containers** and **npm packages** (local + CI) and **GitHub Actions** (CI). The JS Action is mandatory for the Actions-cache CI-RW role; the Docker container is clean for the reader role only.
 
-**Feature work (may be reshaped by the primitive verification above):**
+**Feature work (see REQUIREMENTS.md for the full, security-reviewed set):**
 
-- [ ] Support `pull_request` and `release` trigger events with correct read-write vs read-only semantics, relying on GitHub's read-only cache token for untrusted / fork PRs (resolves the open "why not pull_request?" question)
-- [ ] Make CI read-write vs read-only mode a first-class, documented, testable capability
-- [ ] Optional LRU-style retention in addition to the mandatory date-based cleanup (approach depends on the chosen primitive's last-accessed signal)
-- [ ] Comprehensive automated test coverage for the currently untested paths: I/O orchestration in publish-mirror, `selectBackend`, the cleanup bin wrapper, and the `withHashLock` concurrency edge
-- [ ] Consumer-facing adoption docs (public + private setup) so external projects can wire this in without reading the source
-- [ ] Replace `gh` CLI stderr text-matching with structural Octokit error discrimination (robustness on uncontrolled `gh` versions)
+- [ ] `pull_request`/`release` write-trust, **gated on GitHub's server-side read-only-token backstop** (default off on GHES below the floor)
+- [ ] Document + test the runtime-context-derived RW/RO mode (no caller-facing mode flag)
+- [ ] Comprehensive test coverage for the untested paths (publish/cleanup orchestration, `selectBackend`, cleanup wrapper, `withHashLock`)
+- [ ] Structural (Octokit) error discrimination on the publish AND cleanup paths
+- [ ] Shipped PPE-hygiene gate + repo-wide safety controls; cross-OS correctness (CORR-01); consumer adoption docs (public + private); governance (SECURITY.md/LICENSE)
+
+(LRU via a manifest is out of scope - native Actions-cache LRU + age-only RO; see Key Decisions.)
 
 ### Out of Scope
 
@@ -103,15 +106,16 @@ never a broken build) and writes must stay gated.
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| **Pluggable multi-store**: mandatory Actions-cache CI-RW core; opt-in CI-RO / local-RO; async write-sync; local-RW deferred | Matches the ecosystem norm + Nx Cloud's CREEP fix; minimal default, pay-as-you-compose | [OK] Decided (see ARCHITECTURE-DECISION.md) |
-| Reader / cross-context adapter: **GHCR/OCI vs GitHub Releases** | Security review reweighted them to ~even for public OSS (GHCR: digest-pin + no-overwrite + child-manifest cleanup + >5000-undeletable; Releases sidesteps) | - Pending spike (FOUND-01) |
-| **Write-trust = allowlist-only** (default-deny; no denylist); default includes `pull_request`+`release` (scope-isolated), refuses the dangerous set by construction | Allowlist is complete-by-construction; resolves "why not pull_request?"; a denylist would silently miss dangerous events | [OK] Decided |
-| **Narrow sync gate**, a separate predicate from the write gate (default-branch push/schedule only) | Syncing a PR-scoped entry into a shared store recreates the CREEP precondition | [OK] Decided (load-bearing) |
-| **Repo-wide PPE hygiene CI check** (`zizmor`/`actionlint`) | Backstops the sync gate's residual (a pwn-request poisoning main's cache directly); currently unasserted | [OK] Decided (new control) |
+| **One backend per process, context-selected** (`selectBackend`); default = Actions-cache CI-RW only; opt-in reader store + its publish/cleanup are a separate reader-specific step | Matches the ecosystem norm; minimal default, pay-as-you-compose; the publisher/cleanup subsystem is reader-specific (not port-isolated) | [OK] Decided (see ARCHITECTURE-DECISION.md) |
+| Reader / cross-context adapter: **GHCR/OCI vs GitHub Releases** | Decided on **forward merits only** (impl is a spike/PoC; sunk cost void) - ~even: GHCR carries digest-pin + atomic-no-overwrite + child-manifest + >5000-undeletable; Releases carries the 1000-asset + ~2 GiB ceilings | - Pending spike (FOUND-01) |
+| **Write-trust = allowlist-only** (default-deny; no denylist); `pull_request`/`release` on **only when the server-side read-only-token backstop is detected** (else off) | In-code gate is fork-spoofable defense-in-depth; GitHub-side scoping is what refuses; a denylist would silently miss dangerous events | [OK] Decided |
+| **Sync gate = a separate predicate = `{push, schedule}` only**, test-locked to reject all other events + non-default refs | Syncing a PR- or dispatch-influenced entry into a shared store recreates the CREEP precondition | [OK] Decided (load-bearing) |
+| **Shipped installable PPE-hygiene gate** + default-branch-protection prerequisite | The sole containment for the residual pwn-request surface; heuristic linters alone are defense-in-depth | [OK] Decided |
 | **No content signing as a CREEP control**; digest-pin iff GHCR | CVE-2025-36852: poison precedes hashing, so signing is ineffective; CREEP is defended at the write/sync gates | [OK] Decided |
 | Retention: native Actions LRU (CI tier) + age-only (RO tier); **no LRU manifest** | A manifest adds mutable retention state (security-negative); GHCR exposes no last-accessed signal | [OK] Decided |
+| **OS-namespace the store by default** (or documented consumer OS-discrimination) | Cross-OS cache hit must never serve a wrong-OS artifact (Core Value: never a wrong result) | [OK] Decided |
 | Runtime-context backend selection instead of a mode flag | No caller can misconfigure read-write vs read-only | [OK] Good |
-| `gh` CLI (stderr text-matching) for publish/cleanup | Fragile across `gh` versions | [WARN] Revisit - migrate publish AND cleanup to Octokit structural errors |
+| `gh` CLI (stderr text-matching) for publish/cleanup | Fragile across `gh` versions | [WARN] Revisit - rebuild on Octokit structural errors (publish AND cleanup) |
 
 ## Evolution
 
@@ -131,4 +135,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-17 after the D1-D4 security review - architecture + CREEP posture decided (see ARCHITECTURE-DECISION.md); reader adapter pending spike*
+*Last updated: 2026-07-17 after applying the 6-panel triage survivors (spike/PoC framing; one-backend-per-process reframe; {push,schedule} sync gate; backstop-gated write-trust; shipped PPE gate; OS-namespacing; governance); reader adapter pending spike. See ARCHITECTURE-DECISION.md.*

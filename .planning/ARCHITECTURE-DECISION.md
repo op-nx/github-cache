@@ -1,99 +1,86 @@
 # Architecture Decision Record: Storage Model & CREEP-Safety Posture
 
-**Status:** Proposed — the reader/cross-context storage adapter (GHCR/OCI vs Releases) is pending an empirical spike; everything else is decided.
-**Date:** 2026-07-17
+**Status:** Proposed — the reader/cross-context storage adapter is pending an empirical spike; everything else is decided.
+**Date:** 2026-07-17 (rev. after the D1-D4 security review + a 6-member advisor panel + triage)
 **Scope:** Supersedes the rewound v1 roadmap. Grounds the re-derivation of REQUIREMENTS.md and ROADMAP.md.
 
-## Context
+## Framing: the current implementation is a spike / proof-of-concept
 
-`@op-nx/github-cache` is a self-hosted Nx remote cache built on GitHub-native primitives, meant for external adoption across **public and private** GitHub repos. It speaks Nx's self-hosted-cache HTTP contract as a loopback sidecar. The core threat is **cache poisoning (CREEP, CVE-2025-36852)**. This record is derived from: web research of the build-cache ecosystem (Bazel, Turborepo, Gradle, sccache, Nx Cloud) + GitHub/OCI-as-store prior art + the Nx remote-cache landscape; a full read of the CVE advisory (Nx blog, GHSA-rrr2-jcr8-7q3x, NVD, the HeroDevs technical analysis); and a four-decision security review.
+The shipped architecture, implementation, and delivery mechanism are a **spike/PoC** — a reference to learn from, **not** an asset to preserve. **Sunk cost is zero.** No decision here is justified by "it is already built/tested," and any component may be rebuilt. Consequently the reader-adapter choice is made on **forward merits only**, and known PoC hazards (e.g. the duplicated `TRUSTED_EVENTS` copies, the `gh`-CLI stderr coupling) are to be fixed at the **root** in the rebuild, not parity-patched.
 
 ## Nx contract (fixed constraint)
 
-The current (Nx 20.8+/21+) self-hosted path is the **"Nx custom remote cache specification" v1.0.0**, expressed in **OpenAPI 3.0.0** (embedded as JSON in the Nx docs source; not published as a standalone artifact). It is a local HTTP server: `PUT /v1/cache/{hash}` → 200 / 401 / 403 / **409 (cannot override existing record)**, required `Content-Length`; `GET` → 200 / 403 / 404; single bearer token (server decides RO vs RW). The deprecated custom task-runner API and the `@nx/*-cache` Powerpack plugins are out of scope. Action: **vendor the spec JSON as a conformance fixture / test oracle** (Nx ships no standalone file); watch `info.version` for contract changes.
+The current self-hosted path is the **"Nx custom remote cache specification"** expressed in **OpenAPI 3.0.0** (embedded as JSON in the Nx docs source; no standalone artifact). Local HTTP server: `PUT /v1/cache/{hash}` → success / 401 / 403 / **409 (cannot override existing record)**, required `Content-Length`; `GET` → 200 / 403 / 404; single bearer token (server decides RO vs RW). The deprecated custom task-runner API and `@nx/*-cache` Powerpack plugins are out of scope.
 
-## Decision 1 — Architecture: pluggable multi-store, role/trust-composed
+**Contract-drift caveat (verified):** the PUT success code changed **202 → 200 between Nx 20 and Nx 21 while `info.version` stayed `1.0.0`** — so watching `info.version` does **not** detect drift. The conformance fixture must **hash the full vendored spec** and **pin a named Nx version**. The server returns `200` (Nx 21 behavior); the declared floor is **Nx 21+** (a strict Nx 20.8 client expecting 202 is unsupported unless it accepts any 2xx — verify).
 
-Behind the existing `CacheBackend` port (`exists`/`get`/`put`, keyed by Nx hash), compose stores by role and trust context:
+## Decision 1 — One backend per process, selected by context (not a composition framework)
 
-- **Mandatory core:** one **CI read-write store**, active on *trusted* events. Default adapter: **GitHub Actions cache**.
-- **Opt-in:** a **CI read-only store** (untrusted / non-allowlisted events, fork PRs); a **local-dev read-only store**.
-- **Deferred (later milestone):** a local-dev read-write store; synchronous write fan-out.
-- **Write-sync:** trusted writes propagate to configured stores via **async backfill** (out-of-band publish/sync step, off the CI write hot path; freshness window accepted → reads degrade to MISS).
-- **Default composition = Actions-cache CI-RW only** (no sync, no RO store, no cleanup job). "Actions cache + GHCR reader, synced" and "unified GHCR" are opt-in presets, not the default.
+`selectBackend(env)` returns **exactly one** `CacheBackend` per process, chosen by runtime context; there is **no** runtime composite/registry. The `CacheBackend` port is **`get`/`put`** (keyed by Nx hash); `put` returns `PutResult` and the `'conflict'`/409 path enforces no-overwrite at PUT (no `exists` verb). Write-sync to any second store is the **separate, out-of-band publish step** (today's `publish-mirror`), not a composition primitive.
 
-Trust stays at the protocol/serve layer, never in the storage adapter. Retention/cleanup is a separate single-writer concern, not part of the port.
+- **Default:** Actions-cache CI-RW only — no sync, no second store, no cleanup job.
+- **Opt-in (deploy-time configuration, not a per-call mode):** enabling a reader/cross-context store, and untrusted-CI/local reads from it. **RW-vs-RO stays fully context-derived** — no caller-facing flag a consumer can get wrong (a load-bearing CREEP property). "Enable store X" is config; "this request is RW" is never config.
+- **Deferred (YAGNI until a real consumer needs them):** multiple simultaneous stores, synchronous write fan-out, a local read-write store.
 
-## Decision 2 — Write-trust = allowlist-only
+**Publisher/retention seam (explicit):** only the serve-time **read** path is behind the `CacheBackend` port. The **publish + retention/cleanup subsystem is reader-specific and behind no port** — every reader choice requires building its own publish/cleanup; there is no symmetric publisher port unless a second reader is ever shipped. Do not assume the publisher is pluggable.
 
-A single write-trust policy: **an allowlist of events granted read-write; everything else read-only (default-deny). No denylist.**
-- **Configured allowlist** (consumer-supplied) replaces the default; **default (implicit) allowlist** applies when unconfigured. Defining an allowlist and a denylist together is impossible (denylist does not exist).
-- Default allowlist: `push`, `schedule`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build`, `merge_group`, **`pull_request`**, **`release`**.
-- `pull_request`/`release` are safe to write-trust because GitHub **ref-scopes** their writes (PR → `refs/pull/N/merge`) to a scope the default branch cannot restore — safe *by scope*, not by trust.
-- The dangerous shared-default-branch-scope events (`pull_request_target`, `issue_comment`, fork-`workflow_run`, and `discussion_comment`/`fork`/`watch`/future triggers) are refused by construction (allowlist). Completeness depends on staying an allowlist; a denylist would silently miss them.
+## Decision 2 — Write-trust = allowlist-only; sync gate is separate and minimal
 
-## Decision 3 — Storage primitives
+- **Write-trust = an allowlist** (configured replaces default; else the default implicit allowlist); default-deny; **no denylist**. The dangerous shared-default-scope events (`pull_request_target`, `issue_comment`, fork-`workflow_run`, `discussion_comment`, `fork`, `watch`, …) are refused by construction.
+- **`pull_request`/`release` are in the default allowlist ONLY when GitHub's server-side read-only-cache-token backstop is detected** (github.com / Data Residency); on GHES below the enforcement floor they default **OFF**. The in-code allowlist is **defense-in-depth only** — it is fork-spoofable and has **no standalone security value**; GitHub's server-side ref-scoping is what actually refuses. (Nuance: `pull_request` scope isolation is activity-type-dependent — `[closed]` etc. run in the base scope with a read-only token; PR write *success* is therefore activity-type-dependent, and a blocked write is a benign 409/no-op.)
+- **Sync gate = a separate, narrower predicate = literally `{push, schedule}`** on the default branch. It is **not** the write allowlist. Test-lock it to **reject** `pull_request`, `release`, `repository_dispatch`, `workflow_dispatch`, `merge_group`, `delete`, `registry_package`, `page_build`, and non-default refs — because `repository_dispatch`/`workflow_dispatch` carry attacker-influenced inputs into trusted default-branch code whose output would then be laundered into a shared store.
 
-- **CI read-write adapter: GitHub Actions cache** — native LRU (7-day last-access + size cap), GitHub ref-scope isolation, server-side read-only-token backstop (2026-06-26). Structurally CI-only (`ACTIONS_RUNTIME_TOKEN` exists only in a workflow), which is why a separate reader store exists.
-- **Reader / cross-context adapter: SPIKE-GATED — GHCR/OCI vs GitHub Releases.** Security reweighting (below) narrowed GHCR's earlier lead; the spike resolves it on the merits.
-- **Out:** git-native (separate repo / orphan branch — documented ~6 GiB clone-bloat, no clean eviction) and GitHub Actions build artifacts (ID-addressed, retention-bounded, not content-keyed).
+## Decision 3 — Storage primitives (reader spike-gated, forward-only)
 
-### Reader adapter reweighting (spike input)
-| Factor | GHCR/OCI | Releases |
-|--------|----------|----------|
-| Per-key immutability | Tags mutable → **must app-enforce** no-overwrite; **pull-by-digest mandatory** | Assets first-write-wins (no `--clobber`) |
-| Count cap | None | 1000 assets/release (sharding) |
-| Multi-arch/OS | Distinct tags; untagged **child-manifest** cleanup burden | Distinct asset names; no manifests |
-| Public age-cleanup | **>5000-download versions undeletable** (breaks mandatory age-cleanup for popular public caches; no count API) | **Sidesteps entirely** (assets aren't "packages") |
-| Docker synergy | Native (GHCR is the container registry) | None |
-| Cost (public/private) | Free public; private currently free (policy, 1-month-notice) | Free storage + un-metered download bandwidth |
-
-Net: for the public-OSS priority audience, GHCR and Releases are roughly even on security/ops; GHCR wins where its no-count-cap + Docker synergy justify its added machinery. Reader choice deferred to the spike.
+- **CI read-write adapter: GitHub Actions cache** — native LRU + GitHub ref-scope isolation + server-side read-only-token backstop; structurally CI-only.
+- **Reader / cross-context adapter: SPIKE-GATED — GHCR/OCI vs GitHub Releases**, decided on **forward merits only** (the "Releases is already built" argument is void per the Framing). With that removed, the two are ~even; the spike resolves it against a **symmetric operational ledger**:
+  - *GHCR-side burden:* non-atomic no-overwrite under the per-OS publish matrix (**GO/NO-GO**: requires an atomic create-if-absent, else no-overwrite is best-effort and C2 is the only containment); mutable tags → pull-by-digest mandatory; untagged child-manifest cleanup; the **>5000-download-undeletable** wall (breaks age-cleanup *and* poison-remediation for popular public entries; no count API); cleanup credential often forces a classic PAT; "currently free" private tier is revocable on 1 month's notice.
+  - *Releases-side burden:* **1000 assets/release** cap (sharding); **~2 GiB/asset** ceiling colliding with the 2 GB body cap (silent large-artifact failure).
+  - *Shared rubric factors:* authenticated private keyed lookup; CI read/write performance; cost incl. free-tier durability; **cold-read API fan-out vs the 60/hr anon + 5000/hr auth limits**; ongoing **control-surface count**; per-primitive size ceiling; **remediation capability** for a poisoned entry; Docker-distribution synergy.
+- **Out:** git-native (clone bloat, no clean eviction) and Actions build artifacts (not content-keyed).
 
 ## Decision 4 — CREEP-safety control ledger
 
-CVE-2025-36852: poison happens at **artifact construction, before hashing**; **first-to-cache-wins** race; low privilege (any PR-privileged contributor); no patched version (design-class). Exposure test: *"any system where PRs and main share the same cache is vulnerable."* Fix = write-scope isolation aligned to VCS trust; **integrity/signing/encryption are explicitly ineffective** against it.
+CVE-2025-36852 (CVSS 9.4, CWE-829, GHSA-rrr2-jcr8-7q3x, no patched version): poison at **construction, before hashing**; **first-to-cache-wins**; any PR-privileged contributor. Fix = write-scope isolation aligned to VCS trust; **signing/integrity is ineffective** against it. Controls scale with composition — the default (Actions-cache CI-RW only) carries only C1 + C4 + docs.
 
-| # | Control | Layer |
-|---|---------|-------|
-| C1 | Write-trust allowlist (default-deny; default includes `pull_request`/`release`, refuses the dangerous set by construction) | write |
-| C2 | Narrow sync gate — only default-branch `push`/`schedule` entries sync to a shared/RO store; separate predicate from the write gate; test-locked to reject `pull_request`/`release` | sync |
-| C3 | First-write-wins / no-overwrite (409) enforced per adapter; Actions cache native; GHCR via check-then-write + read-by-digest | write/store |
-| C4 | Repo-wide PPE hygiene: no workflow runs untrusted code in default-branch context; enforced by a CI check (`zizmor`/`actionlint`) | repo-wide |
-| C5 | No content signing for CREEP (ineffective — trusted producer signs poisoned bytes) | integrity |
-| C6 | Pull-by-digest mandatory iff GHCR (no immutable tags); the `{hash}→digest` map's trust = C3 | integrity |
-| C7 | Optional/deferred (v2): asymmetric provenance attestation (cosign keyless), reader-verified — never HMAC | integrity |
-| C8 | Retention disposition: native Actions LRU + age-only RO + no manifest (removes mutable retention state) | retention |
-| C9 | Delete path fails loud / skips on non-404 faults + partial listings (structural-404-only deletion) | cleanup |
-| C10 | Non-fatal handling of the GHCR >5000-download delete refusal (log + continue) | cleanup |
-| C11 | Cleanup credential = job-scoped `GITHUB_TOKEN` (`packages: write`), schedule-only, no untrusted checkout, never referenced in a PR workflow; not a fine-grained PAT (unsupported for GHCR); classic PAT (`read:packages`+`delete:packages`) only for cross-repo ownership | cleanup |
-| C12 | First-party Octokit cleanup preferred over a third-party action (keeps the highest-privilege credential out of a dependency) | cleanup |
-| C13 | Cleanup `concurrency:` group (queue, don't cancel) + fail-closed multi-arch child-manifest handling (GHCR only) | cleanup |
-| C14 | Docs: github.com-only backstop + GHES version floor; warn adopters never to enable fork-PR "send write tokens"/"send secrets" policies | docs |
-| C15 | Docs: retention is storage-hygiene, not poison-containment | docs |
-
-**Controls scale with composition:** the mandatory core (Actions-cache CI-RW only) carries only C1 + C4 + docs; C3/C6/C9-C13 attach only when an opt-in RO store + sync + cleanup are enabled.
+| # | Control |
+|---|---------|
+| C1 | Write-trust allowlist (default-deny); `pull_request`/`release` included **only when the server-side backstop is detected**, else off; dangerous set refused by construction |
+| C2 | Sync gate = separate predicate = `{push, schedule}` only; test-locked to reject all other events + non-default refs |
+| C3 | No-overwrite/409 per adapter — **contract-mandated**, and its CREEP value is **conditional on C1/C2** (not standalone). Actions cache native; GHCR requires atomic create-if-absent (GO/NO-GO) |
+| C4 | Repo-wide PPE hygiene: **shipped installable gate** (reusable workflow / composite action) + **default-branch-protection prerequisite**; heuristic linters (`zizmor`/`actionlint`) are defense-in-depth, not a complete control |
+| C5 | No content signing for CREEP (ineffective — trusted producer signs poisoned bytes) |
+| C6 | Pull-by-digest mandatory iff GHCR; the `{hash}→digest` map is **designed out** (tag == hash) or its single writer + concurrency pinned — never a mutable shared index |
+| C7 | Deferred (v2): asymmetric provenance attestation (cosign keyless), reader-verified — never HMAC |
+| C8 | Retention: native Actions LRU + age-only RO + **no manifest** (no mutable retention state) |
+| C9 | Cleanup delete path: **list phase aborts with zero deletions on any non-404 fault / incomplete pagination**; delete phase isolates per item |
+| C10 | GHCR >5000-download refusal handled non-fatally; documented age-floor exception; recorded as a **poison-remediation gap** (weighs in Decision 3) |
+| C11 | Cleanup credential: job-scoped `GITHUB_TOKEN` where sufficient (package repo-linked + admin); org-owned/unlinked needs a classic PAT (`delete:packages`) **behind an Actions Environment with required reviewers**, or keep GHCR in-repo; never referenced in a PR-triggered workflow |
+| C12 | First-party Octokit cleanup (the delete credential never enters a third-party action) |
+| C13 | GHCR child-manifest cleanup gated on a reference check (fail-closed); reader degrades a missing/partial child to MISS, never truncated bytes |
+| C14 | Docs: github.com-only backstop + GHES floor; **never enable fork-PR "send write tokens"/"send secrets"**; default-branch-protection + ephemeral-single-tenant-runner prerequisites |
+| C15 | Docs: retention is storage-hygiene, **not** poison-containment |
+| C16 | Mirror filter admits **only server-produced keys** (distinguishing namespace/prefix), not "any 1-512 hex"; docs warn every mirrored key is anonymously public |
+| C17 | Observability: a whole-run sync/publish failure **fails loud** (annotation + non-zero exit); ship a "how do I know the cache is working" signal |
 
 ## Decision 5 — Retention / LRU
 
-Age-based cleanup (`CACHE_MIRROR_MAX_AGE_DAYS`, one coupled setting) is the mandatory floor. LRU is served **natively on the Actions-cache CI tier**; the RO tier is **age-only**. A **stateful LRU manifest is out of scope** (security-negative — mutable shared retention state; and GHCR exposes no last-accessed signal). Retention is storage-hygiene, not a poison-containment or remediation path.
+Age-based cleanup (`CACHE_MIRROR_MAX_AGE_DAYS`, one coupled setting) is the mandatory floor. LRU is native on the Actions-cache CI tier; the RO tier is age-only. A **stateful LRU manifest is out of scope** (security-negative + no GHCR last-accessed signal). On GHCR the age-floor has a documented exception for >5000-download entries (C10). The month-shard model + the "no second knob" invariant are **Releases-shaped and reader-conditional**, not universal.
 
-## Consequences & open items (spike)
+## Decision 6 — Cross-OS correctness (Core Value)
 
-- **Spike resolves:** reader adapter (GHCR vs Releases) on the reweighted rubric; GHCR check-then-write atomicity (is create-if-absent racy?), read-by-digest, untagged child-manifest cleanup, `GITHUB_TOKEN`-can-delete-GHCR durability (public preview); GHCR read/write latency + cost (public/private); the ~2 GB body path (ROBUST-02).
-- **Distribution constraint:** the JS Action is mandatory for the Actions-cache CI-RW role (`ACTIONS_RUNTIME_TOKEN` is injected only into JS actions); the Docker container is clean only for the reader role.
-- **Consumer responsibility (C4):** the cache's CREEP-safety in an adopter's repo depends on that repo's workflow hygiene — documented as a prerequisite; dogfooded here as a required CI check. Whether to ship a consumer-facing hygiene helper is an open scope question (lean: docs-only now).
+The cache keys on the opaque Nx **input** hash; Nx does not include the runner OS by default. Serving a Linux-produced entry to a Windows reader is a **wrong result, not a MISS** — a Core-Value violation the CREEP controls do not cover. **Default to OS-namespacing the store** (or require the consumer to OS-discriminate non-portable outputs, documented). The reader-adapter spike must **round-trip both an OS-invariant and an OS-sensitive hash from each CI OS** through the chosen store.
+
+## Consequences & spike scope
+
+- **Spike (both readers' full operational + security ledger, symmetric):** GHCR atomic create-if-absent (GO/NO-GO), read-by-digest, child-manifest cleanup, cleanup-credential capability, cold-read fan-out vs rate limits; Releases per-asset ceiling vs body cap + 1000-asset behavior; the ~2 GB path (ROBUST-02); cross-OS round-trip (Decision 6).
+- **Distribution:** the JS Action is mandatory for the Actions-cache CI-RW role. The **Docker container distribution form is deferred** until the reader adapter lands (its image can't be finalized before it); v1 ships npm + the JS Action.
+- **Governance (project hygiene, required for a poisoning-class OSS tool):** SECURITY.md (vulnerability-disclosure policy), LICENSE, and a versioned consumer-contract / semver statement.
+- **Residual:** CREEP containment is single-layer at the write/sync gates + the (heuristic) PPE gate; the only true second layer is reader-side provenance attestation (C7, deferred). Gate correctness is therefore load-bearing with no backstop.
 
 ## References
 
-- CVE-2025-36852 / GHSA-rrr2-jcr8-7q3x / NVD `CVE-2025-36852` (CVSS v4.0 9.4, CWE-829); Nx blog `nx.dev/blog/cve-2025-36852-critical-cache-poisoning-vulnerability-creep`; HeroDevs analysis `nx.app/files/cve-2025-06`
-- Nx self-hosted caching contract: `nx.dev/docs/guides/tasks--caching/self-hosted-caching`
-- GitHub read-only Actions cache for untrusted triggers (2026-06-26): `github.blog/changelog/2026-06-26-read-only-actions-cache-for-untrusted-triggers/`
-- GitHub dependency-caching (scope isolation): `docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching`
-- CodeQL cache-poisoning queries; Adnan Khan "Cacheract"; Wiz GitHub Actions security; GitHub Security Lab "Preventing pwn requests"
-- OCI distribution spec (tag mutability); GHCR has no immutable tags (`github.com/orgs/community/discussions/181783`)
-- Turborepo signing; sigstore/cosign; sccache pluggable backends; bazel-remote; `nixcite/nixcache-oci`
-- Full corpus: `.planning/research/{STACK,FEATURES,ARCHITECTURE,PITFALLS,SUMMARY}.md`
+CVE-2025-36852 / GHSA-rrr2-jcr8-7q3x / NVD (CVSS 9.4, CWE-829); Nx blog + HeroDevs `nx.app/files/cve-2025-06`; Nx self-hosted caching + the 2026-06-26 read-only-cache changelog; GitHub dependency-caching (scope isolation); CodeQL cache-poisoning; Adnan Khan "Cacheract"; Wiz PPE; OCI distribution spec (tag mutability); GHCR has no immutable tags; sccache/bazel-remote/Turborepo; `nixcite/nixcache-oci`. Full corpus: `.planning/research/*`.
 
 ---
 *Recorded: 2026-07-17*

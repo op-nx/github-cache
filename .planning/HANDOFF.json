@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-17T20:15:35.510Z",
+  "phase": null,
+  "phase_name": "Pre-roadmap: reader-adapter spike pending (FOUND-01)",
+  "phase_dir": null,
+  "status": "paused",
+  "context": "research",
+  "handoff_file": ".planning/.continue-here.md",
+  "completed_tasks": [
+    {"id": 1, "name": "Project init (brownfield) + config + PROJECT.md", "status": "done", "commit": "cbd0537,f8d18e6"},
+    {"id": 2, "name": "Domain research (stack/features/architecture/pitfalls + SUMMARY)", "status": "done", "commit": "3c24199"},
+    {"id": 3, "name": "v1 requirements defined", "status": "done", "commit": "3c33c2b"},
+    {"id": 4, "name": "Rewound premature roadmap + Phase-1 discussion; re-opened primitive selection; auth baseline (public+private) + distribution forms", "status": "done", "commit": "63582d5"},
+    {"id": 5, "name": "4-architecture comparison + full CVE/D1-D4 security review; persisted ARCHITECTURE-DECISION.md + control ledger C1-C18", "status": "done", "commit": "c0dd4bc"},
+    {"id": 6, "name": "6-member advisor panel (3 board + 3 critic) + triage survivors applied", "status": "done", "commit": "dc85cc1"},
+    {"id": 7, "name": "Independent Sonnet /lz-security-review + triage applied", "status": "done", "commit": "a408442"},
+    {"id": 8, "name": "Targeted research resolved: GHCR atomic-create (unavailable/low-severity), backstop host-detection (fail-closed), Nx PUT floor (hard 200)", "status": "done", "commit": "98da97a"}
+  ],
+  "remaining_tasks": [
+    {"id": 9, "name": "Run /gsd:spike on the reader/cross-context adapter (GHCR/OCI vs GitHub Releases) against the FOUND-01 forward-merits ledger", "status": "not_started"},
+    {"id": 10, "name": "Re-derive REQUIREMENTS.md traceability + ROADMAP.md from the settled reader decision", "status": "not_started"},
+    {"id": 11, "name": "Plan + execute phases (test safety net, trust/modes, docs)", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "The spike does hands-on GHCR + Releases experiments; ensure `gh`/GHCR auth is available (docker/oras login to ghcr.io, a token with read:packages/write:packages for the throwaway test package)", "context": "empirical latency/cost/no-overwrite/child-manifest checks", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Architecture = one backend per process via selectBackend + trust input; default = Actions-cache CI-RW only; reader/publish/cleanup is opt-in + reader-specific (not port-isolated)", "rationale": "ecosystem norm; minimal default, pay-as-you-compose", "phase": "pre-roadmap"},
+    {"decision": "Write-trust = allowlist-only (default-deny, no denylist); pull_request/release on only where GitHub's untrusted-default-branch guard exists, host-detected from GITHUB_SERVER_URL (github.com/*.ghe.com ON; all GHES OFF, fail-closed, no caller flag)", "rationale": "CREEP CVE-2025-36852; in-code gate is fork-spoofable defense-in-depth", "phase": "pre-roadmap"},
+    {"decision": "Sync gate = separate predicate = {push, schedule} only, test-locked to reject all else", "rationale": "syncing a PR/dispatch-influenced entry into a shared store recreates the CREEP precondition", "phase": "pre-roadmap"},
+    {"decision": "No content signing for CREEP (ineffective); no LRU manifest; digest-pin iff GHCR; OS-namespace the store by default (CORR-01)", "rationale": "see ARCHITECTURE-DECISION.md control ledger C1-C18", "phase": "pre-roadmap"},
+    {"decision": "OPEN: reader adapter GHCR/OCI vs Releases", "rationale": "purely empirical now (latency/cost/caps/cold-read-fan-out/size-ceiling/remediation) - the paper unknowns (atomicity, backstop detection, Nx floor) are all resolved", "phase": "FOUND-01"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Run /gsd:spike for the reader/cross-context adapter (GHCR/OCI vs GitHub Releases), scoped to the FOUND-01 forward-merits ledger in .planning/ARCHITECTURE-DECISION.md. Decide the reader on forward merits ONLY - the current implementation is a spike/PoC (sunk cost = 0).",
+  "context_notes": "All foundational decisions + the CREEP control ledger (C1-C18) are persisted in .planning/ARCHITECTURE-DECISION.md and triple-reviewed (D1-D4 security review + 6-member advisor panel + independent Sonnet /lz-security-review + targeted research). Exactly ONE decision remains open: the reader adapter (FOUND-01), and it is now purely empirical. Do NOT weight 'already built' (spike/PoC). Do NOT reopen the resolved-on-paper items: GHCR atomic create-if-absent is unavailable but low-severity (C2-covered); the write-trust backstop is host-detected fail-closed; the Nx PUT floor is a hard 200 (Nx 21+). CREEP (CVE-2025-36852) is the core threat; the control ledger is the security spec."
+}

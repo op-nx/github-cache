@@ -16,8 +16,8 @@ an opt-in reader/cross-context store and its publish/cleanup are a separate, rea
 step. Write-trust is an allowlist; the full CREEP control ledger is in
 `.planning/ARCHITECTURE-DECISION.md`. **The current implementation is a spike/PoC (reference,
 rebuildable; sunk cost = 0).** The reader adapter is **LOCKED = GitHub Releases** (FOUND-01
-spike, forward merits) and the Docker container form is **deferred to v2** (FOUND-03); GHCR/OCI
-is the v2 revisit trigger (with cosign + Docker).
+spike, forward merits) and the Docker container form is **deferred to a later milestone** (FOUND-03); GHCR/OCI
+is the later-milestone revisit trigger (with cosign + Docker).
 
 ## Core Value
 
@@ -51,9 +51,9 @@ never a broken build) and writes must stay gated.
 
 **FOUNDATION (P0):**
 
-- [x] **Reader / cross-context storage adapter = GitHub Releases (LOCKED, FOUND-01 spike):** decided on forward merits - fewer incident/operational hazards + no public poison-remediation gap vs GHCR (spike `.planning/spikes/001-005`). Actions cache stays the CI-RW default; git-native and Actions artifacts are out; GHCR is the v2 revisit trigger. See `.planning/ARCHITECTURE-DECISION.md`.
+- [x] **Reader / cross-context storage adapter = GitHub Releases (LOCKED, FOUND-01 spike):** decided on forward merits - fewer incident/operational hazards + no public poison-remediation gap vs GHCR (spike `.planning/spikes/001-005`). Actions cache stays the CI-RW default; git-native and Actions artifacts are out; GHCR is the later-milestone revisit trigger. See `.planning/ARCHITECTURE-DECISION.md`.
 - [ ] **Local read uses the developer's existing GitHub authentication** (git credential helper and/or `gh` CLI, or `GH_TOKEN`/`GITHUB_TOKEN`) and MUST work for **private repositories**. Anonymous zero-credential read is an optional convenience for public repos only - never a design driver.
-- [x] **Distribution forms = npm package + JS Action (v1); Docker deferred to v2 (LOCKED, FOUND-03).** The JS Action is mandatory for the Actions-cache CI-RW role. The Docker container's CI `services:` motivation is covered by running `serve` as a GitHub Actions background step (`background`/`cancel`) + a plain `&` fallback; residual niche (hermetic / non-Node CI) is a v2 item.
+- [x] **Distribution forms = npm package + JS Action (v0.0.1); Docker deferred to a later milestone (LOCKED, FOUND-03).** The JS Action is mandatory for the Actions-cache CI-RW role. The Docker container's CI `services:` motivation is covered by running `serve` as a GitHub Actions background step (`background`/`cancel`) + a plain `&` fallback; residual niche (hermetic / non-Node CI) is a later-milestone item.
 
 **Feature work (see REQUIREMENTS.md for the full, security-reviewed set):**
 
@@ -77,7 +77,7 @@ never a broken build) and writes must stay gated.
 
 ## Context
 
-- **Brownfield.** A substantial, well-architected implementation already exists and is dogfooded in this repo; it is early in **test coverage and public-consumption readiness**, not in implementation. See `.planning/codebase/` (ARCHITECTURE, STACK, CONCERNS, TESTING, CONVENTIONS, STRUCTURE, INTEGRATIONS).
+- **Greenfield rebuild.** A substantial PoC exists and is dogfooded, but it is being **deleted and rebuilt from scratch** (Phase 0 teardown -> MVP/vertical slices; sunk cost = 0). The PoC's `.planning/codebase/*` map and the platform facts/gotchas in `.planning/research/PITFALLS.md` carry forward as **reference/spec only**, never as code to extend. The codebase map is regenerated against the torn-down workspace between Phase 0 and Phase 1 (see ROADMAP.md).
 - **Ports-and-adapters** around a single `CacheBackend` port, with a thin HTTP protocol layer and side-effect-free pure domain modules (`shard`, `cleanup`, `trust`, `types`) for testability. The port isolates any future storage-primitive pivot to a new factory behind `selectBackend`.
 - **Auth assumption:** because the platform is GitHub, local developer environments are assumed already authenticated to GitHub (git credential helper and/or `gh`). Requiring auth is free; depending on anonymous access is not (it excludes private repos).
 - **Three credentials, never mixed:** per-process CSPRNG bearer token (Nx <-> server), `ACTIONS_RUNTIME_TOKEN` (Actions cache service, passed only by process inheritance into JS actions), and `GITHUB_TOKEN`/`GH_TOKEN` (gh/Octokit REST).
@@ -111,7 +111,7 @@ never a broken build) and writes must stay gated.
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | **One backend per process, context-selected** (`selectBackend`); default = Actions-cache CI-RW only; opt-in reader store + its publish/cleanup are a separate reader-specific step | Matches the ecosystem norm; minimal default, pay-as-you-compose; the publisher/cleanup subsystem is reader-specific (not port-isolated) | [OK] Decided (see ARCHITECTURE-DECISION.md) |
-| Reader / cross-context adapter: **GitHub Releases** (v1) | Forward merits (FOUND-01 spike): fewer incident/operational hazards + no public poison-remediation gap (vs GHCR's >5000 wall, child-manifest, delete-cred, visibility); reversible/additive. GHCR = v2 trigger with cosign + Docker | [OK] LOCKED (FOUND-01) |
+| Reader / cross-context adapter: **GitHub Releases** (v0.0.1) | Forward merits (FOUND-01 spike): fewer incident/operational hazards + no public poison-remediation gap (vs GHCR's >5000 wall, child-manifest, delete-cred, visibility); reversible/additive. GHCR = later-milestone trigger with cosign + Docker | [OK] LOCKED (FOUND-01) |
 | **Write-trust = allowlist-only** (default-deny; no denylist); `pull_request`/`release` on **only where GitHub's untrusted-default-branch cache guard exists — host-detected from `GITHUB_SERVER_URL`** (`github.com`/`*.ghe.com` → ON; all GHES → OFF, fail-closed; no caller flag) | In-code gate is fork-spoofable defense-in-depth; the host-based check is a pure env-var function; no GA GHES has the guard yet (floor unpublished) | [OK] Decided |
 | **Sync gate = a separate predicate = `{push, schedule}` only**, test-locked to reject all other events + non-default refs | Syncing a PR- or dispatch-influenced entry into a shared store recreates the CREEP precondition | [OK] Decided (load-bearing) |
 | **Shipped installable PPE-hygiene gate** (best-effort/advisory) + default-branch-protection prerequisite | Heuristic linters can't catch novel evasions, so the load-bearing containment is the `{push,schedule}` sync gate + branch protection; the gate is defense-in-depth | [OK] Decided |
@@ -119,7 +119,7 @@ never a broken build) and writes must stay gated.
 | Retention: native Actions LRU (CI tier) + age-only (RO tier); **no LRU manifest** | A manifest adds mutable retention state (security-negative); GHCR exposes no last-accessed signal | [OK] Decided |
 | **OS-namespace the store by default** (or documented consumer OS-discrimination) | Cross-OS cache hit must never serve a wrong-OS artifact (Core Value: never a wrong result) | [OK] Decided |
 | Runtime-context backend selection instead of a mode flag | No caller can misconfigure read-write vs read-only | [OK] Good |
-| `gh` CLI (stderr text-matching) for publish/cleanup | Fragile across `gh` versions | [WARN] Revisit - rebuild on Octokit structural errors (publish AND cleanup) |
+| Publish/cleanup I/O uses Octokit (`error.status`) from the start, never `gh` stderr text-matching | `gh` gives no structured errors for already-exists/404 and is version-fragile; Octokit discriminates structurally | [OK] Decided (greenfield - no gh-CLI to migrate from) |
 
 ## Evolution
 
@@ -139,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-17 - FOUND-01/03 LOCKED after the reader spike (`.planning/spikes/001-005`): reader adapter = GitHub Releases; Docker deferred to v2; GHCR = v2 revisit trigger. Prior: 6-panel triage + Sonnet `/lz-security-review` + targeted research (host-based fail-closed write-trust detection; GHCR no-overwrite best-effort/low-severity; Nx PUT floor hard 200/Nx-21+). See ARCHITECTURE-DECISION.md.*
+*Last updated: 2026-07-17 - FOUND-01/03 LOCKED after the reader spike (`.planning/spikes/001-005`): reader adapter = GitHub Releases; Docker deferred to a later milestone; GHCR = later-milestone revisit trigger. Prior: 6-panel triage + Sonnet `/lz-security-review` + targeted research (host-based fail-closed write-trust detection; GHCR no-overwrite best-effort/low-severity; Nx PUT floor hard 200/Nx-21+). See ARCHITECTURE-DECISION.md.*

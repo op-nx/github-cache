@@ -25,18 +25,19 @@ Releases (FOUND-01); default composition = Actions-cache CI-RW only, one backend
 via `selectBackend`; publish/cleanup is reader-specific (behind no port); write-trust =
 host-detected fail-closed allowlist; sync gate = `{push, schedule}`; no content signing;
 OS-namespacing; Nx PUT floor = hard `200`/Nx-21+; distribution = npm package + JS Action,
-Docker deferred to v2 (FOUND-03). Full decision record + CREEP control ledger C1-C18:
+Docker deferred to a later milestone (FOUND-03). Full decision record + CREEP control ledger C1-C18:
 `.planning/ARCHITECTURE-DECISION.md`. Locked requirement set: `.planning/REQUIREMENTS.md`.
 Reader spike (FOUND-01, Releases chosen): `.planning/spikes/001-005`.
 
 **Granularity:** standard (7 phases: 1 teardown + 6 build slices).
 
-**De-priming gate (Phase 0 -> Phase 1):** after teardown, run `/gsd:map-codebase` on the
-torn-down (shell-only) workspace so `.planning/codebase/*` no longer describes the deleted PoC,
-and scrub PoC-implementation references (function/file names, old-milestone Active reqs) out of
-`.planning/research/*` (esp. PITFALLS.md) while KEEPING the implementation-independent platform
-facts (see PITFALLS.md "Empirically-Verified Platform Facts"). The rebuild phases then plan with
-zero old-implementation priming. The codebase map re-populates as the slices land.
+**De-priming gate (Phase 0 -> Phase 1):** the `.planning/research/*` docs were already reframed
+brownfield -> greenfield at planning time (PoC-implementation references scrubbed; the
+implementation-independent platform facts kept - see PITFALLS.md "Empirically-Verified Platform
+Facts"), and PROJECT.md was reconciled. Phase 0's remaining de-priming step is to run
+`/gsd:map-codebase` on the torn-down (shell-only) workspace so `.planning/codebase/*` no longer
+describes the deleted PoC, then confirm no rebuild-priming artifact remains. The codebase map
+re-populates as the slices land.
 
 ## Phases
 
@@ -58,7 +59,7 @@ or not any remote cache exists.
 
 **Depends on**: Nothing (first phase; operates on the existing spike/PoC checkout).
 
-**Requirements**: None (prep phase - clears the ground for the greenfield rebuild; no v1
+**Requirements**: None (prep phase - clears the ground for the greenfield rebuild; no v0.0.1
 requirement is delivered here).
 
 **Success Criteria** (what must be TRUE):
@@ -74,11 +75,10 @@ requirement is delivered here).
   4. The Nx workspace shell is intact (nx.json, root tsconfigs, vitest.workspace, root
      package.json, `.gitattributes eol=lf`) and `nx build`/`nx test` across the remaining
      projects is green.
-  5. De-priming is done: `/gsd:map-codebase` has regenerated `.planning/codebase/*` against the
-     torn-down workspace (no PoC trace); PoC-implementation references are scrubbed from
-     `.planning/research/*` (esp. PITFALLS.md) with the implementation-independent platform facts
-     kept; PROJECT.md "Validated" items stay annotated as PoC-to-be-rebuilt. No rebuild-priming
-     artifact remains.
+  5. De-priming is complete: `/gsd:map-codebase` has regenerated `.planning/codebase/*` against
+     the torn-down workspace (no PoC trace). (The `.planning/research/*` brownfield -> greenfield
+     reframe and the PROJECT.md reconciliation were already done at planning time.) A final check
+     confirms no rebuild-priming artifact remains.
 
 **Plans**: TBD
 
@@ -350,14 +350,14 @@ GOV-03.
 
 ## Traceability
 
-Every v1 requirement maps to exactly one phase. FOUND-01 and FOUND-03 are LOCKED grounding
+Every v0.0.1 requirement maps to exactly one phase. FOUND-01 and FOUND-03 are LOCKED grounding
 decisions (not phase work) and are listed for completeness.
 
 | Requirement | Phase | Note |
 |-------------|-------|------|
 | FOUND-01 | LOCKED | Reader = GitHub Releases; grounding decision, not phase work (ADR Decision 3). |
 | FOUND-02 | Phase 3 | Authenticated private-repo local read via the Releases reader, no anonymous dependency. |
-| FOUND-03 | LOCKED | Distribution forms = npm + JS Action; Docker deferred to v2. Physical delivery: JS action for CI dogfooding (Phase 2) + full npm/action distribution (Phase 6, guarded by DOCS-05). |
+| FOUND-03 | LOCKED | Distribution forms = npm + JS Action; Docker deferred to a later milestone. Physical delivery: JS action for CI dogfooding (Phase 2) + full npm/action distribution (Phase 6, guarded by DOCS-05). |
 | SRV-01 | Phase 1 | Server binds loopback (`127.0.0.1`) only; never a routable interface. |
 | SRV-02 | Phase 1 | Timing-safe per-process CSPRNG bearer auth; unauth/mismatch -> 401. |
 | SRV-03 | Phase 1 | `{hash}` path validated (bounded hex); malformed rejected before any backend call. |
@@ -399,11 +399,11 @@ decisions (not phase work) and are listed for completeness.
 
 ## Coverage Validation
 
-**Assertion: 38/38 v1 "v1 Requirements" entries map to exactly one phase, plus FOUND-02 (the
+**Assertion: 38/38 v0.0.1 "v0.0.1 Requirements" entries map to exactly one phase, plus FOUND-02 (the
 one unmet foundational deliverable). No orphans, no duplicates.**
 
-Per-phase v1 requirement counts:
-- Phase 0: 0 (teardown/prep - delivers no v1 requirement).
+Per-phase v0.0.1 requirement counts:
+- Phase 0: 0 (teardown/prep - delivers no v0.0.1 requirement).
 - Phase 1: 6 (SRV-01, SRV-02, SRV-03, SRV-04, SRV-05, TEST-07).
 - Phase 2: 6 (TEST-01, TEST-02, ROBUST-03, ROBUST-04, TRUST-03, TRUST-05).
 - Phase 3: 3 (FOUND-02, TEST-05, CORR-01).
@@ -412,7 +412,7 @@ Per-phase v1 requirement counts:
 - Phase 5: 4 (TRUST-01, TRUST-04, TRUST-06, TRUST-08).
 - Phase 6: 9 (DOCS-01..06, GOV-01..03).
 
-Total mapped: 39 (38 from the v1 Requirements section + FOUND-02). FOUND-01 and FOUND-03 are
+Total mapped: 39 (38 from the v0.0.1 Requirements section + FOUND-02). FOUND-01 and FOUND-03 are
 LOCKED grounding decisions, not counted.
 
 **Resolved ambiguities / deviations from the starting hypothesis (with reasons):**
@@ -463,20 +463,20 @@ verification or the code it constrains touches another):**
 (teardown -> skeleton -> default cache -> read -> publish/retention -> trust-widening ->
 distribution/docs) and self-consistent under the standard granularity.
 
-## Deferred to v2 / Out of Scope (excluded from all v1 phases)
+## Deferred to a later milestone / Out of Scope (excluded from all v0.0.1 phases)
 
-Listed for completeness. These are NOT v1 work and are intentionally unmapped:
+Listed for completeness. These are NOT v0.0.1 work and are intentionally unmapped:
 
-- **TRUST-09** (v2, N/A for Releases): publish-time package-visibility fail-closed assert -
-  Releases assets inherit repo visibility, so no assert is needed in v1.
-- **RETAIN-02** (v2, N/A for Releases): GHCR >5000-download delete-refusal handling - Releases
+- **TRUST-09** (a later milestone, N/A for Releases): publish-time package-visibility fail-closed assert -
+  Releases assets inherit repo visibility, so no assert is needed in v0.0.1.
+- **RETAIN-02** (a later milestone, N/A for Releases): GHCR >5000-download delete-refusal handling - Releases
   assets have no deletion wall.
-- **PROV-01** (v2): optional reader-verified asymmetric provenance attestation (cosign keyless
+- **PROV-01** (a later milestone): optional reader-verified asymmetric provenance attestation (cosign keyless
   via OIDC) - only clean on a GHCR/OCI backend.
-- **GHCR-01** (v2 revisit trigger): re-evaluate GHCR/OCI as an additional synced store when
+- **GHCR-01** (later-milestone revisit trigger): re-evaluate GHCR/OCI as an additional synced store when
   PROV-01 (cosign) and the Docker container form graduate together; brings back the
   GHCR-conditional controls (C6/C10/C11/C13/C18, TRUST-07-GHCR, TRUST-09, RETAIN-02/03-GHCR).
-- **Docker container distribution form** (v2): the CI `services:` motivation is covered by the
+- **Docker container distribution form** (a later milestone): the CI `services:` motivation is covered by the
   GA background-step pattern (DOCS-06) + the `&` fallback; residual niche is hermetic / non-Node
   CI (FOUND-03).
 - **Out of scope entirely:** synchronous write fan-out; a local read-write store; multiple
@@ -499,9 +499,9 @@ Listed for completeness. These are NOT v1 work and are intentionally unmapped:
 
 ---
 *Roadmap regenerated: 2026-07-18. Greenfield MVP / vertical-slice rebuild on the LOCKED
-foundation (FOUND-01 = GitHub Releases; FOUND-03 = Docker deferred to v2). Grounds on
+foundation (FOUND-01 = GitHub Releases; FOUND-03 = Docker deferred to a later milestone). Grounds on
 `.planning/ARCHITECTURE-DECISION.md` (control ledger C1-C18), `.planning/REQUIREMENTS.md`
-(locked v1 set), the FOUND-01 reader spike (`.planning/spikes/001-005`), and
+(locked v0.0.1 set), the FOUND-01 reader spike (`.planning/spikes/001-005`), and
 `.planning/research/SUMMARY.md`. Granularity: standard (7 phases). Rebuild method: Nx-native
 (`nx g @nx/workspace:remove` teardown, `nx g` generators for new projects). Git branching:
 none (sequential).*

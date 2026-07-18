@@ -52,8 +52,8 @@ Progress: [----------] 0%
 
 Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recent decisions affecting current work:
 
-- FOUND-01: reader / cross-context store = GitHub Releases (forward merits, spike 001-005); GHCR = v2 revisit trigger (with PROV-01 + Docker).
-- FOUND-03: distribution = npm + JS Action; Docker container form deferred to v2 (CI sidecar covered by the GA background-step pattern).
+- FOUND-01: reader / cross-context store = GitHub Releases (forward merits, spike 001-005); GHCR = later-milestone revisit trigger (with PROV-01 + Docker).
+- FOUND-03: distribution = npm + JS Action; Docker container form deferred to a later milestone (CI sidecar covered by the GA background-step pattern).
 - Rebuild: the spike/PoC is deleted and rebuilt greenfield as MVP/vertical slices; teardown is Phase 0. Nx-native (`nx g @nx/workspace:remove`; `nx g` generators). Workspace shell kept.
 - Granularity = standard (7 phases). CREEP (CVE-2025-36852) is the governing threat; control ledger C1-C18 is the security spec.
 
@@ -71,9 +71,9 @@ Items acknowledged and carried forward:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Storage | GHCR/OCI as an additional synced store (GHCR-01) | v2 revisit trigger (with PROV-01 + Docker) | 2026-07-18 |
-| Provenance | Cosign keyless attestation (PROV-01) | v2 | 2026-07-18 |
-| Distribution | Docker container form (FOUND-03) | v2 | 2026-07-18 |
+| Storage | GHCR/OCI as an additional synced store (GHCR-01) | later-milestone revisit trigger (with PROV-01 + Docker) | 2026-07-18 |
+| Provenance | Cosign keyless attestation (PROV-01) | a later milestone | 2026-07-18 |
+| Distribution | Docker container form (FOUND-03) | a later milestone | 2026-07-18 |
 
 ## Session Continuity
 

@@ -1,14 +1,22 @@
 # Architecture Research
 
-**Domain:** Self-hosted Nx remote cache on GitHub-native primitives (brownfield refinement)
+**Domain:** Self-hosted Nx remote cache on GitHub-native primitives (greenfield build)
 **Researched:** 2026-07-17
-**Confidence:** HIGH for the trigger/token/permission model (Q1) and testability seams (Q4); MEDIUM for LRU retention (Q2, hinges on `download_count` semantics); HIGH-on-conclusion / MEDIUM-on-specifics for backend pivot (Q3).
+**Confidence:** HIGH for the trigger/token/permission model (section 1) and testability seams (section 4); MEDIUM for recency/LRU retention (section 2, hinges on `download_count` semantics); HIGH-on-conclusion / MEDIUM-on-specifics for storage-primitive choice (section 3).
 
-> This is a SUBSEQUENT-milestone refinement. The existing ports-and-adapters design is already documented in `.planning/codebase/ARCHITECTURE.md` and is NOT re-derived here. This file answers only: how the four Active requirements integrate into (or refine) that design, validated against GitHub's 2026-06-26 cache-token model and comparable systems. Every integration point below is expressed against the existing `CacheBackend` port, the `isWriteTrusted`/`resolveTrustedRepo` trust gates, the shard/retention coupling, and the single-writer cleanup workflow.
+> This research informs building the cache from scratch on the LOCKED foundation
+> (`.planning/ARCHITECTURE-DECISION.md`): one `CacheBackend` read port, a context-derived
+> `selectBackend`, a conservative write-trust gate, a separate `{push, schedule}` sync gate,
+> and reader = GitHub Releases (FOUND-01). It does NOT re-derive the ADR. It answers how the
+> domain capabilities are built against that architecture, validated against GitHub's 2026-06-26
+> cache-token model and comparable systems. Phase structure lives in `.planning/ROADMAP.md`.
 
 ---
 
-## 1. GitHub trigger + permissions + cache-token model (Active req: `pull_request` + `release` events)
+## 1. GitHub trigger + permissions + cache-token model
+
+Grounds the write-trust gate (conservative default-deny in the default-cache slice; `pull_request`
+/ `release` widening in the trust-widening slice) and the separate sync/publish gate.
 
 ### The load-bearing fact (verified in full)
 
@@ -40,222 +48,196 @@ This is the crux. `pull_request` and `release` are NOT trusted by being collabor
         |                                 |                                 |
         v                                 v                                 v
   serve PUT -> 'stored'       serve PUT -> 'stored'                 serve PUT -> @actions/cache
-  (safe: trusted)            (safe: cannot poison shared)          returns -1 -> mapped 'conflict'
+  (safe: trusted)            (safe: cannot poison shared)          returns -1 -> map to 'conflict'
                                                                     (GitHub already refused it)
 ```
 
-The last column is why the in-code gate is only defense-in-depth: even if the sidecar's env-based gate is spoofed into allowing a write on an untrusted default-branch-scoped trigger, `@actions/cache` receives a read-only token and `saveCache` returns `-1`, which `actions-cache-backend.ts` already collapses to a `'conflict'` (see `.planning/codebase/CONCERNS.md`, "-1 sentinel collapse"). The poison write never lands.
+The last column is why the in-code gate is only defense-in-depth: even if the sidecar's env-based gate is spoofed into allowing a write on an untrusted default-branch-scoped trigger, `@actions/cache` receives a read-only token and `saveCache` returns `-1`. The Actions-cache backend must map that `-1` sentinel (already-cached / write-denied) to a `'conflict'`/409 rather than an error, so the poison write never lands and the build is not broken.
 
 ### Defense-in-depth ordering (outermost = load-bearing)
 
 | Layer | Control | Load-bearing? | Where it lives |
 |-------|---------|---------------|----------------|
 | 1 (outermost) | GitHub server-side cache-token: RO for untrusted+default-scope; scope-isolated RW for `pull_request`/`release` | **YES** (the CREEP fix) | GitHub, github.com + Data Residency; version-floor caveat for GHES |
-| 2 (middle) | Workflow `permissions:` scoping + job isolation | YES for the mirror | `.github/workflows/*.yml` |
-| 3 (innermost) | `isWriteTrusted(env)` in `server.ts:154`; `resolveTrustedRepo()` in `publish-mirror.ts:335` | NO (env is fork-spoofable) | `src/lib/trust.ts` |
+| 2 (middle) | Workflow `permissions:` scoping + job isolation | YES for the publish/mirror job | `.github/workflows/*.yml` |
+| 3 (innermost) | The in-code write-trust gate (host-detected, env-derived) | NO (env is fork-spoofable) | the cache library's trust module |
 
-The in-code gate sits *behind* GitHub's control by design and stays there. Its purpose after this milestone is unchanged: fail-safe when layer 1 is absent (older GHES) or misconfigured. Do not promote it to load-bearing.
+The in-code gate sits *behind* GitHub's control by design and stays there. Its purpose is fail-safe when layer 1 is absent (older GHES) or misconfigured. Do not build it as, or promote it to, the load-bearing control.
 
-### The critical integration decision: split the trust predicate
+### The critical design decision: two trust predicates, not one shared list
 
-`TRUSTED_EVENTS` is consumed in **two** places today (`.planning/codebase/ARCHITECTURE.md`): the serve write gate (`server.ts:154`) and the mirror-publish gate (`publish-mirror.ts:335`). These are different trust decisions and must diverge:
+The trusted-event decision is consumed in **two** distinct places, and they must be **two separate predicates from the start** (not one shared list that gets split later):
 
-- **Serve write path (Actions cache PUT):** SAFE to widen to `pull_request` + `release`. GitHub scope-isolates the write; the value delivered is PR/release builds getting their own caching (resolves the open "why not pull_request?" question).
-- **Mirror-publish path (Actions cache -> PUBLIC Release asset):** MUST NOT widen. Publish-mirror is the shared, anonymous, public read path for local dev. Mirroring a PR-scoped or release-scoped entry would collapse exactly the isolation GitHub gives us, republishing untrusted content as the shared read path.
+- **Serve write path (Actions cache PUT):** may include `pull_request` + `release` (in the trust-widening slice, host-detected fail-closed). GitHub scope-isolates the write; the value delivered is PR/release builds getting their own caching.
+- **Sync/publish path (Actions cache -> PUBLIC Release asset):** MUST NOT include them. Publishing is the shared, anonymous, public read path. Mirroring a PR-scoped or release-scoped entry would collapse exactly the isolation GitHub gives us, republishing untrusted content as the shared read path.
 
-Fortunately the existing code already protects the mirror path: `resolveTrustedRepo()` layers a `GITHUB_REF == default branch` check on top of `isWriteTrusted`. A `pull_request` (`refs/pull/N/merge`) and a `release` (`refs/tags/vX`) both fail that default-branch check, so widening the shared `TRUSTED_EVENTS` list does not, today, widen the mirror path.
-
-**Recommendation (opinionated):** do not rely on that coincidence. Make the two predicates explicit so the invariant is legible and test-locked:
+Build the two predicates explicitly so the invariant is legible and test-locked:
 
 ```ts
-// src/lib/trust.ts
-export function isCacheWriteTrusted(env): boolean   // serve PUT: TRUSTED_EVENTS + pull_request + release
-export function isMirrorPublishTrusted(env): boolean // publish: default-branch push/schedule ONLY
+isCacheWriteTrusted(env): boolean    // serve PUT: allowlist (+ pull_request + release, host-gated)
+isSyncPublishTrusted(env): boolean   // publish: default-branch push/schedule ONLY
 ```
 
-Add a regression test asserting `isMirrorPublishTrusted` REJECTS `pull_request` and `release`. This is the guardrail that stops a future "simplify the gate" change from reopening a poisoning path through the public mirror.
+Add a regression test asserting the sync/publish predicate REJECTS `pull_request` and `release` (and every non-`{push, schedule}` event + non-default ref). This is the guardrail that stops a future "simplify the gate" change from ever opening a poisoning path through the public mirror. Do NOT model the mirror gate as an accidental consequence of a default-branch ref check layered on the write gate - make it its own predicate.
 
 ### Permission scoping + job isolation (workflow layer)
 
 - Build / test / `serve` jobs: `permissions: contents: read` only. They never create releases.
-- `publish-mirror` job: `permissions: contents: write` (needs release create/upload), isolated as its own job, gated on trusted default-branch push (unchanged).
-- `mirror-cleanup` job: `permissions: contents: write`, on the daily schedule only (unchanged, single-writer; see section 2).
-- For `pull_request` from forks: GitHub already restricts `GITHUB_TOKEN` to read by default, and the mirror job simply does not run in the PR context. The PR context only ever exercises the serve write path against its own isolated Actions-cache scope. No `pull_request_target` is introduced (that would re-import default-branch scope and the RO-token regression).
+- publish/mirror job: `permissions: contents: write` (needs release create/upload), isolated as its own job, gated on trusted default-branch push.
+- cleanup job: `permissions: contents: write`, on the schedule only (single-writer; see section 2).
+- For `pull_request` from forks: GitHub already restricts `GITHUB_TOKEN` to read by default, and the publish/mirror job simply does not run in the PR context. The PR context only ever exercises the serve write path against its own isolated Actions-cache scope. Never introduce `pull_request_target` (it re-imports default-branch scope and the RO-token regression).
 
-### `TRUSTED_EVENTS` duplication caveat (existing debt, now more sensitive)
+### Trusted-event allowlist: single source of truth
 
-`TRUSTED_EVENTS` is duplicated in `src/lib/trust.ts:5-21` and `start-cache-server/index.cjs:12-21` (the action must run pre-`npm ci` with Node built-ins only). Adding `pull_request`/`release` must be mirrored in both, and the `selfcheck.cjs` assertion comparing the two sets (proposed in `CONCERNS.md`) becomes worth doing now, because a divergence here now changes which events cache at all.
+The trusted-event allowlist is needed in two runtime forms: the cache library (post-`npm ci`, full deps) and the consumption Action's pre-`npm ci` bootstrap, which must run with Node built-ins only (no dependency install yet). Build it with a **single source of truth**: the dependency-free action copy is generated from / shares the canonical list (no hand-maintained dual copy), with a `selfcheck.cjs` parity assertion that fails on drift. A divergence here changes which events cache at all, so the parity check is not optional.
 
 ---
 
-## 2. LRU / last-accessed retention (Active req: optional LRU on top of mandatory age-based cleanup)
+## 2. Recency (LRU) retention: why it is hard on this substrate - DEFERRED
+
+**Status: LRU via a stateful manifest is OUT OF SCOPE for v0.0.1** (`.planning/REQUIREMENTS.md`). Retention
+is age-based only (`CACHE_MIRROR_MAX_AGE_DAYS`, one coupled setting; RETAIN-01/RETAIN-03). This section
+records *why* recency eviction is hard on GitHub Releases so the deferral is grounded, not hand-waved.
 
 ### The core problem: GitHub exposes no last-accessed signal
 
-The Release Asset API object exposes `created_at`, `updated_at`, and `download_count` (verified against <https://docs.github.com/en/rest/releases/assets>) but **no** `last_accessed`. So true LRU-by-access is impossible from GitHub metadata. The only per-asset access proxy is `download_count`.
+The Release Asset API object exposes `created_at`, `updated_at`, and `download_count` (verified against <https://docs.github.com/en/rest/releases/assets>) but **no** `last_accessed`. So true LRU-by-access is impossible from GitHub Releases metadata. The only per-asset access proxy is `download_count`.
 
-**Signal reliability (MEDIUM confidence):** GitHub's docs do not authoritatively state whether an `Accept: application/octet-stream` API download (exactly how `release-mirror-backend.ts` reads) increments `download_count`. Community knowledge holds that it increments when the binary is actually retrieved (via `browser_download_url` or the octet-stream 302 redirect) but not on metadata reads. This uncertainty is the single biggest risk for this requirement and should be resolved by a short empirical spike (fetch metadata, do an octet-stream download, re-fetch metadata, diff the counter) before committing to the design.
+**Signal reliability (MEDIUM confidence):** GitHub's docs do not authoritatively state whether an `Accept: application/octet-stream` API download (exactly how the Releases reader retrieves an asset) increments `download_count`. Community knowledge holds it increments when the binary is actually retrieved (via `browser_download_url` or the octet-stream 302 redirect) but not on metadata reads. This uncertainty is a big reason recency eviction is deferred: the whole approach would rest on an unverified counter.
 
-### Why the reader cannot write the manifest
+### Why the reader cannot maintain a recency signal
 
-The access event (a cache hit) happens on the READ side, i.e. the anonymous, read-only local `serve` process. That process is read-only by design and MUST stay so ("Local read-write mode" is explicitly Out of Scope). So readers cannot push access records anywhere. Any access signal must be reconstructed **server-side, after the fact**, from `download_count` deltas observed by the single writer. This is the only design that respects the read-only-local invariant.
+The access event (a cache hit) happens on the READ side - the anonymous, read-only local `serve` process, which is read-only by construction (a load-bearing CREEP property: local never writes). So readers cannot push access records anywhere. Any access signal would have to be reconstructed **server-side, after the fact**, from `download_count` deltas observed by a single writer. That is the only design that respects the read-only-local invariant - and it is more machinery than v0.0.1 warrants.
 
-### Manifest design: read-modify-write in the single-writer cleanup workflow
+### What recency eviction would cost (sketch, for the deferral record)
 
-Home: the daily scheduled `mirror-cleanup.yml` workflow, exactly where the code comment already earmarks it (`publish-mirror.ts:378`). Physical location: a **dedicated manifest release** (e.g. tag `cache-mirror-manifest`) holding one JSON asset. Rationale over alternatives:
-
-- Dedicated release (RECOMMENDED): reuses the Release primitive the cleanup job already has `contents: write` for; no git-history churn; the cleanup workflow is already the single writer.
-- Committed file on a branch: REJECTED - churns git history and forces the workflow to commit/push (more blast radius, merge conflicts).
-- Actions cache entry: REJECTED - CI-scoped and evicts on the 7-day/10 GB policy; the manifest must outlive Actions cache to describe the mirror.
-
-Critical integration constraint: `MIRROR_SHARD_PATTERN` (`publish-mirror.ts:97`) must NOT match the manifest release, or cleanup deletes its own state. Add the manifest tag to the exclusion the same way the current-month shard is protected.
+A recency layer would need a read-modify-write manifest in a single-writer scheduled cleanup job:
 
 ```
-mirror-cleanup.yml (cron 17 4 * * *, single writer)
-      |
-      v
-  1. GET manifest release asset (JSON)   -- 404 -> start empty (needs structural 404; see section 3/4)
-      |
-      v
-  2. list ALL cache-mirror-* shard assets -> {name -> {download_count, created_at}}
-      |
-      v
-  3. MERGE (the read-modify-write core):
-       for each asset:
-         if current download_count > manifest[asset].count  -> last_active = today
-         else                                                -> last_active = carry forward
-      |
-      v
-  4. EVICT decision (planShardCleanup, extended):
-       delete if  (now - created_at > maxAgeDays)          [mandatory age gate, unchanged]
-              AND (now - last_active > lruIdleDays)          [NEW: LRU protection, optional]
-      |
-      v
-  5. PUT manifest back (upload --clobber to manifest release)
-      |
-      v
-  6. delete evicted assets  (existing cleanupShard path)
+scheduled cleanup (single writer)
+  1. GET a manifest asset (JSON)              -- 404 -> start empty (needs structural 404)
+  2. list shard assets -> {name -> {download_count, created_at}}
+  3. MERGE: download_count increased -> last_active = today; else carry forward
+  4. EVICT: age gate (mandatory) AND recency-idle gate (the deferred part)
+  5. PUT manifest back; delete evicted assets
 ```
 
-### Single-writer / concurrency constraints
+with a dedicated manifest release, a `concurrency:` group so two cleanup runs never race the RMW, and
+the manifest tag excluded from the shard-cleanup pattern (or cleanup deletes its own state). This is
+security-negative (mutable shared retention state), rests on the unverified `download_count` signal,
+and duplicates recency that the Actions-cache CI tier already provides natively - so it is out of scope.
 
-- Exactly one writer of the manifest: the `mirror-cleanup` job. The per-OS `publish-mirror` upload job (runs on push) must NEVER touch the manifest, preserving single-writer.
-- No distributed lock is needed IF two cleanup runs never overlap. The daily cron plus `workflow_dispatch` CAN overlap. Guard with a workflow-level `concurrency: { group: mirror-cleanup }` (queue, do not cancel mid-write). This is the workflow-level analogue of the existing in-process `withHashLock` philosophy: serialize the read-modify-write, let unrelated work run free.
-- The RMW is last-writer-wins on a whole-file JSON blob; because there is only ever one writer and it is serialized by the concurrency group, there is no lost-update hazard. Do not add optimistic-concurrency/ETag machinery - it is unneeded complexity given the single-writer guarantee.
+### The coupling constraint (why even a "keep-hot" variant does not fit)
 
-### The coupling constraint bounds what LRU can do (important)
-
-Retention and the read window are ONE coupled setting (`CACHE_MIRROR_MAX_AGE_DAYS` -> `resolveMaxAgeDays`/`shardTagsForWindow`); `CONCERNS.md` forbids a second knob. This bounds LRU semantics:
-
-- SAFE (recommended, lowest blast radius): LRU as *additional early eviction of cold entries within the read window* to save space under the 1000-asset/shard cap. Worst case is an extra cache MISS (best-effort reads rebuild it) - never a wrong result.
-- UNSAFE without decoupling: LRU as *"keep hot entries past `maxAgeDays`"*. The reader only walks `maxAgeDays` of shards, so an entry kept in an older shard is unreadable dead storage unless LRU also re-promotes it into the current-month shard (a re-upload path). That variant requires decoupling read-window from retention, which the coupling rule forbids, OR a promotion mechanism - a materially larger change. **Flag for deeper research / defer.**
-
-Given the target audience (low-churn OSS repos, generous 30-day window), the honest recommendation is: ship the age-gate-plus-cold-eviction variant, keep it strictly optional (off by default), and treat "keep-hot-longer" as a separate future spike gated on the `download_count` signal proving reliable.
+Retention and the read window are ONE coupled setting (`CACHE_MIRROR_MAX_AGE_DAYS`); a second knob is
+forbidden (windows drift -> retained-but-unreadable or expired-but-uncleanable). A "keep hot entries past
+`maxAgeDays`" variant would need to re-promote entries into the current window (a re-upload path) or
+decouple the window from retention - both larger than v0.0.1's value. The native alternative already covers
+the common case: an entry unused in CI falls out of the Actions cache (7-day/10 GB LRU), stops being
+re-published, and ages out of the mirror by date. **v0.0.1 ships age-based cleanup only; recency eviction is
+a possible later-milestone spike gated on the `download_count` signal proving reliable.**
 
 ---
 
-## 3. Backend-pivot integration behind the `CacheBackend` port (Active req: evaluate other GitHub/Git primitives)
+## 3. Storage primitives behind the `CacheBackend` read port (reader = Releases LOCKED)
 
 ### Primitive comparison
 
 | Primitive | Anon public read | Per-entry size | Count cap | Native TTL/evict | Access signal | Fit |
 |-----------|------------------|----------------|-----------|------------------|---------------|-----|
-| Actions cache (current CI RW) | No (CI-scoped) | large | 10 GB repo | 7-day disuse + LRU at cap | none | Best for CI RW; keep |
-| Release assets (current local RO) | Yes | ~2 GiB | 1000/release | none (manual) | `download_count` only | Best for anon local read; keep |
-| Container/OCI registry (ghcr.io) | Yes (public pkgs) | large (blobs) | none | none | pull stats (coarse) | Plausible mirror alt; higher blast radius |
+| Actions cache (CI RW) | No (CI-scoped) | large | 10 GB repo | 7-day disuse + LRU at cap | none | Best for CI RW; the default |
+| Release assets (local RO) | Yes | ~2 GiB | 1000/release | none (manual) | `download_count` only | **LOCKED reader (FOUND-01)** |
+| Container/OCI registry (ghcr.io) | Yes (public pkgs) | large (blobs) | none | none | pull stats (coarse) | later-milestone revisit trigger (GHCR-01) |
 | Git LFS | No (quota/billing) | 2 GB | n/a | none | none | Poor fit |
 | Orphan branch / git blobs | Yes (raw CDN) | repo-bloat | n/a | history-rewrite only | none | Poor fit (cleanup = history surgery) |
 | Git notes / Gists | n/a | tiny | n/a | none | none | Metadata only, not artifacts |
 
-### Recommendation: no pivot now; the port already isolates blast radius
+### Decision: reader = GitHub Releases is LOCKED
 
-The current two-backend split maps cleanly onto the two access patterns (CI needs authenticated RW with native eviction; local needs anonymous read). No candidate clearly beats that for the low-churn target audience. The one worth a *time-boxed spike* is the OCI/container registry as a mirror-read replacement (content-addressable by digest = the hash, no 1000-asset cap, anonymous pulls for public packages, richer metadata) - but it adds the OCI protocol and push auth, and does not obviously win. Default outcome: keep Actions cache + Releases; log the OCI option.
+FOUND-01 is resolved: the cross-context reader is **GitHub Releases** (`.planning/ARCHITECTURE-DECISION.md` Decision 3; FOUND-01 spike `.planning/spikes/001-005`). The two-backend split maps cleanly onto the two access patterns - CI needs authenticated RW with native eviction (Actions cache); local needs an anonymous keyed read path (Releases). The GHCR/OCI registry was the one serious alternative and was validated in the spike; it is deferred to the **later-milestone GHCR revisit trigger (GHCR-01)**, to be re-evaluated only when the Docker container form and cosign provenance (PROV-01) graduate together. Do not build a runtime store-selection framework; build the one locked reader.
 
-### How a pivot slots in with minimal blast radius
+### How the read port isolates a future store change
 
-The `CacheBackend` port (`get(hash): Promise<Buffer|null>`, `put(hash, body): Promise<PutResult>`) is precisely the seam. A pivot is a new factory returning the object literal, wired into `selectBackend`. What stays UNTOUCHED: `server.ts` (protocol/auth/trust), `trust.ts`, `types.ts`. What must be handled because it lives OUTSIDE the port today:
+The `CacheBackend` read port (`get(hash): Promise<Buffer|null>`, `put(hash, body): Promise<PutResult>`, `put` returning `'stored'`/`'conflict'`/`'forbidden'`) is the seam. A future additional store (GHCR in a later milestone) is a new factory wired into `selectBackend`; the protocol/auth/trust layers never move. What lives OUTSIDE the read port and is reader-specific (build it with the Releases reader, do not assume it is pluggable):
 
-1. **Shard/retention coupling** (`shard.ts`, used by `release-mirror-backend.ts` + `publish-mirror.ts`): Release-specific (month tags, 1000-cap). A digest-addressed OCI backend has no month-shard cap, so `shardTagsForWindow` would collapse to a single namespace or a backend-specific retention model. This is the biggest non-port coupling to redesign.
-2. **`cacheArchivePath` cross-backend reuse**: `publish-mirror.ts` reuses the Actions backend's deterministic temp path. A pivot that changes the CI backend must preserve or replace this (and re-verify an end-to-end `@actions/cache` restore - the path is version-hashed).
-3. **Out-of-band population**: the mirror is filled by the `publish-mirror` bin, not through the port's `put()`. A pivot of the mirror storage changes the publish/cleanup bins too, not just one backend file.
+1. **Shard/retention coupling** (used by the reader + the publisher): Release-specific (month tags, the 1000-asset cap, window-walk). A digest-addressed store has no month-shard cap, so this collapses to a store-specific retention model. This is the biggest non-port coupling - it is per-reader by design (the ADR: the publish/cleanup subsystem is behind no port).
+2. **Archive-path reuse**: the publisher reuses the Actions backend's deterministic temp path. This helper must be the single source of truth; any change re-verifies an end-to-end `@actions/cache` restore, because the path is version-hashed (section 5 of STACK.md).
+3. **Out-of-band population**: the mirror is filled by the publish step, not through the port's `put()`. The publish + cleanup subsystem is reader-specific and behind no port.
 
-Blast-radius summary: replacing the LOCAL READ backend (Releases -> OCI) is contained - new `*-mirror-backend.ts` + `selectBackend` local branch + rewrite of publish/cleanup targets + retention model; protocol layer untouched. Replacing the CI RW backend (Actions cache -> other) is high blast radius - you lose `@actions/cache` native eviction and the JS-actions-only runtime-env plumbing that the two composite actions exist solely to carry. Not recommended.
+Blast-radius summary: because publish/cleanup is reader-specific, a later-milestone additional store (GHCR) is *additive* (multi-store + synced writes), not a switch - v0.0.1 Releases keeps serving. Replacing the CI RW backend (Actions cache -> other) would be high blast radius - you lose `@actions/cache` native eviction and the JS-action runtime-env plumbing the consumption Action exists to carry. Not in scope.
 
-For comparison, the 1st-party `@nx/azure-cache` plugin (<https://21.nx.dev/docs/reference/remote-cache-plugins/azure-cache/overview>) validates this shape: it is a thin adapter over Azure Blob Storage configured by `container`/`accountName`, with `localMode`/`ciMode` (`read-only`/`no-cache`) toggles and OIDC auth. It is the same "one storage adapter behind the Nx remote-cache contract" pattern this project already implements; the only structural difference is that this project derives RW/RO from runtime context instead of exposing a mode toggle (a deliberate, safer choice per the Key Decisions).
-
----
-
-## 4. Testability seams for the untested I/O paths (Active req: comprehensive test coverage)
-
-The codebase already has ONE proven seam: *extract pure decisions, inject the I/O client*. `filterNxCacheKeys`, `planShardCleanup`, `shardTagsForWindow` are pure and tested; `createReleaseMirrorBackend(options)` already injects its Octokit. The untested paths are exactly the ones that have NOT yet had their I/O client injected. Extend the existing pattern; do not invent a new one.
-
-| Path | Current seam gap | Recommended seam | Effort / priority |
-|------|------------------|------------------|-------------------|
-| `gh` orchestration (`ensureShardExists`, `uploadHash`, `getReleaseId`, `listShardAssets`, `cleanupShard`, `cleanupMirror`, `resolveTrustedRepo`) | calls `execFile(gh, ...)` inline; only mocked via nothing | Inject a narrow runner: `type GhRunner = (args: string[]) => Promise<{stdout,stderr,code}>`, default = real `execFile`. Spec asserts the already-exists / `HTTP 404` / other-error branch per sentinel. | High. Converges with the Octokit-migration req (both are "dependency-inject the REST/CLI client") - do them together. |
-| `selectBackend` | pure fn of env but reads `process.env` and builds a real backend | Accept an explicit `env` param; assert WHICH backend + config is returned (CI vs local, `GITHUB_REPOSITORY` validation, `GH_TOKEN \|\| GITHUB_TOKEN` empty-string fallthrough). No network - assert identity/mode, do not exercise I/O. | Low. Cheap, pure. Do first. |
-| `withHashLock` | in-process promise-chain lock, not exported/tested | Export it; drive with deferred fake work fns. Assert: same-hash serializes in order; different hashes run concurrently; map entry is EVICTED after completion (leak guard); a rejected op does not wedge the chain. Zero I/O. | Medium. Closes the sharpest edge (rare truncated reads under concurrency). |
-| cleanup bin wrapper (`publish-mirror-cleanup.ts`) | 34-line failure-aggregation-to-throw, no spec | Inject `cleanupMirror`; force a per-shard failure, assert aggregate-and-exit-nonzero. | Low. |
-
-**Convergence to flag for the roadmap:** the `gh`-runner injection seam IS the Octokit-migration refactor. Migrating `publish-mirror` from `gh` stderr text-matching to structural Octokit `error.status` discrimination (as `release-mirror-backend.ts:25-32` already does) both (a) removes the fragile stderr contract and (b) yields a mockable injected client for the specs. And the LRU manifest bootstrap (section 2) needs a structural 404 ("no manifest yet") - the same structural-error capability. Sequence these together.
+For comparison, the 1st-party `@nx/azure-cache` plugin (<https://21.nx.dev/docs/reference/remote-cache-plugins/azure-cache/overview>) validates this shape: a thin adapter over Azure Blob Storage configured by `container`/`accountName`, with `localMode`/`ciMode` (`read-only`/`no-cache`) toggles and OIDC auth - the same "one storage adapter behind the Nx remote-cache contract" pattern. The deliberate difference here (per the ADR) is deriving RW/RO from runtime context instead of exposing a mode toggle a consumer can set wrong.
 
 ---
 
-## Integration Points (against the existing `CacheBackend` port and trust gates)
+## 4. Testability seams - build them from the start (TDD)
 
-| Boundary | Change | Notes |
-|----------|--------|-------|
-| `server.ts` PUT gate -> `isCacheWriteTrusted` | Widen to include `pull_request`, `release` | Safe: GitHub scope-isolates these writes. Protocol/auth untouched. |
-| `publish-mirror.ts` -> `isMirrorPublishTrusted` | Keep default-branch push/schedule ONLY | Split the predicate; test-lock the rejection of `pull_request`/`release`. |
-| `trust.ts` + `start-cache-server/index.cjs` | Mirror the event-list change in BOTH; add `selfcheck.cjs` parity assertion | Duplication is load-bearing (action runs pre-`npm ci`). |
-| `mirror-cleanup.yml` | Add manifest read-modify-write + `concurrency: mirror-cleanup` group | Single-writer stays single; manifest lives in a dedicated release. |
-| `MIRROR_SHARD_PATTERN` (`publish-mirror.ts:97`) | Exclude the manifest release tag | Or cleanup deletes its own state. |
-| `cleanup.ts` `planShardCleanup` | Extend with optional LRU idle gate (age gate stays mandatory) | Pure fn - unit-test the new branch. |
-| `publish-mirror.ts` gh calls | Inject runner / migrate to Octokit `error.status` | Enables specs + structural 404 for manifest bootstrap. |
-| `selectBackend`, `withHashLock` | Export + accept explicit inputs | Pure/near-pure specs, no I/O. |
-| `CacheBackend` port | UNCHANGED | Any future storage pivot is a new factory behind `selectBackend`; protocol/trust never move. |
+The proven pattern for this shape of system is: *extract pure decisions, inject the I/O client*. Build the domain logic (key filtering, shard planning, cleanup planning, the RW/RO selection, the per-hash lock) as pure/near-pure functions, and inject every network client (Octokit / any CLI runner) so each I/O branch is drivable in a unit test. Write the test first for each. The paths below are exactly the I/O surfaces that must have an injected client from day one, not retrofitted.
 
-## Suggested Build Order (dependencies between the Active requirements)
+| Path | Seam to build | How to test | Priority |
+|------|---------------|-------------|----------|
+| publish + cleanup orchestration (ensure-shard, upload, get-release, list-assets, cleanup) | Inject the client (Octokit) rather than shelling out with inline string-matching. Discriminate faults structurally by `error.status`. | Spec asserts the already-exists (409) / not-found (404) / other-fault branch per structural status. | High. Same seam serves the whole publish/cleanup subsystem. |
+| `selectBackend` | Accept an explicit `env` param (do not read `process.env` inside). | Assert WHICH backend + config is returned: CI vs local, `GITHUB_REPOSITORY` validation, `GH_TOKEN \|\| GITHUB_TOKEN` empty-string fallthrough, malformed-repo rejection. No network - assert identity/mode. | Low. Cheap, pure. Do first. |
+| `withHashLock` | Export it as a standalone per-hash lock. | Drive with deferred fake work fns: same-hash serializes in order; different hashes run concurrently; the map entry is EVICTED after completion (leak guard); a rejected op does not wedge the chain. Zero I/O. | Medium. Closes the sharpest edge (rare truncated reads under concurrency). |
+| cleanup bin wrapper | Inject the cleanup fn; the wrapper aggregates per-item failures. | Force a per-shard failure, assert aggregate-and-exit-nonzero + per-item isolation. | Low. |
 
-1. **Testability seams + coverage first** (`selectBackend`, `withHashLock`, gh-runner injection). Cheap, independent, and the safety net that locks current behavior before trust semantics change. `selectBackend`/`withHashLock` are pure and unblock nothing else; the gh-runner seam is a prerequisite for both step 2 and step 4.
-2. **Octokit migration (structural error discrimination).** Builds directly on the gh-runner seam from step 1. Removes the stderr contract; provides the structural 404 that step 4 needs.
-3. **`pull_request` + `release` events + first-class CI RW/RO mode.** Depends on the trust tests from step 1 and the predicate split. Can run in parallel with step 2. Deliverable: the "why not pull_request?" question resolved, RW/RO made documented and testable.
-4. **LRU manifest retention.** Depends on step 2 (structural 404 for manifest bootstrap) and the cleanup `concurrency` guard. Highest uncertainty (`download_count` signal) - gate on a spike; ship the cold-eviction variant, defer keep-hot-longer.
-5. **Consumer adoption docs.** After step 3 settles the final trust model, so docs describe the shipped RW/RO semantics.
-6. **Backend-pivot evaluation.** Independent spike, off the critical path; likely a no-pivot outcome. The port makes it low-risk whenever it happens.
+**Use Octokit (structural `error.status`) from the start.** A greenfield build has no `gh` CLI to migrate from: discriminate GitHub faults structurally (`error.status === 404/409/422`) via `@octokit/rest`, never by matching human-readable CLI stderr. This gives (a) a robust fault contract and (b) a mockable injected client for the specs, and it supplies the structural 404 that a "does the asset/release exist yet" bootstrap needs. Build it this way - do not build a stderr-text-matching path and plan to replace it.
 
-## Anti-Patterns (specific to this new work)
+---
 
-### Widening the shared `TRUSTED_EVENTS` for both gates at once
-**What people do:** add `pull_request`/`release` to the single `TRUSTED_EVENTS` list and stop.
-**Why it's wrong:** it also widens the mirror-publish gate (today only saved by a coincidental default-branch check), which would republish PR/release-scoped cache content as the shared public read path - collapsing the very isolation GitHub provides.
-**Do this instead:** split `isCacheWriteTrusted` (serve, wide) from `isMirrorPublishTrusted` (publish, narrow) and add a test that locks the mirror gate's rejection of `pull_request`/`release`.
+## Integration Points (seams to build against the LOCKED architecture)
+
+| Boundary | Build | Notes |
+|----------|-------|-------|
+| serve PUT gate -> `isCacheWriteTrusted` | Conservative default-deny allowlist; widen to `pull_request` + `release` only in the trust-widening slice, host-detected fail-closed | Safe: GitHub scope-isolates these writes. Protocol/auth untouched. |
+| sync/publish gate -> `isSyncPublishTrusted` | Separate predicate: default-branch `{push, schedule}` ONLY | Two predicates from the start; test-lock the rejection of `pull_request`/`release`/non-default refs. |
+| trusted-event allowlist + dependency-free action copy | Single source of truth; action copy generated from / shares it; `selfcheck.cjs` parity assertion | The action bootstrap runs pre-`npm ci` (Node built-ins only). |
+| scheduled cleanup | Age-based cleanup under a `concurrency:` group (queue, don't cancel); list phase aborts before any delete on partial pagination | Single-writer; recency/manifest LRU is OUT (section 2). |
+| shard-cleanup pattern | Exclude any non-shard release tag from the delete set | Or cleanup deletes state it should keep. |
+| cleanup planning (pure fn) | Age-gate deletion decision as a pure function | Unit-test the branch; no I/O. |
+| publish/cleanup I/O | Inject Octokit; discriminate faults by `error.status` | Enables specs + structural 404 bootstrap. |
+| `selectBackend`, `withHashLock` | Explicit inputs / exported | Pure/near-pure specs, no I/O. |
+| `CacheBackend` read port | One port: `get`/`put`; publish/cleanup is reader-specific and behind no port | A later-milestone additional store is a new factory behind `selectBackend`; protocol/trust never move. |
+
+## Build order
+
+Phase structure and dependency ordering are owned by `.planning/ROADMAP.md` (7 phases: teardown, walking
+skeleton, default cache in CI, cross-context read, publish + retention + observability, trust-widening +
+PPE gate, distribution + docs + governance). This research feeds those phases; it does not define its own.
+
+## Anti-Patterns (specific to this work)
+
+### Trusting the wrong event set / one shared list for both gates
+**What people do:** put all trusted events in one list and reuse it for both the serve write gate and the publish gate; or add `pull_request_target`/`issue_comment`/`workflow_run` to "cover more triggers."
+**Why it's wrong:** one shared list means widening the write gate also widens the publish gate, republishing PR/release-scoped content as the shared public read path - collapsing GitHub's isolation. And `pull_request_target`/`issue_comment`/fork-`workflow_run` run untrusted-influenced code in the *default-branch* scope - the real CREEP vector.
+**Do this instead:** build `isCacheWriteTrusted` (serve, wider) and `isSyncPublishTrusted` (publish, narrow: `{push, schedule}` + default branch) as two separate predicates; test-lock the publish gate's rejection of PR/release; add exactly `pull_request`/`release` to the write gate (host-gated), never the dangerous set.
 
 ### Treating the in-code trust gate as the CREEP control
 **What people do:** reason "we gate writes in code, so forks are safe."
 **Why it's wrong:** the env is fork-spoofable; the load-bearing control is GitHub's server-side read-only cache token (2026-06-26). The in-code gate is defense-in-depth only.
-**Do this instead:** keep the ordering explicit (GitHub server-side > workflow permissions > in-code gate); document the GHES version-floor caveat for the server-side control.
+**Do this instead:** keep the ordering explicit (GitHub server-side > workflow permissions > in-code gate); document the GHES version-floor caveat for the server-side control; detect the host from `GITHUB_SERVER_URL` and fail closed on GHES.
 
-### Letting a reader try to write the LRU manifest
+### Letting a reader maintain a recency signal
 **What people do:** have the local `serve` process record access into a manifest.
-**Why it's wrong:** local is anonymous and read-only by design (writes must stay Out of Scope). A reader-write path reopens the exact trust surface the whole design avoids.
-**Do this instead:** reconstruct access server-side from `download_count` deltas in the single-writer cleanup workflow. No reader ever writes.
+**Why it's wrong:** local is anonymous and read-only by construction (writes stay OUT). A reader-write path reopens the exact trust surface the design avoids.
+**Do this instead:** do not build recency eviction in v0.0.1 (section 2); ship age-based cleanup only.
 
-### Adding a second retention knob for LRU
-**What people do:** introduce a separate "LRU window" env var distinct from `CACHE_MIRROR_MAX_AGE_DAYS`.
-**Why it's wrong:** read-window and retention are one coupled setting; a second knob desynchronizes them (retained-but-unreadable or expired-but-uncleanable), the exact class of silent bug already fixed twice here.
-**Do this instead:** keep LRU strictly WITHIN the coupled window (cold-eviction only); resolve everything through `resolveMaxAgeDays`.
+### Adding a second retention knob
+**What people do:** introduce a separate "recency window" env var distinct from `CACHE_MIRROR_MAX_AGE_DAYS`.
+**Why it's wrong:** read-window and retention are one coupled setting; a second knob desynchronizes them (retained-but-unreadable or expired-but-uncleanable) - a class of silent bug.
+**Do this instead:** one coupled setting; resolve read-window and retention from the same value.
 
 ## Sources
 
 - GitHub read-only Actions cache for untrusted triggers (2026-06-26, fetched in full via markdown.new): <https://github.blog/changelog/2026-06-26-read-only-actions-cache-for-untrusted-triggers/> - HIGH. States `pull_request`/`release` keep RW via non-default-branch scope; lists the RW trigger set; RO issued for untrusted + default-scope.
 - GitHub Actions dependency-caching reference (scope model, PR merge-ref isolation, RO triggers, "anyone who can open a PR can read base-branch caches"): <https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching> - HIGH.
-- GitHub REST release-assets schema (`download_count`, `created_at`, `updated_at`; increment-on-octet-stream not authoritatively documented): <https://docs.github.com/en/rest/releases/assets> - MEDIUM on the LRU signal.
+- GitHub REST release-assets schema (`download_count`, `created_at`, `updated_at`; increment-on-octet-stream not authoritatively documented): <https://docs.github.com/en/rest/releases/assets> - MEDIUM on the recency signal.
 - Nx self-hosted caching usage notes + HTTP contract (`GET`/`PUT /v1/cache/{hash}`, bearer token, 403 for read-only writes, 409 override, 404 miss): <https://nx.dev/docs/guides/tasks--caching/self-hosted-caching#usage-notes> - HIGH.
 - Nx enterprise security ("writes only from trusted CI branches", CREEP framing, PR artifacts isolated): <https://nx.dev/enterprise/security> - HIGH (corroborates the scope-isolation design; note it is Nx-Cloud marketing framing).
 - Nx `@nx/azure-cache` plugin overview (comparable adapter shape: single storage backend behind the Nx contract, `localMode`/`ciMode`, OIDC): <https://21.nx.dev/docs/reference/remote-cache-plugins/azure-cache/overview> - HIGH.
-- CVE-2025-36852 CREEP background: <https://nx.dev/blog/cve-2025-36852-critical-cache-poisoning-vulnerability-creep> - referenced, not re-fetched (already in project context).
-- Existing design (not re-derived): `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/CONCERNS.md`.
+- CVE-2025-36852 CREEP background: <https://nx.dev/blog/cve-2025-36852-critical-cache-poisoning-vulnerability-creep> - referenced (already in project context).
+- Locked foundation (grounding, not re-derived): `.planning/ARCHITECTURE-DECISION.md` (control ledger C1-C18), `.planning/REQUIREMENTS.md`, FOUND-01 reader spike `.planning/spikes/001-005`.
 
 ---
-*Architecture research (brownfield refinement) for: self-hosted Nx remote cache on GitHub-native primitives*
-*Researched: 2026-07-17*
+*Architecture research for: self-hosted Nx remote cache on GitHub-native primitives*
+*Researched: 2026-07-17. Greenfield reframe: 2026-07-18 (rebased from a subsequent-milestone refinement onto a build-from-scratch framing on the LOCKED foundation; domain findings, sources, and confidence ratings unchanged).*

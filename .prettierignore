@@ -5,6 +5,10 @@
 /.nx/workspace-data
 .nx/self-healing
 
+# Vendored Nx OpenAPI spec fixture - byte-for-byte verbatim, sha256-pinned by
+# the TEST-07 conformance drift guard; MUST NOT be reformatted (would break the hash)
+packages/github-cache/src/conformance/nx-cache-openapi.v23.1.0.json
+
 # Agent and planning docs - churny, not workspace source (D-07)
 .planning/
 CLAUDE.md

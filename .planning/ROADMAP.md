@@ -145,7 +145,28 @@ scaffold the new lib into).
   4. `nx test` for the new library is green, and a real `serve` process answers a scripted
      GET/PUT locally.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+**Wave 1**
+
+  - [ ] 01-01-PLAN.md - Scaffold the `@op-nx/github-cache` lib via `nx g @nx/js:lib` (inferred
+    targets, zero deps) + wire root tsconfig `references[]` (SRV-01) [wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+  - [ ] 01-02-PLAN.md - Authenticated E2E round-trip spine: `CacheBackend` port + writable Map
+    backend + `node:http` server happy path + timing-safe CSPRNG auth (SRV-01, SRV-02) [wave 2]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+  - [ ] 01-03-PLAN.md - Server hardening: hash validation (400 pre-backend), 2 GiB body cap
+    (413-socket-destroy), best-effort read (404)/fail-closed writes, 409 + 403 read-only seam
+    (SRV-03, SRV-04, SRV-05) [wave 3]
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+  - [ ] 01-04-PLAN.md - SC4 real `serve` entrypoint + TEST-07 conformance fixture (vendored Nx
+    spec sha256 drift guard + hard-`200` behavioral run) (TEST-07) [wave 4]
 
 **Risks**:
 
@@ -572,7 +593,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
-| 1. Walking Skeleton | 0/TBD | Not started | - |
+| 1. Walking Skeleton | 0/4 | Not started | - |
 | 2. Default Cache in CI | 0/TBD | Not started | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |

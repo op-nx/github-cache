@@ -1,4 +1,4 @@
-import type { Server } from 'node:http';
+import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CacheBackend } from '../backend/types.js';
@@ -12,7 +12,7 @@ import {
   MAX_CACHE_BODY_BYTES,
 } from './server.js';
 
-let server: Server;
+let server: http.Server;
 
 afterEach(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
@@ -330,5 +330,58 @@ describe('createCacheServer', () => {
     });
 
     expect(res.status).toBe(403);
+  });
+
+  // CR-01: a client that aborts mid-PUT-body destroys the request stream, which
+  // rejects the async handler's body-drain loop. Unguarded, that reject becomes
+  // an unhandledRejection -> process crash on Node 24 (default policy: throw).
+  // The guarded handler must fail only this request and keep serving.
+  it('does not crash on a client abort mid-PUT-body and keeps serving (CR-01)', async () => {
+    const token = generateToken();
+    server = createCacheServer(createWritableMemoryBackend(), token);
+    const base = await listen();
+    const { port } = server.address() as AddressInfo;
+
+    const rejections: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      rejections.push(reason);
+    };
+
+    process.on('unhandledRejection', onUnhandled);
+
+    try {
+      // Declare more bytes than we send, then destroy the socket mid-body so the
+      // server's body-drain stream rejects (ERR_STREAM_PREMATURE_CLOSE).
+      await new Promise<void>((resolve) => {
+        const req = http.request({
+          port,
+          method: 'PUT',
+          path: '/v1/cache/abc123',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-length': '1000',
+          },
+        });
+
+        req.on('error', () => resolve());
+        req.on('close', () => resolve());
+        req.write('partial');
+
+        setTimeout(() => req.destroy(), 50);
+      });
+
+      // Give the server's async handler a tick to reject (or not).
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      // The process must still be alive and the server still answering.
+      const res = await fetch(`${base}/v1/cache/deadbeef`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.status).toBe(404);
+      expect(rejections).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });

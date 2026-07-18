@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v0.0.1
 milestone_name: phases)
 current_phase: 0
-current_phase_name: Teardown
+current_phase_name: teardown
 status: executing
 stopped_at: Phase 0 context gathered
-last_updated: "2026-07-18T01:51:37.349Z"
+last_updated: "2026-07-18T02:23:26.171Z"
 last_activity: 2026-07-18
-last_activity_desc: roadmap regenerated + approved (greenfield MVP/vertical rebuild, 7 phases); Step 8 of new-project complete
+last_activity_desc: Phase 0 execution started
 progress:
-  total_phases: 7
+  total_phases: 1
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 5
+  completed_plans: 1
   percent: 0
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 0 - Teardown
+**Current focus:** Phase 0 — teardown
 
 ## Current Position
 
-Phase: 0 of 6 (Teardown) - first of 7 phases (0-6)
-Plan: 0 of TBD in current phase
+Phase: 0 (teardown) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-07-18 - roadmap regenerated + approved (greenfield MVP/vertical rebuild, 7 phases); Step 8 of new-project complete
+Last activity: 2026-07-18 — Phase 0 execution started
 
 Progress: [----------] 0%
 
@@ -55,6 +55,7 @@ Progress: [----------] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 0 P01 | 21 | 3 tasks | 42 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,8 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - FOUND-03: distribution = npm + JS Action; Docker container form deferred to a later milestone (CI sidecar covered by the GA background-step pattern).
 - Rebuild: the spike/PoC is deleted and rebuilt greenfield as MVP/vertical slices; teardown is Phase 0. Nx-native (`nx g @nx/workspace:remove`; `nx g` generators). Workspace shell kept.
 - Granularity = standard (7 phases). CREEP (CVE-2025-36852) is the governing threat; control ledger C1-C18 is the security spec.
+- [Phase 0]: Phase 0 teardown (00-01): removed @op-nx/github-cache PoC + siblings via nx g @nx/workspace:remove; workspace is now shell-only (@op-nx/source), graph-clean, npm ci green. D-03 cross-OS invariants (.gitattributes eol=lf, nx.json integration discriminator) preserved.
+- [Phase 0]: verdaccio remains in package-lock.json as a transitive optional peer of @nx/js (workspace-core), NOT a dangling PoC ref; downstream lockfile-scoped verdaccio greps should drop that token (PoC tokens op-nx-github-cache/@octokit/@actions/cache ARE fully absent).
 
 ### Pending Todos
 
@@ -87,7 +90,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-18T01:06:41.069Z
+Last session: 2026-07-18T02:21:25.635Z
 Stopped at: Phase 0 context gathered
 Resume file: .planning/phases/00-teardown/00-CONTEXT.md
 Next: plan Phase 0 (Teardown) - `/gsd:plan-phase 0`

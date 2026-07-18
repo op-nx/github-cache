@@ -4,3 +4,10 @@
 /.nx/cache
 /.nx/workspace-data
 .nx/self-healing
+
+# Agent and planning docs - churny, not workspace source (D-07)
+.planning/
+CLAUDE.md
+AGENTS.md
+.claude/
+.gsd-migration-backup/

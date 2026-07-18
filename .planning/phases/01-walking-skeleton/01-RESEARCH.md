@@ -489,18 +489,23 @@ it('stores then serves with Content-Length', async () => {
 
 **All contract facts (status codes, headers, media type, auth scheme, the vendored spec JSON, the hard-`200` floor) are `[VERIFIED]`/`[CITED]`, not assumed.**
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three questions were resolved by plan-phase decisions (see inline `RESOLVED:` markers).
 
 1. **`nx g @nx/js:lib` bundler choice (Claude's Discretion).**
+   - **RESOLVED (Plan 01, Task 1):** `--bundler=swc` (confirmed via mandatory `--dry-run` before commit); swc is already installed, emits real ESM under `nodenext`, and `--useProjectJson` is NOT passed (targets stay inferred, D-02).
    - What we know: schema `bundler` enum = `swc|tsc|rollup|vite|esbuild|none`, default `tsc`; `none` means "not buildable". `linter` enum `none|eslint` (workspace has NO ESLint - pass `--linter=none`). `unitTestRunner` enum `none|jest|vitest` (pass `vitest`). `directory` is REQUIRED. Base tsconfig is a TS-solution setup (`composite`, `emitDeclarationOnly`, `customConditions:['@op-nx/source']`), so a plain `tsc` build emits only `.d.ts` - JS emit needs a real compiler.
    - What's unclear: exact interaction of the generator's scaffolding with the base's `emitDeclarationOnly`.
    - Recommendation: `nx g @nx/js:lib github-cache --directory=packages/github-cache --importPath=@op-nx/github-cache --unitTestRunner=vitest --linter=none --bundler=swc --dry-run` first; inspect output; adjust; then run for real. `swc` is already installed, emits real ESM under `nodenext`, and is the common non-published-lib choice. Do NOT pass `--useProjectJson` (keep inferred config, D-02).
 
 2. **`test` vs `integration` target for the SC4 real-`serve` round-trip (Claude's Discretion).**
+   - **RESOLVED (Plan 04, Task 1):** SC4 (and all SRV-01..05 + TEST-07 specs) run under the `test` target; no `integration` target is defined this phase (Phase 1 has no cross-OS requirement — that is Phase 3).
    - What we know: `nx.json` defines a dormant `integration` target with the `{runtime:"node -p process.platform"}` cross-OS discriminator; CI already matrixes it ubuntu+windows.
    - Recommendation: Put SRV-01..05 + TEST-07 unit/behavioral specs under `test`. The SC4 "real serve answers a scripted GET/PUT" is a real-socket test but has no cross-OS requirement in Phase 1 (that is Phase 3), so `test` is acceptable and simpler. Defining an `integration` target now is optional scaffolding - reasonable but not required; planner call.
 
 3. **Re-vendoring workflow for a future Nx bump.**
+   - **RESOLVED (Plan 04, Task 2):** the re-vendoring step is documented in a comment beside `VENDORED_SPEC_SHA256` in `conformance.spec.ts` (on an Nx major bump: re-fetch the spec from the new version's docs, re-hash, update both constants).
    - What we know: the spec is a committed fixture with a pinned sha256 + pinned version string; no `node_modules` file to diff against.
    - Recommendation: Document (in a comment by `VENDORED_SPEC_SHA256`) that bumping Nx requires manually re-fetching the spec from the new version's docs, re-hashing, and updating both constants - the human step where a real `202->200`-class drift is caught. Not Phase 1 work, but the fixture comment should say so.
 

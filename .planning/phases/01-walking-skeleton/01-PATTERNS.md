@@ -23,7 +23,7 @@
 |-------------------|------|-----------|----------------|---------------|
 | `packages/github-cache/tsconfig.lib.json` | config (build) | -- (n/a) | `tsconfig.base.json` + `nx.json` build target | exact (generator-produced) |
 | `packages/github-cache/tsconfig.spec.json` | config (test) | -- (n/a) | `tsconfig.base.json` + `nx.json` test inputs | exact (generator-produced) |
-| `packages/github-cache/vitest.config.ts` | config (test-runner) | -- (n/a) | `vitest.workspace.ts` + `@nx/vitest` plugin block | role-match (generator-produced) |
+| `packages/github-cache/vitest.config.mts` | config (test-runner) | -- (n/a) | `vitest.workspace.ts` + `@nx/vitest` plugin block | role-match (generator-produced) |
 | `packages/github-cache/package.json` | config (project manifest) | -- (n/a) | root `package.json` (`@op-nx/source`) | role-match (generator-produced) |
 | `tsconfig.json` (root, **MODIFY**) | config (references) | -- (n/a) | itself (`references: []` -> add lib) | exact (self, integration point) |
 | `src/backend/types.ts` | model (port + unions) | CRUD | none -- RESEARCH.md Pattern 2 | greenfield (skeleton) |
@@ -92,13 +92,14 @@ production fileset. Generator-produced by `--unitTestRunner=vitest`. The `test` 
 
 ---
 
-### `packages/github-cache/vitest.config.ts` (config, generator-produced)
+### `packages/github-cache/vitest.config.mts` (config, generator-produced)
 
 **Analog:** `vitest.workspace.ts` (root, 4 lines -- the discovery glob) + `@nx/vitest`
 plugin block (`nx.json` L27-33).
 
-**What to copy:** The mere PRESENCE of this file makes `@nx/vitest` infer the `test`
-target and makes the root `vitest.workspace.ts` glob pick the project up. No manual wiring.
+**What to copy:** The generator emits this as `vitest.config.mts` (NOT `.ts`). The mere
+PRESENCE of this file makes `@nx/vitest` infer the `test` target and makes the root
+`vitest.workspace.ts` glob pick the project up (its glob matches `.mts`). No manual wiring.
 
 **Root glob that auto-discovers it (`vitest.workspace.ts`, whole file):**
 ```ts
@@ -108,7 +109,7 @@ export default [
 ];
 ```
 
-**Do NOT edit `vitest.workspace.ts`** -- the new `vitest.config.ts` is matched
+**Do NOT edit `vitest.workspace.ts`** -- the new `vitest.config.mts` is matched
 automatically by the existing glob. Touching the root file is unnecessary.
 
 ---
@@ -128,7 +129,7 @@ root devDeps at root `package.json` L15-29).
 
 ---
 
-### `tsconfig.json` (root) -- **MODIFY** (integration point)
+### `tsconfig.json` (root) -- **generator-modified** (integration point)
 
 **Analog:** itself. Current state (whole file):
 ```json
@@ -141,10 +142,15 @@ root devDeps at root `package.json` L15-29).
 }
 ```
 
-**What to change:** Add the new lib to `references[]` (currently `[]`, L5):
-`{ "path": "./packages/github-cache/tsconfig.lib.json" }`. This is the ONLY hand-edit to
-a shell file this phase. STRUCTURE.md L122-124 and CONTEXT.md L163 both name this as the
-required integration edit.
+**What changes:** `nx g @nx/js:lib` (via `@nx/js`'s `addProjectToTsSolutionWorkspace`)
+AUTO-ADDS the new lib to `references[]` (currently `[]`, L5) as
+`{ "path": "./packages/github-cache" }` -- the project aggregator directory (its own
+`tsconfig.json` references `tsconfig.lib.json`/`tsconfig.spec.json`), NOT
+`./packages/github-cache/tsconfig.lib.json`. This is generator-produced, not a hand-edit;
+Plan 01 Task 2 VERIFIES it is present and runs `nx sync:check`. Do NOT hand-add a second,
+differently-shaped entry -- `./packages/github-cache/tsconfig.lib.json` does not dedup
+against `./packages/github-cache`. STRUCTURE.md L122-124 and CONTEXT.md L163 name this as
+the required integration reference.
 
 ---
 

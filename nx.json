@@ -99,15 +99,7 @@
           "fileset": "{projectRoot}/**/*.{d.ts,d.cts,d.mts}",
           "dependencies": true
         },
-        {
-          "externalDependencies": [
-            "typescript",
-            "tslib",
-            "@types/node",
-            "@actions/cache",
-            "@octokit/rest"
-          ]
-        }
+        { "externalDependencies": ["typescript", "tslib", "@types/node"] }
       ]
     },
     "typecheck": {
@@ -121,17 +113,7 @@
           "fileset": "{projectRoot}/**/*.{d.ts,d.cts,d.mts}",
           "dependencies": true
         },
-        "^{projectRoot}/../../../../../../../packages/op-nx-github-cache/tsconfig.lib.json",
-        "^{projectRoot}/../../../../../../../packages/op-nx-github-cache/tsconfig.spec.json",
-        {
-          "externalDependencies": [
-            "typescript",
-            "tslib",
-            "@types/node",
-            "@actions/cache",
-            "@octokit/rest"
-          ]
-        }
+        { "externalDependencies": ["typescript", "tslib", "@types/node"] }
       ]
     }
   }

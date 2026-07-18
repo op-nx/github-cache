@@ -21,7 +21,7 @@ export function generateToken(): string {
  * lengths always match: no ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH throw and no
  * length side-channel. Never a `===` compare.
  */
-export function makeAuthGate(
+function makeAuthGate(
   expectedToken: string,
 ): (header?: string) => boolean {
   const expected = createHash('sha256').update(expectedToken).digest();

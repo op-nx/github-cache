@@ -571,7 +571,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Teardown | 5/5 | Complete   | 2026-07-18 |
+| 0. Teardown | 5/5 | Complete    | 2026-07-18 |
 | 1. Walking Skeleton | 0/TBD | Not started | - |
 | 2. Default Cache in CI | 0/TBD | Not started | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |

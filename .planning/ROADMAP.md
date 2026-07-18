@@ -145,7 +145,7 @@ scaffold the new lib into).
   4. `nx test` for the new library is green, and a real `serve` process answers a scripted
      GET/PUT locally.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 **Wave 1**
 
@@ -159,7 +159,7 @@ scaffold the new lib into).
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-  - [ ] 01-03-PLAN.md - Server hardening: hash validation (400 pre-backend), 2 GiB body cap
+  - [x] 01-03-PLAN.md - Server hardening: hash validation (400 pre-backend), 2 GiB body cap
     (413-socket-destroy), best-effort read (404)/fail-closed writes, 409 + 403 read-only seam
     (SRV-03, SRV-04, SRV-05) [wave 3]
 
@@ -593,7 +593,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
-| 1. Walking Skeleton | 2/4 | In Progress|  |
+| 1. Walking Skeleton | 3/4 | In Progress|  |
 | 2. Default Cache in CI | 0/TBD | Not started | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |

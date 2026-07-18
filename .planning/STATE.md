@@ -5,15 +5,15 @@ milestone_name: phases)
 current_phase: 1
 current_phase_name: Walking Skeleton
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-07-18T13:02:07.479Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-07-18T13:23:11.581Z"
 last_activity: 2026-07-18
 last_activity_desc: Phase 1 execution started
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 8
   percent: 50
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 1 (Walking Skeleton) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-07-18 — Phase 1 execution started
+Last activity: 2026-07-18 — Completed 01-03 (server hardening: SRV-03/04/05)
 
-Progress: [----------] 0%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [----------] 0%
 | Phase 0 P04 | 8min | 2 tasks | 0 files |
 | Phase 1 P1 | 21min | 2 tasks | 11 files |
 | Phase 01 P02 | 7 | 2 tasks | 6 files |
+| Phase 01 P03 | 12 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 1]: 01-01 scaffolded @op-nx/github-cache via nx g @nx/js:lib --bundler=tsc (NOT swc: @nx/js:swc require.resolve of @swc/cli violates D-01 zero-dep mandate); inferred build/typecheck/test targets, no project.json (D-02); lib dependencies empty (removed generator-added tslib); SRV-01 behavior deferred to Plan 01-02
 - [Phase 1]: 01-02: bearer auth compares fixed 32-byte SHA-256 digests of both tokens via crypto.timingSafeEqual (no length oracle, never ===); per-process token via crypto.randomBytes (SRV-02)
 - [Phase 1]: 01-02: RW/RO is the injected backend factory at server construction, never a caller-facing mode flag (D-04/TRUST-05); PutResult never-guard keeps forbidden->403 exhaustive (D-06); PUT success is hard 200
+- [Phase 1]: 01-03: server hardened to the full Nx status contract (SRV-03/04/05): {hash} validated ^[a-f0-9]{1,512}$ AFTER auth, BEFORE any backend call (400, backend spy proves not-called); MAX_CACHE_BODY_BYTES=2 GiB via Content-Length precheck + streaming socket-destroy (413, never unbounded buffering)
+- [Phase 1]: 01-03: best-effort read (get fault -> 404 MISS, never 5xx) vs fail-closed write (put fault -> 500, never a silent 200); a raw uncaught throw hangs the node:http socket, so put faults are caught->500 to surface an actual status
+- [Phase 1]: 01-03: createReadOnlyMemoryBackend() (put -> 'forbidden' -> 403) is the D-04 seam injected at construction, never a caller flag (TRUST-05); route capture widened to [^/]* so an empty hash reaches the 400 guard; PutResult never-guard retained (D-06)
 
 ### Pending Todos
 
@@ -102,7 +106,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-18T13:02:07.470Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-07-18T13:22:57.897Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: .planning/phases/01-walking-skeleton/01-CONTEXT.md
-Next: plan Phase 0 (Teardown) - `/gsd:plan-phase 0`
+Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

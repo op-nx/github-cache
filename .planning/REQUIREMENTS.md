@@ -21,9 +21,9 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 
 - [x] **SRV-01** (loopback bind): the HTTP server binds `127.0.0.1` only and is never reachable on a routable interface
 - [x] **SRV-02** (timing-safe auth): bearer-token auth uses a per-process CSPRNG token compared in constant time; unauthenticated or mismatched requests are rejected (401)
-- [ ] **SRV-03** (hash validation): the `{hash}` path segment is validated (bounded-length hex) and malformed hashes are rejected before any backend call
-- [ ] **SRV-04** (body-size cap): request bodies are capped at `MAX_CACHE_BODY_BYTES` (2 GB); oversized bodies are rejected per contract, never buffered unbounded
-- [ ] **SRV-05** (best-effort read): a read fault degrades to a MISS (never a 5xx that breaks the build); writes fail closed
+- [x] **SRV-03** (hash validation): the `{hash}` path segment is validated (bounded-length hex) and malformed hashes are rejected before any backend call
+- [x] **SRV-04** (body-size cap): request bodies are capped at `MAX_CACHE_BODY_BYTES` (2 GB); oversized bodies are rejected per contract, never buffered unbounded
+- [x] **SRV-05** (best-effort read): a read fault degrades to a MISS (never a 5xx that breaks the build); writes fail closed
 
 ### Testing & Safety Net
 

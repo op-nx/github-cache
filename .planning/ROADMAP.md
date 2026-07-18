@@ -85,7 +85,7 @@ requirement is delivered here).
      reframe and the PROJECT.md reconciliation were already done at planning time.) A final check
      confirms no rebuild-priming artifact remains.
 
-**Plans**: 3/5 plans executed
+**Plans**: 4/5 plans executed
 **Wave 1**
 
   - [x] 00-01-PLAN.md - Remove the PoC project + siblings, scrub nx.json/package.json, resync lockfile (SC1, SC4) [wave 1]
@@ -94,7 +94,7 @@ requirement is delivered here).
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-  - [ ] 00-04-PLAN.md - Graph-clean + green acceptance battery across the merged tree (SC1, SC3, SC4) [wave 2]
+  - [x] 00-04-PLAN.md - Graph-clean + green acceptance battery across the merged tree (SC1, SC3, SC4) [wave 2]
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -571,7 +571,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Teardown | 3/5 | In Progress|  |
+| 0. Teardown | 4/5 | In Progress|  |
 | 1. Walking Skeleton | 0/TBD | Not started | - |
 | 2. Default Cache in CI | 0/TBD | Not started | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |

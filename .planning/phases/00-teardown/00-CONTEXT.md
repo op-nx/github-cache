@@ -45,8 +45,14 @@ new capability is not (that starts Phase 1).
 ### De-priming sequence
 - **D-06:** Run `/gsd:map-codebase` to regenerate `.planning/codebase/*` against the torn-down (shell-only) workspace, then confirm no rebuild-priming artifact remains (SC5). Sequence this **LAST** in the phase - after the teardown commits land - so the regenerated map reflects the deleted-PoC state, not the pre-teardown one. (The `.planning/research/*` brownfield->greenfield reframe and the PROJECT.md reconciliation were already done at planning time; only the map regeneration remains.)
 
+### CI format gate (SC3) - added post-research
+- **D-07:** Make `nx format:check --all` green by adding the agent + planning docs to `.prettierignore`: `CLAUDE.md`, `AGENTS.md`, `.claude/`, `.planning/`. RESEARCH.md found `--all` currently exits 1 on unformatted TRACKED docs (none are workspace source) and SC5's map-codebase writes more `.planning` markdown, so the kept `--all` mechanic would ship a red gate. Keep the gate on real source only. Project-local / dogfood-safe (aligns with the `dogfood-changes-stay-consumer-safe` rule). Do NOT reformat the repo-wide docs instead (would fight the tools that generate them and churn every future plan edit). Keep the existing `.prettierignore` entries (`/dist`, `/coverage`, `/.nx/cache`, `/.nx/workspace-data`, `.nx/self-healing`). (User-confirmed 2026-07-18.)
+
+### README de-priming (SC5) - added post-research
+- **D-08:** Minimal shell rewrite of root `README.md`. The current README describes the deleted PoC (calls `op-nx-github-cache` "the only package", has a broken link) - a rebuild-priming artifact SC5 forbids. Trim to a neutral workspace-shell placeholder (project name + "greenfield rebuild in progress", no PoC references, no dead links). Do NOT pre-write Phase 6's adoption docs. (User-confirmed 2026-07-18.)
+
 ### Claude's Discretion
-- Exact `nx g @nx/workspace:remove` flags (`--forceRemove` / `--importPath` etc.) - resolve at plan/execute time against `--help`, per ROADMAP.
+- Exact `nx g @nx/workspace:remove` flags - RESEARCH.md pinned the contract: `nx g @nx/workspace:remove @op-nx/github-cache` (no `--forceRemove` needed - zero dependents; `--dry-run` verified it DELETEs `packages/op-nx-github-cache/` + UPDATEs root `tsconfig.json` only). Still resolve final flags against `--help` at execute time per ROADMAP.
 - Exact ordering of the manual directory deletions and whether they ride in the same commit as the generator run or a follow-up commit.
 - Whether the root `package.json` `integration` script (`nx run-many -t integration`) stays - recommend KEEP (project-agnostic, green no-op, matches the retained CI job).
 
@@ -103,6 +109,7 @@ new capability is not (that starts Phase 1).
 ## Deferred Ideas
 
 - **verdaccio / local-registry publish testing** -> Phase 6 (Distribution + Docs), if the npm-package publish flow wants a local-registry harness. Removed here only because it is coupled to the deleted `.verdaccio/`.
+- **PoC-era GitHub remote cache cleanup** (D-09, user-confirmed 2026-07-18): PoC-era remote Actions-cache entries + `cache-mirror-*` Release assets are DEFERRED - not a Phase 0 SC, harmless once nothing reads them post-teardown, and cleanable anytime. Do NOT delete them in this teardown (would add outward-facing remote scope beyond the SCs).
 - **Unpackaged spikes note (informational):** `.planning/spikes/MANIFEST.md` exists with no findings skill, but the spike verdicts (FOUND-01 = GitHub Releases) are already consumed into `PROJECT.md` / `.planning/ARCHITECTURE-DECISION.md`. No packaging action needed for Phase 0.
 
 None else - discussion stayed within phase scope.

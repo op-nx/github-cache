@@ -14,7 +14,15 @@ import {
 
 let server: http.Server;
 
-afterEach(() => new Promise<void>((resolve) => server.close(() => resolve())));
+// IN-08: guard the teardown -- a test that never assigns `server` (e.g. the
+// MAX_CACHE_BODY_BYTES constant test or the WR-03 throw test), or any reorder /
+// `it.only` that runs such a test first, must not throw `Cannot read properties
+// of undefined (reading 'close')` in afterEach and mask the real result.
+afterEach(async () => {
+  if (server) {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
 
 async function listen(): Promise<string> {
   await new Promise<void>((resolve) => {

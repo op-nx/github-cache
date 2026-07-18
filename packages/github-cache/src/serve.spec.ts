@@ -5,7 +5,14 @@ import { serve } from './serve.js';
 
 let server: Server;
 
-afterEach(() => new Promise<void>((resolve) => server.close(() => resolve())));
+// IN-08: guard the teardown so a test that never assigns `server`, or any
+// reorder / `it.only`, cannot throw `Cannot read properties of undefined
+// (reading 'close')` in afterEach and mask the real result.
+afterEach(async () => {
+  if (server) {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
 
 describe('serve (SC4 composition root)', () => {
   // SRV-01, non-vacuous: ServeOptions exposes no `host` field, so the bind

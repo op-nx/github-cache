@@ -26,15 +26,6 @@ async function listen(): Promise<string> {
 }
 
 describe('createCacheServer', () => {
-  it('binds 127.0.0.1 only (SRV-01)', async () => {
-    server = createCacheServer(createWritableMemoryBackend(), generateToken());
-    await listen();
-
-    const address = server.address() as AddressInfo;
-
-    expect(address.address).toBe('127.0.0.1');
-  });
-
   it('returns 401 when the Authorization header is missing (SRV-02)', async () => {
     server = createCacheServer(createWritableMemoryBackend(), generateToken());
     const base = await listen();

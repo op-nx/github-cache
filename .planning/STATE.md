@@ -6,14 +6,14 @@ current_phase: 0
 current_phase_name: teardown
 status: executing
 stopped_at: Phase 0 context gathered
-last_updated: "2026-07-18T02:30:38.910Z"
+last_updated: "2026-07-18T02:40:07.356Z"
 last_activity: 2026-07-18
 last_activity_desc: Phase 0 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 3
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 0 (teardown) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-07-18 — Phase 0 execution started
 
@@ -57,6 +57,7 @@ Progress: [----------] 0%
 *Updated after each plan completion*
 | Phase 0 P01 | 21 | 3 tasks | 42 files |
 | Phase 0 P02 | 1 | 2 tasks | 2 files |
+| Phase 00 P03 | 6min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 0]: Phase 0 teardown (00-01): removed @op-nx/github-cache PoC + siblings via nx g @nx/workspace:remove; workspace is now shell-only (@op-nx/source), graph-clean, npm ci green. D-03 cross-OS invariants (.gitattributes eol=lf, nx.json integration discriminator) preserved.
 - [Phase 0]: verdaccio remains in package-lock.json as a transitive optional peer of @nx/js (workspace-core), NOT a dangling PoC ref; downstream lockfile-scoped verdaccio greps should drop that token (PoC tokens op-nx-github-cache/@octokit/@actions/cache ARE fully absent).
 - [Phase 0]: Teardown (00-02): deleted mirror-cleanup.yml and reworked ci.yml to 5 jobs (format-check/build/typecheck/test/integration matrix) on Nx LOCAL cache only; workflow permissions reduced to contents:read (D-05, T-00-04).
+- [Phase ?]: D-07: scoped nx format:check --all to source via .prettierignore (agent/planning docs + migration backup ignored); gate green
+- [Phase ?]: D-08: root README trimmed to neutral @op-nx/source shell (no PoC refs, no dead links)
 
 ### Pending Todos
 

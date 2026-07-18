@@ -4,17 +4,17 @@ milestone: v0.0.1
 milestone_name: phases)
 current_phase: 1
 current_phase_name: Walking Skeleton
-status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-07-18T13:23:11.581Z"
+status: verifying
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-07-18T21:39:27.077Z"
 last_activity: 2026-07-18
-last_activity_desc: Phase 1 execution started
+last_activity_desc: "Completed 01-03 (server hardening: SRV-03/04/05)"
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 9
-  completed_plans: 8
-  percent: 50
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 1 (Walking Skeleton) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-18 — Completed 01-03 (server hardening: SRV-03/04/05)
 
 Progress: [█████████░] 89%
@@ -62,6 +62,7 @@ Progress: [█████████░] 89%
 | Phase 1 P1 | 21min | 2 tasks | 11 files |
 | Phase 01 P02 | 7 | 2 tasks | 6 files |
 | Phase 01 P03 | 12 | 2 tasks | 4 files |
+| Phase 01 P04 | 7 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,9 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 1]: 01-03: server hardened to the full Nx status contract (SRV-03/04/05): {hash} validated ^[a-f0-9]{1,512}$ AFTER auth, BEFORE any backend call (400, backend spy proves not-called); MAX_CACHE_BODY_BYTES=2 GiB via Content-Length precheck + streaming socket-destroy (413, never unbounded buffering)
 - [Phase 1]: 01-03: best-effort read (get fault -> 404 MISS, never 5xx) vs fail-closed write (put fault -> 500, never a silent 200); a raw uncaught throw hangs the node:http socket, so put faults are caught->500 to surface an actual status
 - [Phase 1]: 01-03: createReadOnlyMemoryBackend() (put -> 'forbidden' -> 403) is the D-04 seam injected at construction, never a caller flag (TRUST-05); route capture widened to [^/]* so an empty hash reaches the 400 guard; PutResult never-guard retained (D-06)
+- [Phase 01]: 01-04: SC4 serve() composition root binds 127.0.0.1 (SRV-01); resolvePort falls back to OS-assigned 0 on NaN/negative/out-of-range (Pitfall 7); token env read via || so a blank value mints a fresh CSPRNG token (Pitfall 8); Windows-safe entry guard via pathToFileURL(process.argv[1]).href (Pitfall 6); index.ts finalized to re-export createCacheServer + CacheBackend port types
+- [Phase 01]: 01-04: TEST-07 drift signal = sha256 of the FULL committed vendored spec (8c648a0f) vs VENDORED_SPEC_SHA256, never info.version (permanently 1.0.0, Pitfall 2); PINNED_NX_VERSION 23.1.0 (floor Nx 21+); behavioral layer asserts hard-200 (.toBe(200), never any-2xx) + 401/403/404/409 + Content-Length; the sha256 mechanism got a real RED (wrong placeholder digest) before GREEN
+- [Phase 01]: 01-04: vendored nx-cache-openapi.v23.1.0.json added to .prettierignore so it stays byte-for-byte verbatim (LF-normalized under eol=lf for cross-OS hash parity; git blob + working tree both sha256 8c648a0f); Prettier reformatting it would break the pinned digest
 
 ### Pending Todos
 
@@ -106,7 +110,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-18T13:22:57.897Z
-Stopped at: Completed 01-03-PLAN.md
-Resume file: .planning/phases/01-walking-skeleton/01-CONTEXT.md
+Last session: 2026-07-18T21:37:05.414Z
+Stopped at: Completed 01-04-PLAN.md
+Resume file: None
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

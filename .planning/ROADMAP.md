@@ -42,7 +42,7 @@ re-populates as the slices land.
 ## Phases
 
 - [x] **Phase 0: Teardown** - Strip the PoC + its cache-coupled CI; leave the Nx workspace green with a lean, cache-independent baseline CI. (completed 2026-07-18)
-- [ ] **Phase 1: Walking Skeleton** - A new lib speaks the Nx self-hosted-cache HTTP contract E2E against a trivial in-process backend, proven by a conformance fixture.
+- [x] **Phase 1: Walking Skeleton** - A new lib speaks the Nx self-hosted-cache HTTP contract E2E against a trivial in-process backend, proven by a conformance fixture. (completed 2026-07-18)
 - [ ] **Phase 2: Default Cache in CI** - Actions-cache CI-RW backend + context-derived `selectBackend` + conservative write gate + per-hash lock, dogfooded live in this repo's CI.
 - [ ] **Phase 3: Cross-Context Read** - GitHub Releases read-only reader + authenticated private-repo local read + OS-namespacing, so a cross-OS hit never serves a wrong-OS artifact.
 - [ ] **Phase 4: Publish + Retention + Observability** - The `{push,schedule}`-gated publish/sync engine + safe age-based cleanup + fail-loud observability + storage-cap graceful degradation.
@@ -145,7 +145,7 @@ scaffold the new lib into).
   4. `nx test` for the new library is green, and a real `serve` process answers a scripted
      GET/PUT locally.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 **Wave 1**
 
@@ -165,7 +165,7 @@ scaffold the new lib into).
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-  - [ ] 01-04-PLAN.md - SC4 real `serve` entrypoint + TEST-07 conformance fixture (vendored Nx
+  - [x] 01-04-PLAN.md - SC4 real `serve` entrypoint + TEST-07 conformance fixture (vendored Nx
     spec sha256 drift guard + hard-`200` behavioral run) (TEST-07) [wave 4]
 
 **Risks**:
@@ -593,7 +593,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
-| 1. Walking Skeleton | 3/4 | In Progress|  |
+| 1. Walking Skeleton | 4/4 | Complete   | 2026-07-18 |
 | 2. Default Cache in CI | 0/TBD | Not started | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |

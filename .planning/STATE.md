@@ -5,8 +5,8 @@ milestone_name: phases)
 current_phase: 1
 current_phase_name: Walking Skeleton
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-07-18T12:46:16.836Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-07-18T13:02:07.479Z"
 last_activity: 2026-07-18
 last_activity_desc: Phase 1 execution started
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 1 (Walking Skeleton) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-07-18 — Phase 1 execution started
 
@@ -60,6 +60,7 @@ Progress: [----------] 0%
 | Phase 00 P03 | 6min | 2 tasks | 2 files |
 | Phase 0 P04 | 8min | 2 tasks | 0 files |
 | Phase 1 P1 | 21min | 2 tasks | 11 files |
+| Phase 01 P02 | 7 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase ?]: D-08: root README trimmed to neutral @op-nx/source shell (no PoC refs, no dead links)
 - [Phase 0]: Teardown (00-04): SC1-SC4 acceptance battery green on merged tree - graph-clean (only @op-nx/source), ci.yml cache-coupling gone, 5 targets green no-op on local cache, D-03 invariants intact. verdaccio-in-lockfile is a confirmed @nx/js transitive optional-peer non-defect; authoritative direct-ref greps return no matches.
 - [Phase 1]: 01-01 scaffolded @op-nx/github-cache via nx g @nx/js:lib --bundler=tsc (NOT swc: @nx/js:swc require.resolve of @swc/cli violates D-01 zero-dep mandate); inferred build/typecheck/test targets, no project.json (D-02); lib dependencies empty (removed generator-added tslib); SRV-01 behavior deferred to Plan 01-02
+- [Phase 1]: 01-02: bearer auth compares fixed 32-byte SHA-256 digests of both tokens via crypto.timingSafeEqual (no length oracle, never ===); per-process token via crypto.randomBytes (SRV-02)
+- [Phase 1]: 01-02: RW/RO is the injected backend factory at server construction, never a caller-facing mode flag (D-04/TRUST-05); PutResult never-guard keeps forbidden->403 exhaustive (D-06); PUT success is hard 200
 
 ### Pending Todos
 
@@ -99,7 +102,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-18T12:45:18.142Z
-Stopped at: Phase 1 context gathered
+Last session: 2026-07-18T13:02:07.470Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: .planning/phases/01-walking-skeleton/01-CONTEXT.md
 Next: plan Phase 0 (Teardown) - `/gsd:plan-phase 0`

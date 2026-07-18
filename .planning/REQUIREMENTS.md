@@ -19,13 +19,14 @@ Grounded in `.planning/ARCHITECTURE-DECISION.md` (control ledger C1-C18). Most c
 
 Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properties of the Nx-contract HTTP server, now independently traceable.
 
-- [ ] **SRV-01** (loopback bind): the HTTP server binds `127.0.0.1` only and is never reachable on a routable interface
-- [ ] **SRV-02** (timing-safe auth): bearer-token auth uses a per-process CSPRNG token compared in constant time; unauthenticated or mismatched requests are rejected (401)
+- [x] **SRV-01** (loopback bind): the HTTP server binds `127.0.0.1` only and is never reachable on a routable interface
+- [x] **SRV-02** (timing-safe auth): bearer-token auth uses a per-process CSPRNG token compared in constant time; unauthenticated or mismatched requests are rejected (401)
 - [ ] **SRV-03** (hash validation): the `{hash}` path segment is validated (bounded-length hex) and malformed hashes are rejected before any backend call
 - [ ] **SRV-04** (body-size cap): request bodies are capped at `MAX_CACHE_BODY_BYTES` (2 GB); oversized bodies are rejected per contract, never buffered unbounded
 - [ ] **SRV-05** (best-effort read): a read fault degrades to a MISS (never a 5xx that breaks the build); writes fail closed
 
 ### Testing & Safety Net
+
 - [ ] **TEST-01**: `selectBackend` unit specs (CI-vs-local, `GITHUB_REPOSITORY` validation, `GH_TOKEN||GITHUB_TOKEN` fallthrough, malformed-repo rejection, explicit `env` param)
 - [ ] **TEST-02**: `withHashLock` concurrency spec (same-hash serializes; different concurrent; entry evicted; rejected op doesn't wedge)
 - [ ] **TEST-03**: the **publish + cleanup orchestration** (the `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is **built behind an injected client and tested**, with already-exists / not-found / other-fault branches
@@ -35,6 +36,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **TEST-07**: conformance fixture that **hashes the full vendored Nx spec** and **pins a named Nx version** (not `info.version`), asserting the server's success/401/403/404/409 + required `Content-Length`; **floor = Nx 21+ (server must return exactly `200`** — verified: the Nx client matches `200` strictly, treats `409`/`403` as graceful no-ops, and errors on any other status, so a `202` breaks it)
 
 ### Robustness
+
 - [ ] **ROBUST-01**: structural error discrimination (client `error.status`, not stderr text) on **both publish and cleanup/delete** paths; a real fault is never treated as absence
 - [ ] **ROBUST-02**: the large-body path is verified **per-primitive** (Actions-cache + **Releases** now that FOUND-01 is locked, not a generic "~2 GB"). Binding limit (spike 003): the **Releases ~2 GiB/asset ceiling coincides with the 2 GB server body cap** — an artifact at the cap sits on the failure boundary and MUST **fail loud, not silently truncate/drop**
 - [ ] **ROBUST-03**: `@actions/cache` (and version-hash-sensitive deps) pinned **exact** (not `^`); upgrades gated behind `test:act`
@@ -42,6 +44,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **ROBUST-05** (Releases 1000-asset/release cap, LOCKED-bound): the month-shard model keeps assets under the per-release cap; if a shard nonetheless reaches the **1000-asset limit**, the publish path **skips-and-warns** (workflow annotation, non-zero-free) rather than hard-failing the build — the cap degrades to a MISS-on-write, never a broken run
 
 ### Trust & CREEP-safety
+
 - [ ] **TRUST-01**: write-trust = **allowlist** (configured replaces default; else default implicit); default-deny; **no denylist**. `pull_request`/`release` are safe by GitHub scope-isolation, but the default allowlist enables them **only where GitHub's untrusted-default-branch cache guard exists**, detected from **`GITHUB_SERVER_URL`** (`github.com`/`*.ghe.com` → ON; **every GHES host → OFF, fail-closed**; no caller flag). No GA GHES has the guard today (floor unpublished); a dormant version-gate knob stays OFF until one is published. Optional spoof cross-check: `/meta` `installed_version` + `X-GitHub-Enterprise-Version` absence. The in-code gate is fork-spoofable defense-in-depth only
 - [ ] **TRUST-02**: the sync/publish gate is a **separate predicate = `{push, schedule}`** (not the write allowlist), test-locked to **reject** `pull_request`, `release`, `repository_dispatch`, `workflow_dispatch`, `merge_group`, `delete`, `registry_package`, `page_build`, and non-default refs
 - [ ] **TRUST-03**: dangerous shared-default-scope events (`pull_request_target`, `issue_comment`, fork-`workflow_run`, and any non-allowlisted trigger) are refused on the write gate; asserted by test
@@ -54,14 +57,17 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **CORR-01 (cross-OS correctness)**: the store is **OS-namespaced by default** (or the consumer requirement to OS-discriminate non-portable outputs is documented + enforced), so a cross-OS hit never serves a wrong-OS artifact (Core-Value: never a wrong result)
 
 ### Retention & Cleanup
+
 - [ ] **RETAIN-01**: **list phase aborts with zero deletions** on any non-404 fault or incomplete pagination; **delete phase** isolates per-item failures + non-zero exit. Test injects a mid-pagination fault and asserts no deletion
 - [ ] **RETAIN-02** (a later milestone - GHCR revisit trigger; N/A for Releases): the GHCR >5000-download delete refusal is non-fatal (log+continue); documented age-floor exception; recorded as a poison-remediation gap. Releases assets have no deletion wall
 - [ ] **RETAIN-03**: cleanup credential — **Releases (LOCKED):** deletion uses the same `contents:write` `GITHUB_TOKEN` that publishes (no special scope, no PAT, no owner/linkage nuance), via first-party Octokit, under a `concurrency:` group (queue, don't cancel). *(GHCR's larger cleanup surface — `delete:packages`/classic-PAT for org/unlinked packages behind a reviewed Environment, child-manifest reference-checked/fail-closed deletion — moves to the later-milestone GHCR trigger; spike 005 confirmed the in-repo `GITHUB_TOKEN` covers the same-owner case.)*
 
 ### Observability
+
 - [ ] **OBS-01**: a whole-run publish/sync failure **fails loud** (workflow annotation + non-zero exit); ship a documented "how do I know the cache is working / detect sync degradation" signal
 
 ### Consumer Adoption Docs
+
 - [ ] **DOCS-01**: **split** into a 5-minute default quickstart (Actions-cache CI-RW only) and a separate advanced guide (opt-in RO store / sync / cleanup)
 - [ ] **DOCS-02**: config reference for every `resolve*` knob **and** the Nx client vars `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` / `_ACCESS_TOKEN`; note Actions-cache 10 GB-repo LRU (monorepo thrash) and that the default composition has **no local read path**
 - [ ] **DOCS-03**: trust/security section: events that write; CREEP posture; github.com-only backstop + **GHES floor**; **never enable fork-PR send-tokens/secrets**; **default-branch-protection** + ephemeral-single-tenant-runner prerequisites; coupled-`CACHE_MIRROR_MAX_AGE_DAYS`; read-only-local-by-design; **retention = storage-hygiene, not poison-containment**; mirrored keys are anonymously public; freshness-window + mid-session-staleness caveats; (GHCR) pull-by-digest + package-visibility publish step
@@ -70,6 +76,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **DOCS-06** (CI sidecar pattern): document running `serve` as a GitHub Actions **background step** (`background: true` + an explicit **`cancel:` teardown** — mandatory, because the runner's implicit `wait-all` before post-job cleanup would otherwise hang on the never-exiting server), Nx pointed at `NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://localhost:<port>`; with the plain `&` background-process **fallback for GHES / older runners** that lack the feature. Note the consumption Action is a **JS action** (a composite action cannot declare `background:` internally); the background-step / `&` pattern serves the token-based **Releases reader**, whereas the CI-RW **Actions-cache** backend must be launched from a JS action - a plain `run:`/background step's `@actions/cache` save/restore silently no-ops (git-history-confirmed; see PITFALLS.md)
 
 ### Governance
+
 - [ ] **GOV-01**: **SECURITY.md** vulnerability-disclosure policy (required for a poisoning-class tool)
 - [ ] **GOV-02**: LICENSE (MIT)
 - [ ] **GOV-03**: a versioned **consumer-contract / semver** statement (what "breaking" means for the public surface)

@@ -112,24 +112,41 @@ export function createCacheServer(
       return;
     }
 
-    const chunks: Buffer[] = [];
-    let total = 0;
+    let bytes: Buffer;
 
-    for await (const chunk of req) {
-      total += chunk.length;
+    try {
+      const chunks: Buffer[] = [];
+      let total = 0;
 
-      if (total > maxBodyBytes) {
-        res.statusCode = 413;
-        res.end();
-        req.destroy();
+      for await (const chunk of req) {
+        total += chunk.length;
 
-        return;
+        if (total > maxBodyBytes) {
+          res.statusCode = 413;
+          res.end();
+          req.destroy();
+
+          return;
+        }
+
+        chunks.push(chunk);
       }
 
-      chunks.push(chunk);
-    }
+      bytes = Buffer.concat(chunks);
+    } catch {
+      // A stream fault mid-upload (client abort, dropped connection, a
+      // Content-Length that overstates the body -> ERR_STREAM_PREMATURE_CLOSE,
+      // or a malformed chunked body) rejects this async handler. Fail closed on
+      // the single request -- never crash the process (CR-01). No silent 200.
+      if (res.headersSent) {
+        res.destroy();
+      } else {
+        res.statusCode = 400;
+        res.end();
+      }
 
-    const bytes = Buffer.concat(chunks);
+      return;
+    }
 
     let result: PutResult;
 

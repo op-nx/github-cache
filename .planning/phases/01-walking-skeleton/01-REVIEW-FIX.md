@@ -1,11 +1,12 @@
 ---
 phase: 01-walking-skeleton
-fixed_at: 2026-07-18T22:54:44Z
+fixed_at: 2026-07-18T23:18:08Z
 review_path: .planning/phases/01-walking-skeleton/01-REVIEW.md
-iteration: 1
-findings_in_scope: 3
+iteration: 2
+findings_in_scope: 9
 fixed: 3
 skipped: 0
+no_action: 6
 status: all_fixed
 ---
 
@@ -113,5 +114,148 @@ and break the build.
 _Fixed: 2026-07-18T22:54:44Z_
 _Fixer: Claude (gsd-code-fixer)_
 _Iteration: 1_
-</content>
-</invoke>
+
+---
+
+# Phase 1: Code Review Fix Report -- Audit 2 (`--fix --all`)
+
+**Fixed at:** 2026-07-18T23:18:08Z
+**Source review:** .planning/phases/01-walking-skeleton/01-REVIEW.md (post-fix re-review, 2026-07-18T23:04:25Z)
+**Iteration:** 2
+
+**Scope:** Full `--fix --all` pass over the post-fix re-review findings (WR-02,
+WR-03, IN-02..IN-08). The prior pass's CR-01 / WR-01 / IN-01 record above is
+unchanged (those three were confirmed resolved by the re-review). Prior-pass
+WR-02 (deferred) and IN-02 (no-action) are re-adjudicated here.
+
+**Summary:**
+- Findings in scope: 9 (2 warning, 7 info)
+- Fixed: 3 (WR-03, WR-02, IN-08)
+- Skipped (fix failed / rolled back): 0
+- No-action / intentionally retained (per review disposition): 6 (IN-02..IN-07)
+
+**Verification (final, `--skip-nx-cache`):**
+- `npx nx test github-cache` -> **36 passed (36)**, 4 test files (was 35; +1 = the
+  WR-03 RED-then-GREEN regression test).
+- `npx nx typecheck github-cache` -> **Successfully ran** (incl. its `build` dep).
+- `npx nx build github-cache` -> **Successfully ran**.
+
+## Fixed Issues
+
+### WR-03: Exported `createCacheServer` accepts an empty token -- auth bypass via `Bearer ` (empty)
+
+**Severity:** Warning (SECURITY -- missing input validation at a public trust boundary)
+**Files modified:** `packages/github-cache/src/server/server.ts`, `packages/github-cache/src/server/server.spec.ts`
+**Commits:** `0a70433` (test, RED), `c933083` (fix, GREEN)
+**Applied fix (TDD RED-first):**
+- RED: added a spec asserting `createCacheServer(backend, '')` and
+  `createCacheServer(backend, '   ')` both throw `/non-empty bearer token/`.
+  Confirmed FAILING against the unguarded factory (`expected [Function] to throw
+  an error`); 35 other tests green.
+- GREEN: added a construction-time guard `if (!token || !token.trim()) throw new
+  Error('createCacheServer: a non-empty bearer token is required (SRV-02)')`
+  before `makeAuthGate(token)`. This closes the empty-credential bypass
+  (`makeAuthGate('')` set `expected = sha256('')`, so `Authorization: Bearer `
+  authenticated). The `|| !token.trim()` also rejects whitespace-only tokens; the
+  `!token` short-circuit covers a JS consumer passing `undefined` from a
+  misconfigured env var. `serve()` (`token || env || generate`) never passes an
+  empty token, so its behavior is unchanged.
+- SRV-02 constant-time property preserved: the guard runs ONCE at construction,
+  not per request. `makeAuthGate`'s per-request `timingSafeEqual` over fixed
+  32-byte SHA-256 digests is untouched -- no length side-channel introduced for
+  non-empty tokens.
+
+### WR-02: Request-handler dispatcher at the cyclomatic complexity threshold
+
+**Severity:** Warning (complexity -- fallow S1, cyc 20 / CRAP 106.4, introduced)
+**Files modified:** `packages/github-cache/src/server/server.ts`
+**Commit:** `00c2b80`
+**Applied fix (guard-order-preserving decomposition):** Extracted two
+module-private async sub-handlers, `handleGet(backend, hash, res)` and
+`handlePut(backend, hash, req, res, maxBodyBytes)`, from the ~126-line inline
+`http.createServer` arrow. The top-level callback keeps guards 1-3 inline IN
+EXACT ORDER -- route/method (404) -> auth (401) -> hash (400) -- then dispatches
+`GET -> handleGet` / `PUT -> handlePut`. `handlePut` preserves, verbatim and in
+order: (1) Content-Length fast-path 413, (2) the drain try/catch (mid-stream 413
++ fail-closed 400/`res.destroy`), (3) the SEPARATE `backend.put` try/catch ->
+500, (4) the status switch 200/409/403/500. The drain and put try/catch blocks
+were kept separate (merging would reintroduce CR-01 or swallow backend faults).
+The full guard order (route -> auth -> hash -> body-cap -> drain -> backend ->
+status) and every status code are byte-for-byte behavior-identical.
+- **Requires human verification note:** this is a security-critical file. Behavior
+  identity was verified by keeping ALL 36 existing tests green (they encode the
+  order/status contract: SRV-02/03/04/05, the 200/401/403/404/409/413/500 map,
+  and the CR-01 abort-survival test) plus a clean strict typecheck. No test was
+  weakened. A reviewer should still eyeball the diff to confirm no guard was
+  reordered, merged, or hoisted.
+
+### IN-08: Test `afterEach` hooks assume `server` was assigned
+
+**Severity:** Info (test robustness)
+**Files modified:** `packages/github-cache/src/server/server.spec.ts`, `packages/github-cache/src/serve.spec.ts`
+**Commit:** `5f2191e`
+**Applied fix:** Guarded the teardown in both suites:
+`afterEach(async () => { if (server) { await new Promise(resolve =>
+server.close(() => resolve())); } })`. Previously the unguarded
+`server.close()` threw `Cannot read properties of undefined (reading 'close')`
+if a test that never assigns `server` (the `MAX_CACHE_BODY_BYTES` constant test,
+and now the WR-03 throw test) ran first via `it.only` or a reorder, masking the
+real result. Used the minimal guard (kept the non-nullable `server` type -- no
+call-site churn); this matches `conformance.spec.ts`'s guarded pattern in
+intent. Proven by running the `MAX_CACHE_BODY_BYTES` test in isolation
+(`vitest run -t`): it now passes cleanly instead of throwing in teardown.
+
+## No-action / Intentionally Retained (per REVIEW.md disposition)
+
+### IN-02: Four "unused" devDependencies -- NO ACTION (confirmed fallow false positives)
+
+**File:** `package.json` (workspace root)
+**Decision:** Not removed. `@nx/vitest` is an Nx plugin that infers the `test`
+target via `nx.json` (invisible to fallow's ES import graph; removing it breaks
+`nx test`). `@swc-node/register`, `@swc/helpers`, and `tslib` are the SWC
+transpile toolchain + `importHelpers` runtime emit dependency. Recorded so a
+future reader does not "clean up" these and break the build. (Re-confirms the
+prior pass's IN-02 no-action.)
+
+### IN-03: 413 delivered best-effort -- `req.destroy()` can truncate the response
+
+**File:** `packages/github-cache/src/server/server.ts` (handlePut 413 branches)
+**Decision:** Left as-is per review. Deliberate DoS tradeoff -- aborting a
+multi-GiB upload immediately outweighs guaranteed 413 delivery. Fail-closed and
+safe either way; the specs already assert 413 only when it arrives. Not a
+`--fix --all` item.
+
+### IN-04: PUT drains the full body (up to 2 GiB) before backend can return 403/409
+
+**File:** `packages/github-cache/src/server/server.ts` (handlePut drain)
+**Decision:** Left as-is per review. Bounded (not unbounded) buffering, reachable
+only post-auth; acceptable for Phase 1. Upgrade path is Phase 3 (backend
+`canWrite()`/`has(hash)` to short-circuit before draining). No Phase 1 change.
+
+### IN-05: `serve()` prints the live bearer token to stdout
+
+**File:** `packages/github-cache/src/serve.ts:74`
+**Decision:** Left as-is per review. By-design for a loopback, ephemeral,
+per-process dev server -- the operator needs the generated token to configure the
+Nx client and stdout is the standard channel. Optional hardening (gate on
+`process.stdout.isTTY`) noted for if CI use is ever anticipated; not required.
+
+### IN-06: Bearer scheme match is case-sensitive (RFC 7235 says case-insensitive)
+
+**File:** `packages/github-cache/src/server/server.ts` (makeAuthGate scheme check)
+**Decision:** Left as-is per review. No practical impact -- the Nx client always
+sends `Bearer`. The token compare must stay exact regardless. Low value; not
+bundled.
+
+### IN-07: Unsupported methods return 404 instead of 405
+
+**File:** `packages/github-cache/src/server/server.ts` (top-level route/method guard)
+**Decision:** Left as-is per review. Collapsing non-GET/PUT to an opaque,
+pre-auth 404 avoids leaking route/method existence and needs no `Allow` header --
+a defensible fail-closed choice. Do not change under `--fix --all`.
+
+---
+
+_Fixed: 2026-07-18T23:18:08Z_
+_Fixer: Claude (gsd-code-fixer)_
+_Iteration: 2 (`--fix --all`)_

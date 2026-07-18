@@ -85,11 +85,11 @@ requirement is delivered here).
      reframe and the PROJECT.md reconciliation were already done at planning time.) A final check
      confirms no rebuild-priming artifact remains.
 
-**Plans**: 1/5 plans executed
+**Plans**: 2/5 plans executed
 **Wave 1**
 
   - [x] 00-01-PLAN.md - Remove the PoC project + siblings, scrub nx.json/package.json, resync lockfile (SC1, SC4) [wave 1]
-  - [ ] 00-02-PLAN.md - Rework ci.yml to the 5-job local-cache-only baseline + delete mirror-cleanup.yml (SC2, SC3) [wave 1]
+  - [x] 00-02-PLAN.md - Rework ci.yml to the 5-job local-cache-only baseline + delete mirror-cleanup.yml (SC2, SC3) [wave 1]
   - [ ] 00-03-PLAN.md - De-priming doc hygiene: .prettierignore + neutral README.md (SC3 format gate, SC5 README) [wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -571,7 +571,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Teardown | 1/5 | In Progress|  |
+| 0. Teardown | 2/5 | In Progress|  |
 | 1. Walking Skeleton | 0/TBD | Not started | - |
 | 2. Default Cache in CI | 0/TBD | Not started | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |

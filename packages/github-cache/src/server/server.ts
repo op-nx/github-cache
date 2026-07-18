@@ -55,6 +55,18 @@ export function createCacheServer(
   token: string,
   maxBodyBytes: number = MAX_CACHE_BODY_BYTES,
 ): http.Server {
+  // Fail closed at the trust boundary (WR-03/SRV-02): an empty or whitespace-only
+  // token would make expected = sha256('') and let `Authorization: Bearer `
+  // (empty credential) authenticate against an open cache. serve() never passes
+  // an empty token, but this factory is a public export a consumer can misconfigure.
+  // This construction-time guard leaves makeAuthGate's per-request constant-time
+  // compare untouched (no length side-channel for non-empty tokens).
+  if (!token || !token.trim()) {
+    throw new Error(
+      'createCacheServer: a non-empty bearer token is required (SRV-02)',
+    );
+  }
+
   const authGate = makeAuthGate(token);
 
   return http.createServer(async (req, res) => {

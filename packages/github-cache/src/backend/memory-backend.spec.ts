@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createWritableMemoryBackend } from './memory-backend.js';
+import {
+  createReadOnlyMemoryBackend,
+  createWritableMemoryBackend,
+} from './memory-backend.js';
 
 describe('createWritableMemoryBackend', () => {
   it('put stores a new hash and returns "stored"', async () => {
@@ -31,6 +34,24 @@ describe('createWritableMemoryBackend', () => {
 
   it('get of an absent hash returns a miss', async () => {
     const backend = createWritableMemoryBackend();
+
+    const result = await backend.get('deadbeef');
+
+    expect(result).toEqual({ kind: 'miss' });
+  });
+});
+
+describe('createReadOnlyMemoryBackend', () => {
+  it('put always yields "forbidden" (the 403 read-only seam, D-04)', async () => {
+    const backend = createReadOnlyMemoryBackend();
+
+    const result = await backend.put('abc123', Buffer.from('tar-bytes'));
+
+    expect(result).toBe('forbidden');
+  });
+
+  it('get still returns a valid GetResult (miss on an unseeded store)', async () => {
+    const backend = createReadOnlyMemoryBackend();
 
     const result = await backend.get('deadbeef');
 

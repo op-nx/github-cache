@@ -80,7 +80,12 @@ requirement is delivered here).
      reframe and the PROJECT.md reconciliation were already done at planning time.) A final check
      confirms no rebuild-priming artifact remains.
 
-**Plans**: TBD
+**Plans**: 5 plans
+  - [ ] 00-01-PLAN.md - Remove the PoC project + siblings, scrub nx.json/package.json, resync lockfile (SC1, SC4) [wave 1]
+  - [ ] 00-02-PLAN.md - Rework ci.yml to the 5-job local-cache-only baseline + delete mirror-cleanup.yml (SC2, SC3) [wave 1]
+  - [ ] 00-03-PLAN.md - De-priming doc hygiene: .prettierignore + neutral README.md (SC3 format gate, SC5 README) [wave 1]
+  - [ ] 00-04-PLAN.md - Graph-clean + green acceptance battery across the merged tree (SC1, SC3, SC4) [wave 2]
+  - [ ] 00-05-PLAN.md - SC5 de-priming: /gsd:map-codebase regenerate + no-trace check (SC5) [wave 3]
 
 **Risks**:
   - `nx g @nx/workspace:remove` can leave dangling references (tsconfig path aliases,
@@ -489,7 +494,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Teardown | 0/TBD | Not started | - |
+| 0. Teardown | 0/5 | Not started | - |
 | 1. Walking Skeleton | 0/TBD | Not started | - |
 | 2. Default Cache in CI | 0/TBD | Not started | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |

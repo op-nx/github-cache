@@ -8,6 +8,24 @@ let server: Server;
 afterEach(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
 describe('serve (SC4 composition root)', () => {
+  // SRV-01, non-vacuous: ServeOptions exposes no `host` field, so the bind
+  // address below is 100% determined by serve.ts's own internal choice -- the
+  // test cannot supply or influence it. This closes the false-confidence gap
+  // left by server.spec.ts's SRV-01 test, which hardcodes '127.0.0.1' in its
+  // own local listen() helper and then asserts that same test-chosen value
+  // (a tautology; see 01-REVIEW.md WR-01). If serve.ts ever bound a routable
+  // interface (e.g. '0.0.0.0') instead of loopback, this assertion fails.
+  it('binds the loopback interface only, never a routable interface (SRV-01, production bind)', async () => {
+    const running = await serve();
+    server = running.server;
+
+    const address = server.address() as AddressInfo;
+
+    expect(address.address).toBe('127.0.0.1');
+    expect(address.address).not.toBe('0.0.0.0');
+    expect(address.address).not.toBe('::');
+  });
+
   it('binds 127.0.0.1 and answers a scripted authenticated PUT then GET round-trip', async () => {
     const running = await serve();
     server = running.server;

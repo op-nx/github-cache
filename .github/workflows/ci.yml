@@ -7,7 +7,6 @@ on:
   pull_request:
 
 permissions:
-  actions: read
   contents: read
 
 jobs:
@@ -26,8 +25,6 @@ jobs:
 
   build:
     runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -35,33 +32,10 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap build, cold: no server is up yet, so this pass only writes the
-      # local cache and produces dist/bin/serve.js. It cannot itself seed the
-      # remote -- that is what the reset + second build below are for.
-      - run: npm run build
-      # Start the cache server from the JUST-BUILT binary (never a prebuilt or
-      # published copy) so CI dogfoods THIS build's server. A JS action so GitHub
-      # hands it the Actions cache runtime env, which it passes to the server.
-      - uses: ./start-cache-server
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/serve.js
-      # Break the chicken-and-egg: the bootstrap left `build` as a local hit, and
-      # a local hit is never re-uploaded, so `build` would never reach the remote
-      # (and thus never the Release mirror). Dropping the local cache forces the
-      # next build to be a genuine miss -> Nx PUTs the outputs to the server
-      # (gated to trusted events server-side). This is what makes `build` -- and
-      # any future build target -- restorable cross-OS/-arch from the mirror.
-      - run: npx nx reset
       - run: npm run build
 
   typecheck:
     runs-on: ubuntu-24.04-arm
-    # contents: read only. The Actions-cache backend authenticates with
-    # ACTIONS_RUNTIME_TOKEN (handed to the server by the start-cache-server
-    # action, a JS action), not GITHUB_TOKEN, so no actions:write is needed;
-    # writes are gated to trusted events by GitHub server-side regardless.
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -69,28 +43,10 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
-      - run: npx nx build @op-nx/github-cache
-      # A JS action so GitHub hands it the Actions cache runtime env
-      # (ACTIONS_RUNTIME_TOKEN / ACTIONS_RESULTS_URL), which it passes to the
-      # server by inheritance. Self-gates to trusted events; fails loudly if that
-      # env is missing. `command` points at the built bin directly because npm
-      # only links the bin shim when dist/ exists at install time.
-      - uses: ./start-cache-server
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run typecheck
 
-  # Unit tests are OS-portable by construction (pure logic / mocked IO), so their
-  # Nx hash is byte-identical on every OS. Running them on a single OS seeds ONE
-  # cache entry that both Linux and Windows devs hit locally -- running the matrix
-  # here would just make the second leg a redundant cache hit. OS-specific behavior
-  # lives in test-integration below.
   test:
     runs-on: ubuntu-24.04-arm
-    # See typecheck job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -98,37 +54,26 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
-      - run: npx nx build @op-nx/github-cache
-      - uses: ./start-cache-server
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run test
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
-  # so their hash carries a `{ runtime: "node -p process.platform" }` discriminator
-  # (see nx.json's integration inputs): "win32" on any Windows, "linux" on Linux, so
-  # (a) the Linux and Windows hashes differ -> BOTH matrix legs run and a Linux cache
-  # never satisfies a Windows run, and (b) a local Windows `nx integration` computes
-  # the SAME "win32" hash and HITS this cache. process.platform is compiled into node,
-  # so it is "win32" regardless of shell (PowerShell/Git-Bash/cmd) and regardless of
-  # x64-vs-arm64 or the arm64 runner's x86-64 emulation -- unlike `env:RUNNER_OS`
-  # (unset off-CI, so a local run never hits) or a plain `env` var (whose key
-  # MSYS/Git-Bash uppercases while Nx's env hasher is case-sensitive, so it would miss
-  # from a bash-launched run). Requires the Nx runtime-input cache fix (nrwl/nx#34971,
-  # in 22.7.0+; this repo is on 23.1.0) -- before it, the hasher-level cache returned
-  # a stale runtime value whenever the daemon was disabled (as it is on CI). fail-fast
-  # off so a Windows-only failure never hides the Ubuntu result. windows-11-arm also
-  # exercises start-cache-server's detached-spawn path (deferred by the selfcheck on
-  # win32).
+  # so their Nx hash carries a `{ runtime: "node -p process.platform" }`
+  # discriminator (see nx.json's integration inputs): the Linux and Windows hashes
+  # differ, so both matrix legs run and a Linux cache never satisfies a Windows
+  # run, while a local Windows `nx integration` computes the same "win32" hash and
+  # hits that cache. process.platform is compiled into node, so it is stable across
+  # shell (PowerShell/Git-Bash/cmd) and across x64-vs-arm64 or arm64 emulation --
+  # unlike `env:RUNNER_OS` (unset off-CI) or a plain `env` var (whose key MSYS
+  # uppercases while Nx's env hasher is case-sensitive). fail-fast off so a
+  # Windows-only failure never hides the Ubuntu result. This is a green no-op until
+  # Phase 1 adds an `integration` target; the ubuntu+windows matrix is kept as the
+  # cross-OS scaffold Phase 3 stands on, not dead weight.
   integration:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -136,73 +81,4 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
-      - run: npx nx build @op-nx/github-cache
-      - uses: ./start-cache-server
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run integration
-
-  # The two JS actions are otherwise exercised only on Ubuntu. These standalone
-  # self-checks cover their gate/guard/skip logic (and publish-mirror's exit-status
-  # propagation) on Windows -- paths the test matrix's cache-server start does not
-  # reach. Node built-ins only -- no npm ci. Arch has no value here (pure JS), so
-  # x64 windows-latest is fine.
-  windows-selfcheck:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.node-version'
-      - run: node start-cache-server/selfcheck.cjs
-      - run: node publish-mirror/selfcheck.cjs
-
-  publish-mirror:
-    # WAIT for every cache-producing job so their hashes are already in the Actions
-    # cache when this mirrors. But do NOT let a test/integration FAILURE block
-    # mirroring: `!cancelled()` + an explicit build-success gate keeps this running
-    # whenever build passed, regardless of the other legs (34de6eb's concern -- a
-    # single failing leg must never block build/typecheck).
-    #
-    # One leg per OS: a leg can only restore -- and therefore mirror -- the
-    # Actions-cache entries saved on ITS OWN platform. @actions/cache's version
-    # folds in the os.tmpdir() path, a `windows-only` salt, AND the compression
-    # method -- and windows-11-arm omits zstd (falls back to gzip) while ubuntu
-    # uses zstd -- so a Windows-saved entry (e.g. the OS-sensitive `integration`
-    # hash a local Windows dev is meant to hit) is unrestorable from ubuntu even
-    # with enableCrossOsArchive (actions/cache#1622). An ubuntu-only publish-mirror
-    # therefore NEVER mirrors the Windows hash; the Windows leg does. Both legs are
-    # UPLOAD-ONLY -- pruning is a separate daily workflow (mirror-cleanup.yml), so
-    # there is no cross-leg cleanup coordination here. fail-fast off so one leg's
-    # failure never cancels the other's mirroring.
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04-arm, windows-11-arm]
-    needs: [build, typecheck, test, integration]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' }}
-    # actions: read to list the Actions cache entries being mirrored
-    # (GET /repos/.../actions/caches); contents: write to upload the
-    # Release-asset mirror. Job-level permissions replace the workflow block
-    # wholesale, so actions: read must be restated here or the caches API 404s.
-    permissions:
-      actions: read
-      contents: write
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.node-version'
-          cache: 'npm'
-      - run: npm ci
-      # Bootstrap so dist/bin/publish-mirror.js exists for the action to run.
-      - run: npx nx build @op-nx/github-cache
-      # A JS action so @actions/cache's restoreCache is handed the Actions cache
-      # runtime env (there is no gh/REST download for cache content). command
-      # points at the built bin directly (the bin shim isn't linked until dist/
-      # exists at install time); token defaults to the job's GITHUB_TOKEN.
-      - uses: ./publish-mirror
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/publish-mirror.js

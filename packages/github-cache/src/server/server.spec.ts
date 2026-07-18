@@ -46,6 +46,21 @@ describe('createCacheServer', () => {
     expect(res.status).toBe(401);
   });
 
+  // WR-03: the exported factory must reject an empty/whitespace bearer token at
+  // construction. makeAuthGate('') sets expected = sha256(''), so a request
+  // sending exactly `Authorization: Bearer ` (empty credential) satisfies
+  // sha256('') === sha256('') and authenticates against an open cache. serve()
+  // masks this (token || env || generate), but createCacheServer is a public
+  // export -- it must fail closed at the trust boundary.
+  it('throws when constructed with an empty or whitespace bearer token (WR-03)', () => {
+    expect(() => createCacheServer(createWritableMemoryBackend(), '')).toThrow(
+      /non-empty bearer token/,
+    );
+    expect(() =>
+      createCacheServer(createWritableMemoryBackend(), '   '),
+    ).toThrow(/non-empty bearer token/);
+  });
+
   it('stores a PUT then serves it on GET with Content-Length (SC2 round-trip)', async () => {
     const token = generateToken();
     server = createCacheServer(createWritableMemoryBackend(), token);

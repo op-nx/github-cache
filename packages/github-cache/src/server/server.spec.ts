@@ -6,7 +6,11 @@ import {
   createReadOnlyMemoryBackend,
   createWritableMemoryBackend,
 } from '../backend/memory-backend.js';
-import { createCacheServer, generateToken, MAX_CACHE_BODY_BYTES } from './server.js';
+import {
+  createCacheServer,
+  generateToken,
+  MAX_CACHE_BODY_BYTES,
+} from './server.js';
 
 let server: Server;
 

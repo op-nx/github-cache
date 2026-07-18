@@ -28,7 +28,7 @@ const PINNED_NX_VERSION = '23.1.0';
  * is caught by a human at exactly that step.
  */
 const VENDORED_SPEC_SHA256 =
-  '0000000000000000000000000000000000000000000000000000000000000000';
+  '8c648a0f3c63bc496c56c255fd4be3022a892c48fd41eda099999308ccc529e5';
 
 let server: Server | undefined;
 
@@ -100,7 +100,11 @@ describe('Nx contract conformance (TEST-07)', () => {
       const url = `${base}/v1/cache/abc123`;
       const auth = { authorization: `Bearer ${token}` };
 
-      await fetch(url, { method: 'PUT', headers: auth, body: Buffer.from('a') });
+      await fetch(url, {
+        method: 'PUT',
+        headers: auth,
+        body: Buffer.from('a'),
+      });
       const res = await fetch(url, {
         method: 'PUT',
         headers: auth,

@@ -41,7 +41,7 @@ re-populates as the slices land.
 
 ## Phases
 
-- [ ] **Phase 0: Teardown** - Strip the PoC + its cache-coupled CI; leave the Nx workspace green with a lean, cache-independent baseline CI.
+- [x] **Phase 0: Teardown** - Strip the PoC + its cache-coupled CI; leave the Nx workspace green with a lean, cache-independent baseline CI. (completed 2026-07-18)
 - [ ] **Phase 1: Walking Skeleton** - A new lib speaks the Nx self-hosted-cache HTTP contract E2E against a trivial in-process backend, proven by a conformance fixture.
 - [ ] **Phase 2: Default Cache in CI** - Actions-cache CI-RW backend + context-derived `selectBackend` + conservative write gate + per-hash lock, dogfooded live in this repo's CI.
 - [ ] **Phase 3: Cross-Context Read** - GitHub Releases read-only reader + authenticated private-repo local read + OS-namespacing, so a cross-OS hit never serves a wrong-OS artifact.
@@ -85,7 +85,7 @@ requirement is delivered here).
      reframe and the PROJECT.md reconciliation were already done at planning time.) A final check
      confirms no rebuild-priming artifact remains.
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 **Wave 1**
 
   - [x] 00-01-PLAN.md - Remove the PoC project + siblings, scrub nx.json/package.json, resync lockfile (SC1, SC4) [wave 1]
@@ -98,7 +98,7 @@ requirement is delivered here).
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-  - [ ] 00-05-PLAN.md - SC5 de-priming: /gsd:map-codebase regenerate + no-trace check (SC5) [wave 3]
+  - [x] 00-05-PLAN.md - SC5 de-priming: /gsd:map-codebase regenerate + no-trace check (SC5) [wave 3]
 
 **Cross-cutting constraints:**
 
@@ -571,7 +571,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Teardown | 4/5 | In Progress|  |
+| 0. Teardown | 5/5 | Complete   | 2026-07-18 |
 | 1. Walking Skeleton | 0/TBD | Not started | - |
 | 2. Default Cache in CI | 0/TBD | Not started | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |

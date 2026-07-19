@@ -15,5 +15,8 @@
       "default": "./dist/index.js"
     }
   },
-  "dependencies": {}
+  "dependencies": {
+    "@actions/cache": "6.2.0",
+    "@actions/core": "3.0.1"
+  }
 }

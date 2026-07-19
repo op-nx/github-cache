@@ -353,7 +353,22 @@ TRUST-07, RETAIN-01, RETAIN-03, OBS-01.
      documented "how do I know the cache is working / detect sync degradation" signal, and a
      local `put()` always returns `403` (read-only-local). (OBS-01, TEST-06)
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+**Wave 1**
+
+  - [ ] 04-01-PLAN.md - Separate `{push,schedule}`+default-branch sync-gate predicate `isSyncTrusted`, test-locked (TRUST-02) [wave 1]
+  - [ ] 04-02-PLAN.md - Coupled retention module (`resolveMaxAgeDays`/`shardTagsForWindow`, one knob) + reader window-walk (RETAIN-01, D-07/D-08) [wave 1]
+  - [ ] 04-03-PLAN.md - `cleanupMirror` list-abort/delete-isolate engine + shared `octokitFault` helper (RETAIN-01, TEST-04, TEST-06, ROBUST-01, OBS-01) [wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+  - [ ] 04-04-PLAN.md - `publishMirror` engine: nx-cache- filter, per-OS restore, first-write-wins, ~2 GiB fail-loud, 1000-cap skip-warn (TEST-03, ROBUST-01/02/05, TRUST-07, OBS-01) [wave 2]
+  - [ ] 04-05-PLAN.md - `@octokit/rest` exact-pin + scheduled cleanup bin + `cleanup.yml` single-writer workflow (RETAIN-03, OBS-01) [wave 2]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+  - [ ] 04-06-PLAN.md - Sync-gated node24 publish operation + per-OS `ci.yml` publish matrix + live cross-OS round-trip (TRUST-02, OBS-01) [wave 3]
 
 **Risks**:
 
@@ -635,7 +650,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
 | 2. Default Cache in CI | 6/6 | Complete    | 2026-07-19 |
 | 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
-| 4. Publish + Retention + Observability | 0/TBD | Not started | - |
+| 4. Publish + Retention + Observability | 0/6 | Not started | - |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |
 | 6. Distribution + Docs + Governance | 0/TBD | Not started | - |
 

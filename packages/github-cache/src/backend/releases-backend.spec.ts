@@ -151,9 +151,8 @@ describe('createReleasesReadBackend one-time warning (D-11, T-03-03, T-03-06)', 
   // independent of test order (03-01-PLAN.md Task 2 action).
   it('warns to stderr at most once across two throwing get calls (T-03-06)', async () => {
     vi.resetModules();
-    const { createReleasesReadBackend: freshBackend } = await import(
-      './releases-backend.js'
-    );
+    const { createReleasesReadBackend: freshBackend } =
+      await import('./releases-backend.js');
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     const backend = freshBackend(throwingClient);
 
@@ -165,9 +164,8 @@ describe('createReleasesReadBackend one-time warning (D-11, T-03-03, T-03-06)', 
 
   it('never emits any credential-shaped material in the warning (T-03-03)', async () => {
     vi.resetModules();
-    const { createReleasesReadBackend: freshBackend } = await import(
-      './releases-backend.js'
-    );
+    const { createReleasesReadBackend: freshBackend } =
+      await import('./releases-backend.js');
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     const backend = freshBackend(throwingClient);
 

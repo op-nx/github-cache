@@ -98,5 +98,12 @@
     "fallow": {
       "enabled": true
     }
+  },
+  "manager": {
+    "flags": {
+      "discuss": "--analyze --auto",
+      "plan": "--research --tdd --mvp",
+      "execute": "--validate --tdd"
+    }
   }
 }

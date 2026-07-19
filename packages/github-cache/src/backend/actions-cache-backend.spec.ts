@@ -38,6 +38,20 @@ describe('createActionsCacheBackend get (ROBUST-03)', () => {
     expect(result).toEqual({ kind: 'hit', bytes });
   });
 
+  it('removes the restored archive after a HIT so no cache bytes are left on a reused runner (WR-01, T-2-11)', async () => {
+    // A real restoreCache recreates the archive on disk before get reads it;
+    // simulate that here so the cleanup assertion below is non-vacuous.
+    await writeFile(cacheArchivePath(HASH), Buffer.from('tar-bytes'));
+    restoreCache.mockResolvedValue(cacheKeyFor(HASH));
+    const backend = createActionsCacheBackend();
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(true);
+
+    await backend.get(HASH);
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(false);
+  });
+
   it('returns a miss when restoreCache resolves undefined (ROBUST-03)', async () => {
     restoreCache.mockResolvedValue(undefined);
     const backend = createActionsCacheBackend();

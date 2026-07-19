@@ -543,17 +543,19 @@ const hashes = caches
 | A2 | `octokit.rest.repos.uploadReleaseAsset` accepts a Node `Buffer` as `data` and sets the upload host from the release automatically | Standard Stack, Pattern 3 | If a Buffer is not accepted directly, wrap as needed; the pre-upload byte-length check (D-12) is independent of this and still fires. Confirm against octokit.github.io/rest.js/v22 during implementation. |
 | A3 | `getActionsCacheList` via `GITHUB_TOKEN` requires the fine-grained `actions: read` repository permission (the docs page cited `repo` scope for classic PATs) | Pitfall 3, Environment Availability | If the required scope differs, the publish job's `permissions:` block needs adjusting; the empirically-verified repo fact (PITFALLS.md: only-`contents:write` -> caches list 404s) strongly supports `actions:read`. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the publish job trigger on `schedule` as well as `push`?**
    - What we know: the sync-gate predicate ACCEPTS both `push` and `schedule` (TRUST-02); `ci.yml` currently triggers on `push: main` + `pull_request`.
    - What's unclear: whether a scheduled publish adds value (it would re-mirror whatever Actions-cache entries survive) vs. push-only.
    - Recommendation: gate in the bin (load-bearing) regardless; wire the publish job to `push` (matching existing CI) and optionally add a `schedule` trigger later. The predicate must still accept `schedule` for the test-lock.
+   - RESOLVED: 04-06 Task 2 wires the publish matrix job to `if: github.event_name == 'push'` (push-only, matching existing CI) while `isSyncTrusted` still accepts `schedule` for the test-lock (04-01). A `schedule` trigger can be added later without touching the gate.
 
 2. **Does the live cross-OS round-trip (deferred from Phase 3) run as a CI job or a local integration test?**
    - What we know: it needs real GitHub Releases + real cross-OS Actions cache, like the dogfood-seed/verify pair.
    - What's unclear: the exact shape.
    - Recommendation: model it as a CI job pair (per-OS publish -> a read-back that resolves via the Releases mirror on the other OS), analogous to `dogfood-seed`/`dogfood-verify`; the local Vitest suite covers the injected-client branches.
+   - RESOLVED: 04-06 Task 3 models it as a push-gated CI job pair (per-OS publish matrix -> a read-back invoking the real Releases reader directly), analogous to `dogfood-seed`/`dogfood-verify`; the injected-client branches stay covered by the local Vitest suite.
 
 ## Environment Availability
 

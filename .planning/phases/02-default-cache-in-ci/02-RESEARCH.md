@@ -483,19 +483,23 @@ it('drains an in-flight put before exiting on SIGTERM', async () => {
 | A4 | `keyFor(hash) = "nx-cache-" + hash` (prefix now, Phase 5 hardens the filter) | Pattern 2 | LOW - TRUST-08 (server-produced-key filter) is Phase 5; any prefix works for the Phase 2 dogfood. Planner's discretion. |
 | A5 | Pin `@actions/cache` 6.2.0 exact (vs 6.1.0) | Standard Stack | LOW - the CI canary gates it; 6.1.0 is the more-baked fallback. Gate behind the human-verify checkpoint. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three were resolved at planning time. The binding decisions live in
+> `02-06-PLAN.md` (and `02-01-PLAN.md` for the pin) under its "Resolved planning
+> decision (do not re-open)" blocks. Recorded here for traceability -- do not
+> re-open these during execution.
 
 1. **Two-job seed->verify vs single in-process save->restore for the SC5 hit assertion?**
+   - **RESOLVED: two-job `dogfood-seed` -> `dogfood-verify`, keyed on `github.run_id`** (`02-06-PLAN.md`). A single-job restore can succeed from local state while the upload is entirely broken; two jobs prove the round-trip actually crossed GitHub's cache service. `run_id` is decimal, so it already satisfies the server's `^[a-f0-9]{1,512}$` validator.
    - What we know: both exercise the real primitive; two-job with `needs:` + a `github.run_id`-scoped key is deterministic; single-job is simpler but leans on A2.
    - Recommendation: default to the **two-job seed->verify** (deterministic HIT, proves cross-job round-trip). Fall back to single-job only if the second job's token/cost is unwelcome.
 
 2. **Does the dogfood run the full `serve` HTTP server or call the backend directly?**
-   - What we know: SC5 says "runs `serve`"; ROBUST-04's SIGTERM drain is proven by a unit test regardless. Running `serve` in the action's foreground + scripted `fetch` PUT/GET exercises the full contract; calling the backend directly is thinner.
-   - Recommendation: run `serve()` in-process (foreground) + scripted PUT/GET so the dogfood covers the HTTP contract too; keeps the Windows detached-stdio pitfall out of scope.
+   - **RESOLVED: run `serve()` in-process in the action's FOREGROUND + scripted PUT/GET** (`02-06-PLAN.md`), so the dogfood covers the HTTP contract too. No detached child -- this keeps the Windows detached-stdio kill pitfall out of scope, and `background:`/`cancel:` stays Phase 6 (DOCS-06).
 
 3. **`test:act` npm script - keep the name or rename?**
-   - What we know: local `act` is infeasible (R-01). ROBUST-03 wording says "gated behind `test:act`".
-   - Recommendation: keep a `test:act` script as a thin CI-invoked wrapper that SELF-SKIPS when `ACTIONS_RESULTS_URL`/`ACTIONS_RUNTIME_TOKEN` are absent (so it is a documented no-op locally), and make the real gate the dogfood job. Or rename to `test:cache-e2e` and note the ROBUST-03 canary is the CI job. Planner call; either satisfies "upgrades gated behind an end-to-end restore".
+   - **RESOLVED: keep the name `test:act`** (`02-06-PLAN.md`) as a thin wrapper around the same built action entry that SELF-SKIPS (skip notice, exit 0) when `ACTIONS_RESULTS_URL`/`ACTIONS_RUNTIME_TOKEN` are absent. One artifact, two invocation paths; the real ROBUST-03 canary is the CI seed/verify job pair. Local `act` is infeasible (R-01: `act`'s cache server speaks only legacy v1 REST, while `@actions/cache` 6.x uses the v2 twirp `CacheService`).
 
 ## Environment Availability
 

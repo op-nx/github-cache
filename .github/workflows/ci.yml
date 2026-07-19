@@ -100,3 +100,64 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run integration
+
+  # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
+  # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the
+  # exact-pinned @actions/cache dependency (ROBUST-03): a version bump that changes
+  # the archive version hash surfaces here as a failed verify job, not a silently
+  # degraded cache. The round-trip is split across TWO jobs keyed on the workflow
+  # run id because a same-run, same-process read-back can succeed from local state
+  # while the upload never reached GitHub's cache service -- two jobs prove the
+  # bytes actually crossed the service. The jobs deliberately drive a DIRECT
+  # scripted PUT/GET through the internal action rather than real Nx cached tasks,
+  # because a task runner short-circuits on its own local hit and would leave the
+  # server inert behind a green result (Pitfall 6). NO job-level permission block is
+  # added on purpose: the runtime cache credentials (injected only into a JS action)
+  # are independent of the workflow token grant, and a job-level block would REPLACE
+  # the workflow-level grant wholesale rather than extend it. Both jobs run ONLY on
+  # the default-branch push trigger, because the write gate trusts no other trigger
+  # (push/schedule only) and the read-only path is exhaustively unit-tested instead.
+  # action.yml's main points into the build output, so each job builds first.
+  dogfood-seed:
+    # run id as the cache hash: unique per run and already all-decimal, so it
+    # satisfies the server's ^[a-f0-9]{1,512}$ hash validator with no massaging.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - uses: ./packages/github-cache
+        with:
+          hash: ${{ github.run_id }}
+          operation: seed
+        env:
+          # selectBackend hands back the writable Actions-cache backend only when a
+          # token resolves (GH_TOKEN || GITHUB_TOKEN); pass it by process inheritance
+          # into the action step, never through the workflow environment file (D-06).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dogfood-verify:
+    # Reads back exactly what dogfood-seed wrote, keyed on the same run id, so a real
+    # cross-job HIT is the only way this job passes; a MISS fails the job loudly.
+    if: github.event_name == 'push'
+    needs: dogfood-seed
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - uses: ./packages/github-cache
+        with:
+          hash: ${{ github.run_id }}
+          operation: verify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

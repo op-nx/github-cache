@@ -3,7 +3,7 @@ import {
   resolveRepoIdentity,
 } from '../lib/local-context.js';
 import * as assetNaming from '../lib/release-asset-name.js';
-import { shardTag } from '../lib/retention.js';
+import { resolveMaxAgeDays, shardTagsForWindow } from '../lib/retention.js';
 import type { CacheBackend, GetResult, PutResult } from './types.js';
 
 /**
@@ -126,6 +126,111 @@ function githubJsonHeaders(token: string): Record<string, string> {
 }
 
 /**
+ * Resolve one asset from a SINGLE month-shard release, or undefined when the shard or the
+ * asset is genuinely absent (a 404 at any step) -- the caller's cue to try the next shard
+ * in the retention window (D-08). Every non-404 status still THROWS so the port degrades it
+ * to a warned MISS: the "404 = absence, everything else is a fault" split is unchanged from
+ * the Phase 3 single-shard reader, just scoped to one shard of the walk. Discrimination is
+ * STRUCTURAL on res.status only (D-11); the status codes in thrown messages are safe, the
+ * token never is.
+ */
+async function fetchAssetFromShard(
+  repo: string,
+  token: string,
+  tag: string,
+  assetName: string,
+): Promise<Buffer | undefined> {
+  // 1. Resolve the shard release by tag. A 404 here is the ordinary cold-cache MISS for
+  // THIS shard -- the shard release has not been published in this month.
+  const releaseResponse = await fetch(
+    `${GITHUB_API}/repos/${repo}/releases/tags/${tag}`,
+    {
+      headers: githubJsonHeaders(token),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    },
+  );
+
+  if (releaseResponse.status === 404) {
+    return undefined;
+  }
+
+  if (!releaseResponse.ok) {
+    throw new Error(
+      `github-cache: release lookup failed with status ${releaseResponse.status}`,
+    );
+  }
+
+  const release = (await releaseResponse.json()) as { id: number };
+
+  // 2. Paginate the assets endpoint. NEVER read the inline release.assets array -- it is
+  // a non-paginated first-page snapshot, so a near-cap shard would read real HITs as
+  // MISSes (Pitfall 4). Increment page until a short (< 100) page.
+  let asset: { id: number } | undefined;
+
+  for (let page = 1; asset === undefined; page++) {
+    const listResponse = await fetch(
+      `${GITHUB_API}/repos/${repo}/releases/${release.id}/assets?per_page=100&page=${page}`,
+      {
+        headers: githubJsonHeaders(token),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      },
+    );
+
+    if (listResponse.status === 404) {
+      return undefined;
+    }
+
+    if (!listResponse.ok) {
+      throw new Error(
+        `github-cache: asset list failed with status ${listResponse.status}`,
+      );
+    }
+
+    const batch = (await listResponse.json()) as {
+      id: number;
+      name: string;
+    }[];
+    asset = batch.find((candidate) => candidate.name === assetName);
+
+    if (batch.length < 100) {
+      break;
+    }
+  }
+
+  if (asset === undefined) {
+    return undefined;
+  }
+
+  // 3. Download by asset id. GitHub answers with a 302 to signed storage; native fetch
+  // AUTO-FOLLOWS it and DROPS Authorization on that cross-origin hop (whatwg/fetch#1544).
+  // The signed target carries its own auth, so re-attaching the header would leak the
+  // token. Do NOT set redirect:'manual' and do NOT re-attach Authorization after the
+  // redirect.
+  const downloadResponse = await fetch(
+    `${GITHUB_API}/repos/${repo}/releases/assets/${asset.id}`,
+    {
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: 'application/octet-stream',
+      },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    },
+  );
+
+  if (downloadResponse.status === 404) {
+    return undefined;
+  }
+
+  if (!downloadResponse.ok) {
+    throw new Error(
+      `github-cache: asset download failed with status ${downloadResponse.status}`,
+    );
+  }
+
+  return Buffer.from(await downloadResponse.arrayBuffer());
+}
+
+/**
  * The real default ReleaseReadClient (D-03): the authenticated GitHub REST read
  * sequence over the native global fetch -- no HTTP dependency (D-01 zero-dep-lean).
  * This is the ONLY production ReleaseReadClient; the fake seam from Plan 01 is
@@ -182,94 +287,21 @@ export function createReleasesReadClient(
         return undefined;
       }
 
-      // 1. Resolve the shard release by tag. A 404 here is the ordinary cold-cache
-      // MISS -- the shard release has not been published yet.
-      const releaseResponse = await fetch(
-        `${GITHUB_API}/repos/${repo}/releases/tags/${shardTag()}`,
-        {
-          headers: githubJsonHeaders(token),
-          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        },
-      );
+      // D-08: walk the retention window newest-first. shardTagsForWindow is coupled to
+      // resolveMaxAgeDays (the one CACHE_MIRROR_MAX_AGE_DAYS knob, shared with cleanup),
+      // so the read window can never drift from the retention window. A 404 (shard or
+      // asset absent) on one shard moves to the next; a non-404 fault throws (degraded to
+      // a warned MISS at the port). Only exhausting every shard is a MISS -- so an asset
+      // written before a month boundary is still resolved from the next month's context.
+      for (const tag of shardTagsForWindow(resolveMaxAgeDays(env))) {
+        const bytes = await fetchAssetFromShard(repo, token, tag, assetName);
 
-      if (releaseResponse.status === 404) {
-        return undefined;
-      }
-
-      if (!releaseResponse.ok) {
-        throw new Error(
-          `github-cache: release lookup failed with status ${releaseResponse.status}`,
-        );
-      }
-
-      const release = (await releaseResponse.json()) as { id: number };
-
-      // 2. Paginate the assets endpoint. NEVER read the inline release.assets array
-      // -- it is a non-paginated first-page snapshot, so a near-cap shard would read
-      // real HITs as MISSes (Pitfall 4). Increment page until a short (< 100) page.
-      let asset: { id: number } | undefined;
-
-      for (let page = 1; asset === undefined; page++) {
-        const listResponse = await fetch(
-          `${GITHUB_API}/repos/${repo}/releases/${release.id}/assets?per_page=100&page=${page}`,
-          {
-            headers: githubJsonHeaders(token),
-            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-          },
-        );
-
-        if (listResponse.status === 404) {
-          return undefined;
-        }
-
-        if (!listResponse.ok) {
-          throw new Error(
-            `github-cache: asset list failed with status ${listResponse.status}`,
-          );
-        }
-
-        const batch = (await listResponse.json()) as {
-          id: number;
-          name: string;
-        }[];
-        asset = batch.find((candidate) => candidate.name === assetName);
-
-        if (batch.length < 100) {
-          break;
+        if (bytes !== undefined) {
+          return bytes;
         }
       }
 
-      if (asset === undefined) {
-        return undefined;
-      }
-
-      // 3. Download by asset id. GitHub answers with a 302 to signed storage; native
-      // fetch AUTO-FOLLOWS it and DROPS Authorization on that cross-origin hop
-      // (whatwg/fetch#1544). The signed target carries its own auth, so re-attaching
-      // the header would leak the token. Do NOT set redirect:'manual' and do NOT
-      // re-attach Authorization after the redirect.
-      const downloadResponse = await fetch(
-        `${GITHUB_API}/repos/${repo}/releases/assets/${asset.id}`,
-        {
-          headers: {
-            authorization: `Bearer ${token}`,
-            accept: 'application/octet-stream',
-          },
-          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        },
-      );
-
-      if (downloadResponse.status === 404) {
-        return undefined;
-      }
-
-      if (!downloadResponse.ok) {
-        throw new Error(
-          `github-cache: asset download failed with status ${downloadResponse.status}`,
-        );
-      }
-
-      return Buffer.from(await downloadResponse.arrayBuffer());
+      return undefined;
     },
   };
 }

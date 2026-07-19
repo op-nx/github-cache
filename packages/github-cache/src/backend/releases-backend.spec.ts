@@ -372,7 +372,10 @@ describe('createReleasesReadClient REST sequence (FOUND-02, D-03)', () => {
     expect(bytes).toBeUndefined();
   });
 
-  it('returns undefined when the asset name is absent across all pages (FOUND-02)', async () => {
+  it('returns undefined when the asset name is absent across all pages of every shard (FOUND-02, D-08)', async () => {
+    // Two-shard window exhausted: each shard's release exists and paginates, but neither
+    // contains the asset name, so the MISS comes only after walking the whole window
+    // (mock ordering extended to cover the second shard's release + asset-list lookups).
     mockToken.mockResolvedValue('ghs_faketoken');
     mockRepo.mockResolvedValue('op-nx/github-cache');
     vi.spyOn(globalThis, 'fetch')
@@ -381,6 +384,14 @@ describe('createReleasesReadClient REST sequence (FOUND-02, D-03)', () => {
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify([{ id: 1, name: 'someother-linux' }]), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 8 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 2, name: 'yetanother-linux' }]), {
           status: 200,
         }),
       );

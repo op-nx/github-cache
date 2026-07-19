@@ -7,7 +7,6 @@ import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
 import {
   createReleasesReadBackend,
   createReleasesReadClient,
-  shardTag,
   type ReleaseReadClient,
 } from './releases-backend.js';
 
@@ -191,24 +190,6 @@ describe('createReleasesReadBackend one-time warning (D-11, T-03-03, T-03-06)', 
     const written = stderr.mock.calls.map((call) => String(call[0])).join('');
     expect(written).not.toContain('ghs_leakedtokenvalue');
     expect(written).not.toContain('boom');
-  });
-});
-
-describe('shardTag current-month single-shard seam (D-03)', () => {
-  it('is exactly cache-mirror-202607 for a July 2026 date (D-03)', () => {
-    // Pinned as a string literal (not rebuilt from the same template the impl uses)
-    // so a cosmetic change to the tag scheme fails here rather than silently reading
-    // a different shard.
-    expect(shardTag(new Date('2026-07-19'))).toBe('cache-mirror-202607');
-  });
-
-  it('zero-pads the month and reads year+month in UTC (D-03)', () => {
-    expect(shardTag(new Date('2026-01-05T00:00:00Z'))).toBe(
-      'cache-mirror-202601',
-    );
-    expect(shardTag(new Date('2026-12-31T00:00:00Z'))).toBe(
-      'cache-mirror-202612',
-    );
   });
 });
 

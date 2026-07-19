@@ -287,7 +287,11 @@ cache from Phase 2 produces the entries the reader reads back).
      missing asset, auth failure, rate limit - degrades to a MISS rather than breaking the
      build.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+  - [ ] 03-01-PLAN.md - OS-namespaced single-source asset-name helper + read-only Releases backend over the injected client seam (CORR-01, TEST-05)
+  - [ ] 03-02-PLAN.md - three-tier local auth chain (env -> gh -> git credential) + local repo identity (FOUND-02)
+  - [ ] 03-03-PLAN.md - real default fetch client (REST sequence, pagination, redirect, fault matrix) + wire the reader into selectBackend (D-01, D-03, FOUND-02)
 
 **Risks**:
 

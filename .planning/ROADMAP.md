@@ -215,19 +215,21 @@ by the walking skeleton).
      with `@actions/cache` and other hash-sensitive deps pinned exact (not `^`) and upgrades
      gated behind a `test:act` end-to-end round-trip. (ROBUST-03)
 
-**Plans**: 6 plans
+**Plans**: 1/6 plans executed
 
 **Wave 1**
 
-  - [ ] 02-01-PLAN.md - Human legitimacy checkpoint + exact-pin `@actions/cache`/`@actions/core`
+  - [x] 02-01-PLAN.md - Human legitimacy checkpoint + exact-pin `@actions/cache`/`@actions/core`
     install + the pin guard spec (ROBUST-03) [wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
   - [ ] 02-02-PLAN.md - Default-deny `isWriteTrusted` write gate + `TRUSTED_EVENTS` allowlist,
     test-first (TRUST-03) [wave 2]
+
   - [ ] 02-03-PLAN.md - `withHashLock` per-hash serialization primitive, test-first
     (TEST-02) [wave 2]
+
   - [ ] 02-04-PLAN.md - Single-source `cacheArchivePath` (pinned name) + the Actions-cache-backed
     `CacheBackend`, test-first (ROBUST-03) [wave 2]
 
@@ -620,7 +622,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 |-------|----------------|--------|-----------|
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
-| 2. Default Cache in CI | 0/6 | Planned | - |
+| 2. Default Cache in CI | 1/6 | In Progress|  |
 | 3. Cross-Context Read | 0/TBD | Not started | - |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |

@@ -46,7 +46,10 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
   });
 
   it('CI + schedule yields a writable backend whose put is not forbidden (TEST-01)', async () => {
-    const backend = selectBackend({ ...trusted, GITHUB_EVENT_NAME: 'schedule' });
+    const backend = selectBackend({
+      ...trusted,
+      GITHUB_EVENT_NAME: 'schedule',
+    });
 
     const result = await backend.put(HASH, BYTES);
 

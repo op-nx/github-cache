@@ -242,6 +242,63 @@ describe('serve SIGTERM drain (ROBUST-04)', () => {
 
     expect(process.listeners('SIGTERM').length).toBe(before);
   });
+
+  it('a real SIGTERM event drains the in-flight put before process.exit is called (ROBUST-04)', async () => {
+    // Non-vacuous: every OTHER case in this block calls shutdown() directly,
+    // bypassing the actual process.once('SIGTERM', onSigterm) registration that
+    // production relies on. A regression where onSigterm called process.exit(0)
+    // without first awaiting shutdown() (e.g. `shutdown(); process.exit(0);`
+    // instead of `shutdown().then(() => process.exit(0))`) would still pass every
+    // test above -- they never invoke the registered listener at all. This test
+    // fires the REAL 'SIGTERM' event through process.emit (safe here because
+    // process.exit is stubbed) and proves exit is deferred until the drain
+    // actually completes.
+    //
+    // A hash distinct from every other test in this file: with-hash-lock's
+    // module-global map means the prior "never settles" case above leaves
+    // 'abcdef' permanently queued behind an abandoned promise (its gate is
+    // deliberately never released) -- reusing that hash here would wedge this
+    // test forever behind a DIFFERENT test's deliberately-hung write.
+    const fake = gatedPutBackend();
+    vi.mocked(selectBackend).mockReturnValue(fake.backend);
+
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+
+    try {
+      running = await serve();
+
+      const url = `${running.url}/v1/cache/deadbeef01`;
+      const body = Buffer.from('real-sigterm-drain');
+      const putResponse = fetch(url, {
+        method: 'PUT',
+        headers: auth(running.token),
+        body,
+      });
+
+      await fake.started; // the put has reached the backend and is in flight
+
+      process.emit('SIGTERM');
+
+      // server.close() runs synchronously inside shutdown(), before its first
+      // await -- but the drain itself is still pending on the ungated fake.
+      expect(running.server.listening).toBe(false);
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      fake.releasePut('stored');
+      await putResponse;
+
+      // Flush the microtask queue so shutdown()'s awaited race settles and its
+      // `.then(() => process.exit(0))` continuation runs.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(fake.recorded()).toEqual(body);
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
 });
 
 describe('serve write path is locked per hash (TEST-02 wiring)', () => {

@@ -1,16 +1,14 @@
 ---
 phase: 02-default-cache-in-ci
 verified: 2026-07-19T13:00:00Z
-status: human_needed
-score: 9/10 must-haves verified
-behavior_unverified: 1
+status: passed
+score: 10/10 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
-re_verification: no - initial verification
-behavior_unverified_items:
+re_verification: "resolved 2026-07-19 - the single human_needed item (live cross-job cache HIT) was confirmed on CI"
+resolved_items:
   - truth: "This repo's CI runs `serve` against the Actions-cache backend and gets a real, cross-job cache HIT on a default-branch push (ROADMAP SC5)"
-    test: "Push this branch to the default branch; open the resulting workflow run; confirm the `dogfood-seed` job reports a stored PUT (200) and the `dogfood-verify` job reports a cache HIT (GET 200) with matching bytes, keyed on the same `github.run_id`."
-    expected: "`dogfood-verify` logs 'cache HIT for <run_id> with matching bytes.' A MISS (404) or a byte mismatch means the round-trip did not reach GitHub's real Actions-cache service."
-    why_human: "The real `@actions/cache` v2 twirp protocol only runs inside a JS action on genuine GitHub-hosted CI; `ACTIONS_RUNTIME_TOKEN`/`ACTIONS_RESULTS_URL` are injected only into that runtime and cannot be faked locally. Per 02-RESEARCH.md R-01, `act` cannot back this primitive (it only implements the legacy v1 REST protocol) and this arm64/QEMU host would emulate x86 runner images even if it could. The dogfood jobs are fully built, wired, and pass every local gate (build/typecheck/test/fallow/format, the self-skipping `test:act` canary) — only the live cross-job HIT itself requires a real push-triggered workflow run, which does not yet exist on this unpushed branch."
+    evidence: "CI run 29685631933 (push to origin/main at b9c513d): all 9 jobs green. dogfood-seed logged `github-cache dogfood seed: stored 29685631933 (PUT 200)`; dogfood-verify logged `Cache hit for: nx-cache-29685631933` -> `Cache restored successfully` -> `github-cache dogfood verify: cache HIT for 29685631933 with matching bytes` (bearer token masked as ***). The run also required the lockfile fix from quick task 260719-in3, without which npm ci failed on every job. See 02-UAT.md."
 ---
 
 # Phase 2: Default Cache in CI Verification Report

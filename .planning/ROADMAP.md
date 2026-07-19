@@ -215,7 +215,7 @@ by the walking skeleton).
      with `@actions/cache` and other hash-sensitive deps pinned exact (not `^`) and upgrades
      gated behind a `test:act` end-to-end round-trip. (ROBUST-03)
 
-**Plans**: 2/6 plans executed
+**Plans**: 3/6 plans executed
 
 **Wave 1**
 
@@ -227,7 +227,7 @@ by the walking skeleton).
   - [x] 02-02-PLAN.md - Default-deny `isWriteTrusted` write gate + `TRUSTED_EVENTS` allowlist,
     test-first (TRUST-03) [wave 2]
 
-  - [ ] 02-03-PLAN.md - `withHashLock` per-hash serialization primitive, test-first
+  - [x] 02-03-PLAN.md - `withHashLock` per-hash serialization primitive, test-first
     (TEST-02) [wave 2]
 
   - [ ] 02-04-PLAN.md - Single-source `cacheArchivePath` (pinned name) + the Actions-cache-backed
@@ -622,7 +622,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 |-------|----------------|--------|-----------|
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
-| 2. Default Cache in CI | 2/6 | In Progress|  |
+| 2. Default Cache in CI | 3/6 | In Progress|  |
 | 3. Cross-Context Read | 0/TBD | Not started | - |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |

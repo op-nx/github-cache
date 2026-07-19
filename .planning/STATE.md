@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.0.1
 milestone_name: Greenfield MVP Rebuild
-current_phase: 3
-current_phase_name: Cross-Context Read
+current_phase: 03
+current_phase_name: cross-context-read
 status: executing
 stopped_at: Phase 3 context gathered (assumptions mode)
-last_updated: "2026-07-19T17:19:45.040Z"
+last_updated: "2026-07-19T17:45:00.086Z"
 last_activity: 2026-07-19
-last_activity_desc: Phase 03 planning complete
+last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 18
+  completed_plans: 16
   percent: 43
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 02 — default-cache-in-ci
+**Current focus:** Phase 03 — cross-context-read
 
 ## Current Position
 
-Phase: 3 — Cross-Context Read
-Plan: Not started
+Phase: 03 (cross-context-read) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-19 — Phase 03 planning complete
+Last activity: 2026-07-19 — Phase 03 execution started
 
 Progress: [█████████░] 89%
 
@@ -71,6 +71,7 @@ Progress: [█████████░] 89%
 | Phase 02 P04 | 5 | 2 tasks | 4 files |
 | Phase 02 P05 | 14 | 2 tasks | 4 files |
 | Phase 02 P06 | 6 | 2 tasks | 5 files |
+| Phase 03 P01 | 15min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,8 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase ?]: [Phase 02]: 02-05: selectBackend(env) is the single context-derived RW/RO decision point -- only param is the env bag; no options/2nd-arg/env var can request write (TRUST-05, proved structurally via selectBackend.length===0 AND behaviorally). Malformed GITHUB_REPOSITORY throws (fail-closed); unresolvable token degrades to read-only; token via GH_TOKEN||GITHUB_TOKEN.
 - [Phase ?]: [Phase 02]: 02-05: serve() composes selectBackend(process.env) + one inline put-decorator carrying withHashLock and in-flight tracking (server.ts untouched); RunningServer.shutdown() is a bounded SIGTERM drain (unref'd timer) so a hung write yields to SIGKILL. serve gained NO backend-injection option; specs mock the selection module (ROBUST-04).
 - [Phase 02]: 02-06: dogfood JS action (node24) runs serve() in foreground; two-job seed->verify keyed on github.run_id proves a real cross-job Actions-cache HIT (SC5). Bearer token setSecret-masked before any print; runtime creds by process inheritance only (no GITHUB_ENV); no job-level permissions block; push-trigger only. test:act self-skips off-CI - real ROBUST-03 canary is the CI job pair.
+- [Phase ?]: [Phase 03]: 03-01: releaseAssetName is the single comment-locked OS+hash asset-name source (win32->windows / darwin->macos / else linux); Phase 4 publisher MUST import it (D-05/06/07, CORR-01). Namespace-imported into releases-backend so the one derivation call site is its sole reference (G3).
+- [Phase ?]: [Phase 03]: 03-01: createReleasesReadBackend is read-only by construction (put declares zero params -> forbidden); degrade-to-MISS try/catch lives at the backend get, not the client, so an injected client that throws still MISSes; one-time credential-free stderr warner silent on the absent-asset path (D-02/D-11/SRV-05).
 
 ### Pending Todos
 
@@ -132,7 +135,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-19T14:02:58.878Z
+Last session: 2026-07-19T17:43:59.072Z
 Stopped at: Phase 3 context gathered (assumptions mode)
 Resume file: .planning/phases/03-cross-context-read/03-CONTEXT.md
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

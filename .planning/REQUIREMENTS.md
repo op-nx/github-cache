@@ -31,7 +31,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [x] **TEST-02**: `withHashLock` concurrency spec (same-hash serializes; different concurrent; entry evicted; rejected op doesn't wedge)
 - [ ] **TEST-03**: the **publish + cleanup orchestration** (the `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is **built behind an injected client and tested**, with already-exists / not-found / other-fault branches
 - [ ] **TEST-04**: cleanup bin wrapper spec (per-item isolation + non-zero exit on aggregated failure) — paired with RETAIN-01's list-phase-abort test
-- [ ] **TEST-05**: regression guards for the must-not-reopen cross-OS invariants **and** a cross-OS round-trip through the chosen reader adapter (OS-invariant + OS-sensitive hash, from each CI OS)
+- [x] **TEST-05**: regression guards for the must-not-reopen cross-OS invariants **and** a cross-OS round-trip through the chosen reader adapter (OS-invariant + OS-sensitive hash, from each CI OS)
 - [ ] **TEST-06**: date-cleanup + read-only-local covered (expired pruned; within-window retained; local `put()` always 403)
 - [x] **TEST-07**: conformance fixture that **hashes the full vendored Nx spec** and **pins a named Nx version** (not `info.version`), asserting the server's success/401/403/404/409 + required `Content-Length`; **floor = Nx 21+ (server must return exactly `200`** — verified: the Nx client matches `200` strictly, treats `409`/`403` as graceful no-ops, and errors on any other status, so a `202` breaks it)
 

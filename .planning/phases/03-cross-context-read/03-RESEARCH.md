@@ -928,22 +928,28 @@ execution on this machine or CITED to a first-party source.
 | A4 | 5-second subprocess timeout is generous enough for a cold keychain unlock | Pattern 1 | LOW-MEDIUM. A locked keychain requiring user interaction would time out and fall through to MISS rather than hang -- the correct safety direction, but a developer with a slow helper could see avoidable misses. Worth making the constant a named export so it is tunable without hunting. |
 | A5 | `objects.githubusercontent.com` is the redirect target host | Diagram | LOW. Cosmetic/documentary only -- the code never names the host, since fetch follows the redirect automatically. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three resolved during planning; each recommendation is threaded into an executable PLAN.md
+> task (verified by the plan-checker). Retained here as the decision audit trail.
 
 1. **Which shard tag should Phase 3 stub to?**
    - What we know: the month-shard model is `cache-mirror-YYYYMM`; the read-window walk is deferred to Phase 4.
    - What's unclear: whether Phase 3 should stub to the current month (computed) or a fixed constant.
    - Recommendation: compute the CURRENT month (`cache-mirror-` + `YYYYMM`) in one small helper and comment-lock it as the Phase 4 seam. It is the same amount of code as a constant, and it means the reader is already correct for the common case once Phase 4's publisher lands.
+   - RESOLVED: current-month `shardTag` stub implemented in Plan 03 Task 1.
 
 2. **Should the env override for repo identity reuse `GITHUB_REPOSITORY` or introduce a dedicated name?**
    - What we know: D-10 requires "a documented env override." `GITHUB_REPOSITORY` is already the repo's vocabulary and already validated by `GITHUB_REPOSITORY_PATTERN` in `select-backend.ts:7`.
    - What's unclear: whether reusing a runner-injected name locally is confusing.
    - Recommendation: reuse `GITHUB_REPOSITORY`. It reuses an existing validated pattern, needs no new documented knob for DOCS-02, and its CI-vs-local meaning is identical (which repo's cache). A dedicated name is a new public-surface entry for no behavioral gain.
+   - RESOLVED: `GITHUB_REPOSITORY` reused in Plan 02 Task 2 (no new public-surface knob).
 
 3. **Should the one-time warning be per-process or per-fault-class?**
    - What we know: D-11 says "concise one-time stderr warning."
    - What's unclear: one warning total, or one per distinct fault class.
    - Recommendation: one per process, total. A build that cannot reach the cache should say so once; repeating per fault class re-introduces the log spam the "one-time" wording exists to prevent.
+   - RESOLVED: one-warning-per-process rule implemented in Plan 01 Task 2.
 
 ## Environment Availability
 

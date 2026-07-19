@@ -282,15 +282,22 @@ cache from Phase 2 produces the entries the reader reads back).
   3. A cross-OS round-trip test restores both an OS-invariant and an OS-sensitive artifact
      published from each CI OS (ubuntu + windows) through the Releases reader, and asserts a
      cross-OS lookup returns a correct hit or a MISS - never a wrong-OS artifact. (TEST-05)
+     Scope note (CONTEXT.md D-12): Phase 3 satisfies this with an injected-fake cross-OS
+     round-trip (the real publisher does not exist until Phase 4); the live CI-published leg
+     is deferred to Phase 4 and was already proven on paper by spike 005 (run 29613149528).
 
   4. The local reader is read-only by construction (no local write path) and any read fault -
      missing asset, auth failure, rate limit - degrades to a MISS rather than breaking the
      build.
 
 **Plans**: 3 plans
+**Wave 1**
 
   - [ ] 03-01-PLAN.md - OS-namespaced single-source asset-name helper + read-only Releases backend over the injected client seam (CORR-01, TEST-05)
   - [ ] 03-02-PLAN.md - three-tier local auth chain (env -> gh -> git credential) + local repo identity (FOUND-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
   - [ ] 03-03-PLAN.md - real default fetch client (REST sequence, pagination, redirect, fault matrix) + wire the reader into selectBackend (D-01, D-03, FOUND-02)
 
 **Risks**:

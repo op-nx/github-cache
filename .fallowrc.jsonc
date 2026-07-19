@@ -1,0 +1,36 @@
+{
+  // This file is JSONC: fallow reads these comments; generic JSON tools may not.
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+
+  // Manual entry points fallow cannot infer from internal imports. Both are
+  // defensive/documentary: fallow currently credits them via package.json
+  // "exports" plus test imports, but declaring them keeps them reachable if
+  // the tests are ever refactored.
+  "entry": [
+    // Public package barrel: reachable only via the package.json "exports"
+    // field, not internal imports.
+    "packages/github-cache/src/index.ts",
+    // CLI composition root: invoked via a pathToFileURL(main) guard, never imported.
+    "packages/github-cache/src/serve.ts",
+  ],
+
+  // Files outside the product reachability graph, declared so a whole-repo
+  // dead-code run is clean without suppressing any real product finding.
+  "ignorePatterns": [
+    // CI-monitor agent skill scripts, mirrored identically across .github/skills/
+    // and .opencode/skills/; they run standalone as agent tooling, not product code.
+    "**/skills/monitor-ci/scripts/*.mjs",
+    // sha256-pinned vendored Nx OpenAPI fixture, referenced only by conformance.spec.ts.
+    "packages/github-cache/src/conformance/nx-cache-openapi.v23.1.0.json",
+  ],
+
+  // Load-bearing at build/test time but not observable as ES imports. Exact
+  // string match (not glob); exempts each from BOTH unused-dependency and
+  // unlisted-dependency detection. Removing any of these breaks the build.
+  "ignoreDependencies": [
+    "@nx/vitest", // Nx plugin that INFERS the `test` target via nx.json
+    "@swc-node/register", // SWC transpile hook for the test runner
+    "@swc/helpers", // SWC runtime helpers
+    "tslib", // TS importHelpers emit runtime
+  ],
+}

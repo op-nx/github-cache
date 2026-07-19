@@ -1,0 +1,28 @@
+# INTERNAL to this repository's CI dogfood ONLY. This is NOT the published,
+# enumerated consumer surface -- that is Phase 6. It exists solely to prove the
+# Actions-cache backend end-to-end in this repo's own CI (ROADMAP SC5) and to
+# gate an @actions/cache upgrade (ROBUST-03); it is not meant to be consumed by
+# any other workspace.
+#
+# `main` points into the BUILD OUTPUT (dist/action/index.js), not into src, so
+# any job that uses this action MUST build the package first. The CI jobs run
+# `npm run build` before the action step, and `test:act` runs `nx build github-cache`
+# before invoking the same built entry.
+name: 'github-cache dogfood (internal)'
+description: >-
+  Internal CI dogfood for this repository only. Runs serve() against the
+  Actions-cache backend in its own foreground process and drives one scripted PUT
+  or GET to prove a real cache round-trip. NOT the published consumer action (that
+  is Phase 6).
+inputs:
+  hash:
+    description: 'Cache hash to seed or verify (the workflow run id in CI).'
+    required: true
+  operation:
+    description: >-
+      Which HTTP verb this dogfood drives: 'seed' (PUT) or 'verify' (GET). It does
+      NOT affect read-vs-write capability, which is derived from runtime context.
+    required: true
+runs:
+  using: 'node24'
+  main: 'dist/action/index.js'

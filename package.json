@@ -10,7 +10,8 @@
     "format": "nx format:write",
     "format:check": "nx format:check",
     "fallow": "fallow dead-code",
-    "fallow:ci": "fallow dead-code --fail-on-issues"
+    "fallow:ci": "fallow dead-code --fail-on-issues",
+    "test:act": "npx nx build github-cache && node packages/github-cache/dist/action/index.js"
   },
   "private": true,
   "dependencies": {},

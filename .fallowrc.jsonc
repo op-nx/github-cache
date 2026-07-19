@@ -12,6 +12,10 @@
     "packages/github-cache/src/index.ts",
     // CLI composition root: invoked via a pathToFileURL(main) guard, never imported.
     "packages/github-cache/src/serve.ts",
+    // JS-action entry: the runner invokes it as action.yml's `main` (built to
+    // dist/action/index.js); it is never imported, so reachability analysis
+    // cannot infer it. Internal CI dogfood only (not the Phase 6 public surface).
+    "packages/github-cache/src/action/index.ts",
   ],
 
   // Files outside the product reachability graph, declared so a whole-repo

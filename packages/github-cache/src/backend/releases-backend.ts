@@ -3,6 +3,7 @@ import {
   resolveRepoIdentity,
 } from '../lib/local-context.js';
 import * as assetNaming from '../lib/release-asset-name.js';
+import { shardTag } from '../lib/retention.js';
 import type { CacheBackend, GetResult, PutResult } from './types.js';
 
 /**
@@ -122,25 +123,6 @@ function githubJsonHeaders(token: string): Record<string, string> {
     accept: 'application/vnd.github+json',
     'x-github-api-version': '2022-11-28',
   };
-}
-
-/**
- * The month-shard release tag the reader looks in: `cache-mirror-` plus the current
- * UTC year and zero-padded month (e.g. cache-mirror-202607).
- *
- * ponytail: single-shard stub, current month only. The retention read-window walk
- * (shardTagsForWindow, coupled to CACHE_MIRROR_MAX_AGE_DAYS) is Phase 4's concern;
- * Phase 3 deliberately reads exactly one known location so the reader is already
- * correct for the common case the moment Phase 4's publisher lands. Upgrade path:
- * replace this single call site with the Phase 4 read-window walk. Computed from the
- * clock (not a fixed constant) because it is the same amount of code yet already
- * tracks the current month. The exact produced tag is pinned by the spec.
- */
-export function shardTag(date: Date = new Date()): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-
-  return `cache-mirror-${year}${month}`;
 }
 
 /**

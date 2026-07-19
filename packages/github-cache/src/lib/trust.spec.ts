@@ -20,20 +20,29 @@ const REFUSED_EVENTS = [
 
 describe('isWriteTrusted', () => {
   it('trusts push inside GitHub Actions (TRUST-03)', () => {
-    const result = isWriteTrusted({ GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'push' });
+    const result = isWriteTrusted({
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'push',
+    });
 
     expect(result).toBe(true);
   });
 
   it('trusts schedule inside GitHub Actions (TRUST-03)', () => {
-    const result = isWriteTrusted({ GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'schedule' });
+    const result = isWriteTrusted({
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'schedule',
+    });
 
     expect(result).toBe(true);
   });
 
   for (const event of REFUSED_EVENTS) {
     it(`refuses ${event} even inside GitHub Actions (TRUST-03)`, () => {
-      const result = isWriteTrusted({ GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: event });
+      const result = isWriteTrusted({
+        GITHUB_ACTIONS: 'true',
+        GITHUB_EVENT_NAME: event,
+      });
 
       expect(result).toBe(false);
     });
@@ -52,7 +61,10 @@ describe('isWriteTrusted', () => {
   });
 
   it('refuses when GITHUB_ACTIONS is not exactly "true" (TRUST-03)', () => {
-    const result = isWriteTrusted({ GITHUB_ACTIONS: 'false', GITHUB_EVENT_NAME: 'push' });
+    const result = isWriteTrusted({
+      GITHUB_ACTIONS: 'false',
+      GITHUB_EVENT_NAME: 'push',
+    });
 
     expect(result).toBe(false);
   });

@@ -12,7 +12,12 @@ vi.mock('@actions/cache');
 
 const saveCache = vi.mocked(cache.saveCache);
 
-const HASH = 'abc123';
+// A hash UNIQUE to this spec: the writable-path cases drive the Actions backend's
+// put, which writes cacheArchivePath(HASH) to the shared tmpdir. Vitest runs spec
+// files in parallel workers that share the filesystem, so reusing another spec's
+// hash (e.g. actions-cache-backend.spec.ts's 'abc123') would race on the same
+// temp file. Keep this value distinct from every other spec's hash.
+const HASH = 'selectbackendfixture';
 const BYTES = Buffer.from('tar-bytes');
 
 // A well-formed trusted CI context: Actions on, a trusted event, a valid

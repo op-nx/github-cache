@@ -1,9 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  resolveLocalReadToken,
+  resolveRepoIdentity,
+} from '../lib/local-context.js';
 import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
 import {
   createReleasesReadBackend,
+  createReleasesReadClient,
+  shardTag,
   type ReleaseReadClient,
 } from './releases-backend.js';
+
+// The real default ReleaseReadClient resolves the developer's token and repo
+// identity through local-context, which is subprocess-backed (gh / git) on a real
+// machine. Mock that module so these unit tests never spawn gh/git or touch a
+// keychain -- and so CI stays green on a runner with no gh installed. The REST
+// layer itself is exercised by spying on the global fetch (03-PATTERNS.md No
+// Analog Found: mocked global fetch returning crafted Response objects).
+vi.mock('../lib/local-context.js');
+
+const mockToken = vi.mocked(resolveLocalReadToken);
+const mockRepo = vi.mocked(resolveRepoIdentity);
 
 // Safe to reuse short hashes shared with other specs: this spec touches NO
 // filesystem -- the fake client is a plain in-memory Map -- so there is no shared
@@ -174,5 +191,244 @@ describe('createReleasesReadBackend one-time warning (D-11, T-03-03, T-03-06)', 
     const written = stderr.mock.calls.map((call) => String(call[0])).join('');
     expect(written).not.toContain('ghs_leakedtokenvalue');
     expect(written).not.toContain('boom');
+  });
+});
+
+describe('shardTag current-month single-shard seam (D-03)', () => {
+  it('is exactly cache-mirror-202607 for a July 2026 date (D-03)', () => {
+    // Pinned as a string literal (not rebuilt from the same template the impl uses)
+    // so a cosmetic change to the tag scheme fails here rather than silently reading
+    // a different shard.
+    expect(shardTag(new Date('2026-07-19'))).toBe('cache-mirror-202607');
+  });
+
+  it('zero-pads the month and reads year+month in UTC (D-03)', () => {
+    expect(shardTag(new Date('2026-01-05T00:00:00Z'))).toBe(
+      'cache-mirror-202601',
+    );
+    expect(shardTag(new Date('2026-12-31T00:00:00Z'))).toBe(
+      'cache-mirror-202612',
+    );
+  });
+});
+
+describe('createReleasesReadClient no-anonymous-request guarantee (FOUND-02, D-09/D-10)', () => {
+  it('returns undefined and issues ZERO fetches when no token resolves (D-09)', async () => {
+    // Non-vacuous: asserts the fetch spy recorded ZERO calls, not merely that the
+    // result is undefined. A private repo must never be probed unauthenticated --
+    // the reader MISSES rather than dropping to the anonymous 60/hr tier (D-09).
+    mockToken.mockResolvedValue(undefined);
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const bytes = await createReleasesReadClient({}).fetchAsset('abc123-linux');
+
+    expect(bytes).toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined and issues ZERO fetches when the repo identity is unresolved (D-10)', async () => {
+    // Non-vacuous: zero fetch calls, not merely undefined -- with no repo identity
+    // the reader never guesses another repository's namespace and never probes.
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue(undefined);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const bytes = await createReleasesReadClient({}).fetchAsset('abc123-linux');
+
+    expect(bytes).toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('createReleasesReadClient REST sequence (FOUND-02, D-03)', () => {
+  it('resolves asset bytes on the happy path: release 200 -> assets 200 with the name -> download 200 (FOUND-02)', async () => {
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 7 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 42, name: 'abc123-linux' }]), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from('cache-bytes'), { status: 200 }),
+      );
+
+    const bytes = await createReleasesReadClient({}).fetchAsset('abc123-linux');
+
+    expect(bytes).toEqual(Buffer.from('cache-bytes'));
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('paginates: requests page 2 when page 1 returns a full page of 100 not containing the name (D-03)', async () => {
+    // Non-vacuous: page 1 is a FULL page of 100 that does NOT contain the asset, so
+    // a reader that stopped at page 1 (or read the inline release.assets snapshot)
+    // would MISS a real HIT. The asset lives on page 2; the page query must increment.
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    const fullFirstPage = Array.from({ length: 100 }, (_, index) => ({
+      id: index,
+      name: `other-${index}-linux`,
+    }));
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 7 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(fullFirstPage), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 999, name: 'abc123-linux' }]), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from('page2-bytes'), { status: 200 }),
+      );
+
+    const bytes = await createReleasesReadClient({}).fetchAsset('abc123-linux');
+
+    expect(bytes).toEqual(Buffer.from('page2-bytes'));
+    expect(String(fetchSpy.mock.calls[1][0])).toContain('page=1');
+    expect(String(fetchSpy.mock.calls[2][0])).toContain('page=2');
+  });
+
+  it('downloads with Accept octet-stream and a bearer header, and never sets redirect manual (D-03)', async () => {
+    // Non-vacuous: native fetch drops Authorization on the cross-origin 302 to signed
+    // storage by spec (whatwg/fetch#1544). Forcing manual redirect handling or
+    // re-attaching the header would leak the token to third-party storage. Assert the
+    // download carries the right headers AND that the redirect option is simply absent.
+    mockToken.mockResolvedValue('ghs_downloadtoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 7 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 42, name: 'abc123-linux' }]), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from('bytes'), { status: 200 }),
+      );
+
+    await createReleasesReadClient({}).fetchAsset('abc123-linux');
+
+    const downloadInit = fetchSpy.mock.calls[2][1] as unknown as {
+      headers: Record<string, string>;
+      redirect?: string;
+    };
+
+    expect(downloadInit.headers.accept).toBe('application/octet-stream');
+    expect(downloadInit.headers.authorization).toBe('Bearer ghs_downloadtoken');
+    expect(downloadInit.redirect).toBeUndefined();
+  });
+
+  it('returns undefined on a shard 404 -- the ordinary cold-cache MISS (FOUND-02)', async () => {
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 404 }),
+    );
+
+    const bytes = await createReleasesReadClient({}).fetchAsset('abc123-linux');
+
+    expect(bytes).toBeUndefined();
+  });
+
+  it('returns undefined when the asset name is absent across all pages (FOUND-02)', async () => {
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 7 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 1, name: 'someother-linux' }]), {
+          status: 200,
+        }),
+      );
+
+    const bytes = await createReleasesReadClient({}).fetchAsset('abc123-linux');
+
+    expect(bytes).toBeUndefined();
+  });
+});
+
+describe('createReleasesReadClient fault matrix through the backend (SRV-05, D-11)', () => {
+  it.each([401, 403, 429, 500])(
+    'degrades a %i on the release lookup to a MISS through the backend (SRV-05)',
+    async (status) => {
+      mockToken.mockResolvedValue('ghs_faketoken');
+      mockRepo.mockResolvedValue('op-nx/github-cache');
+      vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(null, { status }),
+      );
+      const backend = createReleasesReadBackend(createReleasesReadClient({}));
+
+      expect(await backend.get('abc123')).toEqual({ kind: 'miss' });
+    },
+  );
+
+  it('degrades a rejected fetch (network throw) to a MISS through the backend (SRV-05)', async () => {
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('network down'),
+    );
+    const backend = createReleasesReadBackend(createReleasesReadClient({}));
+
+    expect(await backend.get('abc123')).toEqual({ kind: 'miss' });
+  });
+
+  it('a 404 shard is a silent MISS through the backend: no stderr warning (D-11)', async () => {
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 404 }),
+    );
+    const backend = createReleasesReadBackend(createReleasesReadClient({}));
+
+    const result = await backend.get('abc123');
+
+    expect(result).toEqual({ kind: 'miss' });
+    expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it('a non-404 fault warns on stderr exactly once through the backend (SRV-05, D-11)', async () => {
+    // The warned flag is module-level, so re-import a FRESH module (fresh flag) and
+    // reconfigure the freshly-mocked resolvers, keeping the once-per-process
+    // assertion independent of test order (mirrors the port warning tests above).
+    vi.resetModules();
+    const localContext = await import('../lib/local-context.js');
+    vi.mocked(localContext.resolveLocalReadToken).mockResolvedValue(
+      'ghs_faketoken',
+    );
+    vi.mocked(localContext.resolveRepoIdentity).mockResolvedValue(
+      'op-nx/github-cache',
+    );
+    const {
+      createReleasesReadBackend: freshBackend,
+      createReleasesReadClient: freshClient,
+    } = await import('./releases-backend.js');
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 500 }),
+    );
+
+    await freshBackend(freshClient({})).get('abc123');
+
+    expect(stderr).toHaveBeenCalledTimes(1);
   });
 });

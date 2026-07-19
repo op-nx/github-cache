@@ -2,6 +2,11 @@ import { rm } from 'node:fs/promises';
 import * as cache from '@actions/cache';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
+import {
+  resolveLocalReadToken,
+  resolveRepoIdentity,
+} from './local-context.js';
+import { releaseAssetName } from './release-asset-name.js';
 import { resolveGitHubToken, selectBackend } from './select-backend.js';
 
 // @actions/cache only actually works inside a JS action on real CI, so the
@@ -9,6 +14,14 @@ import { resolveGitHubToken, selectBackend } from './select-backend.js';
 // it -- exactly as actions-cache-backend.spec.ts does. Auto-mock hoists above the
 // imports and replaces every export with a vi.fn().
 vi.mock('@actions/cache');
+
+// The local/untrusted branch now returns the REAL Releases reader (D-01), whose
+// default client resolves the developer's token and repo identity via local-context
+// (subprocess-backed on a real machine). Mock that module so this unit layer never
+// spawns gh/git, touches a keychain, or reaches api.github.com -- and so CI stays
+// green on a runner with no gh installed. Resolvers default to undefined here, which
+// makes the local branch's get MISS with zero network (D-09/D-11).
+vi.mock('./local-context.js');
 
 const saveCache = vi.mocked(cache.saveCache);
 
@@ -93,10 +106,44 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
   });
 
   it('a local developer machine (no GITHUB_ACTIONS) yields a read-only backend: put forbidden and get misses (TEST-01)', async () => {
+    // The local branch now returns the REAL Releases reader. local-context is mocked
+    // (top of file) so its resolvers yield undefined -- fetchAsset returns before any
+    // request, so get MISSES with zero spawn and zero network (D-09/D-11). This keeps
+    // the unit layer off a real keychain/gh/git/api.github.com and green on CI.
     const backend = selectBackend({ GITHUB_REPOSITORY: 'op-nx/github-cache' });
 
     expect(await backend.put(HASH, BYTES)).toBe('forbidden');
     expect(await backend.get(HASH)).toEqual({ kind: 'miss' });
+  });
+
+  it('wires the REAL Releases reader into the local branch: a hit flows through with mocked resolvers + fetch (D-01, FOUND-02)', async () => {
+    // Non-vacuous: this would FAIL against the old createReadOnlyMemoryBackend
+    // placeholder (its store is empty, so get always missed). A hit here proves the
+    // local branch now constructs the real reader wired to the real default client,
+    // and that selectBackend stayed synchronous -- the async token/repo resolution
+    // ran at get-time inside fetchAsset, not at construction (TRUST-05).
+    vi.mocked(resolveLocalReadToken).mockResolvedValue('ghs_faketoken');
+    vi.mocked(resolveRepoIdentity).mockResolvedValue('op-nx/github-cache');
+    const assetName = releaseAssetName(HASH);
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 7 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 42, name: assetName }]), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from('hit-bytes'), { status: 200 }),
+      );
+
+    const backend = selectBackend({ GITHUB_REPOSITORY: 'op-nx/github-cache' });
+    const result = await backend.get(HASH);
+
+    expect(result).toEqual({ kind: 'hit', bytes: Buffer.from('hit-bytes') });
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
   });
 
   it('never mutates process.env -- every case is driven by the explicit env argument (TEST-01)', () => {

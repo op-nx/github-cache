@@ -332,6 +332,40 @@ describe('createReleasesReadClient REST sequence (FOUND-02, D-03)', () => {
     expect(downloadInit.redirect).toBeUndefined();
   });
 
+  it('bounds every GitHub REST fetch with an AbortSignal so a stalled connection degrades to a MISS (SRV-05, HI-02)', async () => {
+    // Non-vacuous: a wedged connection to api.github.com must abort within a bound
+    // (mirroring the subprocess HELPER_TIMEOUT_MS) rather than hang the build for
+    // undici's multi-minute default. Assert each of the three fetches -- release
+    // lookup, asset list, download -- carries an AbortSignal; an unbounded fetch
+    // leaves signal undefined. The abort path itself degrades to a MISS via the
+    // rejected-fetch fault handling already asserted in the fault matrix below.
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 7 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 42, name: 'abc123-linux' }]), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from('bytes'), { status: 200 }),
+      );
+
+    await createReleasesReadClient({}).fetchAsset('abc123-linux');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+
+    for (const call of fetchSpy.mock.calls) {
+      const init = call[1] as unknown as { signal?: unknown };
+
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
   it('returns undefined on a shard 404 -- the ordinary cold-cache MISS (FOUND-02)', async () => {
     mockToken.mockResolvedValue('ghs_faketoken');
     mockRepo.mockResolvedValue('op-nx/github-cache');

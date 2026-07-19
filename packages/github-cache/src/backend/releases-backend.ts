@@ -99,6 +99,19 @@ export function createReleasesReadBackend(
 const GITHUB_API = 'https://api.github.com';
 
 /**
+ * Upper bound (milliseconds) on any single GitHub REST fetch. Mirrors
+ * HELPER_TIMEOUT_MS's rationale (local-context.ts) for the network leg: a stalled
+ * TCP connection, a slow-loris partial response, or a proxy that accepts but never
+ * completes would otherwise leave fetch pending for undici's multi-minute default
+ * and wedge a cache lookup. A timeout-triggered AbortError degrades to a warned
+ * MISS at the port boundary (SRV-05, D-11) -- a bounded fault, never a hang. A
+ * parallel constant, not a reuse of HELPER_TIMEOUT_MS: the subprocess and network
+ * bounds are independent concerns that happen to share a value today. Native
+ * AbortSignal.timeout (Node 24) keeps this zero-dependency (D-01/D-03).
+ */
+const FETCH_TIMEOUT_MS = 5000;
+
+/**
  * Headers for a GitHub JSON metadata call: a bearer Authorization plus the versioned
  * JSON accept header. The token is interpolated ONLY here and in the asset download
  * below, and never logged or echoed (D-11).
@@ -178,7 +191,10 @@ export function createReleasesReadClient(
       // MISS -- the shard release has not been published yet.
       const releaseResponse = await fetch(
         `${GITHUB_API}/repos/${repo}/releases/tags/${shardTag()}`,
-        { headers: githubJsonHeaders(token) },
+        {
+          headers: githubJsonHeaders(token),
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        },
       );
 
       if (releaseResponse.status === 404) {
@@ -201,7 +217,10 @@ export function createReleasesReadClient(
       for (let page = 1; asset === undefined; page++) {
         const listResponse = await fetch(
           `${GITHUB_API}/repos/${repo}/releases/${release.id}/assets?per_page=100&page=${page}`,
-          { headers: githubJsonHeaders(token) },
+          {
+            headers: githubJsonHeaders(token),
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          },
         );
 
         if (listResponse.status === 404) {
@@ -241,6 +260,7 @@ export function createReleasesReadClient(
             authorization: `Bearer ${token}`,
             accept: 'application/octet-stream',
           },
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         },
       );
 

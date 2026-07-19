@@ -1,0 +1,207 @@
+import { rm } from 'node:fs/promises';
+import * as cache from '@actions/cache';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cacheArchivePath } from './cache-archive-path.js';
+import { resolveGitHubToken, selectBackend } from './select-backend.js';
+
+// @actions/cache only actually works inside a JS action on real CI, so the
+// writable-path cases below (which drive the returned backend's put) must mock
+// it -- exactly as actions-cache-backend.spec.ts does. Auto-mock hoists above the
+// imports and replaces every export with a vi.fn().
+vi.mock('@actions/cache');
+
+const saveCache = vi.mocked(cache.saveCache);
+
+const HASH = 'abc123';
+const BYTES = Buffer.from('tar-bytes');
+
+// A well-formed trusted CI context: Actions on, a trusted event, a valid
+// owner/name repo, and a resolvable token. Individual tests spread over this to
+// vary exactly one axis so a failure names the axis that broke.
+const trusted = {
+  GITHUB_ACTIONS: 'true',
+  GITHUB_EVENT_NAME: 'push',
+  GITHUB_REPOSITORY: 'op-nx/github-cache',
+  GH_TOKEN: 'ghs_token',
+} satisfies NodeJS.ProcessEnv;
+
+beforeEach(() => {
+  // A writable put maps to saveCache; a positive id resolves to 'stored'. This
+  // keeps the writable-path assertions off the network and deterministic.
+  saveCache.mockResolvedValue(1);
+});
+
+afterEach(async () => {
+  vi.resetAllMocks();
+  await rm(cacheArchivePath(HASH), { force: true });
+});
+
+describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
+  it('CI + push yields a writable backend whose put is not forbidden (TEST-01)', async () => {
+    const backend = selectBackend({ ...trusted, GITHUB_EVENT_NAME: 'push' });
+
+    const result = await backend.put(HASH, BYTES);
+
+    expect(result).not.toBe('forbidden');
+  });
+
+  it('CI + schedule yields a writable backend whose put is not forbidden (TEST-01)', async () => {
+    const backend = selectBackend({ ...trusted, GITHUB_EVENT_NAME: 'schedule' });
+
+    const result = await backend.put(HASH, BYTES);
+
+    expect(result).not.toBe('forbidden');
+  });
+
+  // Assert the DECISION behaviorally (drive put and read the PutResult variant),
+  // not by identity against a factory, so the test still means something if the
+  // factories are later swapped.
+  it.each([
+    'pull_request',
+    'pull_request_target',
+    'issue_comment',
+    'workflow_run',
+    'workflow_dispatch',
+    'release',
+  ])(
+    'CI + %s yields a read-only backend whose put is forbidden (TEST-01, TRUST-03)',
+    async (event) => {
+      const backend = selectBackend({ ...trusted, GITHUB_EVENT_NAME: event });
+
+      expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+    },
+  );
+
+  it('CI with the triggering event unset yields a read-only backend (TEST-01)', async () => {
+    const noEvent = {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_REPOSITORY: 'op-nx/github-cache',
+      GH_TOKEN: 'ghs_token',
+    };
+
+    const backend = selectBackend(noEvent);
+
+    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+  });
+
+  it('a local developer machine (no GITHUB_ACTIONS) yields a read-only backend: put forbidden and get misses (TEST-01)', async () => {
+    const backend = selectBackend({ GITHUB_REPOSITORY: 'op-nx/github-cache' });
+
+    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+    expect(await backend.get(HASH)).toEqual({ kind: 'miss' });
+  });
+
+  it('never mutates process.env -- every case is driven by the explicit env argument (TEST-01)', () => {
+    const before = JSON.stringify(process.env);
+
+    selectBackend({ GITHUB_REPOSITORY: 'op-nx/github-cache' });
+    selectBackend({ ...trusted });
+
+    expect(JSON.stringify(process.env)).toBe(before);
+  });
+});
+
+describe('selectBackend fail-closed repository validation (TEST-01)', () => {
+  it('throws in trusted context when GITHUB_REPOSITORY is absent (TEST-01)', () => {
+    const env = {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'push',
+      GH_TOKEN: 'ghs_token',
+    };
+
+    expect(() => selectBackend(env)).toThrow(/selectBackend/);
+  });
+
+  it('throws in trusted context when GITHUB_REPOSITORY has no owner/name slash (TEST-01)', () => {
+    expect(() =>
+      selectBackend({ ...trusted, GITHUB_REPOSITORY: 'not-a-repo' }),
+    ).toThrow(/GITHUB_REPOSITORY/);
+  });
+
+  it('throws in trusted context when GITHUB_REPOSITORY has an empty name segment (TEST-01)', () => {
+    expect(() =>
+      selectBackend({ ...trusted, GITHUB_REPOSITORY: 'owner/' }),
+    ).toThrow(/GITHUB_REPOSITORY/);
+  });
+
+  it('degrades to a read-only backend (does NOT throw) in trusted context with no resolvable token (TEST-01)', async () => {
+    const env = {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'push',
+      GITHUB_REPOSITORY: 'op-nx/github-cache',
+    };
+
+    const backend = selectBackend(env);
+
+    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+  });
+
+  it('degrades to a read-only backend when the only token present is set-but-empty (TEST-01)', async () => {
+    const env = {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'push',
+      GITHUB_REPOSITORY: 'op-nx/github-cache',
+      GH_TOKEN: '',
+      GITHUB_TOKEN: '',
+    };
+
+    const backend = selectBackend(env);
+
+    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+  });
+});
+
+describe('resolveGitHubToken fallthrough (TEST-01)', () => {
+  it('prefers GH_TOKEN over GITHUB_TOKEN (TEST-01)', () => {
+    expect(resolveGitHubToken({ GH_TOKEN: 'a', GITHUB_TOKEN: 'b' })).toBe('a');
+  });
+
+  it('falls through a set-but-EMPTY GH_TOKEN to GITHUB_TOKEN (|| not ??, Pitfall 8) (TEST-01)', () => {
+    // If the impl used `??`, the empty string would bind and shadow GITHUB_TOKEN,
+    // producing '' instead of 'b'. The || operator is load-bearing here.
+    expect(resolveGitHubToken({ GH_TOKEN: '', GITHUB_TOKEN: 'b' })).toBe('b');
+  });
+
+  it('resolves GITHUB_TOKEN when GH_TOKEN is absent (TEST-01)', () => {
+    expect(resolveGitHubToken({ GITHUB_TOKEN: 'b' })).toBe('b');
+  });
+
+  it('resolves undefined when neither token is present (TEST-01)', () => {
+    expect(resolveGitHubToken({})).toBeUndefined();
+  });
+});
+
+describe('TRUST-05: no caller-facing mode surface', () => {
+  it('structural: selectBackend.length is 0 -- its single declared parameter has a default (TRUST-05)', () => {
+    // Non-vacuous: Function.length counts parameters BEFORE the first default.
+    // selectBackend declares exactly one parameter (env) and it carries a default
+    // (= process.env), so length is 0 -- a caller has no required argument and no
+    // second parameter to pass. If someone added a `mode`/options parameter to
+    // request the writable backend, this count would change and the test fails.
+    expect(selectBackend.length).toBe(0);
+  });
+
+  it('behavioral: an untrusted env bag carrying override-shaped extra keys still yields a forbidden put (TRUST-05)', async () => {
+    // Non-vacuous: NOT an identity check against a factory (a smuggled flag could
+    // pass that while still returning the writable backend). We spread several
+    // plausible mode-switch keys onto an UNTRUSTED env and drive the REAL put; if
+    // any of them could steer the decision, put would not be 'forbidden'. This
+    // repo has already shipped a tautological security test (01-REVIEW.md WR-01);
+    // this half exists so that failure mode cannot recur for TRUST-05.
+    const env = {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'pull_request', // untrusted trigger
+      GITHUB_REPOSITORY: 'op-nx/github-cache',
+      GH_TOKEN: 'ghs_token',
+      MODE: 'write',
+      FORCE_WRITABLE: 'true',
+      NX_CACHE_MODE: 'rw',
+      writable: 'true',
+      readOnly: 'false',
+    };
+
+    const backend = selectBackend(env);
+
+    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+  });
+});

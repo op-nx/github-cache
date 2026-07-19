@@ -176,10 +176,19 @@ export async function resolveRepoIdentity(
     return undefined;
   }
 
-  // One anchored regex for both remote forms, the .git suffix optional:
+  // Anchored to the URL start AND the github.com host boundary, matching ONLY the
+  // two remote forms D-10 supports, the .git suffix optional:
   //   https://github.com/owner/repo(.git)
   //   git@github.com:owner/repo(.git)
-  const match = /github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url);
+  // The host anchor (^https://github.com/ or ^git@github.com:) is load-bearing
+  // (T-03-11): a bare github.com substring match would misparse a URL that merely
+  // EMBEDS github.com as a path segment on ANOTHER host (a corporate proxy mirror,
+  // a crafted .git/config) into that segment's owner/repo, silently reading into a
+  // foreign cache namespace. No match -> undefined -> MISS; the code never guesses.
+  const match =
+    /^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?$/.exec(
+      url,
+    );
 
   if (match === null) {
     return undefined;

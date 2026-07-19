@@ -379,6 +379,27 @@ describe('resolveRepoIdentity origin remote and env override (FOUND-02)', () => 
     expect(repo).toBeUndefined();
   });
 
+  it('resolves undefined for a URL that merely embeds github.com as a path segment on another host -- never a guess (FOUND-02, D-10, T-03-11)', async () => {
+    // Non-vacuous: each URL contains the literal substring "github.com" but on a
+    // DIFFERENT authority -- a crafted or misconfigured origin such as a corporate
+    // proxy mirror or an untrusted .git/config. A non-host-anchored substring match
+    // would misparse these into attacker-org/attacker-repo (resp. real-owner/
+    // real-repo) and read into a FOREIGN cache namespace. The host-anchored regex
+    // must reject every one -> undefined -> MISS, never a guessed repository (T-03-11).
+    const adversarial = [
+      'https://evil.example.com/github.com/attacker-org/attacker-repo',
+      'https://internal-proxy.corp/mirror/github.com/real-owner/real-repo.git',
+    ];
+
+    for (const url of adversarial) {
+      programSpawn(() => fakeChild({ stdout: `${url}\n`, code: 0 }));
+
+      const repo = await resolveRepoIdentity({});
+
+      expect(repo).toBeUndefined();
+    }
+  });
+
   it('resolves undefined when the git remote child exits non-zero (FOUND-02, D-10)', async () => {
     programSpawn(() => fakeChild({ code: 1 }));
 

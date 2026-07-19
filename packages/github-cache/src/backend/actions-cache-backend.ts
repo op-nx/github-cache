@@ -39,9 +39,16 @@ export function createActionsCacheBackend(): CacheBackend {
         return { kind: 'miss' };
       }
 
-      const bytes = await readFile(path);
+      try {
+        const bytes = await readFile(path);
 
-      return { kind: 'hit', bytes };
+        return { kind: 'hit', bytes };
+      } finally {
+        // Mirror the put path (T-2-11 / WR-01): a restored archive is decrypted
+        // cache bytes on disk; remove it on every exit so nothing is left on a
+        // reused or shared runner.
+        await rm(path, { force: true });
+      }
     },
 
     async put(hash: string, bytes: Buffer): Promise<PutResult> {

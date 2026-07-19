@@ -46,7 +46,7 @@ re-populates as the slices land.
 - [x] **Phase 0: Teardown** - Strip the PoC + its cache-coupled CI; leave the Nx workspace green with a lean, cache-independent baseline CI. (completed 2026-07-18)
 - [x] **Phase 1: Walking Skeleton** - A new lib speaks the Nx self-hosted-cache HTTP contract E2E against a trivial in-process backend, proven by a conformance fixture. (completed 2026-07-18)
 - [x] **Phase 2: Default Cache in CI** - Actions-cache CI-RW backend + context-derived `selectBackend` + conservative write gate + per-hash lock, dogfooded live in this repo's CI. (completed 2026-07-19)
-- [ ] **Phase 3: Cross-Context Read** - GitHub Releases read-only reader + authenticated private-repo local read + OS-namespacing, so a cross-OS hit never serves a wrong-OS artifact.
+- [x] **Phase 3: Cross-Context Read** - GitHub Releases read-only reader + authenticated private-repo local read + OS-namespacing, so a cross-OS hit never serves a wrong-OS artifact. (completed 2026-07-19)
 - [ ] **Phase 4: Publish + Retention + Observability** - The `{push,schedule}`-gated publish/sync engine + safe age-based cleanup + fail-loud observability + storage-cap graceful degradation.
 - [ ] **Phase 5: Trust-Widening + PPE Gate** - Host-detected fail-closed `pull_request`/`release` write-trust + single-source allowlist + server-produced-key mirror filter + shipped PPE-hygiene gate.
 - [ ] **Phase 6: Distribution + Docs + Governance** - npm package + JS Action + background-step CI pattern + enumerated/tested public surface + adoption docs + SECURITY.md/LICENSE/semver.
@@ -290,7 +290,7 @@ cache from Phase 2 produces the entries the reader reads back).
      missing asset, auth failure, rate limit - degrades to a MISS rather than breaking the
      build.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 **Wave 1**
 
   - [x] 03-01-PLAN.md - OS-namespaced single-source asset-name helper + read-only Releases backend over the injected client seam (CORR-01, TEST-05)
@@ -298,7 +298,7 @@ cache from Phase 2 produces the entries the reader reads back).
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-  - [ ] 03-03-PLAN.md - real default fetch client (REST sequence, pagination, redirect, fault matrix) + wire the reader into selectBackend (D-01, D-03, FOUND-02)
+  - [x] 03-03-PLAN.md - real default fetch client (REST sequence, pagination, redirect, fault matrix) + wire the reader into selectBackend (D-01, D-03, FOUND-02)
 
 **Risks**:
 
@@ -634,7 +634,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
 | 2. Default Cache in CI | 6/6 | Complete    | 2026-07-19 |
-| 3. Cross-Context Read | 2/3 | In Progress|  |
+| 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |
 | 6. Distribution + Docs + Governance | 0/TBD | Not started | - |

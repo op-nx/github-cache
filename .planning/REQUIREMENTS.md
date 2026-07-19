@@ -8,7 +8,7 @@
 ## Foundational Decisions (resolve BEFORE the roadmap)
 
 - [x] **FOUND-01 - Reader/cross-context adapter = GitHub Releases** (LOCKED, forward-merits, FOUND-01 spike `.planning/spikes/001-005`). Both stores validated; decided against GHCR on the **fewer incident/operational hazards + no public poison-remediation gap** axis (GHCR's >5000-undeletable wall, child-manifest cleanup, delete-credential nuance, visibility assert). Reversible/additive (multi-store); GHCR is the **later-milestone revisit trigger** with PROV-01 + Docker. Actions cache stays the CI-RW default; git-native + artifacts are out.
-- [ ] **FOUND-02 - Auth baseline.** Local read uses the developer's existing GitHub auth (git credential helper / `gh` / `GH_TOKEN`|`GITHUB_TOKEN`) and MUST work for private repos; MUST NOT depend on anonymous/public access.
+- [x] **FOUND-02 - Auth baseline.** Local read uses the developer's existing GitHub auth (git credential helper / `gh` / `GH_TOKEN`|`GITHUB_TOKEN`) and MUST work for private repos; MUST NOT depend on anonymous/public access.
 - [x] **FOUND-03 - Distribution forms = npm package + JS Action (v0.0.1); Docker deferred to a later milestone** (LOCKED). The JS Action is mandatory for the Actions-cache CI-RW role. The Docker container form is deferred: its CI `services:` sidecar motivation is covered by running `serve` as a GitHub Actions **background step** (GA: `background`/`cancel`), which works cross-OS and in step context, with a plain `&` fallback for GHES/older runners; residual niche (hermetic/non-Node CI) is a later-milestone / on-demand item.
 
 ## v0.0.1 Requirements
@@ -54,7 +54,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **TRUST-07**: first-write-wins/no-overwrite (409) — CREEP value **conditional on TRUST-02**; Actions cache native. **Releases (LOCKED):** the server returns 409 on an existing record and the mirror never overwrites an existing hash-named asset (immutable-by-convention; a same-hash trusted write is byte-identical under CORR-01, so a benign no-op). *(The GHCR best-effort check-then-write variant — low-severity, C2-covered — moves to the later-milestone GHCR trigger.)*
 - [ ] **TRUST-08**: the mirror publishes **only server-produced keys** (distinguishing namespace/prefix), never "any 1-512 hex" Actions-cache key; this filter **MUST ship before/with** enabling the reader mirror for any private repo (a broad filter leaks unrelated CI artifacts as world-readable assets)
 - [ ] **TRUST-09** (a later milestone - GHCR revisit trigger; N/A for Releases): a **publish-time package-visibility fail-closed assert** - verifies package visibility matches the repo and fails the run on mismatch. Releases assets inherit repo visibility, so no assert is needed in v0.0.1
-- [ ] **CORR-01 (cross-OS correctness)**: the store is **OS-namespaced by default** (or the consumer requirement to OS-discriminate non-portable outputs is documented + enforced), so a cross-OS hit never serves a wrong-OS artifact (Core-Value: never a wrong result)
+- [x] **CORR-01 (cross-OS correctness)**: the store is **OS-namespaced by default** (or the consumer requirement to OS-discriminate non-portable outputs is documented + enforced), so a cross-OS hit never serves a wrong-OS artifact (Core-Value: never a wrong result)
 
 ### Retention & Cleanup
 

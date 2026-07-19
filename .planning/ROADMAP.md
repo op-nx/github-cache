@@ -45,7 +45,7 @@ re-populates as the slices land.
 
 - [x] **Phase 0: Teardown** - Strip the PoC + its cache-coupled CI; leave the Nx workspace green with a lean, cache-independent baseline CI. (completed 2026-07-18)
 - [x] **Phase 1: Walking Skeleton** - A new lib speaks the Nx self-hosted-cache HTTP contract E2E against a trivial in-process backend, proven by a conformance fixture. (completed 2026-07-18)
-- [ ] **Phase 2: Default Cache in CI** - Actions-cache CI-RW backend + context-derived `selectBackend` + conservative write gate + per-hash lock, dogfooded live in this repo's CI.
+- [x] **Phase 2: Default Cache in CI** - Actions-cache CI-RW backend + context-derived `selectBackend` + conservative write gate + per-hash lock, dogfooded live in this repo's CI. (completed 2026-07-19)
 - [ ] **Phase 3: Cross-Context Read** - GitHub Releases read-only reader + authenticated private-repo local read + OS-namespacing, so a cross-OS hit never serves a wrong-OS artifact.
 - [ ] **Phase 4: Publish + Retention + Observability** - The `{push,schedule}`-gated publish/sync engine + safe age-based cleanup + fail-loud observability + storage-cap graceful degradation.
 - [ ] **Phase 5: Trust-Widening + PPE Gate** - Host-detected fail-closed `pull_request`/`release` write-trust + single-source allowlist + server-produced-key mirror filter + shipped PPE-hygiene gate.
@@ -215,7 +215,7 @@ by the walking skeleton).
      with `@actions/cache` and other hash-sensitive deps pinned exact (not `^`) and upgrades
      gated behind a `test:act` end-to-end round-trip. (ROBUST-03)
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 **Wave 1**
 
@@ -240,7 +240,7 @@ by the walking skeleton).
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-  - [ ] 02-06-PLAN.md - Internal dogfood JS action + self-skipping `test:act` canary + seed/verify
+  - [x] 02-06-PLAN.md - Internal dogfood JS action + self-skipping `test:act` canary + seed/verify
     CI jobs proving a real cross-job cache hit (ROBUST-03, SC5) [wave 4]
 
 **Risks**:
@@ -622,7 +622,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 |-------|----------------|--------|-----------|
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
-| 2. Default Cache in CI | 5/6 | In Progress|  |
+| 2. Default Cache in CI | 6/6 | Complete   | 2026-07-19 |
 | 3. Cross-Context Read | 0/TBD | Not started | - |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |

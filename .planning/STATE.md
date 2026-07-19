@@ -4,17 +4,17 @@ milestone: v0.0.1
 milestone_name: Greenfield MVP Rebuild
 current_phase: 02
 current_phase_name: default-cache-in-ci
-status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-07-19T03:13:57.480Z"
+status: verifying
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-07-19T03:26:28.543Z"
 last_activity: 2026-07-19
 last_activity_desc: Phase 02 execution started
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 15
-  completed_plans: 14
-  percent: 29
+  completed_plans: 15
+  percent: 43
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 02 (default-cache-in-ci) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-19 — Phase 02 execution started
 
 Progress: [█████████░] 89%
@@ -69,6 +69,7 @@ Progress: [█████████░] 89%
 | Phase 02 P03 | 5 | 1 tasks | 2 files |
 | Phase 02 P04 | 5 | 2 tasks | 4 files |
 | Phase 02 P05 | 14 | 2 tasks | 4 files |
+| Phase 02 P06 | 6 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,7 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 02]: 02-03: withHashLock serializes same-hash ops via a module-global Map<hash,Promise> chained with .then(run,run); stores a non-rejecting tail but returns the real result so a rejection reaches its own caller without wedging; evicts on inFlight.get(hash)===tail identity check; inFlightHashCount() test-only probe; single-process ephemeral-single-tenant ceiling comment-locked (TEST-02/D-03)
 - [Phase ?]: [Phase 02]: 02-05: selectBackend(env) is the single context-derived RW/RO decision point -- only param is the env bag; no options/2nd-arg/env var can request write (TRUST-05, proved structurally via selectBackend.length===0 AND behaviorally). Malformed GITHUB_REPOSITORY throws (fail-closed); unresolvable token degrades to read-only; token via GH_TOKEN||GITHUB_TOKEN.
 - [Phase ?]: [Phase 02]: 02-05: serve() composes selectBackend(process.env) + one inline put-decorator carrying withHashLock and in-flight tracking (server.ts untouched); RunningServer.shutdown() is a bounded SIGTERM drain (unref'd timer) so a hung write yields to SIGKILL. serve gained NO backend-injection option; specs mock the selection module (ROBUST-04).
+- [Phase 02]: 02-06: dogfood JS action (node24) runs serve() in foreground; two-job seed->verify keyed on github.run_id proves a real cross-job Actions-cache HIT (SC5). Bearer token setSecret-masked before any print; runtime creds by process inheritance only (no GITHUB_ENV); no job-level permissions block; push-trigger only. test:act self-skips off-CI - real ROBUST-03 canary is the CI job pair.
 
 ### Pending Todos
 
@@ -128,7 +130,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-19T03:13:15.153Z
-Stopped at: Phase 2 context gathered
+Last session: 2026-07-19T03:26:28.533Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: .planning/phases/02-default-cache-in-ci/02-CONTEXT.md
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
-import { resolveGitHubToken } from './select-backend.js';
+import {
+  GITHUB_REPOSITORY_PATTERN,
+  resolveGitHubToken,
+} from './select-backend.js';
 
 /**
  * Upper bound (milliseconds) on any single credential/context helper spawn.
@@ -142,4 +145,45 @@ export async function resolveLocalReadToken(
 
   // Every tier exhausted -> undefined (reader MISSES). No anonymous fallback.
   return undefined;
+}
+
+/**
+ * Resolve this repository's owner/name identity for the local read (D-10), in
+ * order: a well-formed GITHUB_REPOSITORY override, else the origin git remote.
+ * Injectable env bag with a process.env default (keeps Function.length at 0).
+ *
+ * An unparseable or absent identity resolves undefined -- the read then MISSES and
+ * the code NEVER guesses a repository: a guess would resolve into some OTHER
+ * repository's cache namespace, the same fail-closed hazard select-backend.ts
+ * guards against on the write side.
+ */
+export async function resolveRepoIdentity(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | undefined> {
+  // Env override first, reusing the exported GITHUB_REPOSITORY_PATTERN rather than
+  // a second copy of the owner/name shape. GITHUB_REPOSITORY is runner-injected and
+  // simply absent on a developer machine, which is what makes the git remote the
+  // normal local path. An override that fails the shape is ignored, not trusted.
+  const override = env.GITHUB_REPOSITORY;
+
+  if (override && GITHUB_REPOSITORY_PATTERN.test(override)) {
+    return override;
+  }
+
+  const url = await runHelper('git', ['remote', 'get-url', 'origin']);
+
+  if (url === undefined) {
+    return undefined;
+  }
+
+  // One anchored regex for both remote forms, the .git suffix optional:
+  //   https://github.com/owner/repo(.git)
+  //   git@github.com:owner/repo(.git)
+  const match = /github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url);
+
+  if (match === null) {
+    return undefined;
+  }
+
+  return `${match[1]}/${match[2]}`;
 }

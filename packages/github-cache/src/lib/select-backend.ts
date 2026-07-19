@@ -4,7 +4,7 @@ import type { CacheBackend } from '../backend/types.js';
 import { isWriteTrusted } from './trust.js';
 
 /** owner/name shape for GITHUB_REPOSITORY: one non-slash segment, a slash, one more. */
-const GITHUB_REPOSITORY_PATTERN = /^[^/]+\/[^/]+$/;
+export const GITHUB_REPOSITORY_PATTERN = /^[^/]+\/[^/]+$/;
 
 /**
  * Resolve the GitHub token from runtime context: GH_TOKEN first, then

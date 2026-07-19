@@ -215,7 +215,31 @@ by the walking skeleton).
      with `@actions/cache` and other hash-sensitive deps pinned exact (not `^`) and upgrades
      gated behind a `test:act` end-to-end round-trip. (ROBUST-03)
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+**Wave 1**
+
+  - [ ] 02-01-PLAN.md - Human legitimacy checkpoint + exact-pin `@actions/cache`/`@actions/core`
+    install + the pin guard spec (ROBUST-03) [wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+  - [ ] 02-02-PLAN.md - Default-deny `isWriteTrusted` write gate + `TRUSTED_EVENTS` allowlist,
+    test-first (TRUST-03) [wave 2]
+  - [ ] 02-03-PLAN.md - `withHashLock` per-hash serialization primitive, test-first
+    (TEST-02) [wave 2]
+  - [ ] 02-04-PLAN.md - Single-source `cacheArchivePath` (pinned name) + the Actions-cache-backed
+    `CacheBackend`, test-first (ROBUST-03) [wave 2]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+  - [ ] 02-05-PLAN.md - `selectBackend(env)` with no caller-facing mode surface + `serve`
+    composition (locked writes, bounded SIGTERM drain) (TEST-01, TRUST-05, ROBUST-04) [wave 3]
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+  - [ ] 02-06-PLAN.md - Internal dogfood JS action + self-skipping `test:act` canary + seed/verify
+    CI jobs proving a real cross-job cache hit (ROBUST-03, SC5) [wave 4]
 
 **Risks**:
 
@@ -596,7 +620,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 |-------|----------------|--------|-----------|
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
-| 2. Default Cache in CI | 0/TBD | Not started | - |
+| 2. Default Cache in CI | 0/6 | Planned | - |
 | 3. Cross-Context Read | 0/TBD | Not started | - |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |

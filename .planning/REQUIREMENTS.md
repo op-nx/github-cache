@@ -27,7 +27,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 
 ### Testing & Safety Net
 
-- [ ] **TEST-01**: `selectBackend` unit specs (CI-vs-local, `GITHUB_REPOSITORY` validation, `GH_TOKEN||GITHUB_TOKEN` fallthrough, malformed-repo rejection, explicit `env` param)
+- [x] **TEST-01**: `selectBackend` unit specs (CI-vs-local, `GITHUB_REPOSITORY` validation, `GH_TOKEN||GITHUB_TOKEN` fallthrough, malformed-repo rejection, explicit `env` param)
 - [x] **TEST-02**: `withHashLock` concurrency spec (same-hash serializes; different concurrent; entry evicted; rejected op doesn't wedge)
 - [ ] **TEST-03**: the **publish + cleanup orchestration** (the `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is **built behind an injected client and tested**, with already-exists / not-found / other-fault branches
 - [ ] **TEST-04**: cleanup bin wrapper spec (per-item isolation + non-zero exit on aggregated failure) — paired with RETAIN-01's list-phase-abort test
@@ -40,7 +40,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **ROBUST-01**: structural error discrimination (client `error.status`, not stderr text) on **both publish and cleanup/delete** paths; a real fault is never treated as absence
 - [ ] **ROBUST-02**: the large-body path is verified **per-primitive** (Actions-cache + **Releases** now that FOUND-01 is locked, not a generic "~2 GB"). Binding limit (spike 003): the **Releases ~2 GiB/asset ceiling coincides with the 2 GB server body cap** — an artifact at the cap sits on the failure boundary and MUST **fail loud, not silently truncate/drop**
 - [x] **ROBUST-03**: `@actions/cache` (and version-hash-sensitive deps) pinned **exact** (not `^`); upgrades gated behind `test:act`
-- [ ] **ROBUST-04** (graceful shutdown): the `serve` process handles **`SIGTERM`** to flush in-flight writes / finalize async backfill before exit — required by the GitHub Actions background-step teardown (`cancel` sends `SIGTERM` then `SIGKILL` after a short grace), so a RW job does not lose its last writes at teardown; tested (SIGTERM during an in-flight put drains before exit)
+- [x] **ROBUST-04** (graceful shutdown): the `serve` process handles **`SIGTERM`** to flush in-flight writes / finalize async backfill before exit — required by the GitHub Actions background-step teardown (`cancel` sends `SIGTERM` then `SIGKILL` after a short grace), so a RW job does not lose its last writes at teardown; tested (SIGTERM during an in-flight put drains before exit)
 - [ ] **ROBUST-05** (Releases 1000-asset/release cap, LOCKED-bound): the month-shard model keeps assets under the per-release cap; if a shard nonetheless reaches the **1000-asset limit**, the publish path **skips-and-warns** (workflow annotation, non-zero-free) rather than hard-failing the build — the cap degrades to a MISS-on-write, never a broken run
 
 ### Trust & CREEP-safety
@@ -49,7 +49,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **TRUST-02**: the sync/publish gate is a **separate predicate = `{push, schedule}`** (not the write allowlist), test-locked to **reject** `pull_request`, `release`, `repository_dispatch`, `workflow_dispatch`, `merge_group`, `delete`, `registry_package`, `page_build`, and non-default refs
 - [x] **TRUST-03**: dangerous shared-default-scope events (`pull_request_target`, `issue_comment`, fork-`workflow_run`, and any non-allowlisted trigger) are refused on the write gate; asserted by test
 - [ ] **TRUST-04**: the trusted-event allowlist has a **single source of truth**; the pre-`npm ci` dependency-free action copy is generated from / shares it (no dual root copy), with a `selfcheck.cjs` parity assertion
-- [ ] **TRUST-05**: the runtime-context-derived RW-vs-RO mode is **documented and test-covered** (do NOT introduce a caller-facing mode surface — the no-flag safety property is load-bearing)
+- [x] **TRUST-05**: the runtime-context-derived RW-vs-RO mode is **documented and test-covered** (do NOT introduce a caller-facing mode surface — the no-flag safety property is load-bearing)
 - [ ] **TRUST-06**: a **shipped installable PPE-hygiene gate** (reusable workflow / composite action) running `zizmor`/`actionlint` for named patterns (no `pull_request_target`+PR-checkout; no `issue_comment`/`workflow_run` executing PR code). It is **best-effort/advisory** (cannot verify novel/obfuscated evasions), NOT the load-bearing control - containment is TRUST-02 + **default-branch protection** (both stated as adopter prerequisites)
 - [ ] **TRUST-07**: first-write-wins/no-overwrite (409) — CREEP value **conditional on TRUST-02**; Actions cache native. **Releases (LOCKED):** the server returns 409 on an existing record and the mirror never overwrites an existing hash-named asset (immutable-by-convention; a same-hash trusted write is byte-identical under CORR-01, so a benign no-op). *(The GHCR best-effort check-then-write variant — low-severity, C2-covered — moves to the later-milestone GHCR trigger.)*
 - [ ] **TRUST-08**: the mirror publishes **only server-produced keys** (distinguishing namespace/prefix), never "any 1-512 hex" Actions-cache key; this filter **MUST ship before/with** enabling the reader mirror for any private repo (a broad filter leaks unrelated CI artifacts as world-readable assets)

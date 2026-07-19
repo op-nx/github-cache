@@ -6,14 +6,14 @@ current_phase: 02
 current_phase_name: default-cache-in-ci
 status: executing
 stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-07-19T02:50:45.109Z"
+last_updated: "2026-07-19T03:13:57.480Z"
 last_activity: 2026-07-19
 last_activity_desc: Phase 02 execution started
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 14
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 02 (default-cache-in-ci) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-07-19 — Phase 02 execution started
 
@@ -68,6 +68,7 @@ Progress: [█████████░] 89%
 | Phase 02 P02 | 3min | 1 tasks | 2 files |
 | Phase 02 P03 | 5 | 1 tasks | 2 files |
 | Phase 02 P04 | 5 | 2 tasks | 4 files |
+| Phase 02 P05 | 14 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,8 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 02]: 02-01: pinned @actions/cache@6.2.0 (latest) + @actions/core@3.0.1 exact; human approved latest over the baked 6.1.0 default with the too-new (SUS) verdict surfaced and accepted; src/pinned-deps.spec.ts fails the build if either specifier ever widens to a range (ROBUST-03)
 - [Phase 02]: 02-02: TRUST-03 write allowlist frozen at push+schedule, content-pinned by deep-equality; isWriteTrusted default-denies outside Actions / unrecognised triggers; single TRUSTED_EVENTS declaration (T-2-05); widening is Phase 5/TRUST-01.
 - [Phase 02]: 02-03: withHashLock serializes same-hash ops via a module-global Map<hash,Promise> chained with .then(run,run); stores a non-rejecting tail but returns the real result so a rejection reaches its own caller without wedging; evicts on inFlight.get(hash)===tail identity check; inFlightHashCount() test-only probe; single-process ephemeral-single-tenant ceiling comment-locked (TEST-02/D-03)
+- [Phase ?]: [Phase 02]: 02-05: selectBackend(env) is the single context-derived RW/RO decision point -- only param is the env bag; no options/2nd-arg/env var can request write (TRUST-05, proved structurally via selectBackend.length===0 AND behaviorally). Malformed GITHUB_REPOSITORY throws (fail-closed); unresolvable token degrades to read-only; token via GH_TOKEN||GITHUB_TOKEN.
+- [Phase ?]: [Phase 02]: 02-05: serve() composes selectBackend(process.env) + one inline put-decorator carrying withHashLock and in-flight tracking (server.ts untouched); RunningServer.shutdown() is a bounded SIGTERM drain (unref'd timer) so a hung write yields to SIGKILL. serve gained NO backend-injection option; specs mock the selection module (ROBUST-04).
 
 ### Pending Todos
 
@@ -125,7 +128,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-19T02:50:45.101Z
+Last session: 2026-07-19T03:13:15.153Z
 Stopped at: Phase 2 context gathered
 Resume file: .planning/phases/02-default-cache-in-ci/02-CONTEXT.md
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

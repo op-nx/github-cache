@@ -215,7 +215,7 @@ by the walking skeleton).
      with `@actions/cache` and other hash-sensitive deps pinned exact (not `^`) and upgrades
      gated behind a `test:act` end-to-end round-trip. (ROBUST-03)
 
-**Plans**: 3/6 plans executed
+**Plans**: 5/6 plans executed
 
 **Wave 1**
 
@@ -230,12 +230,12 @@ by the walking skeleton).
   - [x] 02-03-PLAN.md - `withHashLock` per-hash serialization primitive, test-first
     (TEST-02) [wave 2]
 
-  - [ ] 02-04-PLAN.md - Single-source `cacheArchivePath` (pinned name) + the Actions-cache-backed
+  - [x] 02-04-PLAN.md - Single-source `cacheArchivePath` (pinned name) + the Actions-cache-backed
     `CacheBackend`, test-first (ROBUST-03) [wave 2]
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-  - [ ] 02-05-PLAN.md - `selectBackend(env)` with no caller-facing mode surface + `serve`
+  - [x] 02-05-PLAN.md - `selectBackend(env)` with no caller-facing mode surface + `serve`
     composition (locked writes, bounded SIGTERM drain) (TEST-01, TRUST-05, ROBUST-04) [wave 3]
 
 **Wave 4** *(blocked on Wave 3 completion)*
@@ -622,7 +622,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 |-------|----------------|--------|-----------|
 | 0. Teardown | 5/5 | Complete    | 2026-07-18 |
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
-| 2. Default Cache in CI | 3/6 | In Progress|  |
+| 2. Default Cache in CI | 5/6 | In Progress|  |
 | 3. Cross-Context Read | 0/TBD | Not started | - |
 | 4. Publish + Retention + Observability | 0/TBD | Not started | - |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |

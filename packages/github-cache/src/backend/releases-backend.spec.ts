@@ -395,6 +395,36 @@ describe('createReleasesReadClient REST sequence (FOUND-02, D-03)', () => {
 
     expect(bytes).toBeUndefined();
   });
+
+  it('resolves the token and repo identity once per client across multiple fetches, and a fresh client re-resolves (ME-01)', async () => {
+    // Non-vacuous: without memoization each fetchAsset re-runs the subprocess-backed
+    // resolvers (gh / git credential fill / git remote), respawning them once per
+    // cache lookup -- hundreds of times in a real monorepo build -- and multiplying
+    // HI-02's hang-exposure window. Assert the resolvers run once for one client's
+    // lifetime, AND that a second client resolves independently, so the cache is per
+    // instance and never a global that leaks across selectBackend constructions.
+    mockToken.mockResolvedValue('ghs_faketoken');
+    mockRepo.mockResolvedValue('op-nx/github-cache');
+    mockToken.mockClear();
+    mockRepo.mockClear();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 404 }),
+    );
+    const client = createReleasesReadClient({});
+
+    await client.fetchAsset('abc123-linux');
+    await client.fetchAsset('def456-linux');
+    await client.fetchAsset('ghi789-linux');
+
+    expect(mockToken).toHaveBeenCalledTimes(1);
+    expect(mockRepo).toHaveBeenCalledTimes(1);
+
+    const secondClient = createReleasesReadClient({});
+    await secondClient.fetchAsset('jkl012-linux');
+
+    expect(mockToken).toHaveBeenCalledTimes(2);
+    expect(mockRepo).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('createReleasesReadClient fault matrix through the backend (SRV-05, D-11)', () => {

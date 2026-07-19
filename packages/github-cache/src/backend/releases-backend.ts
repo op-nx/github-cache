@@ -169,11 +169,23 @@ export function shardTag(date: Date = new Date()): string {
 export function createReleasesReadClient(
   env: NodeJS.ProcessEnv = process.env,
 ): ReleaseReadClient {
+  // ME-01: memoize token and repo-identity resolution per client instance. Both are
+  // invariant for the process lifetime, yet Nx issues one get() per distinct task
+  // hash -- potentially hundreds per build -- and each would otherwise respawn gh /
+  // git credential fill / git remote. Caching the PROMISE (not the value) also
+  // collapses concurrent first-use calls onto one in-flight resolution. Resolution
+  // still happens at get-time, not at selectBackend construction, so selectBackend
+  // stays synchronous and zero-arity (TRUST-05); the cache is per instance, never
+  // global.
+  let cachedToken: Promise<string | undefined> | undefined;
+  let cachedRepo: Promise<string | undefined> | undefined;
+
   return {
     async fetchAsset(assetName: string): Promise<Buffer | undefined> {
       // D-09 no-anon: resolve the token BEFORE any request. No token -> undefined
       // with zero fetches, so a private repo is never probed unauthenticated.
-      const token = await resolveLocalReadToken(env);
+      cachedToken ??= resolveLocalReadToken(env);
+      const token = await cachedToken;
 
       if (token === undefined) {
         return undefined;
@@ -181,7 +193,8 @@ export function createReleasesReadClient(
 
       // D-10: resolve the repo identity next, still before any request. Unresolved
       // -> undefined with no fetch; the reader never guesses another repo's namespace.
-      const repo = await resolveRepoIdentity(env);
+      cachedRepo ??= resolveRepoIdentity(env);
+      const repo = await cachedRepo;
 
       if (repo === undefined) {
         return undefined;

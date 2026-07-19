@@ -1,5 +1,9 @@
 import { createActionsCacheBackend } from '../backend/actions-cache-backend.js';
 import { createReadOnlyMemoryBackend } from '../backend/memory-backend.js';
+import {
+  createReleasesReadBackend,
+  createReleasesReadClient,
+} from '../backend/releases-backend.js';
 import type { CacheBackend } from '../backend/types.js';
 import { isWriteTrusted } from './trust.js';
 
@@ -37,9 +41,14 @@ export function selectBackend(
   env: NodeJS.ProcessEnv = process.env,
 ): CacheBackend {
   if (!isWriteTrusted(env)) {
-    // Phase 3 placeholder for the real cross-context Releases reader: today the
-    // read-only backend's store is empty, so get always misses (put -> 403).
-    return createReadOnlyMemoryBackend();
+    // The local/untrusted branch returns the real cross-context GitHub Releases
+    // reader (D-01), constructed with the real default client. selectBackend stays
+    // SYNCHRONOUS: the async token and repo-identity resolution defer into the
+    // client's fetchAsset (run at get-time), never at construction -- which is what
+    // keeps Function.length at 0 and the serve.ts call site synchronous (TRUST-05).
+    // The env bag is threaded through so the client resolves against the injected
+    // environment. put is 'forbidden' by construction (read-only).
+    return createReleasesReadBackend(createReleasesReadClient(env));
   }
 
   if (!GITHUB_REPOSITORY_PATTERN.test(env.GITHUB_REPOSITORY ?? '')) {

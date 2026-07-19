@@ -2,10 +2,7 @@ import { rm } from 'node:fs/promises';
 import * as cache from '@actions/cache';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
-import {
-  resolveLocalReadToken,
-  resolveRepoIdentity,
-} from './local-context.js';
+import { resolveLocalReadToken, resolveRepoIdentity } from './local-context.js';
 import { releaseAssetName } from './release-asset-name.js';
 import { resolveGitHubToken, selectBackend } from './select-backend.js';
 

@@ -28,7 +28,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 ### Testing & Safety Net
 
 - [ ] **TEST-01**: `selectBackend` unit specs (CI-vs-local, `GITHUB_REPOSITORY` validation, `GH_TOKEN||GITHUB_TOKEN` fallthrough, malformed-repo rejection, explicit `env` param)
-- [ ] **TEST-02**: `withHashLock` concurrency spec (same-hash serializes; different concurrent; entry evicted; rejected op doesn't wedge)
+- [x] **TEST-02**: `withHashLock` concurrency spec (same-hash serializes; different concurrent; entry evicted; rejected op doesn't wedge)
 - [ ] **TEST-03**: the **publish + cleanup orchestration** (the `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is **built behind an injected client and tested**, with already-exists / not-found / other-fault branches
 - [ ] **TEST-04**: cleanup bin wrapper spec (per-item isolation + non-zero exit on aggregated failure) — paired with RETAIN-01's list-phase-abort test
 - [ ] **TEST-05**: regression guards for the must-not-reopen cross-OS invariants **and** a cross-OS round-trip through the chosen reader adapter (OS-invariant + OS-sensitive hash, from each CI OS)

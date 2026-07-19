@@ -6,7 +6,7 @@ current_phase: 02
 current_phase_name: default-cache-in-ci
 status: executing
 stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-07-19T02:34:08.865Z"
+last_updated: "2026-07-19T02:41:48.607Z"
 last_activity: 2026-07-19
 last_activity_desc: Phase 02 execution started
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 02 (default-cache-in-ci) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-07-19 — Phase 02 execution started
 
@@ -66,6 +66,7 @@ Progress: [█████████░] 89%
 | Phase 01 P04 | 7 | 2 tasks | 6 files |
 | Phase 02 P01 | 2min | 2 tasks | 3 files |
 | Phase 02 P02 | 3min | 1 tasks | 2 files |
+| Phase 02 P03 | 5 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,7 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 01]: 01-04: vendored nx-cache-openapi.v23.1.0.json added to .prettierignore so it stays byte-for-byte verbatim (LF-normalized under eol=lf for cross-OS hash parity; git blob + working tree both sha256 8c648a0f); Prettier reformatting it would break the pinned digest
 - [Phase 02]: 02-01: pinned @actions/cache@6.2.0 (latest) + @actions/core@3.0.1 exact; human approved latest over the baked 6.1.0 default with the too-new (SUS) verdict surfaced and accepted; src/pinned-deps.spec.ts fails the build if either specifier ever widens to a range (ROBUST-03)
 - [Phase 02]: 02-02: TRUST-03 write allowlist frozen at push+schedule, content-pinned by deep-equality; isWriteTrusted default-denies outside Actions / unrecognised triggers; single TRUSTED_EVENTS declaration (T-2-05); widening is Phase 5/TRUST-01.
+- [Phase 02]: 02-03: withHashLock serializes same-hash ops via a module-global Map<hash,Promise> chained with .then(run,run); stores a non-rejecting tail but returns the real result so a rejection reaches its own caller without wedging; evicts on inFlight.get(hash)===tail identity check; inFlightHashCount() test-only probe; single-process ephemeral-single-tenant ceiling comment-locked (TEST-02/D-03)
 
 ### Pending Todos
 
@@ -122,7 +124,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-19T02:34:08.857Z
+Last session: 2026-07-19T02:40:51.341Z
 Stopped at: Phase 2 context gathered
 Resume file: .planning/phases/02-default-cache-in-ci/02-CONTEXT.md
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

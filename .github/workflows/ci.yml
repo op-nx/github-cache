@@ -23,6 +23,24 @@ jobs:
       # default git-diff base, so diff-based format:check always fails here.
       - run: npx nx format:check --all
 
+  # `fallow dead-code --fail-on-issues` gates the whole repo against dead code
+  # (unused files/exports/deps + reachability). It is config-declared-clean via
+  # .fallowrc.jsonc and base-independent, so it works identically on push and on
+  # shallow pull_request checkouts -- unlike `fallow audit`, which needs an
+  # origin/main diff base and fails open (exits 0) when that ref is absent.
+  # Future option: `fallow audit --changed-since origin/main` for faster,
+  # diff-scoped gating once the repo grows large enough to want it.
+  fallow:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run fallow:ci
+
   build:
     runs-on: ubuntu-24.04-arm
     steps:

@@ -8,7 +8,9 @@
     "test": "nx run-many -t test",
     "integration": "nx run-many -t integration",
     "format": "nx format:write",
-    "format:check": "nx format:check"
+    "format:check": "nx format:check",
+    "fallow": "fallow dead-code",
+    "fallow:ci": "fallow dead-code --fail-on-issues"
   },
   "private": true,
   "dependencies": {},
@@ -20,6 +22,7 @@
     "@swc/helpers": "0.5.18",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "~4.1.0",
+    "fallow": "~3.6.0",
     "nx": "23.1.0",
     "prettier": "^3.8.1",
     "tslib": "^2.3.0",

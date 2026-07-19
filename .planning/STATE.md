@@ -8,7 +8,7 @@ status: verifying
 stopped_at: Completed 02-06-PLAN.md
 last_updated: "2026-07-19T03:26:28.543Z"
 last_activity: 2026-07-19
-last_activity_desc: Phase 02 execution started
+last_activity_desc: "Completed quick task 260719-in3: Fix cross-OS lockfile drift (CI + dogfood HIT confirmed)"
 progress:
   total_phases: 7
   completed_phases: 3
@@ -117,6 +117,7 @@ None yet.
 |---|-------------|------|--------|--------|-----------|
 | 260719-26c | Add Fallow config + `fallow` package.json scripts/devDependency + `fallow` CI job | 2026-07-19 | 200bc34 | Verified | [260719-26c-add-fallow-config-add-fallow-package-jso](./quick/260719-26c-add-fallow-config-add-fallow-package-jso/) |
 | 260719-3el | Add worktree strategy to AGENTS.md | 2026-07-19 | fb5e51a | Verified | [260719-3el-add-worktree-strategy-to-agents-md](./quick/260719-3el-add-worktree-strategy-to-agents-md/) |
+| 260719-in3 | Fix cross-OS lockfile drift blocking CI npm ci + dogfood canary | 2026-07-19 | b9c513d | Verified | [260719-in3-fix-cross-os-lockfile-drift-blocking-ci-](./quick/260719-in3-fix-cross-os-lockfile-drift-blocking-ci-/) |
 
 ## Deferred Items
 

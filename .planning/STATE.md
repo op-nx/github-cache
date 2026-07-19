@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.0.1
-milestone_name: phases)
+milestone_name: Greenfield MVP Rebuild
 current_phase: 2
 current_phase_name: Default Cache in CI
 status: verifying

@@ -39,6 +39,8 @@ Facts"), and PROJECT.md was reconciled. Phase 0's remaining de-priming step is t
 describes the deleted PoC, then confirm no rebuild-priming artifact remains. The codebase map
 re-populates as the slices land.
 
+## v0.0.1: Greenfield MVP Rebuild
+
 ## Phases
 
 - [x] **Phase 0: Teardown** - Strip the PoC + its cache-coupled CI; leave the Nx workspace green with a lean, cache-independent baseline CI. (completed 2026-07-18)

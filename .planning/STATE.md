@@ -98,6 +98,12 @@ None yet.
 
 None yet.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260719-26c | Add Fallow config + `fallow` package.json scripts/devDependency + `fallow` CI job | 2026-07-19 | 200bc34 | Verified | [260719-26c-add-fallow-config-add-fallow-package-jso](./quick/260719-26c-add-fallow-config-add-fallow-package-jso/) |
+
 ## Deferred Items
 
 Items acknowledged and carried forward:
@@ -111,6 +117,6 @@ Items acknowledged and carried forward:
 ## Session Continuity
 
 Last session: 2026-07-18T21:37:05.414Z
-Stopped at: Completed 01-04-PLAN.md
+Stopped at: Completed quick task 260719-26c (fallow config + scripts + CI job)
 Resume file: None
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

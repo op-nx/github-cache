@@ -275,7 +275,11 @@ describe('serve write path is locked per hash (TEST-02 wiring)', () => {
     // Non-vacuous: put #2 entered the backend only AFTER put #1 was released.
     // If the composition did not wrap put in withHashLock, put #2 would enter
     // before 'release:1' -- so this exact order is the wiring proof.
-    expect(tracker.order).toEqual(['start:aaaaaa', 'release:1', 'start:aaaaaa']);
+    expect(tracker.order).toEqual([
+      'start:aaaaaa',
+      'release:1',
+      'start:aaaaaa',
+    ]);
   }, 4000);
 
   it('runs concurrent PUTs of different hashes in parallel (TEST-02)', async () => {
@@ -299,7 +303,9 @@ describe('serve write path is locked per hash (TEST-02 wiring)', () => {
     // resolve and this test would time out.
     await tracker.whenStarted(2);
 
-    expect(tracker.order.filter((entry) => entry.startsWith('start:'))).toHaveLength(2);
+    expect(
+      tracker.order.filter((entry) => entry.startsWith('start:')),
+    ).toHaveLength(2);
 
     tracker.gates[0]('stored');
     tracker.gates[1]('stored');

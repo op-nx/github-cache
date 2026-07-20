@@ -47,6 +47,8 @@
         "{workspaceRoot}/SECURITY.md",
         "{workspaceRoot}/LICENSE",
         "{workspaceRoot}/package.json",
+        "{workspaceRoot}/start-cache-server/action.yml",
+        "{workspaceRoot}/start-cache-server/entry.ts",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
         {
           "fileset": "{projectRoot}/tsconfig.storybook.json",

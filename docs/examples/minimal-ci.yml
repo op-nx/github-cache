@@ -1,0 +1,43 @@
+# Minimal @op-nx/github-cache adopter workflow.
+#
+# Copy this into .github/workflows/ in your Nx repository. It turns on the
+# default read-write cache (backed by the GitHub Actions cache) with nothing to
+# host. For the opt-in Releases store, publish / sync, and cleanup, see
+# ../advanced.md.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+
+      # Start the loopback cache sidecar as a background step. It exports
+      # NX_SELF_HOSTED_REMOTE_CACHE_SERVER and
+      # NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN for the Nx step below.
+      - uses: op-nx/github-cache/start-cache-server@v0
+        id: cache-server
+        background: true
+        env:
+          # Selects the writable Actions-cache backend on trusted triggers
+          # (push / schedule). On a pull request the backend is read-only.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: npx nx affected -t build test
+
+      # Mandatory teardown: the never-exiting sidecar would otherwise hang the
+      # job at the implicit wait-all before post-job cleanup.
+      - cancel: cache-server

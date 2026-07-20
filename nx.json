@@ -49,6 +49,11 @@
         "{workspaceRoot}/package.json",
         "{workspaceRoot}/start-cache-server/action.yml",
         "{workspaceRoot}/start-cache-server/entry.ts",
+        "{workspaceRoot}/README.md",
+        "{workspaceRoot}/docs/configuration.md",
+        "{workspaceRoot}/docs/advanced.md",
+        "{workspaceRoot}/docs/examples/minimal-ci.yml",
+        "{workspaceRoot}/docs/examples/README.md",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
         {
           "fileset": "{projectRoot}/tsconfig.storybook.json",

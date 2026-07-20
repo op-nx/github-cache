@@ -25,6 +25,10 @@
     // cannot infer it. Resolves the mirrored asset through the real Releases reader
     // behind a pathToFileURL(main) guard.
     "packages/github-cache/src/roundtrip/read-back.ts",
+    // Trust-copy drift tripwire + generator: ci.yml's selfcheck job + the `selfcheck`
+    // / `generate:trust` package scripts invoke it as a standalone bin via node; never
+    // imported, so reachability analysis cannot infer it (TRUST-04 / D-07).
+    "packages/github-cache/selfcheck.cjs",
   ],
 
   // Files outside the product reachability graph, declared so a whole-repo
@@ -35,6 +39,10 @@
     "**/skills/monitor-ci/scripts/*.mjs",
     // sha256-pinned vendored Nx OpenAPI fixture, referenced only by conformance.spec.ts.
     "packages/github-cache/src/conformance/nx-cache-openapi.v23.1.0.json",
+    // Generated dependency-free write-gate copy: referenced by require() in
+    // trust.generated.spec.ts + regenerated/diffed by selfcheck.cjs, not an ES import
+    // in the product graph (mirrors the vendored-json fixture entry, TRUST-04 / D-06).
+    "packages/github-cache/src/action/trust.generated.cjs",
   ],
 
   // Load-bearing at build/test time but not observable as ES imports. Exact

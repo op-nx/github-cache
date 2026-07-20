@@ -11,6 +11,8 @@
     "format:check": "nx format:check",
     "fallow": "fallow dead-code",
     "fallow:ci": "fallow dead-code --fail-on-issues",
+    "selfcheck": "node packages/github-cache/selfcheck.cjs",
+    "generate:trust": "node packages/github-cache/selfcheck.cjs --write",
     "test:act": "npx nx build github-cache && node packages/github-cache/dist/action/index.js"
   },
   "private": true,

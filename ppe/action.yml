@@ -37,7 +37,7 @@ runs:
     - name: Install actionlint (exact-pinned 1.7.12)
       shell: bash
       run: |
-        bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) \
+        bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) \
           1.7.12 "${RUNNER_TEMP}/actionlint-bin"
     - name: zizmor audit (advisory)
       # --no-exit-codes keeps it advisory (never exits 11-14 on a finding). The

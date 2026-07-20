@@ -9,7 +9,16 @@
  * cannot import the compiled TS module -- it needs a committed, dependency-free
  * CommonJS copy. This script GENERATES that copy from trust.ts source (never a
  * hand-maintained dual copy) and, with no args, byte-diffs the committed copy to
- * fail CI on any drift (a hand edit, or a trust.ts change with no regeneration).
+ * fail CI on drift in the two extracted ALLOWLIST ARRAYS (TRUSTED_EVENTS /
+ * HOST_GATED_EVENTS) or any hand edit to the committed .cjs.
+ *
+ * SCOPE (do not overclaim): it does NOT diff host-gate LOGIC. The function
+ * bodies (hostSupportsWidenedTrust / isWriteTrusted) are a fixed template baked
+ * into this script, not derived from trust.ts's function source -- so a trust.ts
+ * *logic* change with unchanged arrays regenerates byte-identically and reads
+ * "in sync" here. Host-gate logic parity between trust.ts and the generated .cjs
+ * is the job of src/lib/trust.generated.spec.ts (the load-bearing semantic-parity
+ * suite), NOT this byte diff.
  *
  * It extracts the two allowlist arrays from the trust.ts SOURCE (not the dist
  * build output), so it is build-order-independent and runs with node builtins

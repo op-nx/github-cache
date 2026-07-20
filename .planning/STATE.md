@@ -6,14 +6,14 @@ current_phase: 6
 current_phase_name: Distribution + Docs + Governance
 status: executing
 stopped_at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
-last_updated: "2026-07-20T22:55:29.524Z"
+last_updated: "2026-07-20T23:10:43.157Z"
 last_activity: 2026-07-20
 last_activity_desc: Phase 6 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 33
-  completed_plans: 30
+  completed_plans: 31
   percent: 86
 ---
 
@@ -88,6 +88,7 @@ Progress: [██████████] 100% of planned plans (phase 5 pendin
 | Phase 05 P05-04 | 6min | 2 tasks | 4 files |
 | Phase 06 P01 | 45min | 3 tasks | 13 files |
 | Phase 06 P03 | 9 | 2 tasks | 4 files |
+| Phase 06 P05 | 11min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -140,6 +141,9 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 05]: 05-03 (TRUST-04): trust.ts is the ONE authored allowlist; selfcheck.cjs extracts TRUSTED_EVENTS+HOST_GATED_EVENTS from trust.ts SOURCE (build-order-independent, node builtins only) and emits committed dependency-free trust.generated.cjs (require node:url only, GENERATED banner, in .prettierignore). Two-layer drift guard: CI selfcheck byte-diff exit-1-on-drift + trust.generated.spec.ts full-matrix isWriteTrusted parity (144 combos) + deep-equal arrays. Wired into ci.yml named job + selfcheck/generate:trust scripts + fallow entry/ignore (D-06/D-07).
 - [Phase 06]: 06-03: SECURITY.md is advisories-first with NO contact email (GitHub private vulnerability reporting primary); root MIT LICENSE mirrors the 06-01 package LICENSE (holder Lars Gyrup Brink Nielsen). GOV-01/GOV-02, D-10/D-11.
 - [Phase 06]: 06-03: governance-email.spec.ts is an allowlist-inversion guard (only the approved public gmail allowed; forbidden value never encoded; maintainer-content-scoped). Wired SECURITY.md/LICENSE/root package.json as nx test-target inputs so a scanned-file edit busts the cache and re-runs it -- closes T-06-03-02 (a stale nx cache had replayed a false pass).
+- [Phase 06]: 06-05: docs/trust-and-security.md renders the settled Phase-5 CREEP model from the single sources (trust.ts/sync-gate.ts/ADR C1-C18/Phase-5 SECURITY+VERIFICATION); github.com-only with NO guessed GHES version, retention framed as storage hygiene (not poison-containment), explicit never-enable-fork-PR-tokens + no sub-floor-GHES PR/release writes (DOCS-03/D-08).
+- [Phase 06]: 06-05: docs-trust.spec.ts is a single-source drift guard -- imports TRUSTED_EVENTS/HOST_GATED_EVENTS/SYNC_EVENTS and asserts each event string renders verbatim in the trust doc, so widening any allowlist trips the build until the doc is updated; imports from ./lib/... (flat-in-src convention, matching serve.ts) and resolves docs at ../../../docs via import.meta.url (ppe-action.spec.ts precedent).
+- [Phase 06]: 06-05: docs/versioning.md defines the public surface as the D-04 set and "breaking" against it under the pre-1.0 (0.x) posture (breaking bumps MINOR + documented; DOCS-05 guard makes changes intentional not silent; 1.0 freezes to standard semver) (GOV-03/D-01/D-12).
 
 ### Pending Todos
 
@@ -170,7 +174,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-20T22:54:28.740Z
+Last session: 2026-07-20T23:10:29.870Z
 Stopped at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
 Resume file: .planning/phases/06-distribution-docs-governance/06-CONTEXT.md
 Next: verify phase 5 (verify-work / secure-phase / validate-phase), then extract-learnings; the advisory PPE CI job's findings-produced behavior is a first-push live close

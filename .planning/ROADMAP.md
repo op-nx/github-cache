@@ -497,13 +497,13 @@ GOV-03.
      poisoning-class tool), an MIT LICENSE, and a versioned consumer-contract / semver
      statement defining what "breaking" means for the public surface. (GOV-01, GOV-02, GOV-03)
 
-**Plans**: 2/5 plans executed
+**Plans**: 3/5 plans executed
 
 - [x] 06-01-PLAN.md
 - [ ] 06-02-PLAN.md
 - [x] 06-03-PLAN.md
 - [ ] 06-04-PLAN.md
-- [ ] 06-05-PLAN.md
+- [x] 06-05-PLAN.md
 
 **Risks**:
 
@@ -678,7 +678,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
 | 4. Publish + Retention + Observability | 6/6 | Complete    | 2026-07-20 |
 | 5. Trust-Widening + PPE Gate | 4/4 | Complete    | 2026-07-20 |
-| 6. Distribution + Docs + Governance | 2/5 | In Progress|  |
+| 6. Distribution + Docs + Governance | 3/5 | In Progress|  |
 
 ---
 *Roadmap regenerated: 2026-07-18. Greenfield MVP / vertical-slice rebuild on the LOCKED

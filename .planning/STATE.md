@@ -4,17 +4,17 @@ milestone: v0.0.1
 milestone_name: Greenfield MVP Rebuild
 current_phase: 04
 current_phase_name: Publish + Retention + Observability
-status: executing
+status: verifying
 stopped_at: "Completed 04-05-PLAN.md (cleanup runs: octokit pin + bin + cleanup.yml)"
-last_updated: "2026-07-20T01:47:22.030Z"
+last_updated: "2026-07-20T02:08:57.747Z"
 last_activity: 2026-07-19
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 24
-  completed_plans: 23
-  percent: 57
+  completed_plans: 24
+  percent: 71
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 04 (Publish + Retention + Observability) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-19 — Phase 04 execution started
 
 Progress: [█████████░] 89%
@@ -79,6 +79,7 @@ Progress: [█████████░] 89%
 | Phase 04 P04-03 | 5 | 3 tasks | 3 files |
 | Phase 04 P04-04 | 12min | 1 tasks | 2 files |
 | Phase 04 P04-05 | 7min | 3 tasks | 6 files |
+| Phase 04 P04-06 | 10min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,8 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 04]: 04-04: publishMirror is the injected-client, Octokit-free mirror engine -- nx-cache- filter (D-16) -> same-OS restore (D-03) -> lazy get-or-create current-month shard -> first-write-wins upload; pre-upload ~2 GiB fail-loud whole-run throw (D-12), 1000-asset skip-and-warn (D-11), statusOf duck-type discrimination with per-item upload fault isolated+annotated vs whole-run throw (D-13/OBS-01); asset name via releaseAssetName only (CORR-01).
 - [Phase ?]: Cleanup bin reuses GITHUB_REPOSITORY_PATTERN + resolveGitHubToken for fail-closed guards (no new code)
 - [Phase ?]: @octokit/rest exact-pinned at 22.0.1 and guarded by pinned-deps.spec.ts (T-04-SC)
+- [Phase ?]: [Phase 04]: 04-06: publish is an OPERATION on the existing node24 action (not a run: step) so restoreCache has the JS-action-only ACTIONS_RUNTIME_TOKEN runtime; isSyncTrusted gates FIRST (gated-out = exit 0, D-01/TRUST-02), then a real-Octokit createPublishClient adapter (getActionsCacheList + listReleaseAssets via octokit.paginate) -> publishMirror -> D-17 core.summary
+- [Phase ?]: [Phase 04]: 04-06: per-OS publish matrix restates BOTH contents:write AND actions:read (job block replaces the workflow grant, Pitfall 3), needs: build NOT test; the publish job seeds nx-cache-<run_id> per OS (LOCAL Nx cache = no other traffic) doubling as the round-trip producer; publish-verify reads back through the Releases reader DIRECTLY, not selectBackend
 
 ### Pending Todos
 
@@ -151,7 +154,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-20T01:47:21.461Z
+Last session: 2026-07-20T02:08:05.971Z
 Stopped at: Completed 04-05-PLAN.md (cleanup runs: octokit pin + bin + cleanup.yml)
 Resume file: None
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

@@ -47,7 +47,7 @@ re-populates as the slices land.
 - [x] **Phase 1: Walking Skeleton** - A new lib speaks the Nx self-hosted-cache HTTP contract E2E against a trivial in-process backend, proven by a conformance fixture. (completed 2026-07-18)
 - [x] **Phase 2: Default Cache in CI** - Actions-cache CI-RW backend + context-derived `selectBackend` + conservative write gate + per-hash lock, dogfooded live in this repo's CI. (completed 2026-07-19)
 - [x] **Phase 3: Cross-Context Read** - GitHub Releases read-only reader + authenticated private-repo local read + OS-namespacing, so a cross-OS hit never serves a wrong-OS artifact. (completed 2026-07-19)
-- [ ] **Phase 4: Publish + Retention + Observability** - The `{push,schedule}`-gated publish/sync engine + safe age-based cleanup + fail-loud observability + storage-cap graceful degradation.
+- [x] **Phase 4: Publish + Retention + Observability** - The `{push,schedule}`-gated publish/sync engine + safe age-based cleanup + fail-loud observability + storage-cap graceful degradation. (completed 2026-07-20)
 - [ ] **Phase 5: Trust-Widening + PPE Gate** - Host-detected fail-closed `pull_request`/`release` write-trust + single-source allowlist + server-produced-key mirror filter + shipped PPE-hygiene gate.
 - [ ] **Phase 6: Distribution + Docs + Governance** - npm package + JS Action + background-step CI pattern + enumerated/tested public surface + adoption docs + SECURITY.md/LICENSE/semver.
 
@@ -353,7 +353,7 @@ TRUST-07, RETAIN-01, RETAIN-03, OBS-01.
      documented "how do I know the cache is working / detect sync degradation" signal, and a
      local `put()` always returns `403` (read-only-local). (OBS-01, TEST-06)
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 **Wave 1**
 
@@ -368,7 +368,7 @@ TRUST-07, RETAIN-01, RETAIN-03, OBS-01.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-  - [ ] 04-06-PLAN.md - Sync-gated node24 publish operation + per-OS `ci.yml` publish matrix + live cross-OS round-trip (TRUST-02, OBS-01) [wave 3]
+  - [x] 04-06-PLAN.md - Sync-gated node24 publish operation + per-OS `ci.yml` publish matrix + live cross-OS round-trip (TRUST-02, OBS-01) [wave 3]
 
 **Risks**:
 
@@ -650,7 +650,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
 | 2. Default Cache in CI | 6/6 | Complete    | 2026-07-19 |
 | 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
-| 4. Publish + Retention + Observability | 5/6 | In Progress|  |
+| 4. Publish + Retention + Observability | 6/6 | Complete   | 2026-07-20 |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |
 | 6. Distribution + Docs + Governance | 0/TBD | Not started | - |
 

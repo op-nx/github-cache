@@ -20,6 +20,11 @@
     // node; never imported, so reachability analysis cannot infer it. Exports
     // createCleanupClient behind a pathToFileURL(main) guard.
     "packages/github-cache/src/cleanup/index.ts",
+    // Live cross-OS round-trip read-back: ci.yml's publish-verify job invokes it as
+    // dist/roundtrip/read-back.js via node; never imported, so reachability analysis
+    // cannot infer it. Resolves the mirrored asset through the real Releases reader
+    // behind a pathToFileURL(main) guard.
+    "packages/github-cache/src/roundtrip/read-back.ts",
   ],
 
   // Files outside the product reachability graph, declared so a whole-repo

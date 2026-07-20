@@ -200,10 +200,59 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
+      # This repo runs Nx on the LOCAL cache, so the only nx-cache-* Actions-cache
+      # entries that ever exist are the ones we seed. Seed a known entry keyed on the
+      # run id (all-decimal, satisfies the ^[a-f0-9]{1,512}$ hash validator) so each OS
+      # leg has a DETERMINISTIC entry to mirror -- and so the live cross-OS round-trip
+      # has a producer: publish-verify reads <run_id> back through the real Releases
+      # reader below (the leg deferred from Phase 3). Seed runs as a JS-action operation
+      # for the same reason publish does (the Actions-cache runtime is JS-action-only).
+      - uses: ./packages/github-cache
+        with:
+          hash: ${{ github.run_id }}
+          operation: seed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: ./packages/github-cache
         with:
           operation: publish
         env:
           # Token by process inheritance into the action step (D-06), never through the
           # workflow environment file. resolveGitHubToken reads GH_TOKEN || GITHUB_TOKEN.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The live cross-OS publish/read-back round-trip (the leg deferred from Phase 3). It
+  # runs after the WHOLE publish matrix and, per OS, resolves the run-id entry that
+  # matrix mirrored THROUGH THE REAL GitHub Releases reader -- invoked DIRECTLY
+  # (createReleasesReadBackend(createReleasesReadClient(process.env)) in read-back.ts),
+  # NOT selectBackend, which in a push (write-trusted) context returns the writable
+  # Actions-cache backend rather than the reader (TRUST-05). Each OS leg reads back ONLY
+  # its own-OS asset (<run_id>-<os> via releaseAssetName), so this proves the same-OS
+  # publisher->reader contract against REAL published assets and exercises the 04-02
+  # shard-window walk live; the wrong-OS MISS stays unit-proven. The reader is native
+  # fetch (no ACTIONS_RUNTIME_TOKEN), so this is a plain `node` step, not a JS action.
+  # It needs only the workflow-default contents: read to fetch a release asset, so it
+  # adds NO job-level permissions block and never touches the write gate. Mirrors the
+  # dogfood-verify shape: push-gated, needs the producer, a MISS fails the job loud
+  # (the reader swallows faults to a MISS, so any MISS is a round-trip failure).
+  publish-verify:
+    if: github.event_name == 'push'
+    needs: publish
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: node packages/github-cache/dist/roundtrip/read-back.js
+        env:
+          # The reader resolves its token from GH_TOKEN || GITHUB_TOKEN (tier 1) and the
+          # repo from GITHUB_REPOSITORY (runner-injected); GITHUB_RUN_ID is the hash.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

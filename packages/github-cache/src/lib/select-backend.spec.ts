@@ -73,18 +73,26 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
 
   // Assert the DECISION behaviorally (drive put and read the PutResult variant),
   // not by identity against a factory, so the test still means something if the
-  // factories are later swapped.
+  // factories are later swapped. pull_request and release are NO LONGER here --
+  // they are host-gated (TRUST-01) and covered in the widening describe below.
+  // The remaining entries are the dangerous trio + workflow_dispatch: never in
+  // any write allowlist, so a guarded github.com host must NOT rescue them.
   it.each([
-    'pull_request',
     'pull_request_target',
     'issue_comment',
     'workflow_run',
     'workflow_dispatch',
-    'release',
   ])(
-    'CI + %s yields a read-only backend whose put is forbidden (TEST-01, TRUST-03)',
+    'CI + %s yields a read-only backend whose put is forbidden even on a github.com host (TEST-01, TRUST-01, Pitfall 1)',
     async (event) => {
-      const backend = selectBackend({ ...trusted, GITHUB_EVENT_NAME: event });
+      // Non-vacuous: the guarded host is PRESENT, so a passing 'forbidden' proves
+      // the host did not rescue a dangerous/unlisted event (it is in neither
+      // write allowlist -> default-deny regardless of host).
+      const backend = selectBackend({
+        ...trusted,
+        GITHUB_EVENT_NAME: event,
+        GITHUB_SERVER_URL: 'https://github.com',
+      });
 
       expect(await backend.put(HASH, BYTES)).toBe('forbidden');
     },
@@ -151,6 +159,38 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
 
     expect(JSON.stringify(process.env)).toBe(before);
   });
+});
+
+describe('selectBackend host-gated widening flows through isWriteTrusted (TRUST-01)', () => {
+  // The widening lives entirely in trust.ts; selectBackend threads the full env
+  // bag into isWriteTrusted unchanged, so pull_request/release now reach the
+  // writable backend on a guarded host and stay read-only on a GHES host --
+  // end-to-end proof that Task 1's gate flows through the selection point.
+  it.each(['pull_request', 'release'])(
+    'CI + %s on a github.com host yields a writable backend whose put is not forbidden (TRUST-01)',
+    async (event) => {
+      const backend = selectBackend({
+        ...trusted,
+        GITHUB_EVENT_NAME: event,
+        GITHUB_SERVER_URL: 'https://github.com',
+      });
+
+      expect(await backend.put(HASH, BYTES)).not.toBe('forbidden');
+    },
+  );
+
+  it.each(['pull_request', 'release'])(
+    'CI + %s on a GHES host yields a read-only backend whose put is forbidden (fail-closed, TRUST-01)',
+    async (event) => {
+      const backend = selectBackend({
+        ...trusted,
+        GITHUB_EVENT_NAME: event,
+        GITHUB_SERVER_URL: 'https://ghes.example.com',
+      });
+
+      expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+    },
+  );
 });
 
 describe('selectBackend fail-closed repository validation (TEST-01)', () => {
@@ -240,9 +280,15 @@ describe('TRUST-05: no caller-facing mode surface', () => {
     // any of them could steer the decision, put would not be 'forbidden'. This
     // repo has already shipped a tautological security test (01-REVIEW.md WR-01);
     // this half exists so that failure mode cannot recur for TRUST-05.
+    //
+    // Under TRUST-01 widening pull_request became host-gated, so it would be
+    // WRITABLE on a github.com host and no longer prove the point. Use
+    // pull_request_target: refused on EVERY host (dangerous trio), even with a
+    // guarded GITHUB_SERVER_URL present, so this stays a real untrusted example.
     const env = {
       GITHUB_ACTIONS: 'true',
-      GITHUB_EVENT_NAME: 'pull_request', // untrusted trigger
+      GITHUB_EVENT_NAME: 'pull_request_target', // refused on every host
+      GITHUB_SERVER_URL: 'https://github.com', // guarded host must NOT rescue it
       GITHUB_REPOSITORY: 'op-nx/github-cache',
       GH_TOKEN: 'ghs_token',
       MODE: 'write',

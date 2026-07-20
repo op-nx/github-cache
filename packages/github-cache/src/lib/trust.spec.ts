@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isSyncTrusted } from './sync-gate.js';
 import { HOST_GATED_EVENTS, TRUSTED_EVENTS, isWriteTrusted } from './trust.js';
 
 // The host-independent base allowlist: trusted on ANY host (TRUST-01 / D-01).
@@ -170,4 +171,34 @@ describe('allowlist content pins', () => {
   it('HOST_GATED_EVENTS deep-equals the two-element pull_request/release set (TRUST-01)', () => {
     expect([...HOST_GATED_EVENTS]).toEqual(['pull_request', 'release']);
   });
+});
+
+describe('write-widen did NOT widen the sync gate (ADR C2 cross-check)', () => {
+  // Regression (Pitfall 3): TRUST-01 widened the WRITE gate to pull_request /
+  // release on a github.com host. The SYNC/publish gate is a SEPARATE allowlist
+  // (sync-gate.ts) and MUST stay narrow, or the mirror would publish a
+  // PR/release-scoped entry as a world-readable Release asset (CREEP re-poison).
+  //
+  // Injected default-branch reader so the predicate never touches the filesystem
+  // (mirrors sync-gate.spec.ts's readMain). It resolves to the default branch so
+  // the ONLY reason isSyncTrusted refuses is the event allowlist -- not the
+  // branch/ref checks -- making this non-vacuous.
+  const readMain = (): string => 'main';
+
+  for (const event of ['pull_request', 'release']) {
+    it(`isSyncTrusted refuses ${event} even on a github.com host on the default branch (TRUST-01 guard)`, () => {
+      const result = isSyncTrusted(
+        {
+          GITHUB_ACTIONS: 'true',
+          GITHUB_EVENT_NAME: event,
+          GITHUB_REF: 'refs/heads/main',
+          GITHUB_REF_NAME: 'main',
+          GITHUB_SERVER_URL: 'https://github.com',
+        },
+        readMain,
+      );
+
+      expect(result).toBe(false);
+    });
+  }
 });

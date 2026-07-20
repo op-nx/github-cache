@@ -6,14 +6,14 @@ current_phase: 04
 current_phase_name: Publish + Retention + Observability
 status: executing
 stopped_at: Completed 03-02-PLAN.md (local auth + repo identity core); 03-03 remains
-last_updated: "2026-07-20T01:19:42.615Z"
+last_updated: "2026-07-20T01:33:53.931Z"
 last_activity: 2026-07-19
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 24
-  completed_plans: 20
+  completed_plans: 21
   percent: 57
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 04 (Publish + Retention + Observability) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-07-19 — Phase 04 execution started
 
@@ -77,6 +77,7 @@ Progress: [█████████░] 89%
 | Phase 04 P01 | 15min | 1 tasks | 2 files |
 | Phase 04 P02 | 45min | 2 tasks | 4 files |
 | Phase 04 P04-03 | 5 | 3 tasks | 3 files |
+| Phase 04 P04-04 | 12min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,7 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase ?]: 04-01: sync gate is a SEPARATE predicate (isSyncTrusted / SYNC_EVENTS), never reuses the write gate allowlist (D-01 / TRUST-02 / ADR C2 CREEP control)
 - [Phase 04]: 04-02: retention.ts is the ONE coupled knob (resolveMaxAgeDays, default 30) + single-source cache-mirror-YYYYMM shard scheme (shardTag moved here); the Releases reader walks shardTagsForWindow newest-first, 404 advances shard, MISS only after exhausting the window (D-07/D-08). RETAIN-01 (cleanup) stays open -> 04-03. — One knob prevents read/retention drift; single-source template prevents silent cross-OS MISS; window walk survives month boundaries without FOUND-02 regression.
 - [Phase 04]: 04-03: cleanupMirror is the list-abort/delete-isolate prune engine behind an injected CleanupClient -- LIST materializes every cache-mirror-* release+asset before any delete (any throw aborts with ZERO deletions, inverting the reader swallow discipline); DELETE prunes by created_at, per-item isolated, 404 benign vs non-404 real fault via statusOf duck-type, core.setFailed on aggregate; OBS-01 summary reports pruned/failed/scanned. Shared octokitFault test factory added (RETAIN-01/TEST-06).
+- [Phase 04]: 04-04: publishMirror is the injected-client, Octokit-free mirror engine -- nx-cache- filter (D-16) -> same-OS restore (D-03) -> lazy get-or-create current-month shard -> first-write-wins upload; pre-upload ~2 GiB fail-loud whole-run throw (D-12), 1000-asset skip-and-warn (D-11), statusOf duck-type discrimination with per-item upload fault isolated+annotated vs whole-run throw (D-13/OBS-01); asset name via releaseAssetName only (CORR-01).
 
 ### Pending Todos
 
@@ -146,7 +148,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-20T01:19:42.606Z
+Last session: 2026-07-20T01:33:53.919Z
 Stopped at: Completed 03-02-PLAN.md (local auth + repo identity core); 03-03 remains
 Resume file: None
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

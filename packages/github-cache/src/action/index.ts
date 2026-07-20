@@ -108,8 +108,9 @@ function createPublishClient(
  * leg's server-produced Actions-cache entries to the current month-shard GitHub
  * Release via the fully-tested publishMirror engine, then emits the D-17
  * "is-the-cache-working" summary. A whole-run fault propagates to the top-level
- * run().catch(setFailed) (fail loud, OBS-01/D-15); per-item faults are annotated
- * inside the engine (D-13).
+ * run().catch(setFailed) (fail loud, OBS-01/D-15); per-item faults are isolated and
+ * annotated inside the engine (D-13), and a nonzero aggregate `failed` count fails
+ * the run loud via the engine's core.setFailed (OBS-01/D-15), mirroring cleanupMirror.
  */
 async function runPublish(): Promise<void> {
   // D-01/TRUST-02: the sync gate is the FIRST statement of the publish path -- the

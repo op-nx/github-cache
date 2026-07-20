@@ -146,6 +146,10 @@ async function ensureShardRelease(
  *   asset set is byte-identical under CORR-01); a duplicate-upload race returning 422 is
  *   likewise benign. A real per-item fault (401/403/429/5xx) is annotated and counted but
  *   isolated so the rest of the batch still mirrors (D-13 per-item vs whole-run).
+ * - Aggregate fail-loud (OBS-01/D-15): a nonzero `failed` count calls core.setFailed after
+ *   the batch, so a systemic upload regression (a token whose permissions regressed, a
+ *   sustained upload-phase outage) fails the job instead of reporting CI green -- mirroring
+ *   cleanupMirror's aggregate check. Only the count is logged, never a token.
  *
  * Returns mirrored/skipped/failed counts; the bin emits the OBS-01 summary from them.
  */
@@ -238,6 +242,16 @@ export async function publishMirror(
         `github-cache: failed to mirror ${name} (status ${statusOf(error) ?? 'unknown'}); continuing.`,
       );
     }
+  }
+
+  // OBS-01/D-15: fail the run loud on any aggregate per-item failure, mirroring
+  // cleanupMirror. Per-item faults are isolated (D-13) so the batch still completes,
+  // but a nonzero total means the mirror is degraded -- a token whose permissions
+  // regressed or a sustained upload-phase outage would otherwise count every entry
+  // into `failed` yet exit 0, reporting a fully-broken mirror as CI green. Only the
+  // count is logged, never a token or a raw workflow-command string.
+  if (failed > 0) {
+    core.setFailed(`github-cache publish: ${failed} asset mirror(s) failed.`);
   }
 
   return { mirrored, skipped, failed };

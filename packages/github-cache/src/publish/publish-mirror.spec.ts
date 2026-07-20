@@ -31,6 +31,7 @@ vi.mock('@actions/core', () => ({
   warning: vi.fn(),
   info: vi.fn(),
   notice: vi.fn(),
+  setFailed: vi.fn(),
 }));
 
 const HASH = 'abc123';
@@ -236,6 +237,34 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
     // A real per-item fault is SURFACED as a failure (not a skip) and does not abort the batch.
     expect(result).toEqual({ mirrored: 1, skipped: 0, failed: 1 });
     expect(core.warning).toHaveBeenCalledOnce();
+  });
+});
+
+describe('publishMirror aggregate fail-loud (OBS-01, D-15)', () => {
+  it('calls core.setFailed when any per-item upload fails (failed > 0)', async () => {
+    // A systemic upload regression: every entry faults, so without the aggregate
+    // check the job would exit 0 and report a fully-broken mirror as CI green.
+    const fake = client({
+      uploadReleaseAsset: vi.fn(async () => {
+        throw octokitFault(500);
+      }),
+    });
+
+    const result = await publishMirror(fake);
+
+    expect(result.failed).toBe(1);
+    expect(core.setFailed).toHaveBeenCalledOnce();
+    // The message carries the count only, never a token or a raw command string.
+    expect(vi.mocked(core.setFailed).mock.calls[0][0]).toContain('1');
+  });
+
+  it('does NOT call core.setFailed on a clean whole-run success (failed == 0)', async () => {
+    const fake = client();
+
+    const result = await publishMirror(fake);
+
+    expect(result.failed).toBe(0);
+    expect(core.setFailed).not.toHaveBeenCalled();
   });
 });
 

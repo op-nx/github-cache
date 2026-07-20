@@ -43,9 +43,19 @@ runs:
       # --no-exit-codes keeps it advisory (never exits 11-14 on a finding). The
       # default regular persona covers dangerous-triggers, template-injection,
       # cache-poisoning, artipacked and github-env -- the named PPE patterns.
+      # inputs.path is routed through env (not interpolated into run:) so the
+      # value cannot break out of the shell quoting -- avoiding the exact
+      # template-injection shape this scan targets in other workflows.
       shell: bash
-      run: zizmor "${{ inputs.path }}" --no-exit-codes
+      env:
+        AUDIT_PATH: ${{ inputs.path }}
+      run: zizmor "$AUDIT_PATH" --no-exit-codes
     - name: actionlint (advisory)
       # Swallow actionlint's exit 1 so a finding is advisory, never a job failure.
+      # inputs.path is routed through env (not interpolated into run:) so the
+      # value cannot break out of the shell quoting -- avoiding the exact
+      # template-injection shape this scan targets in other workflows.
       shell: bash
-      run: '"${RUNNER_TEMP}/actionlint-bin/actionlint" "${{ inputs.path }}" || true'
+      env:
+        AUDIT_PATH: ${{ inputs.path }}
+      run: '"${RUNNER_TEMP}/actionlint-bin/actionlint" "$AUDIT_PATH" || true'

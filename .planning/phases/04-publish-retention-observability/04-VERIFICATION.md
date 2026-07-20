@@ -1,9 +1,10 @@
 ---
 phase: 04-publish-retention-observability
 verified: 2026-07-20T04:20:00Z
-status: human_needed
-score: "36/37 must-haves verified (5 roadmap success criteria + 32 plan-level truths; 1 present-but-behavior-unverified; 21/21 prohibitions honored; 7/7 artifacts verified; 8/8 key links wired)"
-behavior_unverified: 1
+status: passed
+live_proof_confirmed: "CI run 29726834220 on main (7fec51e) GREEN: publish (ubuntu-24.04-arm + windows-11-arm) + publish-verify (both OS legs) + dogfood-seed/verify all success; the deferred-from-Phase-3 live cross-OS mirror->read-back round-trip is confirmed on real GitHub infrastructure. (First push run 29726381233 failed on a cross-OS npm-ci lockfile drift, fixed in 7fec51e.)"
+score: "37/37 must-haves verified (5 roadmap success criteria + 32 plan-level truths; the 1 previously-behavior-unverified live round-trip now CONFIRMED green on CI; 21/21 prohibitions honored; 7/7 artifacts verified; 8/8 key links wired)"
+behavior_unverified: 0
 overrides_applied: 0
 re_verification: false
 behavior_unverified_items:

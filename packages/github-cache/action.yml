@@ -12,16 +12,23 @@ name: 'github-cache dogfood (internal)'
 description: >-
   Internal CI dogfood for this repository only. Runs serve() against the
   Actions-cache backend in its own foreground process and drives one scripted PUT
-  or GET to prove a real cache round-trip. NOT the published consumer action (that
-  is Phase 6).
+  or GET to prove a real cache round-trip, OR mirrors this OS's Actions-cache
+  entries to a month-shard GitHub Release (the sync-gated 'publish' operation).
+  NOT the published consumer action (that is Phase 6).
 inputs:
   hash:
-    description: 'Cache hash to seed or verify (the workflow run id in CI).'
-    required: true
+    description: >-
+      Cache hash to seed or verify (the workflow run id in CI). Required by the
+      'seed' and 'verify' operations; unused by 'publish', so it is optional here
+      and each operation enforces its own requirement at runtime.
+    required: false
   operation:
     description: >-
-      Which HTTP verb this dogfood drives: 'seed' (PUT) or 'verify' (GET). It does
-      NOT affect read-vs-write capability, which is derived from runtime context.
+      Which operation to run. 'seed' (PUT) and 'verify' (GET) drive the dogfood
+      cache round-trip; 'publish' mirrors this OS's server-produced Actions-cache
+      entries to the current month-shard GitHub Release, gated FIRST on
+      isSyncTrusted (default-branch {push,schedule} only, D-01). None of these
+      affect read-vs-write capability, which is derived from runtime context.
     required: true
 runs:
   using: 'node24'

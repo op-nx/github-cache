@@ -1,5 +1,12 @@
 import * as core from '@actions/core';
+import { Octokit } from '@octokit/rest';
 import { serve } from '../serve.js';
+import { isSyncTrusted } from '../lib/sync-gate.js';
+import {
+  GITHUB_REPOSITORY_PATTERN,
+  resolveGitHubToken,
+} from '../lib/select-backend.js';
+import { publishMirror, type PublishClient } from '../publish/publish-mirror.js';
 
 /**
  * Deterministic dogfood payload for a given cache hash. The seed job PUTs it and
@@ -9,6 +16,155 @@ import { serve } from '../serve.js';
  */
 function dogfoodBody(hash: string): Buffer {
   return Buffer.from(`nx-github-cache-dogfood:${hash}`);
+}
+
+/**
+ * The real PublishClient adapter over @octokit/rest (D-04), mirroring the cleanup
+ * bin's createCleanupClient. The two list methods go through `octokit.paginate`
+ * (materialize-all, reject-on-page-fault). listCacheEntries scopes to THIS ref (the
+ * default branch) and drops the rare keyless cache row so the engine only ever sees a
+ * concrete key. listReleaseAssets paginates the assets endpoint -- NEVER the inline
+ * release.assets first-page snapshot (Pitfall 4) -- and maps to asset NAMES, which is
+ * all the engine compares for first-write-wins (D-05). getReleaseByTag throws a 404
+ * when the shard is absent; createRelease throws a 422 when another matrix leg created
+ * the tag first -- ensureShardRelease inside the engine handles both. The engine
+ * imports NO @octokit/rest; octokit lives here in the bin/action.
+ */
+function createPublishClient(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  ref: string,
+): PublishClient {
+  return {
+    async listCacheEntries() {
+      // getActionsCacheList needs the job's actions:read scope (Pitfall 3). Scope to
+      // this ref (refs/heads/<default-branch>) so only default-branch entries mirror.
+      const caches = await octokit.paginate(
+        octokit.rest.actions.getActionsCacheList,
+        { owner, repo, ref, per_page: 100 },
+      );
+
+      return caches
+        .filter((cache): cache is typeof cache & { key: string } => {
+          return typeof cache.key === 'string';
+        })
+        .map((cache) => ({ key: cache.key }));
+    },
+
+    async getReleaseByTag(tag) {
+      const { data } = await octokit.rest.repos.getReleaseByTag({
+        owner,
+        repo,
+        tag,
+      });
+
+      return data;
+    },
+
+    async createRelease(tag) {
+      const { data } = await octokit.rest.repos.createRelease({
+        owner,
+        repo,
+        tag_name: tag,
+      });
+
+      return data;
+    },
+
+    async listReleaseAssets(releaseId) {
+      const assets = await octokit.paginate(
+        octokit.rest.repos.listReleaseAssets,
+        { owner, repo, release_id: releaseId, per_page: 100 },
+      );
+
+      return assets.map((asset) => asset.name);
+    },
+
+    async uploadReleaseAsset(releaseId, name, bytes) {
+      // Explicit content-length: uploads.github.com mishandles a missing/streamed
+      // length on large assets (Pitfall 5). The Buffer is passed as data as-is
+      // (Octokit accepts it); the ~2 GiB pre-upload guard lives in the engine (D-12).
+      await octokit.rest.repos.uploadReleaseAsset({
+        owner,
+        repo,
+        release_id: releaseId,
+        name,
+        data: bytes as unknown as string,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-length': String(bytes.byteLength),
+        },
+      });
+    },
+  };
+}
+
+/**
+ * The sync-gated publish operation (TRUST-02/OBS-01, D-01/D-17). Mirrors this OS
+ * leg's server-produced Actions-cache entries to the current month-shard GitHub
+ * Release via the fully-tested publishMirror engine, then emits the D-17
+ * "is-the-cache-working" summary. A whole-run fault propagates to the top-level
+ * run().catch(setFailed) (fail loud, OBS-01/D-15); per-item faults are annotated
+ * inside the engine (D-13).
+ */
+async function runPublish(): Promise<void> {
+  // D-01/TRUST-02: the sync gate is the FIRST statement of the publish path -- the
+  // default-branch check lives in the predicate, not the workflow `if:` alone. A
+  // gated-out run (a PR, a non-default ref, a tag) is a clean exit 0: core.info +
+  // return, never an error. isSyncTrusted, NOT isWriteTrusted -- Phase 5 widens the
+  // WRITE allowlist to pull_request/release and a shared predicate would silently
+  // widen SYNC with it (the CREEP precondition C2 exists to prevent).
+  if (!isSyncTrusted(process.env)) {
+    core.info(
+      'github-cache publish: not a trusted sync context; skipping (no mirror).',
+    );
+
+    return;
+  }
+
+  const repository = process.env.GITHUB_REPOSITORY ?? '';
+
+  if (!GITHUB_REPOSITORY_PATTERN.test(repository)) {
+    // Fail-closed on a corrupted repository identity (selectBackend/cleanup
+    // precedent): a trusted publish path must never resolve into another namespace.
+    throw new Error(
+      'github-cache publish: GITHUB_REPOSITORY must be a valid owner/name',
+    );
+  }
+
+  const [owner, repo] = repository.split('/');
+  const token = resolveGitHubToken(process.env);
+
+  if (token === undefined) {
+    // No token means the enumerate/upload path cannot authenticate; fail loud once
+    // here rather than let every getActionsCacheList / upload 401 (OBS-01/D-15).
+    throw new Error(
+      'github-cache publish: no GH_TOKEN/GITHUB_TOKEN resolved for the upload path',
+    );
+  }
+
+  const ref = process.env.GITHUB_REF ?? '';
+  const octokit = new Octokit({ auth: token });
+
+  const result = await publishMirror(
+    createPublishClient(octokit, owner, repo, ref),
+  );
+
+  // D-17 (OBS-01): the "is the cache working" signal -- a job-summary table of the
+  // mirrored/skipped/failed counts the engine returns. Mirrors the cleanup summary.
+  core.summary
+    .addHeading('github-cache publish', 2)
+    .addTable([
+      [
+        { data: 'metric', header: true },
+        { data: 'count', header: true },
+      ],
+      ['mirrored', String(result.mirrored)],
+      ['skipped', String(result.skipped)],
+      ['failed', String(result.failed)],
+    ]);
+  await core.summary.write();
 }
 
 /**
@@ -35,8 +191,17 @@ async function run(): Promise<void> {
     return;
   }
 
-  const hash = core.getInput('hash', { required: true });
+  // Read `operation` BEFORE the required `hash` input so the publish branch never
+  // trips getInput's required-and-not-supplied throw (publish uses no hash).
   const operation = core.getInput('operation', { required: true });
+
+  if (operation === 'publish') {
+    await runPublish();
+
+    return;
+  }
+
+  const hash = core.getInput('hash', { required: true });
 
   // serve() is the real composition root: it calls selectBackend(process.env),
   // which in a trusted push context returns the writable Actions-cache backend.

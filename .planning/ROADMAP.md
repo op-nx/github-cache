@@ -49,7 +49,7 @@ re-populates as the slices land.
 - [x] **Phase 3: Cross-Context Read** - GitHub Releases read-only reader + authenticated private-repo local read + OS-namespacing, so a cross-OS hit never serves a wrong-OS artifact. (completed 2026-07-19)
 - [x] **Phase 4: Publish + Retention + Observability** - The `{push,schedule}`-gated publish/sync engine + safe age-based cleanup + fail-loud observability + storage-cap graceful degradation. (completed 2026-07-20)
 - [x] **Phase 5: Trust-Widening + PPE Gate** - Host-detected fail-closed `pull_request`/`release` write-trust + single-source allowlist + server-produced-key mirror filter + shipped PPE-hygiene gate. (completed 2026-07-20)
-- [ ] **Phase 6: Distribution + Docs + Governance** - npm package + JS Action + background-step CI pattern + enumerated/tested public surface + adoption docs + SECURITY.md/LICENSE/semver.
+- [x] **Phase 6: Distribution + Docs + Governance** - npm package + JS Action + background-step CI pattern + enumerated/tested public surface + adoption docs + SECURITY.md/LICENSE/semver. (completed 2026-07-20)
 
 ## Phase Details
 
@@ -497,12 +497,12 @@ GOV-03.
      poisoning-class tool), an MIT LICENSE, and a versioned consumer-contract / semver
      statement defining what "breaking" means for the public surface. (GOV-01, GOV-02, GOV-03)
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 
 - [x] 06-01-PLAN.md
 - [x] 06-02-PLAN.md
 - [x] 06-03-PLAN.md
-- [ ] 06-04-PLAN.md
+- [x] 06-04-PLAN.md
 - [x] 06-05-PLAN.md
 
 **Risks**:
@@ -678,7 +678,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
 | 4. Publish + Retention + Observability | 6/6 | Complete    | 2026-07-20 |
 | 5. Trust-Widening + PPE Gate | 4/4 | Complete    | 2026-07-20 |
-| 6. Distribution + Docs + Governance | 4/5 | In Progress|  |
+| 6. Distribution + Docs + Governance | 5/5 | Complete   | 2026-07-20 |
 
 ---
 *Roadmap regenerated: 2026-07-18. Greenfield MVP / vertical-slice rebuild on the LOCKED

@@ -6,15 +6,15 @@ current_phase: 6
 current_phase_name: Distribution + Docs + Governance
 status: executing
 stopped_at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
-last_updated: "2026-07-20T23:28:13.183Z"
+last_updated: "2026-07-20T23:49:45.921Z"
 last_activity: 2026-07-20
 last_activity_desc: Phase 6 execution started
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 33
-  completed_plans: 32
-  percent: 86
+  completed_plans: 33
+  percent: 100
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 6 (Distribution + Docs + Governance) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-07-20 — Phase 6 execution started
 
@@ -90,6 +90,7 @@ Progress: [██████████] 100% of planned plans (phase 5 pendin
 | Phase 06 P03 | 9 | 2 tasks | 4 files |
 | Phase 06 P05 | 11min | 2 tasks | 3 files |
 | Phase 06 P02 | 10min | 2 tasks tasks | 2 files files |
+| Phase 06 P04 | 16 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,9 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 06]: 06-05: docs/versioning.md defines the public surface as the D-04 set and "breaking" against it under the pre-1.0 (0.x) posture (breaking bumps MINOR + documented; DOCS-05 guard makes changes intentional not silent; 1.0 freezes to standard semver) (GOV-03/D-01/D-12).
 - [Phase 06]: 06-02 (DOCS-05): public-surface.spec.ts is an explicit-assertion-list guard (not snapshot) enumerating the D-04 consumer contract ONLY -- value export createCacheServer + 4 type exports (CacheBackend/GetHit/GetResult/PutResult), the single 'port' action input, 7 env knobs, and MAX_CACHE_BODY_BYTES as a fixed 2 GiB const (NOT a knob). Value exports read from runtime barrel keys; type exports parsed from index.ts (type-only exports are erased at runtime). Internal helpers excluded structurally via barrel-key equality (never grepped by name). Proven real RED (bogus 'serve') -> GREEN (one-line fix).
 - [Phase 06]: 06-02 (Rule 2 deviation): wired {workspaceRoot}/start-cache-server/action.yml + entry.ts into the nx test targetDefaults inputs (the 06-03 T-06-03-02 stale-cache precedent) so the DOCS-05 guard re-runs when those out-of-project files drift; two explicit files, not a start-cache-server/** glob, to avoid churning on the 2.4 MB bundle.
+- [Phase ?]: [Phase 06]: 06-04 (DOCS-01): README rewritten as the 5-min default CI-RW quickstart (start-cache-server background step + mandatory cancel: teardown); GITHUB_TOKEN passed to the step so selectBackend hands back the writable backend, else every CI write silently MISSes. docs/ nav + pre-1.0 versioning note added.
+- [Phase ?]: [Phase 06]: 06-04 (DOCS-01/DOCS-06): advanced.md documents opt-in Releases reader / publish-sync / cleanup by capability + trust/runtime requirements only, never presenting the internal dogfood action as the consumer surface; the & fallback is scoped to the token-based Releases reader path ONLY (CI-RW requires the JS action because a plain run:/& step lacks ACTIONS_RUNTIME_TOKEN).
+- [Phase ?]: [Phase 06]: 06-04 (DOCS-02/DOCS-04): configuration.md documents all 7 consumer env knobs (matching DOCS-05 EXPECTED_ENV_KNOBS) + the 10 GB LRU and no-anonymous-default-local-read notes + MAX_CACHE_BODY_BYTES as a fixed 2 GiB limit; minimal-ci.yml distinct from the dogfood ci.yml. docs-adoption.spec.ts guard wired repo-root docs into nx.json test inputs (explicit paths); 06-05 docs-trust wiring gap logged to deferred-items.md.
 
 ### Pending Todos
 
@@ -177,7 +181,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-20T23:26:48.236Z
+Last session: 2026-07-20T23:48:42.125Z
 Stopped at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
 Resume file: .planning/phases/06-distribution-docs-governance/06-CONTEXT.md
 Next: verify phase 5 (verify-work / secure-phase / validate-phase), then extract-learnings; the advisory PPE CI job's findings-produced behavior is a first-push live close

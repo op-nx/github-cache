@@ -4,16 +4,16 @@ milestone: v0.0.1
 milestone_name: Greenfield MVP Rebuild
 current_phase: 5
 current_phase_name: Trust-Widening + PPE Gate
-status: executing
-stopped_at: "Completed 05-01-PLAN.md (TRUST-08 server-produced-key single-source filter)"
-last_updated: "2026-07-20T11:39:30.000Z"
+status: verifying
+stopped_at: Completed 05-01-PLAN.md (TRUST-08 server-produced-key single-source filter)
+last_updated: "2026-07-20T09:53:33.800Z"
 last_activity: 2026-07-20
-last_activity_desc: Executed 05-01 (cache-key.ts leaf + isServerProducedKey filter, TRUST-08 closed)
+last_activity_desc: Executed 05-01 (TRUST-08 server-produced-key filter)
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 28
-  completed_plans: 25
+  completed_plans: 26
   percent: 71
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 5 — Trust-Widening + PPE Gate
-Plan: 05-01 complete (1 of 4)
-Status: Executing
-Last activity: 2026-07-20 — Executed 05-01 (TRUST-08 server-produced-key filter)
+Plan: 05-02 complete (2 of 4)
+Status: In progress — 05-03 and 05-04 remaining
+Last activity: 2026-07-20 — Executed 05-02 (TRUST-01 host-gated write-trust widening)
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -82,6 +82,7 @@ Progress: [█████████░] 89%
 | Phase 04 P04-05 | 7min | 3 tasks | 6 files |
 | Phase 04 P04-06 | 10min | 3 tasks | 5 files |
 | Phase 05 P05-01 | 9min | 2 tasks | 7 files |
+| Phase 05 P05-02 | 13min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,8 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase ?]: [Phase 04]: 04-06: publish is an OPERATION on the existing node24 action (not a run: step) so restoreCache has the JS-action-only ACTIONS_RUNTIME_TOKEN runtime; isSyncTrusted gates FIRST (gated-out = exit 0, D-01/TRUST-02), then a real-Octokit createPublishClient adapter (getActionsCacheList + listReleaseAssets via octokit.paginate) -> publishMirror -> D-17 core.summary
 - [Phase ?]: [Phase 04]: 04-06: per-OS publish matrix restates BOTH contents:write AND actions:read (job block replaces the workflow grant, Pitfall 3), needs: build NOT test; the publish job seeds nx-cache-<run_id> per OS (LOCAL Nx cache = no other traffic) doubling as the round-trip producer; publish-verify reads back through the Releases reader DIRECTLY, not selectBackend
 - [Phase 05]: 05-01 (TRUST-08, ships FIRST per D-09): promoted the server-produced-key namespace into ONE src/lib/cache-key.ts leaf (CACHE_KEY_PREFIX + HASH_PATTERN + cacheKeyFor + new isServerProducedKey). isServerProducedKey = prefix + HASH_PATTERN suffix (the FULL filter the Phase 4 startsWith-only subset lacked, D-08): a foreign or nx-cache-<non-hex> key is filtered BEFORE restore, closing the info-disclosure gap (T-05-08-01). HASH_PATTERN moved out of server.ts so SRV-03 + TRUST-08 share one home; cacheKeyFor output byte-identical (T-05-08-03). Strict cross-file count===1 assertion guards against a duplicate authored literal (T-05-08-02). Leaf imports nothing from siblings (github-identity.ts precedent).
+- [Phase ?]: Host-gated write-trust: pull_request/release admitted only on github.com/*.ghe.com, fail-closed on GHES/malformed (TRUST-01)
+- [Phase ?]: endsWith('.ghe.com') requires a real leading label; bare ghe.com / notghe.com / github.com.attacker.com denied via structural URL hostname parse
 
 ### Pending Todos
 
@@ -158,7 +161,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-20T11:39:30.000Z
+Last session: 2026-07-20T09:52:07.195Z
 Stopped at: Completed 05-01-PLAN.md (TRUST-08 server-produced-key single-source filter)
 Resume file: None
 Next: execute 05-02 / 05-03 / 05-04 (trust widening, codegen+selfcheck, PPE composite action)

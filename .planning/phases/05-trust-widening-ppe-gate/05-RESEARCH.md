@@ -523,7 +523,7 @@ expect(code).toMatch(/--no-exit-codes/);          // advisory posture (D-12)
 versions, exit codes, composite syntax) are all `[VERIFIED]`/`[CITED]`; only the items above carry
 residual uncertainty, all in the safe (fail-closed / advisory) direction.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **PPE composite action path** (`<ppe-path>`).
    - What we know: consumers reference `uses: owner/repo/<path>@ref`; the dogfood action lives at
@@ -532,17 +532,20 @@ residual uncertainty, all in the safe (fail-closed / advisory) direction.
      `packages/github-cache/ppe`.
    - Recommendation: pick a short, stable top-level path (e.g. `ppe/`) for a clean
      `op-nx/github-cache/ppe@vX`; it is Claude's discretion (D-10). Confirm at plan time.
+   - RESOLVED: path = `ppe/` (top-level), so adopters consume `op-nx/github-cache/ppe@vX` (plan 05-04).
 
 2. **This repo's own CI: advisory or blocking for the PPE gate?**
    - What we know: D-12 makes it advisory for adopters; this repo's own posture is planner discretion.
    - Recommendation: run it advisory in `ci.yml` first (annotations only), consider hard-gating this
      repo's workflows after a clean baseline. Dogfooding it at all satisfies "shipped installable."
+   - RESOLVED: this repo's CI runs the PPE gate ADVISORY (annotations only, `--no-exit-codes`) (plan 05-04 Task 2).
 
 3. **Committed `.cjs` location + who consumes it in v0.0.1.**
    - What we know: nothing in Phase 5 executes the `.cjs` yet (the consumer JS action is Phase 6);
      Phase 5 produces + drift-guards it (TRUST-04 lands here by roadmap).
    - Recommendation: place the `.cjs` where the Phase 6 consumer action will `require` it, commit it,
      and guard it now. Do NOT also build a consumer action this phase (that is Phase 6 scope).
+   - RESOLVED: committed at `packages/github-cache/src/action/trust.generated.cjs`, generated + drift-guarded, no consumer action built this phase (plan 05-03).
 
 ## Environment Availability
 

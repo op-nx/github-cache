@@ -60,11 +60,11 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 
 - [x] **RETAIN-01**: **list phase aborts with zero deletions** on any non-404 fault or incomplete pagination; **delete phase** isolates per-item failures + non-zero exit. Test injects a mid-pagination fault and asserts no deletion
 - [ ] **RETAIN-02** (a later milestone - GHCR revisit trigger; N/A for Releases): the GHCR >5000-download delete refusal is non-fatal (log+continue); documented age-floor exception; recorded as a poison-remediation gap. Releases assets have no deletion wall
-- [ ] **RETAIN-03**: cleanup credential — **Releases (LOCKED):** deletion uses the same `contents:write` `GITHUB_TOKEN` that publishes (no special scope, no PAT, no owner/linkage nuance), via first-party Octokit, under a `concurrency:` group (queue, don't cancel). *(GHCR's larger cleanup surface — `delete:packages`/classic-PAT for org/unlinked packages behind a reviewed Environment, child-manifest reference-checked/fail-closed deletion — moves to the later-milestone GHCR trigger; spike 005 confirmed the in-repo `GITHUB_TOKEN` covers the same-owner case.)*
+- [x] **RETAIN-03**: cleanup credential — **Releases (LOCKED):** deletion uses the same `contents:write` `GITHUB_TOKEN` that publishes (no special scope, no PAT, no owner/linkage nuance), via first-party Octokit, under a `concurrency:` group (queue, don't cancel). *(GHCR's larger cleanup surface — `delete:packages`/classic-PAT for org/unlinked packages behind a reviewed Environment, child-manifest reference-checked/fail-closed deletion — moves to the later-milestone GHCR trigger; spike 005 confirmed the in-repo `GITHUB_TOKEN` covers the same-owner case.)*
 
 ### Observability
 
-- [ ] **OBS-01**: a whole-run publish/sync failure **fails loud** (workflow annotation + non-zero exit); ship a documented "how do I know the cache is working / detect sync degradation" signal
+- [x] **OBS-01**: a whole-run publish/sync failure **fails loud** (workflow annotation + non-zero exit); ship a documented "how do I know the cache is working / detect sync degradation" signal
 
 ### Consumer Adoption Docs
 

@@ -353,12 +353,12 @@ TRUST-07, RETAIN-01, RETAIN-03, OBS-01.
      documented "how do I know the cache is working / detect sync degradation" signal, and a
      local `put()` always returns `403` (read-only-local). (OBS-01, TEST-06)
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 
 **Wave 1**
 
   - [x] 04-01-PLAN.md - Separate `{push,schedule}`+default-branch sync-gate predicate `isSyncTrusted`, test-locked (TRUST-02) [wave 1]
-  - [ ] 04-02-PLAN.md - Coupled retention module (`resolveMaxAgeDays`/`shardTagsForWindow`, one knob) + reader window-walk (RETAIN-01, D-07/D-08) [wave 1]
+  - [x] 04-02-PLAN.md - Coupled retention module (`resolveMaxAgeDays`/`shardTagsForWindow`, one knob) + reader window-walk (RETAIN-01, D-07/D-08) [wave 1]
   - [ ] 04-03-PLAN.md - `cleanupMirror` list-abort/delete-isolate engine + shared `octokitFault` helper (RETAIN-01, TEST-04, TEST-06, ROBUST-01, OBS-01) [wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -650,7 +650,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 1. Walking Skeleton | 4/4 | Complete    | 2026-07-18 |
 | 2. Default Cache in CI | 6/6 | Complete    | 2026-07-19 |
 | 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
-| 4. Publish + Retention + Observability | 1/6 | In Progress|  |
+| 4. Publish + Retention + Observability | 2/6 | In Progress|  |
 | 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |
 | 6. Distribution + Docs + Governance | 0/TBD | Not started | - |
 

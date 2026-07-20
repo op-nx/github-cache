@@ -6,14 +6,14 @@ current_phase: 04
 current_phase_name: Publish + Retention + Observability
 status: executing
 stopped_at: Completed 03-02-PLAN.md (local auth + repo identity core); 03-03 remains
-last_updated: "2026-07-19T23:31:26.216Z"
+last_updated: "2026-07-20T01:05:06.778Z"
 last_activity: 2026-07-19
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 24
-  completed_plans: 19
+  completed_plans: 20
   percent: 57
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 04 (Publish + Retention + Observability) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-07-19 — Phase 04 execution started
 
@@ -75,6 +75,7 @@ Progress: [█████████░] 89%
 | Phase 03 P02 | 10min | 2 tasks | 3 files |
 | Phase 03 P03 | 8 | 2 tasks | 4 files |
 | Phase 04 P01 | 15min | 1 tasks | 2 files |
+| Phase 04 P02 | 45min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,7 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase ?]: [Phase 03]: 03-02: resolveRepoIdentity resolves owner/name from a shape-validated GITHUB_REPOSITORY override else git remote origin (https + scp-like ssh, .git optional); non-GitHub/unparseable -> undefined, never a guess (D-10). GITHUB_REPOSITORY_PATTERN exported from select-backend.ts (1-line diff) and reused; resolveGitHubToken body byte-identical (TEST-01 intact). FOUND-02 checkbox deferred to 03-03 end-to-end wiring.
 - [Phase ?]: [Phase 03]: 03-03: createReleasesReadClient is the real default ReleaseReadClient (authenticated GitHub REST over native fetch, zero-dep): resolves token then repo BEFORE any request (D-09/D-10, zero-fetch on undefined), paginates assets (per_page=100, never inline release.assets), download drops Authorization on the 302 by spec (no redirect:manual). 404 -> silent undefined; other non-ok -> throw -> port warns+MISS (D-11). selectBackend local branch wires it and stays synchronous (async resolution deferred into fetchAsset, TRUST-05 length 0). shardTag = current-month cache-mirror-YYYYMM single-shard seam. Benign call-time-only circular import select-backend->releases-backend->local-context.
 - [Phase ?]: 04-01: sync gate is a SEPARATE predicate (isSyncTrusted / SYNC_EVENTS), never reuses the write gate allowlist (D-01 / TRUST-02 / ADR C2 CREEP control)
+- [Phase 04]: 04-02: retention.ts is the ONE coupled knob (resolveMaxAgeDays, default 30) + single-source cache-mirror-YYYYMM shard scheme (shardTag moved here); the Releases reader walks shardTagsForWindow newest-first, 404 advances shard, MISS only after exhausting the window (D-07/D-08). RETAIN-01 (cleanup) stays open -> 04-03. — One knob prevents read/retention drift; single-source template prevents silent cross-OS MISS; window walk survives month boundaries without FOUND-02 regression.
 
 ### Pending Todos
 
@@ -142,7 +144,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-19T23:30:31.427Z
+Last session: 2026-07-20T01:04:20.079Z
 Stopped at: Completed 03-02-PLAN.md (local auth + repo identity core); 03-03 remains
 Resume file: None
 Next: execute 01-04-PLAN.md (conformance fixture TEST-07 + serve.ts SC4 + public surface)

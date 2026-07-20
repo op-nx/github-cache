@@ -44,6 +44,9 @@
       "inputs": [
         "default",
         "^production",
+        "{workspaceRoot}/SECURITY.md",
+        "{workspaceRoot}/LICENSE",
+        "{workspaceRoot}/package.json",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
         {
           "fileset": "{projectRoot}/tsconfig.storybook.json",

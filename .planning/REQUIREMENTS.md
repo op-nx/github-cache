@@ -32,7 +32,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **TEST-03**: the **publish + cleanup orchestration** (the `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is **built behind an injected client and tested**, with already-exists / not-found / other-fault branches
 - [ ] **TEST-04**: cleanup bin wrapper spec (per-item isolation + non-zero exit on aggregated failure) — paired with RETAIN-01's list-phase-abort test
 - [x] **TEST-05**: regression guards for the must-not-reopen cross-OS invariants **and** a cross-OS round-trip through the chosen reader adapter (OS-invariant + OS-sensitive hash, from each CI OS)
-- [ ] **TEST-06**: date-cleanup + read-only-local covered (expired pruned; within-window retained; local `put()` always 403)
+- [x] **TEST-06**: date-cleanup + read-only-local covered (expired pruned; within-window retained; local `put()` always 403)
 - [x] **TEST-07**: conformance fixture that **hashes the full vendored Nx spec** and **pins a named Nx version** (not `info.version`), asserting the server's success/401/403/404/409 + required `Content-Length`; **floor = Nx 21+ (server must return exactly `200`** — verified: the Nx client matches `200` strictly, treats `409`/`403` as graceful no-ops, and errors on any other status, so a `202` breaks it)
 
 ### Robustness
@@ -58,7 +58,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 
 ### Retention & Cleanup
 
-- [ ] **RETAIN-01**: **list phase aborts with zero deletions** on any non-404 fault or incomplete pagination; **delete phase** isolates per-item failures + non-zero exit. Test injects a mid-pagination fault and asserts no deletion
+- [x] **RETAIN-01**: **list phase aborts with zero deletions** on any non-404 fault or incomplete pagination; **delete phase** isolates per-item failures + non-zero exit. Test injects a mid-pagination fault and asserts no deletion
 - [ ] **RETAIN-02** (a later milestone - GHCR revisit trigger; N/A for Releases): the GHCR >5000-download delete refusal is non-fatal (log+continue); documented age-floor exception; recorded as a poison-remediation gap. Releases assets have no deletion wall
 - [ ] **RETAIN-03**: cleanup credential — **Releases (LOCKED):** deletion uses the same `contents:write` `GITHUB_TOKEN` that publishes (no special scope, no PAT, no owner/linkage nuance), via first-party Octokit, under a `concurrency:` group (queue, don't cancel). *(GHCR's larger cleanup surface — `delete:packages`/classic-PAT for org/unlinked packages behind a reviewed Environment, child-manifest reference-checked/fail-closed deletion — moves to the later-milestone GHCR trigger; spike 005 confirmed the in-repo `GITHUB_TOKEN` covers the same-owner case.)*
 

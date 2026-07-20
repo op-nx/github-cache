@@ -6,7 +6,10 @@ import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
 } from '../lib/select-backend.js';
-import { publishMirror, type PublishClient } from '../publish/publish-mirror.js';
+import {
+  publishMirror,
+  type PublishClient,
+} from '../publish/publish-mirror.js';
 
 /**
  * Deterministic dogfood payload for a given cache hash. The seed job PUTs it and
@@ -153,17 +156,15 @@ async function runPublish(): Promise<void> {
 
   // D-17 (OBS-01): the "is the cache working" signal -- a job-summary table of the
   // mirrored/skipped/failed counts the engine returns. Mirrors the cleanup summary.
-  core.summary
-    .addHeading('github-cache publish', 2)
-    .addTable([
-      [
-        { data: 'metric', header: true },
-        { data: 'count', header: true },
-      ],
-      ['mirrored', String(result.mirrored)],
-      ['skipped', String(result.skipped)],
-      ['failed', String(result.failed)],
-    ]);
+  core.summary.addHeading('github-cache publish', 2).addTable([
+    [
+      { data: 'metric', header: true },
+      { data: 'count', header: true },
+    ],
+    ['mirrored', String(result.mirrored)],
+    ['skipped', String(result.skipped)],
+    ['failed', String(result.failed)],
+  ]);
   await core.summary.write();
 }
 

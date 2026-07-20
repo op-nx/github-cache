@@ -141,6 +141,7 @@ None yet.
 | 260719-26c | Add Fallow config + `fallow` package.json scripts/devDependency + `fallow` CI job | 2026-07-19 | 200bc34 | Verified | [260719-26c-add-fallow-config-add-fallow-package-jso](./quick/260719-26c-add-fallow-config-add-fallow-package-jso/) |
 | 260719-3el | Add worktree strategy to AGENTS.md | 2026-07-19 | fb5e51a | Verified | [260719-3el-add-worktree-strategy-to-agents-md](./quick/260719-3el-add-worktree-strategy-to-agents-md/) |
 | 260719-in3 | Fix cross-OS lockfile drift blocking CI npm ci + dogfood canary | 2026-07-19 | b9c513d | Verified | [260719-in3-fix-cross-os-lockfile-drift-blocking-ci-](./quick/260719-in3-fix-cross-os-lockfile-drift-blocking-ci-/) |
+| 260720-fal | Break releases-backend<->select-backend import cycle (github-identity leaf) + format phase-4 sources; fallow:ci + format:check green | 2026-07-20 | 77163a6 | Verified | (inline /gsd:fast --validate) |
 
 ## Deferred Items
 

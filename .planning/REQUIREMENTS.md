@@ -77,7 +77,7 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 
 ### Governance
 
-- [ ] **GOV-01**: **SECURITY.md** vulnerability-disclosure policy (required for a poisoning-class tool)
+- [x] **GOV-01**: **SECURITY.md** vulnerability-disclosure policy (required for a poisoning-class tool)
 - [x] **GOV-02**: LICENSE (MIT)
 - [ ] **GOV-03**: a versioned **consumer-contract / semver** statement (what "breaking" means for the public surface)
 

@@ -6,14 +6,14 @@ current_phase: 6
 current_phase_name: Distribution + Docs + Governance
 status: executing
 stopped_at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
-last_updated: "2026-07-20T22:41:20.061Z"
+last_updated: "2026-07-20T22:55:29.524Z"
 last_activity: 2026-07-20
 last_activity_desc: Phase 6 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 33
-  completed_plans: 29
+  completed_plans: 30
   percent: 86
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 6 (Distribution + Docs + Governance) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-20 — Phase 6 execution started
 
@@ -87,6 +87,7 @@ Progress: [██████████] 100% of planned plans (phase 5 pendin
 | Phase 05 P05-03 | 15min | 2 tasks | 7 files |
 | Phase 05 P05-04 | 6min | 2 tasks | 4 files |
 | Phase 06 P01 | 45min | 3 tasks | 13 files |
+| Phase 06 P03 | 9 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,8 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase ?]: endsWith('.ghe.com') requires a real leading label; bare ghe.com / notghe.com / github.com.attacker.com denied via structural URL hostname parse
 - [Phase 05]: 05-04 (TRUST-06): shipped ppe/action.yml, an ADVISORY composite action (using: composite) self-installing EXACT-pinned zizmor==1.27.0 (pipx) + actionlint 1.7.12 (official download-actionlint.bash), running both non-failing (zizmor --no-exit-codes, actionlint exit swallowed) for the named unsafe-trigger patterns. Positioned in name/description as advisory defense-in-depth, NOT the containment control (D-10/D-11/D-12; containment stays TRUST-02 sync gate + branch protection). ppe-action.spec.ts is the D-11 exact-pin analog: comment-stripped, mutation-proven config-assertion (pin change fails) since consumer-runtime installs are invisible to pinned-deps.spec.ts. Advisory `ppe` CI job dogfoods ./ppe against ppe/fixtures/unsafe-workflow.yml (kept outside .github/workflows so it never runs); the findings-produced behavior is a first-push live close (human_needed). NOTE for reviewer: download-actionlint.bash is fetched from actionlint `main` while the binary is pinned to 1.7.12.
 - [Phase 05]: 05-03 (TRUST-04): trust.ts is the ONE authored allowlist; selfcheck.cjs extracts TRUSTED_EVENTS+HOST_GATED_EVENTS from trust.ts SOURCE (build-order-independent, node builtins only) and emits committed dependency-free trust.generated.cjs (require node:url only, GENERATED banner, in .prettierignore). Two-layer drift guard: CI selfcheck byte-diff exit-1-on-drift + trust.generated.spec.ts full-matrix isWriteTrusted parity (144 combos) + deep-equal arrays. Wired into ci.yml named job + selfcheck/generate:trust scripts + fallow entry/ignore (D-06/D-07).
+- [Phase 06]: 06-03: SECURITY.md is advisories-first with NO contact email (GitHub private vulnerability reporting primary); root MIT LICENSE mirrors the 06-01 package LICENSE (holder Lars Gyrup Brink Nielsen). GOV-01/GOV-02, D-10/D-11.
+- [Phase 06]: 06-03: governance-email.spec.ts is an allowlist-inversion guard (only the approved public gmail allowed; forbidden value never encoded; maintainer-content-scoped). Wired SECURITY.md/LICENSE/root package.json as nx test-target inputs so a scanned-file edit busts the cache and re-runs it -- closes T-06-03-02 (a stale nx cache had replayed a false pass).
 
 ### Pending Todos
 
@@ -167,7 +170,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-20T22:41:20.052Z
+Last session: 2026-07-20T22:54:28.740Z
 Stopped at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
 Resume file: .planning/phases/06-distribution-docs-governance/06-CONTEXT.md
 Next: verify phase 5 (verify-work / secure-phase / validate-phase), then extract-learnings; the advisory PPE CI job's findings-produced behavior is a first-push live close

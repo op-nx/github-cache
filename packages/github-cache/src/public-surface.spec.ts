@@ -36,7 +36,7 @@ import { MAX_CACHE_BODY_BYTES } from './server/server.js';
 // edits the lists below; that edit IS the human-readable diff a reviewer sees. ---
 
 /** D-04 group (c): the runtime value exports of the package barrel. */
-const EXPECTED_VALUE_EXPORTS = ['createCacheServer', 'serve'];
+const EXPECTED_VALUE_EXPORTS = ['createCacheServer'];
 
 /** D-04 group (c): the type-only exports of the package barrel. */
 const EXPECTED_TYPE_EXPORTS = [

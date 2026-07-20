@@ -161,3 +161,49 @@ jobs:
           operation: verify
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The per-OS publish matrix is this phase's LIVE mirror path (D-03, TRUST-02): on a
+  # default-branch push each leg enumerates the default-branch Actions-cache entries via
+  # getActionsCacheList, restores the nx-cache-* ones IT CAN restore on ITS OWN OS, and
+  # uploads them to the current month-shard GitHub Release. The matrix is LOAD-BEARING and
+  # self-enforcing: @actions/cache folds the per-OS tmpdir path + a windows-only salt + the
+  # compression method into the cache version hash, so an ubuntu leg can NEVER restore a
+  # Windows-saved entry (restoreCache returns undefined and the engine skips it). Collapsing
+  # this to one OS SILENTLY drops the other OS's entries (D-03) -- keep BOTH legs; fail-fast
+  # off so a Windows-only failure never hides the ubuntu result. It runs as `operation: publish`
+  # on the node24 JS action, NOT a `run: node` step, because @actions/cache restoreCache needs
+  # the JS-action-only ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL runtime (a plain run: step
+  # silently MISSes -- verified Phase 2). needs: build (NOT test): a failing test leg must never
+  # skip the mirror and drop already-built entries (RESEARCH Anti-Patterns). if: !cancelled() &&
+  # push -- the mirror runs only on the trusted push trigger, and isSyncTrusted re-checks the
+  # default branch in-process as the load-bearing gate (D-01), not the workflow if: alone.
+  publish:
+    if: ${{ !cancelled() && github.event_name == 'push' }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    # A job-level permissions block REPLACES the workflow grant (contents: read) WHOLESALE --
+    # it does NOT merge. So this block MUST restate BOTH scopes: contents: write (create the
+    # month-shard release + upload assets) AND actions: read (getActionsCacheList; omitting it
+    # 404s the cache enumeration -- Pitfall 3). Least-privilege: exactly these two, nothing more.
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - uses: ./packages/github-cache
+        with:
+          operation: publish
+        env:
+          # Token by process inheritance into the action step (D-06), never through the
+          # workflow environment file. resolveGitHubToken reads GH_TOKEN || GITHUB_TOKEN.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -418,7 +418,27 @@ publish/mirror path built in Phase 4).
      best-effort/advisory defense-in-depth; load-bearing containment stays TRUST-02 +
      default-branch protection. (TRUST-06)
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+**Wave 1**
+
+  - [ ] 05-01-PLAN.md - Single-source server-produced-key filter (`cache-key.ts` leaf +
+    `isServerProducedKey`) + refactor backend/publish/server; ships FIRST per D-09 (TRUST-08) [wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+  - [ ] 05-02-PLAN.md - Host-gated write-trust widening (`pull_request`/`release` on
+    github.com/`*.ghe.com`, fail-closed on GHES) + sync-gate-not-widened cross-check (TRUST-01) [wave 2]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+  - [ ] 05-03-PLAN.md - Single-source allowlist codegen: `selfcheck.cjs` + committed
+    `trust.generated.cjs` + semantic-parity spec + CI drift wiring (TRUST-04) [wave 3]
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+  - [ ] 05-04-PLAN.md - Advisory PPE-hygiene composite action (`zizmor` 1.27.0 + `actionlint`
+    1.7.12, exact-pinned) + config-assertion spec + advisory CI job + unsafe fixture (TRUST-06) [wave 4]
 
 **Risks**:
 
@@ -651,7 +671,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 2. Default Cache in CI | 6/6 | Complete    | 2026-07-19 |
 | 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
 | 4. Publish + Retention + Observability | 6/6 | Complete    | 2026-07-20 |
-| 5. Trust-Widening + PPE Gate | 0/TBD | Not started | - |
+| 5. Trust-Widening + PPE Gate | 0/4 | Not started | - |
 | 6. Distribution + Docs + Governance | 0/TBD | Not started | - |
 
 ---

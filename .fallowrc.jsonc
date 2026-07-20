@@ -16,6 +16,10 @@
     // dist/action/index.js); it is never imported, so reachability analysis
     // cannot infer it. Internal CI dogfood only (not the Phase 6 public surface).
     "packages/github-cache/src/action/index.ts",
+    // Scheduled cleanup entry: cleanup.yml invokes it as dist/cleanup/index.js via
+    // node; never imported, so reachability analysis cannot infer it. Exports
+    // createCleanupClient behind a pathToFileURL(main) guard.
+    "packages/github-cache/src/cleanup/index.ts",
   ],
 
   // Files outside the product reachability graph, declared so a whole-repo

@@ -229,7 +229,7 @@ describe('resolveLocalReadToken three-tier chain (FOUND-02)', () => {
     expect(spawnMock.mock.calls[1]?.[0]).toBe('git');
   });
 
-  it('spawns git credential fill hardened: shell false, bounded numeric timeout, windowsHide, prompts and askpass neutralised (FOUND-02, T-03-10)', async () => {
+  it('spawns git credential fill hardened: shell false, bounded numeric timeout, uncatchable SIGKILL, windowsHide, prompts and askpass neutralised (FOUND-02, T-03-10, WR-03)', async () => {
     programSpawn((file) =>
       fakeChild(
         file === 'gh'
@@ -248,6 +248,7 @@ describe('resolveLocalReadToken three-tier chain (FOUND-02)', () => {
     const options = gitCall?.[2] as {
       shell?: boolean;
       timeout?: number;
+      killSignal?: string;
       windowsHide?: boolean;
       env?: Record<string, string>;
     };
@@ -255,6 +256,9 @@ describe('resolveLocalReadToken three-tier chain (FOUND-02)', () => {
     expect(options.shell).toBe(false);
     expect(typeof options.timeout).toBe('number');
     expect(options.timeout).toBe(HELPER_TIMEOUT_MS);
+    // WR-03: the timeout kill must be the uncatchable SIGKILL, not the default
+    // SIGTERM, so a signal-trapping helper cannot survive the timer and hang.
+    expect(options.killSignal).toBe('SIGKILL');
     expect(options.windowsHide).toBe(true);
     expect(options.env?.GIT_TERMINAL_PROMPT).toBe('0');
     expect(options.env?.GIT_ASKPASS).toBe('');

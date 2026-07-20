@@ -53,6 +53,15 @@ function runHelper(
       // timeout: a hung helper (locked keychain, network probe) is killed rather
       // than allowed to wedge the build; the tier then degrades to a MISS.
       timeout: HELPER_TIMEOUT_MS,
+      // killSignal SIGKILL, not the default SIGTERM (WR-03): the timeout must be
+      // UNCATCHABLE. A wrapper helper that traps or ignores SIGTERM would otherwise
+      // survive the timer, never fire 'close', and leave runHelper's promise
+      // unsettled -- wedging the whole resolution chain indefinitely, the exact
+      // "MISS, not a hang" failure this timeout exists to prevent. On Windows every
+      // kill already maps to a forceful TerminateProcess, so this only strengthens
+      // the POSIX path where SIGTERM is catchable. A child stuck in an
+      // uninterruptible syscall is unkillable by any signal and out of scope.
+      killSignal: 'SIGKILL',
       // windowsHide: no console window flash per spawn on Windows.
       windowsHide: true,
       // All three env keys are load-bearing TOGETHER: disabling terminal prompts

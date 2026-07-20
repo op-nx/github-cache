@@ -1,7 +1,8 @@
 ---
 phase: 05-trust-widening-ppe-gate
 verified: 2026-07-20T18:39:56Z
-status: human_needed
+status: passed
+live_proof_confirmed: "CI run 29772015309 on main (fe08c7c) GREEN: the advisory ppe job self-installs zizmor==1.27.0 + actionlint 1.7.12 and scans the fixture (findings as annotations, job non-failing) + selfcheck job + both publish/publish-verify cross-OS legs all success. The live PPE findings-produced proof is confirmed. (First live run 29771418344 failed on a missing mkdir for the actionlint install dir — caught ONLY by the live leg, not the local config-assertion spec — fixed in fe08c7c.)"
 score: 21/22 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0

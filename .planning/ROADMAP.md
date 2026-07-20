@@ -418,11 +418,11 @@ publish/mirror path built in Phase 4).
      best-effort/advisory defense-in-depth; load-bearing containment stays TRUST-02 +
      default-branch protection. (TRUST-06)
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 **Wave 1**
 
-  - [ ] 05-01-PLAN.md - Single-source server-produced-key filter (`cache-key.ts` leaf +
+  - [x] 05-01-PLAN.md - Single-source server-produced-key filter (`cache-key.ts` leaf +
     `isServerProducedKey`) + refactor backend/publish/server; ships FIRST per D-09 (TRUST-08) [wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -671,7 +671,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 2. Default Cache in CI | 6/6 | Complete    | 2026-07-19 |
 | 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
 | 4. Publish + Retention + Observability | 6/6 | Complete    | 2026-07-20 |
-| 5. Trust-Widening + PPE Gate | 0/4 | Not started | - |
+| 5. Trust-Widening + PPE Gate | 1/4 | In Progress|  |
 | 6. Distribution + Docs + Governance | 0/TBD | Not started | - |
 
 ---

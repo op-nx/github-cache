@@ -48,7 +48,7 @@ re-populates as the slices land.
 - [x] **Phase 2: Default Cache in CI** - Actions-cache CI-RW backend + context-derived `selectBackend` + conservative write gate + per-hash lock, dogfooded live in this repo's CI. (completed 2026-07-19)
 - [x] **Phase 3: Cross-Context Read** - GitHub Releases read-only reader + authenticated private-repo local read + OS-namespacing, so a cross-OS hit never serves a wrong-OS artifact. (completed 2026-07-19)
 - [x] **Phase 4: Publish + Retention + Observability** - The `{push,schedule}`-gated publish/sync engine + safe age-based cleanup + fail-loud observability + storage-cap graceful degradation. (completed 2026-07-20)
-- [ ] **Phase 5: Trust-Widening + PPE Gate** - Host-detected fail-closed `pull_request`/`release` write-trust + single-source allowlist + server-produced-key mirror filter + shipped PPE-hygiene gate.
+- [x] **Phase 5: Trust-Widening + PPE Gate** - Host-detected fail-closed `pull_request`/`release` write-trust + single-source allowlist + server-produced-key mirror filter + shipped PPE-hygiene gate. (completed 2026-07-20)
 - [ ] **Phase 6: Distribution + Docs + Governance** - npm package + JS Action + background-step CI pattern + enumerated/tested public surface + adoption docs + SECURITY.md/LICENSE/semver.
 
 ## Phase Details
@@ -418,7 +418,7 @@ publish/mirror path built in Phase 4).
      best-effort/advisory defense-in-depth; load-bearing containment stays TRUST-02 +
      default-branch protection. (TRUST-06)
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 **Wave 1**
 
@@ -437,7 +437,7 @@ publish/mirror path built in Phase 4).
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-  - [ ] 05-04-PLAN.md - Advisory PPE-hygiene composite action (`zizmor` 1.27.0 + `actionlint`
+  - [x] 05-04-PLAN.md - Advisory PPE-hygiene composite action (`zizmor` 1.27.0 + `actionlint`
     1.7.12, exact-pinned) + config-assertion spec + advisory CI job + unsafe fixture (TRUST-06) [wave 4]
 
 **Risks**:
@@ -671,7 +671,7 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
 | 2. Default Cache in CI | 6/6 | Complete    | 2026-07-19 |
 | 3. Cross-Context Read | 3/3 | Complete   | 2026-07-19 |
 | 4. Publish + Retention + Observability | 6/6 | Complete    | 2026-07-20 |
-| 5. Trust-Widening + PPE Gate | 3/4 | In Progress|  |
+| 5. Trust-Widening + PPE Gate | 4/4 | Complete   | 2026-07-20 |
 | 6. Distribution + Docs + Governance | 0/TBD | Not started | - |
 
 ---

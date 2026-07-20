@@ -5,15 +5,15 @@ milestone_name: Greenfield MVP Rebuild
 current_phase: 5
 current_phase_name: Trust-Widening + PPE Gate
 status: verifying
-stopped_at: Completed 05-01-PLAN.md (TRUST-08 server-produced-key single-source filter)
-last_updated: "2026-07-20T10:09:30.449Z"
+stopped_at: Completed 05-04-PLAN.md (TRUST-06 installable PPE-hygiene composite action)
+last_updated: "2026-07-20T10:19:24.327Z"
 last_activity: 2026-07-20
-last_activity_desc: Executed 05-02 (TRUST-01 host-gated write-trust widening)
+last_activity_desc: Executed 05-04 (TRUST-06 installable PPE-hygiene composite action)
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 28
-  completed_plans: 27
+  completed_plans: 28
   percent: 71
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 5 — Trust-Widening + PPE Gate
-Plan: 05-02 complete (2 of 4)
-Status: In progress — 05-03 and 05-04 remaining
-Last activity: 2026-07-20 — Executed 05-02 (TRUST-01 host-gated write-trust widening)
+Plan: 05-04 complete (4 of 4)
+Status: Phase 5 plans all done — awaiting verification (verify/secure/validate)
+Last activity: 2026-07-20 — Executed 05-04 (TRUST-06 installable PPE-hygiene composite action)
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100% of planned plans (phase 5 pending verification)
 
 ## Performance Metrics
 
@@ -84,6 +84,7 @@ Progress: [█████████░] 93%
 | Phase 05 P05-01 | 9min | 2 tasks | 7 files |
 | Phase 05 P05-02 | 13min | 2 tasks | 3 files |
 | Phase 05 P05-03 | 15min | 2 tasks | 7 files |
+| Phase 05 P05-04 | 6min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,7 @@ Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recen
 - [Phase 05]: 05-01 (TRUST-08, ships FIRST per D-09): promoted the server-produced-key namespace into ONE src/lib/cache-key.ts leaf (CACHE_KEY_PREFIX + HASH_PATTERN + cacheKeyFor + new isServerProducedKey). isServerProducedKey = prefix + HASH_PATTERN suffix (the FULL filter the Phase 4 startsWith-only subset lacked, D-08): a foreign or nx-cache-<non-hex> key is filtered BEFORE restore, closing the info-disclosure gap (T-05-08-01). HASH_PATTERN moved out of server.ts so SRV-03 + TRUST-08 share one home; cacheKeyFor output byte-identical (T-05-08-03). Strict cross-file count===1 assertion guards against a duplicate authored literal (T-05-08-02). Leaf imports nothing from siblings (github-identity.ts precedent).
 - [Phase ?]: Host-gated write-trust: pull_request/release admitted only on github.com/*.ghe.com, fail-closed on GHES/malformed (TRUST-01)
 - [Phase ?]: endsWith('.ghe.com') requires a real leading label; bare ghe.com / notghe.com / github.com.attacker.com denied via structural URL hostname parse
+- [Phase 05]: 05-04 (TRUST-06): shipped ppe/action.yml, an ADVISORY composite action (using: composite) self-installing EXACT-pinned zizmor==1.27.0 (pipx) + actionlint 1.7.12 (official download-actionlint.bash), running both non-failing (zizmor --no-exit-codes, actionlint exit swallowed) for the named unsafe-trigger patterns. Positioned in name/description as advisory defense-in-depth, NOT the containment control (D-10/D-11/D-12; containment stays TRUST-02 sync gate + branch protection). ppe-action.spec.ts is the D-11 exact-pin analog: comment-stripped, mutation-proven config-assertion (pin change fails) since consumer-runtime installs are invisible to pinned-deps.spec.ts. Advisory `ppe` CI job dogfoods ./ppe against ppe/fixtures/unsafe-workflow.yml (kept outside .github/workflows so it never runs); the findings-produced behavior is a first-push live close (human_needed). NOTE for reviewer: download-actionlint.bash is fetched from actionlint `main` while the binary is pinned to 1.7.12.
 - [Phase 05]: 05-03 (TRUST-04): trust.ts is the ONE authored allowlist; selfcheck.cjs extracts TRUSTED_EVENTS+HOST_GATED_EVENTS from trust.ts SOURCE (build-order-independent, node builtins only) and emits committed dependency-free trust.generated.cjs (require node:url only, GENERATED banner, in .prettierignore). Two-layer drift guard: CI selfcheck byte-diff exit-1-on-drift + trust.generated.spec.ts full-matrix isWriteTrusted parity (144 combos) + deep-equal arrays. Wired into ci.yml named job + selfcheck/generate:trust scripts + fallow entry/ignore (D-06/D-07).
 
 ### Pending Todos
@@ -163,7 +165,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-20T10:07:38.704Z
-Stopped at: Completed 05-01-PLAN.md (TRUST-08 server-produced-key single-source filter)
+Last session: 2026-07-20T10:19:24.315Z
+Stopped at: Completed 05-04-PLAN.md (TRUST-06 installable PPE-hygiene composite action)
 Resume file: None
-Next: execute 05-02 / 05-03 / 05-04 (trust widening, codegen+selfcheck, PPE composite action)
+Next: verify phase 5 (verify-work / secure-phase / validate-phase), then extract-learnings; the advisory PPE CI job's findings-produced behavior is a first-push live close

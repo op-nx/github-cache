@@ -182,6 +182,16 @@ jobs:
     needs: build
     strategy:
       fail-fast: false
+      # max-parallel 1 serializes the OS legs (WR-01). Run concurrently, each leg
+      # snapshots the shard's asset count once and caches it for the rest of its run,
+      # so both legs can observe the shard at 999 and both pass the soft 1000-asset cap
+      # check, pushing it to 1001 -- one past the documented cap. Serializing makes the
+      # later leg's listReleaseAssets see the earlier leg's uploads, so its cap check is
+      # accurate. Per-OS isolation is unchanged (each leg still runs on its own OS and
+      # mirrors only the entries IT can restore); the only cost is a little wall-clock on
+      # this push-only background mirror job. fail-fast stays off so a Windows-only
+      # failure never hides the ubuntu result.
+      max-parallel: 1
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}

@@ -1,0 +1,184 @@
+---
+phase: 05-trust-widening-ppe-gate
+plan: 03
+subsystem: infra
+tags: [github-actions, write-trust, codegen, drift-guard, selfcheck, commonjs, vitest, fallow]
+
+# Dependency graph
+requires:
+  - phase: 05-trust-widening-ppe-gate
+    provides: widened isWriteTrusted + TRUSTED_EVENTS + HOST_GATED_EVENTS + hostSupportsWidenedTrust single source (05-02)
+  - phase: 02-write-gate
+    provides: isWriteTrusted / TRUSTED_EVENTS write gate
+provides:
+  - selfcheck.cjs generator + byte-diff drift tripwire (extracts allowlists from trust.ts SOURCE)
+  - committed dependency-free trust.generated.cjs (node:url only) mirroring the widened allowlist + host gate
+  - trust.generated.spec.ts full-matrix semantic-parity guard (TS vs .cjs) + deep-equal arrays
+  - selfcheck job in ci.yml + selfcheck/generate:trust package scripts + fallow entry/ignore wiring
+affects: [05-04-ppe-action, 06-distribution-docs]
+
+# Tech tracking
+tech-stack:
+  added: []
+  patterns:
+    - "Single-source codegen: extract array literals from TS SOURCE via deterministic regex, emit a fixed CommonJS template (build-order-independent, node builtins only)"
+    - "Two-layer parity guard: CI byte-diff selfcheck (structural drift / hand edits) + Vitest full-matrix semantic parity (behavioral drift)"
+    - "Byte-exact generated artifact excluded from prettier (mirrors the vendored-fixture precedent) so formatting cannot trigger a false drift trip"
+
+key-files:
+  created:
+    - packages/github-cache/selfcheck.cjs
+    - packages/github-cache/src/action/trust.generated.cjs
+    - packages/github-cache/src/lib/trust.generated.spec.ts
+  modified:
+    - .github/workflows/ci.yml
+    - package.json
+    - .fallowrc.jsonc
+    - .prettierignore
+
+key-decisions:
+  - "The .cjs is GENERATED from trust.ts source (deterministic regex extraction) and committed; never hand-maintained (D-05/D-06). GENERATED banner + prohibition comment."
+  - "selfcheck reads trust.ts SOURCE not dist, so it is build-order-independent and runs with node builtins only (A4/T-05-04-03)"
+  - "trust.generated.cjs added to .prettierignore (deviation, Rule 3): byte-exact artifact owned by selfcheck; prettier reformatting would create a false drift-guard trip with no trust.ts change (mirrors the vendored-json fixture precedent)"
+
+patterns-established:
+  - "createRequire(import.meta.url) to require() the committed .cjs from a Vitest spec so the exact consumer-runtime artifact is exercised"
+  - "Non-vacuous parity: the matrix asserts BOTH trusted and untrusted verdicts appear, so parity cannot pass trivially against an all-deny bug"
+  - "Drift tripwire proven by manual mutation: a one-char hand edit -> exit 1 + stderr, restored -> exit 0"
+
+requirements-completed: [TRUST-04]
+
+coverage:
+  - id: D1
+    description: "Committed dependency-free .cjs reproduces isWriteTrusted verdicts IDENTICAL to trust.ts across the full env matrix (GITHUB_ACTIONS x GITHUB_EVENT_NAME x GITHUB_SERVER_URL, 144 combinations)"
+    requirement: TRUST-04
+    verification:
+      - kind: unit
+        ref: "packages/github-cache/src/lib/trust.generated.spec.ts#trust.generated.cjs semantic parity with trust.ts (TRUST-04)"
+        status: pass
+    human_judgment: false
+  - id: D2
+    description: "The .cjs TRUSTED_EVENTS and HOST_GATED_EVENTS deep-equal trust.ts's arrays"
+    requirement: TRUST-04
+    verification:
+      - kind: unit
+        ref: "packages/github-cache/src/lib/trust.generated.spec.ts#trust.generated.cjs allowlist arrays deep-equal trust.ts (TRUST-04)"
+        status: pass
+    human_judgment: false
+  - id: D3
+    description: "selfcheck.cjs regenerates the .cjs in-memory and exits 1 (stderr drift message) when the committed copy drifted, exit 0 when in sync"
+    requirement: TRUST-04
+    verification:
+      - kind: manual
+        ref: "node packages/github-cache/selfcheck.cjs after a one-char hand edit -> exit 1 + stderr; restored -> exit 0 (recorded in this summary)"
+        status: pass
+    human_judgment: true
+  - id: D4
+    description: "The .cjs is dependency-free CommonJS (require only node builtins) so a JS action can run it before npm ci"
+    requirement: TRUST-04
+    verification:
+      - kind: unit
+        ref: "grep: only require in trust.generated.cjs is require('node:url'); no require('@ or bare-package require"
+        status: pass
+    human_judgment: false
+  - id: D5
+    description: "selfcheck runs in CI as a distinct named job in the check battery (D-07)"
+    requirement: TRUST-04
+    verification:
+      - kind: config
+        ref: ".github/workflows/ci.yml#selfcheck job -> `- run: npm run selfcheck`"
+        status: pass
+    human_judgment: false
+
+# Metrics
+duration: 15min
+completed: 2026-07-20
+status: complete
+---
+
+# Phase 5 Plan 03: Single-Source Trust Codegen + selfcheck Drift Guard Summary
+
+**The widened trust.ts allowlist is now the single authored source for a committed, dependency-free CommonJS copy generated by selfcheck.cjs; a two-layer guard (CI byte-diff selfcheck + a full-matrix Vitest semantic-parity spec) fails the build on any drift.**
+
+## Performance
+
+- **Duration:** ~15 min
+- **Completed:** 2026-07-20
+- **Tasks:** 2 (Task 1 TDD RED -> GREEN)
+- **Files created:** 3, **modified:** 4
+
+## Accomplishments
+- `selfcheck.cjs`: a dependency-free generator + drift tripwire. `generateTrustCjs()` reads `src/lib/trust.ts` SOURCE, extracts `TRUSTED_EVENTS` + `HOST_GATED_EVENTS` via deterministic regex, and emits a fixed CommonJS template reproducing `hostSupportsWidenedTrust` + `isWriteTrusted` verbatim. `--write` (re)writes the committed copy; no-args regenerates in-memory and byte-diffs, exiting 1 with a stderr message on drift (D-07).
+- `src/action/trust.generated.cjs`: the committed dependency-free copy (only `require('node:url')`), carrying a GENERATED banner + do-not-hand-edit prohibition, mirroring the widened allowlist + host gate (D-06). Produced solely by `node selfcheck.cjs --write` (idempotent).
+- `trust.generated.spec.ts`: the load-bearing behavioral guard. `createRequire` loads the committed `.cjs` and asserts `isWriteTrusted` parity with trust.ts across all 144 env combinations, plus a non-vacuous check (both verdicts appear) and deep-equal allowlist arrays.
+- Wired selfcheck into the check battery: a distinct `selfcheck` CI job, `selfcheck` + `generate:trust` package scripts, a fallow `entry` for the bin and an `ignorePatterns` for the generated artifact.
+
+## Task Commits
+
+Each task committed atomically (Task 1 TDD RED -> GREEN):
+
+1. **Task 1 (RED): failing semantic-parity spec** - `3886e55` (test) - spec fails with "Cannot find module ../action/trust.generated.cjs"
+2. **Task 1 (GREEN): generator + committed .cjs** - `9f9559a` (feat) - 147 parity tests green, selfcheck exit 0, idempotent
+3. **Task 2: CI + scripts + fallow wiring** - `f0325b0` (chore) - drift tripwire proven, fallow/format clean
+
+**Plan metadata:** committed separately (docs: complete plan)
+
+## Files Created/Modified
+- `packages/github-cache/selfcheck.cjs` (new) - Generator (`generateTrustCjs`) + CLI (`--write` / drift-diff) guarded by `require.main === module`. Extracts from trust.ts SOURCE (build-order-independent); node builtins only.
+- `packages/github-cache/src/action/trust.generated.cjs` (new, generated) - Committed dependency-free CommonJS write gate. `module.exports = { isWriteTrusted, TRUSTED_EVENTS, HOST_GATED_EVENTS }`.
+- `packages/github-cache/src/lib/trust.generated.spec.ts` (new) - Full-matrix parity + non-vacuous + array deep-equal (147 tests).
+- `.github/workflows/ci.yml` - New `selfcheck` job (checkout + setup-node + npm ci + `npm run selfcheck`), a named red job on drift.
+- `package.json` - `selfcheck` and `generate:trust` scripts.
+- `.fallowrc.jsonc` - `selfcheck.cjs` as `entry`; `trust.generated.cjs` as `ignorePatterns`.
+- `.prettierignore` - excludes `trust.generated.cjs` (byte-exact generated artifact; see Deviations).
+
+## Decisions Made
+- The `.cjs` is generated by deterministic regex extraction of the two array literals from trust.ts source and embedded in a fixed CommonJS template (Claude's-discretion mechanism A4). An AST parser would be more code for no gain at n=2 arrays.
+- selfcheck reads trust.ts SOURCE (not the dist build output), keeping it build-order-independent and runnable with node builtins only (T-05-04-03).
+- Used `??` (matching trust.ts) in the generated host/event reads; verdicts are provably identical to trust.ts across the matrix (which includes the empty-string and unset server-URL cases).
+
+## Deviations from Plan
+
+**1. [Rule 3 - Blocking-issue prevention] Added `trust.generated.cjs` to `.prettierignore`**
+- **Found during:** Task 1 GREEN (format:check evaluation).
+- **Issue:** The generated `.cjs` is a byte-exact artifact whose bytes are owned by `selfcheck.cjs` and byte-diffed in CI. If prettier ever reformatted it (via a `nx format:write` or a future prettier-config change), the committed copy would no longer match a fresh regeneration -> a false `selfcheck` drift trip with no trust.ts change.
+- **Fix:** Excluded it from prettier, exactly mirroring the repo's existing precedent for the byte-exact vendored Nx OpenAPI fixture. The generated output happens to be prettier-clean today, so this changes nothing observable now; it permanently decouples the artifact from prettier's evolving opinion.
+- **Files modified:** `.prettierignore`
+- **Commit:** `9f9559a`
+
+The plan's `files_modified` frontmatter did not list `.prettierignore`; this is the only addition beyond the listed set. All planned files were produced as specified.
+
+## Issues Encountered
+None. Baseline suite (271 tests) green; after this plan the suite is 418 tests green (+147 from the parity matrix). No fix-attempt loops.
+
+## Threat Model Coverage
+- **T-05-04-01 (Tampering, generated .cjs drifting from trust.ts):** mitigated - two-layer guard: `selfcheck.cjs` byte-diff (catches hand edits + stale arrays) wired into CI as a named job, plus the full-matrix semantic-parity spec (catches host-logic divergence). GENERATED banner + prohibition comment discourage hand edits.
+- **T-05-04-02 (Tampering, a second hand-maintained allowlist copy):** mitigated - the .cjs is generated from the single trust.ts source (D-05/D-06); no authored dual copy. Parity spec + selfcheck fail the build on any manual divergence.
+- **T-05-04-03 (Config/Build, selfcheck depending on build output):** mitigated - selfcheck extracts arrays from trust.ts SOURCE (not dist), so it is build-order-independent and runs with node builtins only.
+
+## Drift-Guard Evidence (manual proof, not a committed test change)
+Appended a stray `// stray drift char` line to the committed `trust.generated.cjs`, ran `node packages/github-cache/selfcheck.cjs`:
+- Output: `selfcheck: DRIFT -- src/action/trust.generated.cjs is out of sync with src/lib/trust.ts. Regenerate with ... (never hand-edit the .cjs).`
+- Exit code: `1`.
+Restored via `git checkout -- packages/github-cache/src/action/trust.generated.cjs`; re-ran selfcheck -> `in sync`, exit `0`. Tree left clean.
+
+## User Setup Required
+None - no external service configuration required. The generated `.cjs` is committed; consumers (Phase 6) will `require` it pre-`npm ci`.
+
+## Next Phase Readiness
+- The single-source allowlist + committed dependency-free copy + drift guard is complete and CI-wired; ready for 05-04 (PPE composite action). No consumer action is built this phase (Phase 6 scope, per RESOLVED open question 3).
+- No blockers.
+
+## Verification
+- `npx nx test github-cache`: 418 tests green (147 in trust.generated.spec.ts).
+- `node packages/github-cache/selfcheck.cjs`: exit 0 in sync; exit 1 + stderr on a deliberate drift (restored).
+- `npm run typecheck`, `npm run build`, `npm run fallow:ci` (0 issues), `npx nx format:check --all`: all clean.
+- Idempotent: re-running `--write` produces a byte-identical file.
+
+## Self-Check: PASSED
+
+All three created files exist on disk (`selfcheck.cjs`, `trust.generated.cjs`, `trust.generated.spec.ts`); all four modified files updated. All three task commits (`3886e55`, `9f9559a`, `f0325b0`) present in git history. Full battery green.
+
+---
+*Phase: 05-trust-widening-ppe-gate*
+*Completed: 2026-07-20*

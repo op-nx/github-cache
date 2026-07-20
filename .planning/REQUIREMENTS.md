@@ -73,12 +73,12 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 - [ ] **DOCS-03**: trust/security section: events that write; CREEP posture; github.com-only backstop + **GHES floor**; **never enable fork-PR send-tokens/secrets**; **default-branch-protection** + ephemeral-single-tenant-runner prerequisites; coupled-`CACHE_MIRROR_MAX_AGE_DAYS`; read-only-local-by-design; **retention = storage-hygiene, not poison-containment**; mirrored keys are anonymously public; freshness-window + mid-session-staleness caveats; (GHCR) pull-by-digest + package-visibility publish step
 - [ ] **DOCS-04**: a minimal **example adopter config** (example workflow/repo), distinct from this repo's maximal dogfood config
 - [ ] **DOCS-05**: an **enumerated, tested public surface** (every consumer env knob, action input, package export) with a test that fails on unintended changes ("dogfood changes stay consumer-safe")
-- [ ] **DOCS-06** (CI sidecar pattern): document running `serve` as a GitHub Actions **background step** (`background: true` + an explicit **`cancel:` teardown** — mandatory, because the runner's implicit `wait-all` before post-job cleanup would otherwise hang on the never-exiting server), Nx pointed at `NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://localhost:<port>`; with the plain `&` background-process **fallback for GHES / older runners** that lack the feature. Note the consumption Action is a **JS action** (a composite action cannot declare `background:` internally); the background-step / `&` pattern serves the token-based **Releases reader**, whereas the CI-RW **Actions-cache** backend must be launched from a JS action - a plain `run:`/background step's `@actions/cache` save/restore silently no-ops (git-history-confirmed; see PITFALLS.md)
+- [x] **DOCS-06** (CI sidecar pattern): document running `serve` as a GitHub Actions **background step** (`background: true` + an explicit **`cancel:` teardown** — mandatory, because the runner's implicit `wait-all` before post-job cleanup would otherwise hang on the never-exiting server), Nx pointed at `NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://localhost:<port>`; with the plain `&` background-process **fallback for GHES / older runners** that lack the feature. Note the consumption Action is a **JS action** (a composite action cannot declare `background:` internally); the background-step / `&` pattern serves the token-based **Releases reader**, whereas the CI-RW **Actions-cache** backend must be launched from a JS action - a plain `run:`/background step's `@actions/cache` save/restore silently no-ops (git-history-confirmed; see PITFALLS.md)
 
 ### Governance
 
 - [ ] **GOV-01**: **SECURITY.md** vulnerability-disclosure policy (required for a poisoning-class tool)
-- [ ] **GOV-02**: LICENSE (MIT)
+- [x] **GOV-02**: LICENSE (MIT)
 - [ ] **GOV-03**: a versioned **consumer-contract / semver** statement (what "breaking" means for the public surface)
 
 ## Later-Milestone Requirements

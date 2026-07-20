@@ -37,6 +37,9 @@ runs:
     - name: Install actionlint (exact-pinned 1.7.12)
       shell: bash
       run: |
+        # download-actionlint.bash requires the target DIR to already exist; it
+        # does not create it (verified live: exit 1 "Directory ... does not exist").
+        mkdir -p "${RUNNER_TEMP}/actionlint-bin"
         bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) \
           1.7.12 "${RUNNER_TEMP}/actionlint-bin"
     - name: zizmor audit (advisory)

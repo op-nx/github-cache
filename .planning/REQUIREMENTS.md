@@ -29,19 +29,19 @@ Delivered by the Phase 1 walking-skeleton server - Core-Value hardening properti
 
 - [x] **TEST-01**: `selectBackend` unit specs (CI-vs-local, `GITHUB_REPOSITORY` validation, `GH_TOKEN||GITHUB_TOKEN` fallthrough, malformed-repo rejection, explicit `env` param)
 - [x] **TEST-02**: `withHashLock` concurrency spec (same-hash serializes; different concurrent; entry evicted; rejected op doesn't wedge)
-- [ ] **TEST-03**: the **publish + cleanup orchestration** (the `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is **built behind an injected client and tested**, with already-exists / not-found / other-fault branches
-- [ ] **TEST-04**: cleanup bin wrapper spec (per-item isolation + non-zero exit on aggregated failure) — paired with RETAIN-01's list-phase-abort test
+- [x] **TEST-03**: the **publish + cleanup orchestration** (the `gh`/client I/O: ensure-shard, upload, get-release, list-assets, cleanup) is **built behind an injected client and tested**, with already-exists / not-found / other-fault branches
+- [x] **TEST-04**: cleanup bin wrapper spec (per-item isolation + non-zero exit on aggregated failure) — paired with RETAIN-01's list-phase-abort test
 - [x] **TEST-05**: regression guards for the must-not-reopen cross-OS invariants **and** a cross-OS round-trip through the chosen reader adapter (OS-invariant + OS-sensitive hash, from each CI OS)
 - [x] **TEST-06**: date-cleanup + read-only-local covered (expired pruned; within-window retained; local `put()` always 403)
 - [x] **TEST-07**: conformance fixture that **hashes the full vendored Nx spec** and **pins a named Nx version** (not `info.version`), asserting the server's success/401/403/404/409 + required `Content-Length`; **floor = Nx 21+ (server must return exactly `200`** — verified: the Nx client matches `200` strictly, treats `409`/`403` as graceful no-ops, and errors on any other status, so a `202` breaks it)
 
 ### Robustness
 
-- [ ] **ROBUST-01**: structural error discrimination (client `error.status`, not stderr text) on **both publish and cleanup/delete** paths; a real fault is never treated as absence
-- [ ] **ROBUST-02**: the large-body path is verified **per-primitive** (Actions-cache + **Releases** now that FOUND-01 is locked, not a generic "~2 GB"). Binding limit (spike 003): the **Releases ~2 GiB/asset ceiling coincides with the 2 GB server body cap** — an artifact at the cap sits on the failure boundary and MUST **fail loud, not silently truncate/drop**
+- [x] **ROBUST-01**: structural error discrimination (client `error.status`, not stderr text) on **both publish and cleanup/delete** paths; a real fault is never treated as absence
+- [x] **ROBUST-02**: the large-body path is verified **per-primitive** (Actions-cache + **Releases** now that FOUND-01 is locked, not a generic "~2 GB"). Binding limit (spike 003): the **Releases ~2 GiB/asset ceiling coincides with the 2 GB server body cap** — an artifact at the cap sits on the failure boundary and MUST **fail loud, not silently truncate/drop**
 - [x] **ROBUST-03**: `@actions/cache` (and version-hash-sensitive deps) pinned **exact** (not `^`); upgrades gated behind `test:act`
 - [x] **ROBUST-04** (graceful shutdown): the `serve` process handles **`SIGTERM`** to flush in-flight writes / finalize async backfill before exit — required by the GitHub Actions background-step teardown (`cancel` sends `SIGTERM` then `SIGKILL` after a short grace), so a RW job does not lose its last writes at teardown; tested (SIGTERM during an in-flight put drains before exit)
-- [ ] **ROBUST-05** (Releases 1000-asset/release cap, LOCKED-bound): the month-shard model keeps assets under the per-release cap; if a shard nonetheless reaches the **1000-asset limit**, the publish path **skips-and-warns** (workflow annotation, non-zero-free) rather than hard-failing the build — the cap degrades to a MISS-on-write, never a broken run
+- [x] **ROBUST-05** (Releases 1000-asset/release cap, LOCKED-bound): the month-shard model keeps assets under the per-release cap; if a shard nonetheless reaches the **1000-asset limit**, the publish path **skips-and-warns** (workflow annotation, non-zero-free) rather than hard-failing the build — the cap degrades to a MISS-on-write, never a broken run
 
 ### Trust & CREEP-safety
 

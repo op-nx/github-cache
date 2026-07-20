@@ -1,0 +1,245 @@
+import * as core from '@actions/core';
+import { createActionsCacheBackend } from '../backend/actions-cache-backend.js';
+import { releaseAssetName } from '../lib/release-asset-name.js';
+import { shardTag } from '../lib/retention.js';
+
+/**
+ * The ~2 GiB per-asset Releases ceiling, which coincides with the server's 2 GB body
+ * cap (D-12/ROBUST-02). Checked BEFORE any upload so the outcome is deterministic: an
+ * artifact at or over this size fails the whole run loud, it is never truncated or
+ * dropped. The exact boundary (>= vs >) is pinned by publish-mirror.spec.ts.
+ */
+export const RELEASE_ASSET_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+
+/**
+ * The per-release (per month shard) asset cap (D-11/ROBUST-05). A shard already holding
+ * this many assets degrades a new entry to skip-and-warn -- a cache MISS-on-write -- and
+ * never hard-fails the build. The cap tracks monthly write volume, independent of the
+ * retention window.
+ */
+export const RELEASE_ASSET_CAP = 1000;
+
+const CACHE_KEY_PREFIX = 'nx-cache-';
+
+/** The single restore-result shape the engine consumes (mirrors the CacheBackend get). */
+export type GetResult =
+  | { readonly kind: 'hit'; readonly bytes: Buffer }
+  | { readonly kind: 'miss' };
+
+/** An Actions-cache entry as the publisher needs it: only its key drives the mirror. */
+export interface CacheEntry {
+  readonly key: string;
+}
+
+/** A GitHub Release as the publisher needs it: its id addresses the shard's assets. */
+export interface PublishRelease {
+  readonly id: number;
+}
+
+/**
+ * The narrow injected client (D-02/D-04 seam, the ReleaseReadClient precedent). Each
+ * method wraps a single Octokit call in the real 04-06 adapter and is free to throw an
+ * Octokit-shaped fault carrying a numeric `status`. This module imports NO @octokit/rest:
+ * the engine is pure orchestration behind this seam, so the full fault matrix is
+ * unit-tested with a fault-shaped fake and no live network.
+ *
+ * listReleaseAssets returns the FULLY materialized set of asset names (the real adapter
+ * paginates, never reading a release's inline `assets` first-page snapshot -- Pitfall 4).
+ * getReleaseByTag throws a 404 when the shard does not exist yet; createRelease throws a
+ * 422 when another matrix leg created the tag first.
+ */
+export interface PublishClient {
+  listCacheEntries(): Promise<CacheEntry[]>;
+  getReleaseByTag(tag: string): Promise<PublishRelease>;
+  createRelease(tag: string): Promise<PublishRelease>;
+  listReleaseAssets(releaseId: number): Promise<string[]>;
+  uploadReleaseAsset(
+    releaseId: number,
+    name: string,
+    bytes: Buffer,
+  ): Promise<void>;
+}
+
+/** Run counts for the OBS-01 summary (D-17); the bin emits the summary from these. */
+export interface PublishResult {
+  readonly mirrored: number;
+  readonly skipped: number;
+  readonly failed: number;
+}
+
+/** Test-injection knobs only (no runtime mode surface). `now` pins the shard tag. */
+export interface PublishOptions {
+  readonly now?: Date;
+}
+
+/**
+ * Duck-type the numeric status off an Octokit-shaped fault (ROBUST-01, D-04). Never
+ * `instanceof RequestError` (two @octokit/request-error versions can coexist in the
+ * dependency tree) and never stderr text: discrimination is STRUCTURAL on error.status.
+ * Inlined rather than shared with cleanup.ts so this engine imports nothing from a
+ * sibling module (the same 8-line duck-type ships in both, matching the 04-03 precedent).
+ */
+function statusOf(error: unknown): number | undefined {
+  if (
+    error !== null &&
+    typeof error === 'object' &&
+    typeof (error as { status?: unknown }).status === 'number'
+  ) {
+    return (error as { status: number }).status;
+  }
+
+  return undefined;
+}
+
+/**
+ * Get-or-create the month-shard release, tolerating a concurrent-create race across the
+ * per-OS matrix legs (D-05). Structural fault discrimination throughout (ROBUST-01):
+ * only a 404 on the lookup means "not created yet"; a 422 on create means "another leg
+ * created the tag first" -> re-read. Every other status is a REAL fault and propagates,
+ * never inferred as absence.
+ */
+async function ensureShardRelease(
+  client: PublishClient,
+  tag: string,
+): Promise<number> {
+  try {
+    const release = await client.getReleaseByTag(tag);
+
+    return release.id;
+  } catch (error) {
+    if (statusOf(error) !== 404) {
+      throw error;
+    }
+  }
+
+  try {
+    const release = await client.createRelease(tag);
+
+    return release.id;
+  } catch (error) {
+    if (statusOf(error) === 422) {
+      const release = await client.getReleaseByTag(tag);
+
+      return release.id;
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * The out-of-band publish/mirror engine (D-02/D-03/D-05/D-11/D-12, TEST-03,
+ * ROBUST-01/02/05, TRUST-07, OBS-01). Enumerate default-branch Actions-cache entries,
+ * mirror ONLY the server-produced `nx-cache-` keys (D-16), restore each hash's bytes on
+ * THIS OS leg, and upload to the current-month shard release without ever overwriting:
+ *
+ * - Enumeration (whole-run): a listCacheEntries fault propagates so the bin fails loud.
+ * - Filter (D-16): only keys starting `nx-cache-` are mirrored, the prefix sliced to the
+ *   hash; every other CI cache key is ignored.
+ * - Restore (D-03): a foreign-OS or evicted entry MISSes its same-OS restore and is
+ *   skipped -- never an error. The shard release is ensured LAZILY, only once there is a
+ *   restorable entry, so an all-MISS leg never creates an empty release.
+ * - ~2 GiB boundary (D-12/ROBUST-02): a pre-upload bytes.byteLength check fails the whole
+ *   run loud (core.error + throw) BEFORE any upload -- never truncate or drop.
+ * - 1000-asset cap (D-11/ROBUST-05): a shard at the cap skips-and-warns (core.warning),
+ *   never hard-fails.
+ * - First-write-wins (D-05/TRUST-07): a name already present is a benign no-op (the shard
+ *   asset set is byte-identical under CORR-01); a duplicate-upload race returning 422 is
+ *   likewise benign. A real per-item fault (401/403/429/5xx) is annotated and counted but
+ *   isolated so the rest of the batch still mirrors (D-13 per-item vs whole-run).
+ *
+ * Returns mirrored/skipped/failed counts; the bin emits the OBS-01 summary from them.
+ */
+export async function publishMirror(
+  client: PublishClient,
+  options: PublishOptions = {},
+): Promise<PublishResult> {
+  const tag = shardTag(options.now);
+  const actionsCache = createActionsCacheBackend();
+
+  const entries = await client.listCacheEntries();
+  const hashes = entries
+    .filter((entry) => entry.key.startsWith(CACHE_KEY_PREFIX))
+    .map((entry) => entry.key.slice(CACHE_KEY_PREFIX.length));
+
+  let mirrored = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  // The shard release + its asset set, resolved lazily on the first restorable entry.
+  let releaseId: number | undefined;
+  let existingNames: Set<string> | undefined;
+
+  for (const hash of hashes) {
+    const restored: GetResult = await actionsCache.get(hash);
+
+    if (restored.kind === 'miss') {
+      skipped++;
+
+      continue;
+    }
+
+    const bytes = restored.bytes;
+    const name = releaseAssetName(hash);
+
+    // D-12: deterministic pre-upload boundary check -- fail the whole run loud BEFORE any
+    // upload, so an oversized artifact is never truncated or dropped (ROBUST-02).
+    if (bytes.byteLength >= RELEASE_ASSET_MAX_BYTES) {
+      core.error(
+        `github-cache: asset ${name} is ${bytes.byteLength} bytes, at or over the ~2 GiB Releases ceiling; refusing to upload (never truncate).`,
+      );
+
+      throw new Error(
+        'github-cache: cache asset exceeds the ~2 GiB release-asset ceiling',
+      );
+    }
+
+    if (releaseId === undefined || existingNames === undefined) {
+      releaseId = await ensureShardRelease(client, tag);
+      existingNames = new Set(await client.listReleaseAssets(releaseId));
+    }
+
+    // D-11: the 1000-asset per-release cap degrades to skip-and-warn, never a hard fail.
+    if (existingNames.size >= RELEASE_ASSET_CAP && !existingNames.has(name)) {
+      core.warning(
+        `github-cache: month-shard release ${tag} is at the ${RELEASE_ASSET_CAP}-asset cap; skipping ${name} (cache MISS-on-write, not an error).`,
+      );
+      skipped++;
+
+      continue;
+    }
+
+    // D-05 first-write-wins: an already-present name is a benign no-op (byte-identical
+    // under CORR-01) -- no upload, never an overwrite.
+    if (existingNames.has(name)) {
+      skipped++;
+
+      continue;
+    }
+
+    try {
+      await client.uploadReleaseAsset(releaseId, name, bytes);
+      existingNames.add(name);
+      mirrored++;
+    } catch (error) {
+      if (statusOf(error) === 422) {
+        // A duplicate-upload race (another leg wrote the same byte-identical name between
+        // our list and upload) returns 422 already_exists -- benign no-op (D-05),
+        // discriminated on status alone, never on body text.
+        skipped++;
+
+        continue;
+      }
+
+      // A real per-item fault (401/403/429/5xx): annotate + count, but isolate it so the
+      // rest of the batch still mirrors (D-13). Only the asset name + numeric status are
+      // logged -- never a token, never a raw workflow-command string.
+      failed++;
+      core.warning(
+        `github-cache: failed to mirror ${name} (status ${statusOf(error) ?? 'unknown'}); continuing.`,
+      );
+    }
+  }
+
+  return { mirrored, skipped, failed };
+}

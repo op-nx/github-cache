@@ -60,6 +60,25 @@ jobs:
       - run: npm ci
       - run: npm run selfcheck
 
+  # Advisory PPE-hygiene dogfood (TRUST-06 / D-12). Runs the shipped composite
+  # action (ppe/action.yml) against a KNOWN-unsafe fixture workflow to prove it
+  # self-installs exact-pinned zizmor + actionlint and emits findings. ADVISORY
+  # only: the action runs its tools non-failing (zizmor --no-exit-codes,
+  # actionlint exit swallowed), so findings surface as annotations, NEVER a gate
+  # -- containment stays the sync gate + default-branch protection, never this
+  # job. It targets ppe/fixtures/unsafe-workflow.yml (deliberately outside
+  # .github/workflows so GitHub never runs it). Kept a distinct named job (like
+  # selfcheck/fallow) separate from the typecheck/test battery. Its
+  # "produces findings" behavior is the first-push live close for TRUST-06
+  # (expect a human_needed/live confirm on the CI run).
+  ppe:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./ppe
+        with:
+          path: ppe/fixtures/unsafe-workflow.yml
+
   build:
     runs-on: ubuntu-24.04-arm
     steps:

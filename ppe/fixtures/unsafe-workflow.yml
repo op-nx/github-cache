@@ -1,0 +1,20 @@
+# FIXTURE ONLY -- intentionally UNSAFE. Never place this file under
+# .github/workflows: it must NEVER execute. It exists solely as a scan target
+# for the advisory PPE gate (ppe/action.yml), giving zizmor (dangerous-triggers
+# + template-injection + unpinned-uses) and actionlint a known-unsafe workflow
+# to flag so the `ppe` job in ci.yml proves the gate actually emits findings.
+#
+# The unsafe pattern embodied here is the canonical CREEP vector: a
+# pull_request_target trigger that checks out the PR head and interpolates an
+# untrusted event field straight into a run: shell step.
+name: unsafe fixture (do not run)
+on:
+  pull_request_target:
+jobs:
+  unsafe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: echo "PR title is ${{ github.event.pull_request.title }}"

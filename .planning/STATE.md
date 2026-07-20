@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.0.1
 milestone_name: Greenfield MVP Rebuild
-current_phase: 5
-current_phase_name: Trust-Widening + PPE Gate
+current_phase: 6
+current_phase_name: Distribution + Docs + Governance
 status: verifying
 stopped_at: Completed 05-04-PLAN.md (TRUST-06 installable PPE-hygiene composite action)
-last_updated: "2026-07-20T10:19:24.327Z"
+last_updated: "2026-07-20T19:35:07.426Z"
 last_activity: 2026-07-20
-last_activity_desc: Executed 05-04 (TRUST-06 installable PPE-hygiene composite action)
+last_activity_desc: Phase 05 complete, transitioned to Phase 6
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 28
   completed_plans: 28
-  percent: 71
+  percent: 86
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 ## Current Position
 
-Phase: 5 — Trust-Widening + PPE Gate
-Plan: 05-04 complete (4 of 4)
+Phase: 6 — Distribution + Docs + Governance
+Plan: Not started
 Status: Phase 5 plans all done — awaiting verification (verify/secure/validate)
-Last activity: 2026-07-20 — Executed 05-04 (TRUST-06 installable PPE-hygiene composite action)
+Last activity: 2026-07-20 — Phase 05 complete, transitioned to Phase 6
 
 Progress: [██████████] 100% of planned plans (phase 5 pending verification)
 
@@ -39,7 +39,7 @@ Progress: [██████████] 100% of planned plans (phase 5 pendin
 
 **Velocity:**
 
-- Total plans completed: 21
+- Total plans completed: 25
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -51,6 +51,7 @@ Progress: [██████████] 100% of planned plans (phase 5 pendin
 | 1 | 4 | - | - |
 | 02 | 6 | - | - |
 | 04 | 6 | - | - |
+| 05 | 4 | - | - |
 
 **Recent Trend:**
 

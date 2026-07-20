@@ -1,5 +1,9 @@
 import * as core from '@actions/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createReleasesReadBackend,
+  type ReleaseReadClient,
+} from '../backend/releases-backend.js';
 import { octokitFault } from '../test/octokit-fault.js';
 import {
   cleanupMirror,
@@ -222,5 +226,22 @@ describe('cleanupMirror observability (OBS-01)', () => {
     expect(flat).toContain('failed');
     expect(flat).toContain('scanned');
     expect(core.summary.write).toHaveBeenCalledOnce();
+  });
+});
+
+describe('createReleasesReadBackend read-only-local put re-assertion (TEST-06)', () => {
+  // ROADMAP couples TEST-06's read-only-local half (a local put() always resolves
+  // 'forbidden' / 403 -- there is no local write path) with this phase's date-cleanup,
+  // so it is re-asserted here alongside the prune/retain tests. The put path itself is
+  // unchanged from Phase 3; this pins the coupling in a Phase 4 spec.
+  it("resolves 'forbidden' for a local put -- there is no local write path (TEST-06)", async () => {
+    const readOnlyClient: ReleaseReadClient = {
+      async fetchAsset(): Promise<Buffer | undefined> {
+        return undefined;
+      },
+    };
+    const backend = createReleasesReadBackend(readOnlyClient);
+
+    expect(await backend.put('abc123', Buffer.from('x'))).toBe('forbidden');
   });
 });

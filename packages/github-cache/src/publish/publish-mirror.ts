@@ -1,5 +1,6 @@
 import * as core from '@actions/core';
 import { createActionsCacheBackend } from '../backend/actions-cache-backend.js';
+import { CACHE_KEY_PREFIX, isServerProducedKey } from '../lib/cache-key.js';
 import { releaseAssetName } from '../lib/release-asset-name.js';
 import { shardTag } from '../lib/retention.js';
 
@@ -18,8 +19,6 @@ export const RELEASE_ASSET_MAX_BYTES = 2 * 1024 * 1024 * 1024;
  * retention window.
  */
 export const RELEASE_ASSET_CAP = 1000;
-
-const CACHE_KEY_PREFIX = 'nx-cache-';
 
 /** The single restore-result shape the engine consumes (mirrors the CacheBackend get). */
 export type GetResult =
@@ -129,12 +128,15 @@ async function ensureShardRelease(
 /**
  * The out-of-band publish/mirror engine (D-02/D-03/D-05/D-11/D-12, TEST-03,
  * ROBUST-01/02/05, TRUST-07, OBS-01). Enumerate default-branch Actions-cache entries,
- * mirror ONLY the server-produced `nx-cache-` keys (D-16), restore each hash's bytes on
- * THIS OS leg, and upload to the current-month shard release without ever overwriting:
+ * mirror ONLY the server-produced keys via isServerProducedKey (D-16/D-08/TRUST-08),
+ * restore each hash's bytes on THIS OS leg, and upload to the current-month shard
+ * release without ever overwriting:
  *
  * - Enumeration (whole-run): a listCacheEntries fault propagates so the bin fails loud.
- * - Filter (D-16): only keys starting `nx-cache-` are mirrored, the prefix sliced to the
- *   hash; every other CI cache key is ignored.
+ * - Filter (D-08/TRUST-08): only server-produced keys (prefix + a valid HASH_PATTERN
+ *   suffix) are mirrored, the prefix sliced to the hash; a foreign key OR a
+ *   `nx-cache-<non-hex>` key is filtered out BEFORE restore, never mirrored as a public
+ *   asset (the hardening the Phase 4 startsWith-only subset lacked).
  * - Restore (D-03): a foreign-OS or evicted entry MISSes its same-OS restore and is
  *   skipped -- never an error. The shard release is ensured LAZILY, only once there is a
  *   restorable entry, so an all-MISS leg never creates an empty release.
@@ -162,7 +164,7 @@ export async function publishMirror(
 
   const entries = await client.listCacheEntries();
   const hashes = entries
-    .filter((entry) => entry.key.startsWith(CACHE_KEY_PREFIX))
+    .filter((entry) => isServerProducedKey(entry.key))
     .map((entry) => entry.key.slice(CACHE_KEY_PREFIX.length));
 
   let mirrored = 0;

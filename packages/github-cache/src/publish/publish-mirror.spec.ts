@@ -70,27 +70,31 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-describe('publishMirror nx-cache- prefix filter (D-16)', () => {
-  it('mirrors ONLY nx-cache- keys, stripping the prefix to the hash, and never restores a non-nx key', async () => {
+describe('publishMirror server-produced-key filter (D-16/D-08/TRUST-08)', () => {
+  it('mirrors ONLY prefix + valid-hex keys, stripping the prefix to the hash, and never restores a foreign or non-hex key', async () => {
     const fake = client({
       listCacheEntries: vi.fn(async () => [
-        { key: 'nx-cache-h1' },
+        { key: 'nx-cache-aa11' },
         { key: 'unrelated-key' },
-        { key: 'nx-cache-h2' },
+        { key: 'nx-cache-zzz' },
+        { key: 'nx-cache-bb22' },
       ]),
     });
 
     const result = await publishMirror(fake);
 
     expect(result.mirrored).toBe(2);
-    // The non-nx key is filtered BEFORE restore, so get is called only with the two hashes.
-    expect(getMock.mock.calls.map((call) => call[0])).toEqual(['h1', 'h2']);
+    // The foreign key AND the nx-cache-<non-hex> key are filtered BEFORE restore, so get
+    // is called only with the two valid-hex hashes. This proves the hardened
+    // isServerProducedKey rejects a garbage suffix -- the D-08 improvement over the old
+    // startsWith-only behavior, which would have restored nx-cache-zzz.
+    expect(getMock.mock.calls.map((call) => call[0])).toEqual(['aa11', 'bb22']);
     const uploadedNames = vi
       .mocked(fake.uploadReleaseAsset)
       .mock.calls.map((call) => call[1]);
     expect(uploadedNames).toEqual([
-      releaseAssetName('h1'),
-      releaseAssetName('h2'),
+      releaseAssetName('aa11'),
+      releaseAssetName('bb22'),
     ]);
   });
 });
@@ -223,8 +227,8 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
   it('isolates and counts a per-item upload 5xx, annotates it, and mirrors the rest (D-13)', async () => {
     const fake = client({
       listCacheEntries: vi.fn(async () => [
-        { key: 'nx-cache-h1' },
-        { key: 'nx-cache-h2' },
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
       ]),
       uploadReleaseAsset: vi
         .fn<PublishClient['uploadReleaseAsset']>()

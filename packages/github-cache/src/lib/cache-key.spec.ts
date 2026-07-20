@@ -103,4 +103,35 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
     expect(source).not.toMatch(/from '\.\.\/server/);
     expect(source).not.toMatch(/from '\.\/select-backend/);
   });
+
+  it('authors the prefix literal exactly ONCE across the leaf + its consumers (strict cross-file single source)', () => {
+    // Now that the backend and publish path route through the leaf, the authored
+    // prefix literal must exist in exactly one production place -- cache-key.ts --
+    // and nowhere else. A second authored copy re-opens the drift T-05-08-02 guards.
+    const files = {
+      'cache-key.ts': new URL('./cache-key.ts', import.meta.url),
+      'actions-cache-backend.ts': new URL(
+        '../backend/actions-cache-backend.ts',
+        import.meta.url,
+      ),
+      'publish-mirror.ts': new URL(
+        '../publish/publish-mirror.ts',
+        import.meta.url,
+      ),
+    };
+
+    const perFile: Record<string, number> = {};
+    let total = 0;
+
+    for (const [name, url] of Object.entries(files)) {
+      const count = countAuthored(readFileSync(url, 'utf8'), CACHE_KEY_PREFIX);
+      perFile[name] = count;
+      total += count;
+    }
+
+    expect(total).toBe(1);
+    expect(perFile['cache-key.ts']).toBe(1);
+    expect(perFile['actions-cache-backend.ts']).toBe(0);
+    expect(perFile['publish-mirror.ts']).toBe(0);
+  });
 });

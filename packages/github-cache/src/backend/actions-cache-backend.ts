@@ -1,18 +1,12 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import * as cache from '@actions/cache';
 import { cacheArchivePath } from '../lib/cache-archive-path.js';
+import { cacheKeyFor } from '../lib/cache-key.js';
 import type { CacheBackend, GetResult, PutResult } from './types.js';
 
-/**
- * Actions-cache key for a task hash. The key space is the same bounded
- * lowercase-hex space the server already validates (HASH_PATTERN
- * ^[a-f0-9]{1,512}$), and the `nx-cache-` prefix keeps these entries
- * distinguishable from unrelated CI cache keys. Hardening this prefix into an
- * enforced server-produced-key filter is Phase 5 / TRUST-08.
- */
-export function cacheKeyFor(hash: string): string {
-  return `nx-cache-${hash}`;
-}
+// The server-produced-key namespace + filter (prefix + HASH_PATTERN) now live in
+// the cache-key.ts single-source leaf (TRUST-08 done); this backend just consumes
+// cacheKeyFor so save and restore key by the one authored prefix.
 
 /**
  * The project's first real storage backend (ROBUST-03, ROADMAP SC5): a

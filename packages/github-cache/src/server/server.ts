@@ -1,11 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
+import { HASH_PATTERN } from '../lib/cache-key.js';
 import type { CacheBackend, PutResult } from '../backend/types.js';
 
 const ROUTE = /^\/v1\/cache\/([^/]*)$/;
 
-/** Bounded lowercase-hex task hash (SRV-03); the Actions-cache key space (TRUST-08). */
-const HASH_PATTERN = /^[a-f0-9]{1,512}$/;
+// The SRV-03 hash guard shares HASH_PATTERN with the TRUST-08 key filter; its
+// single home is the cache-key.ts leaf (one bounded lowercase-hex space).
 
 /** Max PUT body (SRV-04): 2 GiB = 2,147,483,648 bytes. */
 export const MAX_CACHE_BODY_BYTES = 2 * 1024 * 1024 * 1024;

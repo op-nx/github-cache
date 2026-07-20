@@ -3,10 +3,8 @@ import { rm, writeFile } from 'node:fs/promises';
 import * as cache from '@actions/cache';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cacheArchivePath } from '../lib/cache-archive-path.js';
-import {
-  cacheKeyFor,
-  createActionsCacheBackend,
-} from './actions-cache-backend.js';
+import { cacheKeyFor } from '../lib/cache-key.js';
+import { createActionsCacheBackend } from './actions-cache-backend.js';
 
 // First module mock in this repository. @actions/cache only actually works inside
 // a JS action on real CI, so every unit layer MUST mock it and prove the backend

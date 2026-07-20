@@ -1,7 +1,12 @@
 {
   "name": "@op-nx/github-cache",
   "version": "0.0.1",
-  "private": true,
+  "license": "MIT",
+  "author": "Lars Gyrup Brink Nielsen <larsbrinknielsen@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/op-nx/github-cache.git"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -14,6 +19,13 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
+  },
+  "bin": {
+    "github-cache": "./dist/serve.js"
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@actions/cache": "6.2.0",

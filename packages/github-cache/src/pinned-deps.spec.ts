@@ -42,3 +42,29 @@ describe('pinned toolkit dependencies (ROBUST-03)', () => {
     expect(specifier).toMatch(EXACT_SEMVER);
   });
 });
+
+/**
+ * ROBUST-03(b): esbuild bundles the committed consumer JS action entry
+ * (start-cache-server/index.js) that external repos resolve via `uses:`. Its
+ * output is a supply-chain input to every consumer, and the CI drift guard
+ * (`npm run check:action`) only proves the committed bundle matches a rebuild
+ * with the INSTALLED esbuild -- so a range specifier could silently swap the
+ * audited (legitimacy verdict OK) build tool for an un-audited minor/patch and
+ * change the bundle bytes. esbuild is a devDependency ONLY (never shipped to
+ * consumers) and is pinned exact in the ROOT workspace manifest
+ * (`../../../package.json` from here). This spec fails the build the moment the
+ * specifier widens to a range (`^`/`~`/`>=`).
+ */
+describe('pinned build tooling (ROBUST-03)', () => {
+  const workspaceManifest = JSON.parse(
+    readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
+  ) as { devDependencies?: Record<string, string> };
+
+  const EXACT_SEMVER = /^\d+\.\d+\.\d+$/;
+
+  it('esbuild is pinned to an exact version in the workspace devDependencies, never a range (ROBUST-03)', () => {
+    const specifier = workspaceManifest.devDependencies?.['esbuild'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+});

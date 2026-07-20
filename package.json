@@ -16,7 +16,6 @@
     "test:act": "npx nx build github-cache && node packages/github-cache/dist/action/index.js"
   },
   "private": true,
-  "dependencies": {},
   "devDependencies": {
     "@nx/js": "23.1.0",
     "@nx/vitest": "23.1.0",
@@ -25,6 +24,7 @@
     "@swc/helpers": "0.5.18",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "~4.1.0",
+    "esbuild": "0.28.1",
     "fallow": "~3.6.0",
     "nx": "23.1.0",
     "prettier": "^3.8.1",

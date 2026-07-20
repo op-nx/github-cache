@@ -23,8 +23,7 @@ const CACHE_KEY_PREFIX = 'nx-cache-';
 
 /** The single restore-result shape the engine consumes (mirrors the CacheBackend get). */
 export type GetResult =
-  | { readonly kind: 'hit'; readonly bytes: Buffer }
-  | { readonly kind: 'miss' };
+  { readonly kind: 'hit'; readonly bytes: Buffer } | { readonly kind: 'miss' };
 
 /** An Actions-cache entry as the publisher needs it: only its key drives the mirror. */
 export interface CacheEntry {

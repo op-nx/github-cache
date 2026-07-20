@@ -48,13 +48,17 @@ function defaultBranch(env: NodeJS.ProcessEnv): string | undefined {
  */
 export function isSyncTrusted(
   env: NodeJS.ProcessEnv = process.env,
-  readDefaultBranch: (e: NodeJS.ProcessEnv) => string | undefined = defaultBranch,
+  readDefaultBranch: (
+    e: NodeJS.ProcessEnv,
+  ) => string | undefined = defaultBranch,
 ): boolean {
   if (env.GITHUB_ACTIONS !== 'true') {
     return false; // not CI -> never sync
   }
 
-  if (!(SYNC_EVENTS as readonly string[]).includes(env.GITHUB_EVENT_NAME ?? '')) {
+  if (
+    !(SYNC_EVENTS as readonly string[]).includes(env.GITHUB_EVENT_NAME ?? '')
+  ) {
     return false; // rejects pull_request/release/dispatch/merge_group/delete/etc.
   }
 

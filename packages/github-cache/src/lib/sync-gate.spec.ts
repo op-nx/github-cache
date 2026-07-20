@@ -104,7 +104,10 @@ describe('isSyncTrusted', () => {
   });
 
   it('refuses when GITHUB_ACTIONS is not exactly "true" (TRUST-02)', () => {
-    const result = isSyncTrusted(syncEnv({ GITHUB_ACTIONS: 'false' }), readMain);
+    const result = isSyncTrusted(
+      syncEnv({ GITHUB_ACTIONS: 'false' }),
+      readMain,
+    );
 
     expect(result).toBe(false);
   });

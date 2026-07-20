@@ -100,8 +100,9 @@ describe('shardTagsForWindow calendar-month walk, newest first (D-08)', () => {
   });
 
   it('includes the prior month for a single-day window that crosses the month start', () => {
-    expect(
-      shardTagsForWindow(1, new Date('2026-07-01T12:00:00Z')),
-    ).toEqual(['cache-mirror-202607', 'cache-mirror-202606']);
+    expect(shardTagsForWindow(1, new Date('2026-07-01T12:00:00Z'))).toEqual([
+      'cache-mirror-202607',
+      'cache-mirror-202606',
+    ]);
   });
 });

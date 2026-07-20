@@ -45,7 +45,9 @@ export function shardTag(date: Date = new Date()): string {
  * `DEFAULT_MAX_AGE_DAYS` (30); a finite positive value is floored and clamped to
  * `MAX_AGE_CEILING_DAYS` (365). Both the reader window and the cleanup scan resolve here.
  */
-export function resolveMaxAgeDays(env: NodeJS.ProcessEnv = process.env): number {
+export function resolveMaxAgeDays(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
   const raw = Number(env.CACHE_MIRROR_MAX_AGE_DAYS);
 
   if (!Number.isFinite(raw) || raw <= 0) {

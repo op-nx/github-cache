@@ -13,9 +13,14 @@
     "fallow:ci": "fallow dead-code --fail-on-issues",
     "selfcheck": "node packages/github-cache/selfcheck.cjs",
     "generate:trust": "node packages/github-cache/selfcheck.cjs --write",
+    "build:action": "node esbuild.action.mjs",
+    "check:action": "npm run build:action && git diff --exit-code -- start-cache-server/index.js",
     "test:act": "npx nx build github-cache && node packages/github-cache/dist/action/index.js"
   },
   "private": true,
+  "dependencies": {
+    "@actions/core": "3.0.1"
+  },
   "devDependencies": {
     "@nx/js": "23.1.0",
     "@nx/vitest": "23.1.0",

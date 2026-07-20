@@ -29,6 +29,13 @@
     // / `generate:trust` package scripts invoke it as a standalone bin via node; never
     // imported, so reachability analysis cannot infer it (TRUST-04 / D-07).
     "packages/github-cache/selfcheck.cjs",
+    // Consumer JS action entry: esbuild.action.mjs bundles it to
+    // start-cache-server/index.js, which the runner invokes as action.yml's `main`;
+    // it is never imported, so reachability analysis cannot infer it (D-09, Phase 6).
+    "start-cache-server/entry.ts",
+    // Consumer-action bundler: the `build:action` / `check:action` package scripts
+    // invoke it as a standalone node bin; never imported (mirrors selfcheck.cjs).
+    "esbuild.action.mjs",
   ],
 
   // Files outside the product reachability graph, declared so a whole-repo
@@ -43,6 +50,10 @@
     // trust.generated.spec.ts + regenerated/diffed by selfcheck.cjs, not an ES import
     // in the product graph (mirrors the vendored-json fixture entry, TRUST-04 / D-06).
     "packages/github-cache/src/action/trust.generated.cjs",
+    // Generated esbuild bundle of the consumer JS action: bytes owned by
+    // esbuild.action.mjs, byte-diffed in CI by `npm run check:action`; a 2.4mb
+    // dependency-inlined artifact, not product source to analyze (Phase 6, Pitfall 1).
+    "start-cache-server/index.js",
   ],
 
   // Load-bearing at build/test time but not observable as ES imports. Exact

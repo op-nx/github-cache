@@ -1,0 +1,32 @@
+# Consumer sidecar action (Channel B) -- the PUBLIC, uses:-consumable surface,
+# SEPARATE from packages/github-cache/action.yml (that one is the INTERNAL CI
+# dogfood action and must never be presented as the consumer surface, D-09).
+#
+# Consumed as a background step inside the adopter's own job:
+#   - uses: actions/checkout@v7
+#   - uses: op-nx/github-cache/start-cache-server@v0
+#     id: cache-server
+#     background: true
+#   - run: npx nx affected -t build test   # reads the exported NX_* vars
+#   - cancel: cache-server                 # MANDATORY teardown (Pitfall 3)
+#
+# main points at the COMMITTED, esbuild-bundled index.js (NOT gitignored dist/),
+# because a uses: action resolves main from the git ref -- never from npm and
+# never after a build step (Pitfall 1). The bundle is drift-guarded by
+# `npm run check:action`. It is a JS action, NOT composite: a composite action
+# cannot declare background: internally (Pitfall 5).
+name: 'op-nx github-cache server'
+description: >-
+  Runs the @op-nx/github-cache loopback Nx remote-cache sidecar as a background
+  step, then exports NX_SELF_HOSTED_REMOTE_CACHE_SERVER and
+  NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN so a later Nx step in the same job
+  reaches the sidecar. Pair with `background: true` and a `cancel:` teardown.
+inputs:
+  port:
+    description: >-
+      Loopback port for the sidecar. Omitted -> an OS-assigned ephemeral port
+      (read it back from the exported NX_SELF_HOSTED_REMOTE_CACHE_SERVER).
+    required: false
+runs:
+  using: 'node24'
+  main: 'index.js'

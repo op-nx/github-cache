@@ -15,6 +15,12 @@ packages/github-cache/src/conformance/nx-cache-openapi.v23.1.0.json
 # `node packages/github-cache/selfcheck.cjs --write`, never by hand or by prettier.
 packages/github-cache/src/action/trust.generated.cjs
 
+# Committed esbuild bundle of the consumer JS action - bytes owned by
+# esbuild.action.mjs and byte-diffed by `npm run check:action`; prettier must not
+# reformat it (would create a false drift-guard trip with no entry.ts change).
+# Rebuild via `npm run build:action`, never by hand or by prettier.
+start-cache-server/index.js
+
 # Agent and planning docs - churny, not workspace source (D-07)
 .planning/
 CLAUDE.md

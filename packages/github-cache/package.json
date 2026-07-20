@@ -23,7 +23,9 @@
   "bin": {
     "github-cache": "./dist/serve.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },

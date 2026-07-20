@@ -382,23 +382,29 @@ describe('public consumer surface (DOCS-05)', () => {
 
 **If esbuild is swapped for the vite-library-mode path, A3 changes but the drift-guard mitigation is identical.**
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All four resolved at plan-phase per 06-CONTEXT.md "Claude's Discretion" + the orchestrator's resolution notes. See each `RESOLVED:` line.
 
 1. **Should `MAX_CACHE_BODY_BYTES` become a real env knob, or be documented as a fixed limit?**
    - What we know: D-04 lists it in the enumerated surface; the code (`server.ts:12`) has it as a `const` + injectable test param, NOT `process.env`-read.
    - What's unclear: whether D-04 intends it to be tunable or just *documented* as part of the contract.
    - Recommendation: document as a **fixed 2 GiB contract limit** (honest to code, matches the Releases ~2 GiB ceiling per ROBUST-02); promoting it to an env var is optional scope the plan can decline. The guard test should reflect whichever is chosen.
+   - **RESOLVED: fixed 2 GiB const, NOT an env knob.** Plan 06-02 asserts `MAX_CACHE_BODY_BYTES === 2147483648` as a fixed contract limit (kept out of the env-knob list); 06-04 documents it as fixed. Recommendation adopted.
 
 2. **Does the npm package export `serve` (library path), or is the bin the only server entry?**
    - What we know: `index.ts` exports only `createCacheServer` (needs a backend + token); `serve()` (the full composition root) is not exported.
    - Recommendation: add `serve`/`ServeOptions`/`RunningServer` to the barrel so `npx`/library consumers get the batteries-included path; include them in the DOCS-05 surface. Decide before writing the guard test (the surface set depends on it).
+   - **RESOLVED: MINIMAL barrel -- serve is NOT exported** (reverses the research recommendation, per the orchestrator + D-04). The importable surface stays `createCacheServer` + the 4 port types; the server entry for `npx`/`&` is the `bin` (dist/serve.js), not a barrel export. The 06-02 DOCS-05 guard enumerates exactly that minimal set. See 06-02 / D-04.
 
 3. **Where does the consumer action live — `start-cache-server/` (repo root, mirrors `ppe/`) or `actions/start-cache-server/`?**
    - Recommendation: repo-root `start-cache-server/` mirrors the existing `ppe/` precedent (`uses: op-nx/github-cache/ppe@v`), keeping the consumer-action convention consistent. Planner discretion; either works for `uses:`.
+   - **RESOLVED: repo-root `start-cache-server/`.** Plan 06-01 creates start-cache-server/{action.yml,entry.ts,index.js} at the repo root, mirroring ppe/. Recommendation adopted. See 06-01.
 
 4. **Wire an actual `npm publish` release workflow now, or publish-ready only?**
    - What we know: D-13 says publish-ready + `uses:`-consumable is sufficient for v0.0.1; a release workflow is planner discretion.
    - Recommendation: ship publish-READY + a `npm publish --dry-run`/`npm pack --dry-run` CI check (proves the tarball is correct without publishing). Defer the live-publish trigger; `--provenance` can come with it later.
+   - **RESOLVED: publish-READY + a `npm pack --dry-run` file-list guard, NO live-publish workflow this milestone.** Plan 06-01 ships the pack-check.cjs file-list guard + CI job; the live-publish trigger is deferred per D-13. Recommendation adopted. See 06-01 / D-13.
 
 ## Environment Availability
 

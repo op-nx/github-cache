@@ -30,4 +30,15 @@ describe('pinned toolkit dependencies (ROBUST-03)', () => {
 
     expect(specifier).toMatch(EXACT_SEMVER);
   });
+
+  // @octokit/rest is the supply-chain surface for the publish + cleanup adapters
+  // (T-04-SC). It was verdict OK in the 04-RESEARCH Package Legitimacy Audit
+  // (official octokit org, no postinstall), pinned to the exact audited version so
+  // a range operator can never silently pull an un-audited minor/patch. This spec
+  // fails the build the moment the specifier widens to a range.
+  it('@octokit/rest is pinned to an exact version, never a range (T-04-SC)', () => {
+    const specifier = manifest.dependencies?.['@octokit/rest'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
 });

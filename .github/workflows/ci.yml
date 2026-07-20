@@ -63,6 +63,41 @@ jobs:
       - run: npm ci
       - run: npm run selfcheck
 
+  # The consumer-action bundle drift guard (DOCS-06, Pitfall 1). A `uses:` action
+  # resolves start-cache-server/index.js from the git ref -- never from npm, never
+  # after a build -- so the committed esbuild bundle must stay in sync with
+  # entry.ts and its inlined deps. check:action rebuilds it with the exact-pinned
+  # esbuild and byte-diffs the committed file, exiting non-zero on staleness or a
+  # hand edit (mirrors the selfcheck.cjs trust-copy tripwire). Kept a distinct
+  # named job so a drift surfaces as a red action-bundle-drift job.
+  action-bundle-drift:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run check:action
+
+  # The npm tarball file-list guard (DOCS-06 / GOV-02, A1, Pitfall 2). Proves
+  # files:["dist"] ships ONLY dist/ + LICENSE + README.md + package.json and
+  # excludes every src/CI/dogfood internal (dogfood-stays-local, T-06-01-01). It
+  # needs dist built first because the tarball includes the build output, so it
+  # runs npm run build before the guard. Dependency-free node guard; distinct job.
+  pack-check:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run pack:check
+
   # Advisory PPE-hygiene dogfood (TRUST-06 / D-12). Runs the shipped composite
   # action (ppe/action.yml) against a KNOWN-unsafe fixture workflow to prove it
   # self-installs exact-pinned zizmor + actionlint and emits findings. ADVISORY
@@ -202,6 +237,70 @@ jobs:
           operation: verify
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # DOCS-06 LIVE PROOF: the consumer background-step round-trip (a first-push live
+  # close, like dogfood/ppe). It consumes the PUBLIC start-cache-server action
+  # exactly as an adopter would -- `uses: ./start-cache-server` with
+  # `background: true` -- then drives a scripted PUT+GET against the exported
+  # NX_SELF_HOSTED_REMOTE_CACHE_SERVER using the exported token, proving the
+  # loopback sidecar serves a real round-trip through the write-trusted
+  # Actions-cache backend. The `cancel:` teardown is MANDATORY: the implicit
+  # wait-all before post-job cleanup would otherwise hang forever on the
+  # never-exiting serve (Pitfall 3); cancel sends SIGTERM -> serve() drains
+  # in-flight puts (ROBUST-04) -> clean exit. Push-gated: the write gate trusts
+  # push/schedule only. GITHUB_TOKEN is passed to the action step by process
+  # inheritance (mirroring dogfood-seed) -- without it selectBackend degrades to
+  # the read-only memory backend and the proof would exercise the WRONG backend
+  # (D-06). No job-level permissions block: the workflow-default contents:read
+  # plus the JS-action-only runtime cache creds suffice (T-06-01-05).
+  #
+  # FIRST-PUSH LIVE CLOSE: whether core.exportVariable propagates from a
+  # background step to a later run: step is a background-steps-engine behavior
+  # this job validates live; the round-trip fails loud with a clear message if
+  # the vars are absent (surfaced as a human_needed item at verify-work).
+  consumer-smoke:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build:action
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Nx cache round-trip over the loopback sidecar
+        env:
+          RUN_HASH: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          server="${NX_SELF_HOSTED_REMOTE_CACHE_SERVER:?background start-cache-server step did not export the server url}"
+          token="${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN:?background start-cache-server step did not export the access token}"
+          auth="Authorization: Bearer ${token}"
+          # Wait for the loopback sidecar to accept connections: an authed GET on
+          # an unknown hash returns 404 (up); connection-refused keeps code=000.
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${server}/v1/cache/deadbeef" || echo 000)
+            if [ "${code}" != "000" ]; then
+              break
+            fi
+            sleep 1
+          done
+          # PUT a payload keyed on the run id (all-decimal -> valid ^[a-f0-9]+$),
+          # then read it back and byte-compare: a real round-trip through the
+          # write-trusted Actions-cache backend.
+          printf 'consumer-smoke-%s' "${RUN_HASH}" > payload.bin
+          put=$(curl -s -o /dev/null -w '%{http_code}' -X PUT --data-binary @payload.bin -H "${auth}" "${server}/v1/cache/${RUN_HASH}")
+          test "${put}" = "200"
+          curl -fsS -H "${auth}" "${server}/v1/cache/${RUN_HASH}" -o roundtrip.bin
+          cmp payload.bin roundtrip.bin
+          echo "[OK] consumer sidecar round-trip: PUT 200 + GET byte-match on ${RUN_HASH}"
+      - cancel: cache-server
 
   # The per-OS publish matrix is this phase's LIVE mirror path (D-03, TRUST-02): on a
   # default-branch push each leg enumerates the default-branch Actions-cache entries via

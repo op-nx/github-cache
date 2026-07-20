@@ -36,6 +36,9 @@
     // Consumer-action bundler: the `build:action` / `check:action` package scripts
     // invoke it as a standalone node bin; never imported (mirrors selfcheck.cjs).
     "esbuild.action.mjs",
+    // npm tarball file-list guard: the `pack:check` package script + the ci.yml
+    // pack-check job invoke it as a standalone node bin; never imported (T-06-01-01).
+    "packages/github-cache/pack-check.cjs",
   ],
 
   // Files outside the product reachability graph, declared so a whole-repo

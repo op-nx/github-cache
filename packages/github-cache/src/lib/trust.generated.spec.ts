@@ -1,10 +1,6 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-import {
-  HOST_GATED_EVENTS,
-  TRUSTED_EVENTS,
-  isWriteTrusted,
-} from './trust.js';
+import { HOST_GATED_EVENTS, TRUSTED_EVENTS, isWriteTrusted } from './trust.js';
 
 /**
  * TRUST-04 semantic-parity guard (the load-bearing behavioral check; the CI

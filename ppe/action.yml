@@ -1,0 +1,51 @@
+# github-cache PPE-hygiene gate (TRUST-06 / D-10, D-11, D-12).
+#
+# ADVISORY / best-effort defense-in-depth ONLY. This is NOT the containment
+# control -- containment stays the TRUST-02 sync gate + default-branch
+# protection (ADR C4). A finding here NEVER fails the consumer's job by
+# default: zizmor runs with --no-exit-codes and actionlint's exit is swallowed.
+#
+# Consumed as a STEP inside the adopter's own job:
+#   - uses: actions/checkout@v7
+#   - uses: op-nx/github-cache/ppe@vX
+#     with:
+#       path: .        # optional; audit target, defaults to the repo root
+# The consumer supplies runs-on + actions/checkout; the action self-installs its
+# exact-pinned tools (the consumer never provides zizmor/actionlint).
+name: 'github-cache PPE hygiene (advisory)'
+description: >-
+  Best-effort/ADVISORY PPE-hygiene gate: self-installs exact-pinned zizmor and
+  actionlint and audits workflows for unsafe triggers (no pull_request_target +
+  PR-checkout; no issue_comment/workflow_run executing PR code). It is advisory
+  defense-in-depth, not the containment control -- containment stays
+  default-branch protection + the sync gate. A finding is an annotation, never a
+  job failure. The consumer supplies runs-on and actions/checkout.
+inputs:
+  path:
+    description: >-
+      Audit target passed to zizmor and actionlint. Defaults to the repository
+      root so the whole workflow set is scanned; narrow it to a single file to
+      scope the advisory audit.
+    required: false
+    default: '.'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install zizmor (exact-pinned 1.27.0)
+      shell: bash
+      run: pipx install zizmor==1.27.0
+    - name: Install actionlint (exact-pinned 1.7.12)
+      shell: bash
+      run: |
+        bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) \
+          1.7.12 "${RUNNER_TEMP}/actionlint-bin"
+    - name: zizmor audit (advisory)
+      # --no-exit-codes keeps it advisory (never exits 11-14 on a finding). The
+      # default regular persona covers dangerous-triggers, template-injection,
+      # cache-poisoning, artipacked and github-env -- the named PPE patterns.
+      shell: bash
+      run: zizmor "${{ inputs.path }}" --no-exit-codes
+    - name: actionlint (advisory)
+      # Swallow actionlint's exit 1 so a finding is advisory, never a job failure.
+      shell: bash
+      run: '"${RUNNER_TEMP}/actionlint-bin/actionlint" "${{ inputs.path }}" || true'

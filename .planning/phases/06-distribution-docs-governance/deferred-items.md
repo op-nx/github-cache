@@ -5,7 +5,13 @@ changes and are therefore out of scope per the executor scope-boundary rule.
 
 ## From 06-04 (adoption docs)
 
-- **06-05 docs-trust guard has the same stale-cache gap 06-02/06-03 fixed.**
+- **[RESOLVED 2026-07-21]** **06-05 docs-trust guard had the same stale-cache gap 06-02/06-03 fixed.**
+  Fixed during phase-6 execution close-out: `{workspaceRoot}/docs/trust-and-security.md`
+  and `{workspaceRoot}/docs/versioning.md` are now wired into `nx.json`
+  `targetDefaults.test.inputs`, so editing either doc busts the Nx test cache and
+  re-runs the guard. Verified green with `--skip-nx-cache`.
+
+  Original finding:
   `packages/github-cache/src/docs-trust.spec.ts` reads
   `docs/trust-and-security.md` and `docs/versioning.md` via `import.meta.url`,
   but neither file is wired into the `test` target inputs in `nx.json`. As with

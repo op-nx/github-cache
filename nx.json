@@ -52,6 +52,8 @@
         "{workspaceRoot}/README.md",
         "{workspaceRoot}/docs/configuration.md",
         "{workspaceRoot}/docs/advanced.md",
+        "{workspaceRoot}/docs/trust-and-security.md",
+        "{workspaceRoot}/docs/versioning.md",
         "{workspaceRoot}/docs/examples/minimal-ci.yml",
         "{workspaceRoot}/docs/examples/README.md",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },

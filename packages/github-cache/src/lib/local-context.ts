@@ -1,18 +1,13 @@
 import { spawn } from 'node:child_process';
-// NOTE: this import closes a call-time-only 3-file cycle
-// (select-backend -> releases-backend -> local-context -> select-backend). It is
-// safe ONLY because every reference to a binding imported here is read inside a
-// function body (resolveLocalReadToken uses resolveGitHubToken, resolveRepoIdentity
-// uses GITHUB_REPOSITORY_PATTERN), never at this module's top-level evaluation -- so
-// no cyclically imported binding is touched before the cycle finishes linking, and
-// there is no temporal-dead-zone hazard whichever module evaluates first. Do NOT
-// read select-backend's exports at this file's top level (e.g. a module-scope const
-// built from GITHUB_REPOSITORY_PATTERN): with no import/no-cycle lint rule in this
-// repo, that would silently reintroduce a module-load ReferenceError.
+// Import from the ./github-identity.js leaf, NOT ./select-backend.js: these two
+// symbols were extracted there precisely to break the former
+// releases-backend -> local-context -> select-backend -> releases-backend cycle.
+// The leaf imports nothing back into this graph, so there is no import cycle and
+// no temporal-dead-zone hazard. (select-backend re-exports both for its own callers.)
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
-} from './select-backend.js';
+} from './github-identity.js';
 
 /**
  * Upper bound (milliseconds) on any single credential/context helper spawn.

@@ -5,27 +5,20 @@ import {
   createReleasesReadClient,
 } from '../backend/releases-backend.js';
 import type { CacheBackend } from '../backend/types.js';
+import {
+  GITHUB_REPOSITORY_PATTERN,
+  resolveGitHubToken,
+} from './github-identity.js';
 import { isWriteTrusted } from './trust.js';
 
-/** owner/name shape for GITHUB_REPOSITORY: one non-slash segment, a slash, one more. */
-export const GITHUB_REPOSITORY_PATTERN = /^[^/]+\/[^/]+$/;
-
-/**
- * Resolve the GitHub token from runtime context: GH_TOKEN first, then
- * GITHUB_TOKEN. The chain deliberately uses the falsy-coalescing `||` (NOT the
- * nullish `??`) so a set-but-empty value falls through to the next source rather
- * than binding an empty secret (Pitfall 8; mirrors serve.ts:41-45). A later
- * reader must not "tidy" this to `??`.
- *
- * Nothing in Phase 2 sends this token anywhere -- the Actions-cache primitive
- * authenticates with its own runtime token -- but TEST-01 specifies the
- * fallthrough and Phase 3's authenticated private-repo read consumes it.
- */
-export function resolveGitHubToken(
-  env: NodeJS.ProcessEnv = process.env,
-): string | undefined {
-  return env.GH_TOKEN || env.GITHUB_TOKEN || undefined;
-}
+// GITHUB_REPOSITORY_PATTERN and resolveGitHubToken moved to the ./github-identity.js
+// leaf module to break the releases-backend -> local-context -> select-backend cycle.
+// Re-exported here so every existing `from './select-backend.js'` import (TEST-01
+// included) keeps resolving them unchanged.
+export {
+  GITHUB_REPOSITORY_PATTERN,
+  resolveGitHubToken,
+} from './github-identity.js';
 
 /**
  * The single context-derived backend selection point (D-01, TRUST-05). RW-vs-RO

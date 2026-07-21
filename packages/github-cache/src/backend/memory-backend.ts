@@ -48,11 +48,12 @@ export function createWritableMemoryBackend(): CacheBackend {
 }
 
 /**
- * Read-only form of the Map-backed CacheBackend (the D-04 403 seam): put always
- * yields 'forbidden' -> the server maps it to 403. get mirrors the writable read
- * path; its store stays empty in Phase 1 (the real cross-context reader is
- * Phase 3), so get always misses here. RW-vs-RO is which factory constructs the
- * server, never a caller-facing mode flag (TRUST-05).
+ * Read-only form of the Map-backed backend (the D-04 read seam): a ReadableBackend
+ * with NO put -- a write is unrepresentable, and the SERVER (not a put() return
+ * value) answers a PUT routed here with the Nx contract's 403. get mirrors the
+ * writable read path; its store stays empty in Phase 1 (the real cross-context
+ * reader is Phase 3), so get always misses here. RW-vs-RO is which factory
+ * constructs the server, never a caller-facing mode flag (TRUST-05).
  */
 export function createReadOnlyMemoryBackend(): ReadableBackend {
   const store = new Map<string, Buffer>();

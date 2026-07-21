@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import { statusOf } from '../lib/octokit-status.js';
-import { MS_PER_DAY, SHARD_TAG_PREFIX } from '../lib/retention.js';
+import { isServerProducedAssetName } from '../lib/release-asset-name.js';
+import { isShardTag, MS_PER_DAY } from '../lib/retention.js';
 import { writeCountSummary } from '../lib/summary.js';
 
 /** A GitHub Release as the cleanup engine needs it: its id and its tag (the shard key). */
@@ -73,13 +74,22 @@ export async function cleanupMirror(
   let scanned = 0;
 
   for (const release of releases) {
-    if (!release.tag_name.startsWith(SHARD_TAG_PREFIX)) {
+    if (!isShardTag(release.tag_name)) {
       continue;
     }
 
     const assets = await client.listAllAssets(release.id);
 
     for (const asset of assets) {
+      // Prune only the publisher's <hash>-<os> assets, mirroring the read/write
+      // side's isServerProducedKey discipline: a foreign asset dropped into a
+      // genuine shard is never deleted as ours. First statement in the loop so a
+      // foreign asset (even one with a malformed created_at) is skipped silently
+      // and `scanned` counts only genuine mirror assets considered.
+      if (!isServerProducedAssetName(asset.name)) {
+        continue;
+      }
+
       scanned++;
       const createdMs = new Date(asset.created_at).getTime();
 

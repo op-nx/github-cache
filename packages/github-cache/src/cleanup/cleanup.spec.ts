@@ -74,7 +74,7 @@ describe('cleanupMirror LIST phase fail-loud (RETAIN-01, D-10, C9)', () => {
     const listAllAssets = vi
       .fn<(releaseId: number) => Promise<CleanupAsset[]>>()
       .mockResolvedValueOnce([
-        { id: 1, name: 'old-linux', created_at: EXPIRED },
+        { id: 1, name: 'feed01-linux', created_at: EXPIRED },
       ])
       .mockRejectedValueOnce(octokitFault(500));
     const faultingClient = client({
@@ -136,6 +136,27 @@ describe('cleanupMirror LIST phase fail-loud (RETAIN-01, D-10, C9)', () => {
     expect(listAllAssets).not.toHaveBeenCalled();
     expect(deleteAsset).not.toHaveBeenCalled();
   });
+
+  it('skips a non-shard cache-mirror-* release entirely (exact isShardTag, not a loose prefix)', async () => {
+    // The loose startsWith(SHARD_TAG_PREFIX) matched these; the exact isShardTag
+    // does not, so a cache-mirror-latest / cache-mirror-backup release is never
+    // scoped -- its assets are neither listed nor deleted.
+    const listAllAssets = vi.fn(async () => [] as CleanupAsset[]);
+    const deleteAsset = vi.fn(async () => {});
+    const nonShardClient = client({
+      listAllReleases: vi.fn(async () => [
+        { id: 30, tag_name: 'cache-mirror-latest' },
+        { id: 31, tag_name: 'cache-mirror-backup' },
+      ]),
+      listAllAssets,
+      deleteAsset,
+    });
+
+    await cleanupMirror(nonShardClient, 30);
+
+    expect(listAllAssets).not.toHaveBeenCalled();
+    expect(deleteAsset).not.toHaveBeenCalled();
+  });
 });
 
 describe('cleanupMirror DELETE phase prune/retain by created_at (TEST-06)', () => {
@@ -143,8 +164,8 @@ describe('cleanupMirror DELETE phase prune/retain by created_at (TEST-06)', () =
     const deleteAsset = vi.fn(async () => {});
     const pruneClient = client({
       listAllAssets: vi.fn(async () => [
-        { id: 1, name: 'expired-linux', created_at: EXPIRED },
-        { id: 2, name: 'fresh-linux', created_at: WITHIN_WINDOW },
+        { id: 1, name: 'abc123-linux', created_at: EXPIRED },
+        { id: 2, name: 'deadbeef-linux', created_at: WITHIN_WINDOW },
       ]),
       deleteAsset,
     });
@@ -156,6 +177,30 @@ describe('cleanupMirror DELETE phase prune/retain by created_at (TEST-06)', () =
     expect(result.pruned).toBe(1);
     expect(result.failed).toBe(0);
     expect(result.scanned).toBe(2);
+  });
+
+  it('skips a foreign asset but still prunes a genuine expired <hash>-<os> in the same shard (asset-name narrowing guard)', async () => {
+    // The regression guard for the asset-name narrowing: a foreign asset (no
+    // <hash>-<os> shape) in a genuine shard is skipped -- before scanned++ -- while
+    // a genuine expired publisher asset in the SAME release is still pruned, proving
+    // the change is a pure narrowing that never stops pruning real shard assets.
+    const deleteAsset = vi.fn(async () => {});
+    const guardClient = client({
+      listAllAssets: vi.fn(async () => [
+        { id: 1, name: 'sbom.json', created_at: EXPIRED },
+        { id: 2, name: 'deadc0de-linux', created_at: EXPIRED },
+      ]),
+      deleteAsset,
+    });
+
+    const result = await cleanupMirror(guardClient, 30);
+
+    expect(deleteAsset).toHaveBeenCalledTimes(1);
+    expect(deleteAsset).toHaveBeenCalledWith(2);
+    expect(result.pruned).toBe(1);
+    expect(result.failed).toBe(0);
+    // The foreign asset is skipped before scanned++, so only the genuine one counts.
+    expect(result.scanned).toBe(1);
   });
 });
 
@@ -192,8 +237,8 @@ describe('cleanupMirror DELETE phase isolation + fail-loud (TEST-04, OBS-01)', (
       .mockRejectedValueOnce(octokitFault(500));
     const mixedFaultClient = client({
       listAllAssets: vi.fn(async () => [
-        { id: 1, name: 'gone-linux', created_at: EXPIRED },
-        { id: 2, name: 'faulted-linux', created_at: EXPIRED },
+        { id: 1, name: 'c0ffee-linux', created_at: EXPIRED },
+        { id: 2, name: 'dec0de-linux', created_at: EXPIRED },
       ]),
       deleteAsset,
     });
@@ -212,8 +257,8 @@ describe('cleanupMirror observability (OBS-01)', () => {
   it('reports pruned/failed/scanned counts in the run summary (OBS-01)', async () => {
     const obsClient = client({
       listAllAssets: vi.fn(async () => [
-        { id: 1, name: 'expired-linux', created_at: EXPIRED },
-        { id: 2, name: 'fresh-linux', created_at: WITHIN_WINDOW },
+        { id: 1, name: 'ba5eba11-linux', created_at: EXPIRED },
+        { id: 2, name: 'd15ea5e-linux', created_at: WITHIN_WINDOW },
       ]),
     });
 
@@ -255,7 +300,7 @@ describe('cleanupMirror malformed created_at guard', () => {
     const deleteAsset = vi.fn(async () => {});
     const fake = client({
       listAllAssets: vi.fn(async () => [
-        { id: 1, name: 'bad-timestamp', created_at: 'not-a-date' },
+        { id: 1, name: 'abcdef-linux', created_at: 'not-a-date' },
       ]),
       deleteAsset,
     });

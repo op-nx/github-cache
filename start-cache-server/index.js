@@ -68375,6 +68375,7 @@ function shardTag(date = /* @__PURE__ */ new Date()) {
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   return `${SHARD_TAG_PREFIX}${year}${month}`;
 }
+var SHARD_TAG_PATTERN = new RegExp("^" + SHARD_TAG_PREFIX + "\\d{6}$");
 function resolveMaxAgeDays(env = process.env) {
   const raw = Number(env.CACHE_MIRROR_MAX_AGE_DAYS);
   if (!Number.isFinite(raw) || raw <= 0) {

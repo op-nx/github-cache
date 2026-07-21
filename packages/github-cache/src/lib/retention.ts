@@ -47,6 +47,27 @@ export function shardTag(date: Date = new Date()): string {
 }
 
 /**
+ * Exact month-shard tag pattern: the prefix followed by a 6-digit `YYYYMM`
+ * (equivalent to `/^cache-mirror-\d{6}$/`). Built FROM `SHARD_TAG_PREFIX` so the
+ * prefix literal is not copied a second time (I8: one home for the tag scheme).
+ * The `\d{6}` deliberately matches ALL month shards (wider than the reader window,
+ * per Pitfall 4) -- it only excludes non-shard `cache-mirror-*` tags such as
+ * `cache-mirror-latest` / `cache-mirror-backup`.
+ */
+export const SHARD_TAG_PATTERN = new RegExp('^' + SHARD_TAG_PREFIX + '\\d{6}$');
+
+/**
+ * Whether a release tag is a genuine `cache-mirror-YYYYMM` month shard. The exact
+ * accepter the cleanup scope filter uses instead of a loose `startsWith` prefix,
+ * so a `cache-mirror-latest` / `cache-mirror-backup` tag is never scoped for
+ * pruning. Round-trip-safe with `shardTag`: `isShardTag(shardTag(anyDate))` is
+ * always true, so the accepter can never drift from the producer.
+ */
+export function isShardTag(tag: string): boolean {
+  return SHARD_TAG_PATTERN.test(tag);
+}
+
+/**
  * Resolve the single coupled retention knob `CACHE_MIRROR_MAX_AGE_DAYS` (D-07). It is
  * untrusted numeric input from the consumer env, so it is validated + clamped at this
  * trust boundary (T-04-04): an unset, non-numeric, zero, or negative value falls back to

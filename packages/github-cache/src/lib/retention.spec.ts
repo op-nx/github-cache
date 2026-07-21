@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isShardTag,
   resolveMaxAgeDays,
+  SHARD_TAG_PATTERN,
+  SHARD_TAG_PREFIX,
   shardTag,
   shardTagsForWindow,
 } from './retention.js';
@@ -22,6 +25,47 @@ describe('shardTag current-month single-shard tag (D-03/D-08)', () => {
     expect(shardTag(new Date('2026-12-31T00:00:00Z'))).toBe(
       'cache-mirror-202612',
     );
+  });
+});
+
+describe('isShardTag exact month-shard accepter (I8, Pitfall 4)', () => {
+  // The exact accept/reject sets are pinned so the cleanup scope narrowing cannot
+  // silently widen back to a loose `startsWith` prefix. \d{6} matches every YYYYMM
+  // month shard (deliberately wider than the reader window) but rejects any
+  // non-shard cache-mirror-* tag.
+  it.each([
+    'cache-mirror-202607',
+    'cache-mirror-202601',
+    'cache-mirror-202612',
+  ])('accepts the genuine month shard %s', (tag) => {
+    expect(isShardTag(tag)).toBe(true);
+  });
+
+  it.each([
+    'cache-mirror-',
+    'cache-mirror-2026',
+    'cache-mirror-20260',
+    'cache-mirror-2026070',
+    'cache-mirror-latest',
+    'cache-mirror-backup',
+    'cache-mirror-2026-07',
+    'v1.0.0',
+  ])('rejects the non-shard tag %s', (tag) => {
+    expect(isShardTag(tag)).toBe(false);
+  });
+
+  it('round-trips with shardTag so the accepter never drifts from the producer', () => {
+    expect(isShardTag(shardTag(new Date('2026-07-19')))).toBe(true);
+    expect(isShardTag(shardTag(new Date('2026-01-05T00:00:00Z')))).toBe(true);
+    expect(isShardTag(shardTag(new Date('2026-12-31T00:00:00Z')))).toBe(true);
+  });
+
+  it('derives from the single-sourced SHARD_TAG_PREFIX (one home for the scheme)', () => {
+    // Pin the prefix literal and the derived pattern so a cosmetic edit fails HERE
+    // rather than silently scoping a different tag set (Pitfall 7).
+    expect(SHARD_TAG_PREFIX).toBe('cache-mirror-');
+    expect(SHARD_TAG_PATTERN.test('cache-mirror-202607')).toBe(true);
+    expect(SHARD_TAG_PATTERN.test('cache-mirror-latest')).toBe(false);
   });
 });
 

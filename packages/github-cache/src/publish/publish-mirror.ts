@@ -170,6 +170,9 @@ export async function publishMirror(
   let mirrored = 0;
   let skipped = 0;
   let failed = 0;
+  // Restore-MISS subset of `skipped` (skipped also counts already-present + cap +
+  // 422-race). Tracked separately to detect an all-restore-MISS run below.
+  let readMisses = 0;
 
   // The shard release + its asset set, resolved lazily on the first restorable entry.
   let releaseId: number | undefined;
@@ -180,6 +183,7 @@ export async function publishMirror(
 
     if (restored.kind === 'miss') {
       skipped++;
+      readMisses++;
 
       continue;
     }
@@ -247,6 +251,21 @@ export async function publishMirror(
         `github-cache: failed to mirror ${name} (status ${statusOf(error) ?? 'unknown'}); continuing.`,
       );
     }
+  }
+
+  // Silent-degradation signal (WARN, not fail): if EVERY enumerated server-produced
+  // entry restored as a MISS and nothing mirrored, that is either the legitimate
+  // cross-OS case (this OS's publish leg cannot restore entries saved on another OS)
+  // OR an Actions-cache read-scope regression that looks identical to "nothing to
+  // do" and would otherwise exit green. A hard fail would break legitimate cross-OS
+  // runs, so surface it as a warning rather than swallowing it.
+  if (hashes.length > 0 && readMisses === hashes.length && mirrored === 0) {
+    core.warning(
+      `github-cache publish: all ${hashes.length} server-produced cache ` +
+        `entr${hashes.length === 1 ? 'y' : 'ies'} restored as a MISS; nothing ` +
+        'mirrored. Expected when publishing from a different OS than the entries ' +
+        "were saved on; otherwise check the runtime token's Actions-cache read scope.",
+    );
   }
 
   // OBS-01/D-15: fail the run loud on any aggregate per-item failure, mirroring

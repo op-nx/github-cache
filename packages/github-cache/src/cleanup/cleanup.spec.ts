@@ -245,3 +245,24 @@ describe('createReleasesReadBackend read-only-local put re-assertion (TEST-06)',
     expect(await backend.put('abc123', Buffer.from('x'))).toBe('forbidden');
   });
 });
+
+describe('cleanupMirror malformed created_at guard', () => {
+  it('warns and does NOT prune an asset whose created_at is unparseable (never delete on ambiguous age)', async () => {
+    const deleteAsset = vi.fn(async () => {});
+    const fake = client({
+      listAllAssets: vi.fn(async () => [
+        { id: 1, name: 'bad-timestamp', created_at: 'not-a-date' },
+      ]),
+      deleteAsset,
+    });
+
+    const result = await cleanupMirror(fake, 30);
+
+    // NaN age -> not deleted (never delete on ambiguity) but surfaced, not silent.
+    expect(deleteAsset).not.toHaveBeenCalled();
+    expect(result).toEqual({ pruned: 0, failed: 0, scanned: 1 });
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('unparseable created_at'),
+    );
+  });
+});

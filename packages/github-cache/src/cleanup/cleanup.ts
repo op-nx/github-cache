@@ -97,8 +97,23 @@ export async function cleanupMirror(
 
     for (const asset of assets) {
       scanned++;
+      const createdMs = new Date(asset.created_at).getTime();
 
-      if (new Date(asset.created_at).getTime() < cutoff) {
+      if (Number.isNaN(createdMs)) {
+        // A malformed/absent created_at makes age undecidable. `NaN < cutoff` is
+        // false, so the old code silently RETAINED such an asset -- an unparseable
+        // timestamp could quietly defeat retention (drift toward the 1000-asset
+        // cap). Do NOT delete on ambiguous data (the module's never-delete-live-
+        // data ethos forbids expiring on an unknown age), but do NOT stay silent:
+        // warn so a human can act. Growth stays bounded by the per-release cap.
+        core.warning(
+          `github-cache cleanup: asset ${asset.name} has an unparseable created_at; skipping age check (not pruned).`,
+        );
+
+        continue;
+      }
+
+      if (createdMs < cutoff) {
         expired.push({ assetId: asset.id, name: asset.name });
       }
     }

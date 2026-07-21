@@ -338,3 +338,32 @@ describe('publishMirror ~2 GiB boundary fail-loud (ROBUST-02, D-12)', () => {
     expect(core.error).toHaveBeenCalledOnce();
   });
 });
+
+describe('publishMirror all-restore-MISS degradation signal', () => {
+  it('warns (does NOT fail) when every enumerated entry restores as a MISS and nothing mirrored', async () => {
+    // Every server-produced entry MISSes its same-OS restore: either the legitimate
+    // cross-OS case or an Actions-cache read-scope regression. Must be visible, not
+    // a silent green run -- but not a hard fail (that would break real cross-OS runs).
+    getMock.mockResolvedValue(MISS);
+    const fake = client();
+
+    const result = await publishMirror(fake);
+
+    expect(result).toEqual({ mirrored: 0, skipped: 1, failed: 0 });
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('restored as a MISS'),
+    );
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  it('does NOT warn about all-MISS when at least one entry mirrors', async () => {
+    getMock.mockResolvedValue(hit());
+    const fake = client();
+
+    await publishMirror(fake);
+
+    expect(core.warning).not.toHaveBeenCalledWith(
+      expect.stringContaining('restored as a MISS'),
+    );
+  });
+});

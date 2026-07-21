@@ -5,9 +5,11 @@
  * `process.platform` -- compiled-in, emulation-proof, and shell-invariant -- not
  * `env:RUNNER_OS`, which is CI-only and absent locally.
  */
+export type CacheOs = 'windows' | 'macos' | 'linux';
+
 export function cachePlatform(
   platform: NodeJS.Platform = process.platform,
-): string {
+): CacheOs {
   if (platform === 'win32') {
     return 'windows';
   }

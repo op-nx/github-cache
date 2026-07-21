@@ -18,8 +18,8 @@ export const GITHUB_REPOSITORY_PATTERN = /^[^/]+\/[^/]+$/;
  * Resolve the GitHub token from runtime context: GH_TOKEN first, then
  * GITHUB_TOKEN. The chain deliberately uses the falsy-coalescing `||` (NOT the
  * nullish `??`) so a set-but-empty value falls through to the next source rather
- * than binding an empty secret (Pitfall 8; mirrors serve.ts:41-45). A later
- * reader must not "tidy" this to `??`.
+ * than binding an empty secret (Pitfall 8; mirrors the `||`-not-`??` token
+ * fallback in serve()). A later reader must not "tidy" this to `??`.
  *
  * Nothing in Phase 2 sends this token anywhere -- the Actions-cache primitive
  * authenticates with its own runtime token -- but TEST-01 specifies the

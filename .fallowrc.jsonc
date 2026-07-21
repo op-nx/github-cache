@@ -40,8 +40,9 @@
   // Files outside the product reachability graph, declared so a whole-repo
   // dead-code run is clean without suppressing any real product finding.
   "ignorePatterns": [
-    // CI-monitor agent skill scripts, mirrored identically across .github/skills/
-    // and .opencode/skills/; they run standalone as agent tooling, not product code.
+    // CI-monitor agent skill scripts, mirrored identically across the per-agent
+    // skills dirs (.agents/, .cursor/, .github/, .opencode/); the **/skills/ glob
+    // covers every copy. They run standalone as agent tooling, not product code.
     "**/skills/monitor-ci/scripts/*.mjs",
     // sha256-pinned vendored Nx OpenAPI fixture, referenced only by conformance.spec.ts.
     "packages/github-cache/src/conformance/nx-cache-openapi.v23.1.0.json",

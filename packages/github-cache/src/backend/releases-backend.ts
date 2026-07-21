@@ -2,6 +2,7 @@ import {
   resolveLocalReadToken,
   resolveRepoIdentity,
 } from '../lib/local-context.js';
+import { statusOf } from '../lib/octokit-status.js';
 import * as assetNaming from '../lib/release-asset-name.js';
 import { resolveMaxAgeDays, shardTagsForWindow } from '../lib/retention.js';
 import type { Hash } from '../lib/cache-key.js';
@@ -89,9 +90,9 @@ export function createReleasesReadBackend(
         // (Pitfall 9). The catch lives in the backend, not the client, so an
         // injected client that throws is covered too. Surface ONLY a numeric
         // status (safe; never the error message/body) so a persistent auth
-        // misconfig is diagnosable.
-        const status = (error as { status?: unknown }).status;
-        warnOnce(typeof status === 'number' ? status : undefined);
+        // misconfig is diagnosable. statusOf is the single-source status extractor
+        // shared with the cleanup + publish engines (never `instanceof RequestError`).
+        warnOnce(statusOf(error));
 
         return { kind: 'miss' };
       }

@@ -68340,6 +68340,14 @@ async function resolveRepoIdentity(env = process.env) {
   return `${match2[1]}/${match2[2]}`;
 }
 
+// packages/github-cache/src/lib/octokit-status.ts
+function statusOf(error2) {
+  if (error2 !== null && typeof error2 === "object" && typeof error2.status === "number") {
+    return error2.status;
+  }
+  return void 0;
+}
+
 // packages/github-cache/src/lib/release-asset-name.ts
 function cachePlatform(platform2 = process.platform) {
   if (platform2 === "win32") {
@@ -68412,8 +68420,7 @@ function createReleasesReadBackend(client) {
         }
         return { kind: "hit", bytes };
       } catch (error2) {
-        const status = error2.status;
-        warnOnce(typeof status === "number" ? status : void 0);
+        warnOnce(statusOf(error2));
         return { kind: "miss" };
       }
     }

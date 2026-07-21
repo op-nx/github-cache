@@ -4015,11 +4015,11 @@ var require_util2 = __commonJS({
     var { isUint8Array } = require("node:util/types");
     var { webidl } = require_webidl();
     var supportedHashes = [];
-    var crypto3;
+    var crypto2;
     try {
-      crypto3 = require("node:crypto");
+      crypto2 = require("node:crypto");
       const possibleRelevantHashes = ["sha256", "sha384", "sha512"];
-      supportedHashes = crypto3.getHashes().filter((hash) => possibleRelevantHashes.includes(hash));
+      supportedHashes = crypto2.getHashes().filter((hash) => possibleRelevantHashes.includes(hash));
     } catch {
     }
     function responseURL(response) {
@@ -4292,7 +4292,7 @@ var require_util2 = __commonJS({
       }
     }
     function bytesMatch(bytes, metadataList) {
-      if (crypto3 === void 0) {
+      if (crypto2 === void 0) {
         return true;
       }
       const parsedMetadata = parseMetadata(metadataList);
@@ -4307,7 +4307,7 @@ var require_util2 = __commonJS({
       for (const item of metadata2) {
         const algorithm = item.algo;
         const expectedValue = item.hash;
-        let actualValue = crypto3.createHash(algorithm).update(bytes).digest("base64");
+        let actualValue = crypto2.createHash(algorithm).update(bytes).digest("base64");
         if (actualValue[actualValue.length - 1] === "=") {
           if (actualValue[actualValue.length - 2] === "=") {
             actualValue = actualValue.slice(0, -2);
@@ -5371,8 +5371,8 @@ var require_body = __commonJS({
     var { multipartFormDataParser } = require_formdata_parser();
     var random;
     try {
-      const crypto3 = require("node:crypto");
-      random = (max) => crypto3.randomInt(0, max);
+      const crypto2 = require("node:crypto");
+      random = (max) => crypto2.randomInt(0, max);
     } catch {
       random = (max) => Math.floor(Math.random(max));
     }
@@ -16873,13 +16873,13 @@ var require_frame = __commonJS({
     "use strict";
     var { maxUnsigned16Bit } = require_constants5();
     var BUFFER_SIZE = 16386;
-    var crypto3;
+    var crypto2;
     var buffer3 = null;
     var bufIdx = BUFFER_SIZE;
     try {
-      crypto3 = require("node:crypto");
+      crypto2 = require("node:crypto");
     } catch {
-      crypto3 = {
+      crypto2 = {
         // not full compatibility, but minimum.
         randomFillSync: function randomFillSync(buffer4, _offset, _size) {
           for (let i = 0; i < buffer4.length; ++i) {
@@ -16892,7 +16892,7 @@ var require_frame = __commonJS({
     function generateMask() {
       if (bufIdx === BUFFER_SIZE) {
         bufIdx = 0;
-        crypto3.randomFillSync(buffer3 ??= Buffer.allocUnsafe(BUFFER_SIZE), 0, BUFFER_SIZE);
+        crypto2.randomFillSync(buffer3 ??= Buffer.allocUnsafe(BUFFER_SIZE), 0, BUFFER_SIZE);
       }
       return [buffer3[bufIdx++], buffer3[bufIdx++], buffer3[bufIdx++], buffer3[bufIdx++]];
     }
@@ -16964,9 +16964,9 @@ var require_connection = __commonJS({
     var { Headers: Headers2, getHeadersList } = require_headers();
     var { getDecodeSplit } = require_util2();
     var { WebsocketFrameSend } = require_frame();
-    var crypto3;
+    var crypto2;
     try {
-      crypto3 = require("node:crypto");
+      crypto2 = require("node:crypto");
     } catch {
     }
     function establishWebSocketConnection(url2, protocols, client, ws, onEstablish, options) {
@@ -16986,7 +16986,7 @@ var require_connection = __commonJS({
         const headersList = getHeadersList(new Headers2(options.headers));
         request.headersList = headersList;
       }
-      const keyValue = crypto3.randomBytes(16).toString("base64");
+      const keyValue = crypto2.randomBytes(16).toString("base64");
       request.headersList.append("sec-websocket-key", keyValue);
       request.headersList.append("sec-websocket-version", "13");
       for (const protocol of protocols) {
@@ -17016,7 +17016,7 @@ var require_connection = __commonJS({
             return;
           }
           const secWSAccept = response.headersList.get("Sec-WebSocket-Accept");
-          const digest = crypto3.createHash("sha1").update(keyValue + uid).digest("base64");
+          const digest = crypto2.createHash("sha1").update(keyValue + uid).digest("base64");
           if (secWSAccept !== digest) {
             failWebsocketConnection(ws, "Incorrect hash received in Sec-WebSocket-Accept header.");
             return;
@@ -22121,7 +22121,7 @@ var require_has_flag = __commonJS({
 var require_supports_color = __commonJS({
   "node_modules/supports-color/index.js"(exports2, module2) {
     "use strict";
-    var os8 = require("os");
+    var os7 = require("os");
     var tty = require("tty");
     var hasFlag = require_has_flag();
     var { env } = process;
@@ -22169,7 +22169,7 @@ var require_supports_color = __commonJS({
         return min;
       }
       if (process.platform === "win32") {
-        const osRelease = os8.release().split(".");
+        const osRelease = os7.release().split(".");
         if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) {
           return Number(osRelease[2]) >= 14931 ? 3 : 2;
         }
@@ -27633,36 +27633,8 @@ function escapeProperty(s) {
   return toCommandValue(s).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A").replace(/:/g, "%3A").replace(/,/g, "%2C");
 }
 
-// node_modules/@actions/core/lib/file-command.js
-var crypto = __toESM(require("crypto"), 1);
-var fs = __toESM(require("fs"), 1);
-var os2 = __toESM(require("os"), 1);
-function issueFileCommand(command, message) {
-  const filePath = process.env[`GITHUB_${command}`];
-  if (!filePath) {
-    throw new Error(`Unable to find environment variable for file command ${command}`);
-  }
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Missing file at path: ${filePath}`);
-  }
-  fs.appendFileSync(filePath, `${toCommandValue(message)}${os2.EOL}`, {
-    encoding: "utf8"
-  });
-}
-function prepareKeyValueMessage(key, value) {
-  const delimiter3 = `ghadelimiter_${crypto.randomUUID()}`;
-  const convertedValue = toCommandValue(value);
-  if (key.includes(delimiter3)) {
-    throw new Error(`Unexpected input: name should not contain the delimiter "${delimiter3}"`);
-  }
-  if (convertedValue.includes(delimiter3)) {
-    throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter3}"`);
-  }
-  return `${key}<<${delimiter3}${os2.EOL}${convertedValue}${os2.EOL}${delimiter3}`;
-}
-
 // node_modules/@actions/core/lib/core.js
-var os5 = __toESM(require("os"), 1);
+var os4 = __toESM(require("os"), 1);
 
 // node_modules/@actions/http-client/lib/index.js
 var http = __toESM(require("http"), 1);
@@ -28711,7 +28683,7 @@ var _summary = new Summary();
 var import_os2 = __toESM(require("os"), 1);
 
 // node_modules/@actions/exec/lib/toolrunner.js
-var os3 = __toESM(require("os"), 1);
+var os2 = __toESM(require("os"), 1);
 var events = __toESM(require("events"), 1);
 var child = __toESM(require("child_process"), 1);
 var path3 = __toESM(require("path"), 1);
@@ -28721,7 +28693,7 @@ var import_assert = require("assert");
 var path2 = __toESM(require("path"), 1);
 
 // node_modules/@actions/io/lib/io-util.js
-var fs2 = __toESM(require("fs"), 1);
+var fs = __toESM(require("fs"), 1);
 var path = __toESM(require("path"), 1);
 var __awaiter4 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
@@ -28750,9 +28722,9 @@ var __awaiter4 = function(thisArg, _arguments, P, generator) {
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
-var { chmod, copyFile, lstat, mkdir, open, readdir, rename, rm, rmdir, stat, symlink, unlink } = fs2.promises;
+var { chmod, copyFile, lstat, mkdir, open, readdir, rename, rm, rmdir, stat, symlink, unlink } = fs.promises;
 var IS_WINDOWS = process.platform === "win32";
-var READONLY = fs2.constants.O_RDONLY;
+var READONLY = fs.constants.O_RDONLY;
 function exists(fsPath) {
   return __awaiter4(this, void 0, void 0, function* () {
     try {
@@ -29022,12 +28994,12 @@ var ToolRunner = class extends events.EventEmitter {
   _processLineBuffer(data, strBuffer, onLine) {
     try {
       let s = strBuffer + data.toString();
-      let n = s.indexOf(os3.EOL);
+      let n = s.indexOf(os2.EOL);
       while (n > -1) {
         const line = s.substring(0, n);
         onLine(line);
-        s = s.substring(n + os3.EOL.length);
-        n = s.indexOf(os3.EOL);
+        s = s.substring(n + os2.EOL.length);
+        n = s.indexOf(os2.EOL);
       }
       return s;
     } catch (err) {
@@ -29196,7 +29168,7 @@ var ToolRunner = class extends events.EventEmitter {
         }
         const optionsNonNull = this._cloneExecOptions(this.options);
         if (!optionsNonNull.silent && optionsNonNull.outStream) {
-          optionsNonNull.outStream.write(this._getCommandString(optionsNonNull) + os3.EOL);
+          optionsNonNull.outStream.write(this._getCommandString(optionsNonNull) + os2.EOL);
         }
         const state3 = new ExecState(optionsNonNull, this.toolPath);
         state3.on("debug", (message) => {
@@ -29442,15 +29414,6 @@ var ExitCode;
   ExitCode2[ExitCode2["Success"] = 0] = "Success";
   ExitCode2[ExitCode2["Failure"] = 1] = "Failure";
 })(ExitCode || (ExitCode = {}));
-function exportVariable(name, val) {
-  const convertedVal = toCommandValue(val);
-  process.env[name] = convertedVal;
-  const filePath = process.env["GITHUB_ENV"] || "";
-  if (filePath) {
-    return issueFileCommand("ENV", prepareKeyValueMessage(name, val));
-  }
-  issueCommand("set-env", { name }, convertedVal);
-}
 function setSecret(secret) {
   issueCommand("add-mask", {}, secret);
 }
@@ -29481,7 +29444,7 @@ function warning(message, properties = {}) {
   issueCommand("warning", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 function info(message) {
-  process.stdout.write(message + os5.EOL);
+  process.stdout.write(message + os4.EOL);
 }
 
 // packages/github-cache/src/serve.ts
@@ -29494,7 +29457,7 @@ var import_promises = require("node:fs/promises");
 var path10 = __toESM(require("path"), 1);
 
 // node_modules/@actions/glob/lib/internal-globber.js
-var fs3 = __toESM(require("fs"), 1);
+var fs2 = __toESM(require("fs"), 1);
 
 // node_modules/@actions/glob/lib/internal-glob-options-helper.js
 function getOptions(copy) {
@@ -29683,7 +29646,7 @@ function partialMatch(patterns, itemPath) {
 }
 
 // node_modules/@actions/glob/lib/internal-pattern.js
-var os6 = __toESM(require("os"), 1);
+var os5 = __toESM(require("os"), 1);
 var path6 = __toESM(require("path"), 1);
 var import_assert4 = __toESM(require("assert"), 1);
 var import_minimatch = __toESM(require_minimatch(), 1);
@@ -29838,7 +29801,7 @@ var Pattern = class _Pattern {
     if (pattern === "." || pattern.startsWith(`.${path6.sep}`)) {
       pattern = _Pattern.globEscape(process.cwd()) + pattern.substr(1);
     } else if (pattern === "~" || pattern.startsWith(`~${path6.sep}`)) {
-      homedir2 = homedir2 || os6.homedir();
+      homedir2 = homedir2 || os5.homedir();
       (0, import_assert4.default)(homedir2, "Unable to determine HOME directory");
       (0, import_assert4.default)(hasAbsoluteRoot(homedir2), `Expected HOME directory to be a rooted path. Actual '${homedir2}'`);
       pattern = _Pattern.globEscape(homedir2) + pattern.substr(1);
@@ -30057,7 +30020,7 @@ var DefaultGlobber = class _DefaultGlobber {
       for (const searchPath of getSearchPaths(patterns)) {
         debug(`Search path '${searchPath}'`);
         try {
-          yield __await(fs3.promises.lstat(searchPath));
+          yield __await(fs2.promises.lstat(searchPath));
         } catch (err) {
           if (err.code === "ENOENT") {
             continue;
@@ -30091,7 +30054,7 @@ var DefaultGlobber = class _DefaultGlobber {
             continue;
           }
           const childLevel = item.level + 1;
-          const childItems = (yield __await(fs3.promises.readdir(item.path))).map((x) => new SearchState(path7.join(item.path, x), childLevel));
+          const childItems = (yield __await(fs2.promises.readdir(item.path))).map((x) => new SearchState(path7.join(item.path, x), childLevel));
           stack.push(...childItems.reverse());
         } else if (match2 & MatchKind.File) {
           yield yield __await(item.path);
@@ -30126,7 +30089,7 @@ var DefaultGlobber = class _DefaultGlobber {
       let stats;
       if (options.followSymbolicLinks) {
         try {
-          stats = yield fs3.promises.stat(item.path);
+          stats = yield fs2.promises.stat(item.path);
         } catch (err) {
           if (err.code === "ENOENT") {
             if (options.omitBrokenSymbolicLinks) {
@@ -30138,10 +30101,10 @@ var DefaultGlobber = class _DefaultGlobber {
           throw err;
         }
       } else {
-        stats = yield fs3.promises.lstat(item.path);
+        stats = yield fs2.promises.lstat(item.path);
       }
       if (stats.isDirectory() && options.followSymbolicLinks) {
-        const realPath = yield fs3.promises.realpath(item.path);
+        const realPath = yield fs2.promises.realpath(item.path);
         while (traversalChain.length >= item.level) {
           traversalChain.pop();
         }
@@ -30191,8 +30154,8 @@ function create(patterns, options) {
 }
 
 // node_modules/@actions/cache/lib/internal/cacheUtils.js
-var crypto2 = __toESM(require("crypto"), 1);
-var fs4 = __toESM(require("fs"), 1);
+var crypto = __toESM(require("crypto"), 1);
+var fs3 = __toESM(require("fs"), 1);
 var path8 = __toESM(require("path"), 1);
 var semver = __toESM(require_semver2(), 1);
 var util = __toESM(require("util"), 1);
@@ -30289,13 +30252,13 @@ function createTempDirectory() {
       }
       tempDirectory = path8.join(baseLocation, "actions", "temp");
     }
-    const dest = path8.join(tempDirectory, crypto2.randomUUID());
+    const dest = path8.join(tempDirectory, crypto.randomUUID());
     yield mkdirP(dest);
     return dest;
   });
 }
 function getArchiveFileSizeInBytes(filePath) {
-  return fs4.statSync(filePath).size;
+  return fs3.statSync(filePath).size;
 }
 function resolvePaths(patterns) {
   return __awaiter10(this, void 0, void 0, function* () {
@@ -30333,7 +30296,7 @@ function resolvePaths(patterns) {
 }
 function unlinkFile(filePath) {
   return __awaiter10(this, void 0, void 0, function* () {
-    return util.promisify(fs4.unlink)(filePath);
+    return util.promisify(fs3.unlink)(filePath);
   });
 }
 function getVersion(app_1) {
@@ -30375,7 +30338,7 @@ function getCacheFileName(compressionMethod) {
 }
 function getGnuTarPathOnWindows() {
   return __awaiter10(this, void 0, void 0, function* () {
-    if (fs4.existsSync(GnuTarPathOnWindows)) {
+    if (fs3.existsSync(GnuTarPathOnWindows)) {
       return GnuTarPathOnWindows;
     }
     const versionOutput = yield getVersion("tar");
@@ -30397,7 +30360,7 @@ function getCacheVersion(paths, compressionMethod, enableCrossOsArchive = false)
     components.push("windows-only");
   }
   components.push(versionSalt);
-  return crypto2.createHash("sha256").update(components.join("|")).digest("hex");
+  return crypto.createHash("sha256").update(components.join("|")).digest("hex");
 }
 function getRuntimeToken() {
   const token = process.env["ACTIONS_RUNTIME_TOKEN"];
@@ -30408,7 +30371,7 @@ function getRuntimeToken() {
 }
 
 // node_modules/@actions/cache/lib/internal/cacheHttpClient.js
-var fs7 = __toESM(require("fs"), 1);
+var fs6 = __toESM(require("fs"), 1);
 var import_url = require("url");
 
 // node_modules/@typespec/ts-http-runtime/dist/esm/abort-controller/AbortError.js
@@ -30769,7 +30732,7 @@ function createHttpHeaders(rawHeaders) {
 }
 
 // node_modules/@typespec/ts-http-runtime/dist/esm/util/uuidUtils.js
-function randomUUID3() {
+function randomUUID2() {
   return globalThis.crypto.randomUUID();
 }
 
@@ -30809,7 +30772,7 @@ var PipelineRequestImpl = class {
     this.abortSignal = options.abortSignal;
     this.onUploadProgress = options.onUploadProgress;
     this.onDownloadProgress = options.onDownloadProgress;
-    this.requestId = options.requestId || randomUUID3();
+    this.requestId = options.requestId || randomUUID2();
     this.allowInsecureConnection = options.allowInsecureConnection ?? false;
     this.enableBrowserStreams = options.enableBrowserStreams ?? false;
     this.requestOverrides = options.requestOverrides;
@@ -32178,7 +32141,7 @@ async function concat(sources) {
 
 // node_modules/@typespec/ts-http-runtime/dist/esm/policies/multipartPolicy.js
 function generateBoundary() {
-  return `----AzSDKFormBoundary${randomUUID3()}`;
+  return `----AzSDKFormBoundary${randomUUID2()}`;
 }
 function encodeHeaders(headers) {
   let result = "";
@@ -32490,8 +32453,8 @@ function getErrorMessage(e) {
 function isError2(e) {
   return isError(e);
 }
-function randomUUID4() {
-  return randomUUID3();
+function randomUUID3() {
+  return randomUUID2();
 }
 var isNodeLike2 = isNodeLike;
 function uint8ArrayToString2(bytes, format) {
@@ -39324,7 +39287,7 @@ function escapeAttribute(val) {
 }
 
 // node_modules/fast-xml-builder/src/orderedJs2Xml.js
-var EOL7 = "\n";
+var EOL6 = "\n";
 function detectXmlVersionFromArray(jArray, options) {
   if (!Array.isArray(jArray) || jArray.length === 0) return "1.0";
   const first = jArray[0];
@@ -39346,7 +39309,7 @@ function resolveTagName(name, isAttribute2, options, matcher, qNameValidator) {
 function toXml(jArray, options) {
   let indentation = "";
   if (options.format) {
-    indentation = EOL7;
+    indentation = EOL6;
   }
   const stopNodeExpressions = [];
   if (options.stopNodes && Array.isArray(options.stopNodes)) {
@@ -40587,7 +40550,7 @@ var NativeCRC64 = (() => {
     }
     if (ENVIRONMENT_IS_NODE) {
       if (typeof process == "undefined" || !process.release || process.release.name !== "node") throw new Error("not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)");
-      var fs8 = require2("fs");
+      var fs7 = require2("fs");
       var nodePath = require2("path");
       if (ENVIRONMENT_IS_WORKER) {
         scriptDirectory = nodePath.dirname(scriptDirectory) + "/";
@@ -40596,7 +40559,7 @@ var NativeCRC64 = (() => {
       }
       read_ = (filename, binary) => {
         filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
-        return fs8.readFileSync(filename, binary ? void 0 : "utf8");
+        return fs7.readFileSync(filename, binary ? void 0 : "utf8");
       };
       readBinary = (filename) => {
         var ret = read_(filename, true);
@@ -40608,7 +40571,7 @@ var NativeCRC64 = (() => {
       };
       readAsync = (filename, onload, onerror) => {
         filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
-        fs8.readFile(filename, function(err2, data) {
+        fs7.readFile(filename, function(err2, data) {
           if (err2) onerror(err2);
           else onload(data.buffer);
         });
@@ -60691,7 +60654,7 @@ var BlobLeaseClient = class {
       this._containerOrBlobOperation = clientContext.blob;
     }
     if (!leaseId2) {
-      leaseId2 = randomUUID4();
+      leaseId2 = randomUUID3();
     }
     this._leaseId = leaseId2;
   }
@@ -64874,7 +64837,7 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
         throw new RangeError(`The buffer's size is too big or the BlockSize is too small;the number of blocks must be <= ${BLOCK_BLOB_MAX_BLOCKS}`);
       }
       const blockList = [];
-      const blockIDPrefix = randomUUID4();
+      const blockIDPrefix = randomUUID3();
       let transferProgress = 0;
       const batch = new Batch(options.concurrency);
       for (let i = 0; i < numBlocks; i++) {
@@ -64956,7 +64919,7 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
     }
     return tracingClient.withSpan("BlockBlobClient-uploadStream", options, async (updatedOptions) => {
       let blockNum = 0;
-      const blockIDPrefix = randomUUID4();
+      const blockIDPrefix = randomUUID3();
       let transferProgress = 0;
       const blockList = [];
       const scheduler = new BufferScheduler(
@@ -65931,7 +65894,7 @@ function uploadCacheArchiveSDK(signedUploadURL, archivePath, options) {
 
 // node_modules/@actions/cache/lib/internal/downloadUtils.js
 var buffer2 = __toESM(require("buffer"), 1);
-var fs6 = __toESM(require("fs"), 1);
+var fs5 = __toESM(require("fs"), 1);
 var stream = __toESM(require("stream"), 1);
 var util4 = __toESM(require("util"), 1);
 
@@ -66191,7 +66154,7 @@ var DownloadProgress = class {
 };
 function downloadCacheHttpClient(archiveLocation, archivePath) {
   return __awaiter13(this, void 0, void 0, function* () {
-    const writeStream = fs6.createWriteStream(archivePath);
+    const writeStream = fs5.createWriteStream(archivePath);
     const httpClient = new HttpClient("actions/cache");
     const downloadResponse = yield retryHttpClientResponse("downloadCache", () => __awaiter13(this, void 0, void 0, function* () {
       return httpClient.get(archiveLocation);
@@ -66216,7 +66179,7 @@ function downloadCacheHttpClient(archiveLocation, archivePath) {
 function downloadCacheHttpClientConcurrent(archiveLocation, archivePath, options) {
   return __awaiter13(this, void 0, void 0, function* () {
     var _a;
-    const archiveDescriptor = yield fs6.promises.open(archivePath, "w");
+    const archiveDescriptor = yield fs5.promises.open(archivePath, "w");
     const httpClient = new HttpClient("actions/cache", void 0, {
       socketTimeout: options.timeoutInMs,
       keepAlive: true
@@ -66332,7 +66295,7 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
     } else {
       const maxSegmentSize = Math.min(134217728, buffer2.constants.MAX_LENGTH);
       const downloadProgress = new DownloadProgress(contentLength2);
-      const fd = fs6.openSync(archivePath, "w");
+      const fd = fs5.openSync(archivePath, "w");
       try {
         downloadProgress.startDisplayTimer();
         const controller = new AbortController();
@@ -66350,12 +66313,12 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
             controller.abort();
             throw new Error("Aborting cache download as the download time exceeded the timeout.");
           } else if (Buffer.isBuffer(result)) {
-            fs6.writeFileSync(fd, result);
+            fs5.writeFileSync(fd, result);
           }
         }
       } finally {
         downloadProgress.stopDisplayTimer();
-        fs6.closeSync(fd);
+        fs5.closeSync(fd);
       }
     }
   });
@@ -66643,7 +66606,7 @@ function uploadFile(httpClient, cacheId, archivePath, options) {
   return __awaiter14(this, void 0, void 0, function* () {
     const fileSize = getArchiveFileSizeInBytes(archivePath);
     const resourceUrl = getCacheApiUrl(`caches/${cacheId.toString()}`);
-    const fd = fs7.openSync(archivePath, "r");
+    const fd = fs6.openSync(archivePath, "r");
     const uploadOptions = getUploadOptions(options);
     const concurrency = assertDefined("uploadConcurrency", uploadOptions.uploadConcurrency);
     const maxChunkSize = assertDefined("uploadChunkSize", uploadOptions.uploadChunkSize);
@@ -66657,7 +66620,7 @@ function uploadFile(httpClient, cacheId, archivePath, options) {
           const start = offset;
           const end = offset + chunkSize - 1;
           offset += maxChunkSize;
-          yield uploadChunk(httpClient, resourceUrl, () => fs7.createReadStream(archivePath, {
+          yield uploadChunk(httpClient, resourceUrl, () => fs6.createReadStream(archivePath, {
             fd,
             start,
             end,
@@ -66668,7 +66631,7 @@ function uploadFile(httpClient, cacheId, archivePath, options) {
         }
       })));
     } finally {
-      fs7.closeSync(fd);
+      fs6.closeSync(fd);
     }
     return;
   });
@@ -68788,14 +68751,16 @@ if (process.argv[1] && __actionImportMetaUrl === (0, import_node_url2.pathToFile
 
 // start-cache-server/entry.ts
 async function run() {
+  if (!process.env.NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN) {
+    setFailed(
+      "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN is not set. A background step cannot export env to later steps, so set both NX_SELF_HOSTED_REMOTE_CACHE_SERVER and NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN (with a matching fixed port) in a regular step BEFORE this background step -- this action adopts them."
+    );
+    return;
+  }
   const port = getInput("port") || void 0;
   const running = await serve({ port });
   setSecret(running.token);
-  exportVariable("NX_SELF_HOSTED_REMOTE_CACHE_SERVER", running.url);
-  exportVariable(
-    "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN",
-    running.token
-  );
+  info(`github-cache sidecar listening on ${running.url}`);
 }
 void run().catch((error2) => {
   setFailed(error2 instanceof Error ? error2.message : String(error2));

@@ -2,13 +2,24 @@
 # SEPARATE from packages/github-cache/action.yml (that one is the INTERNAL CI
 # dogfood action and must never be presented as the consumer surface, D-09).
 #
-# Consumed as a background step inside the adopter's own job:
+# A background step CANNOT export env to later steps: core.exportVariable writes
+# $GITHUB_ENV, which the runner only processes AFTER a step COMPLETES -- and a
+# background step does not complete until its `cancel:` teardown. So the CONSUMER
+# pre-sets the two NX_* vars in a REGULAR step first (its $GITHUB_ENV writes DO
+# propagate); serve() ADOPTS the pre-set token + port.
+#
+# Consumed inside the adopter's own job:
 #   - uses: actions/checkout@v7
+#   - run: |                                # regular step: $GITHUB_ENV propagates
+#       echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+#       echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 #   - uses: op-nx/github-cache/start-cache-server@v0
 #     id: cache-server
 #     background: true
-#   - run: npx nx affected -t build test   # reads the exported NX_* vars
-#   - cancel: cache-server                 # MANDATORY teardown (Pitfall 3)
+#     with:
+#       port: '3000'                        # must match the pre-set SERVER url port
+#   - run: npx nx affected -t build test    # reads the pre-set NX_* vars
+#   - cancel: cache-server                  # MANDATORY teardown (Pitfall 3)
 #
 # main points at the COMMITTED, esbuild-bundled index.js (NOT gitignored dist/),
 # because a uses: action resolves main from the git ref -- never from npm and
@@ -18,14 +29,16 @@
 name: 'op-nx github-cache server'
 description: >-
   Runs the @op-nx/github-cache loopback Nx remote-cache sidecar as a background
-  step, then exports NX_SELF_HOSTED_REMOTE_CACHE_SERVER and
-  NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN so a later Nx step in the same job
-  reaches the sidecar. Pair with `background: true` and a `cancel:` teardown.
+  step. A background step cannot export env to later steps, so set
+  NX_SELF_HOSTED_REMOTE_CACHE_SERVER and NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN
+  (with a matching fixed port) in a prior regular step; this action adopts them.
+  Pair with `background: true` and a `cancel:` teardown.
 inputs:
   port:
     description: >-
-      Loopback port for the sidecar. Omitted -> an OS-assigned ephemeral port
-      (read it back from the exported NX_SELF_HOSTED_REMOTE_CACHE_SERVER).
+      Loopback port for the sidecar. Must match the port in the pre-set
+      NX_SELF_HOSTED_REMOTE_CACHE_SERVER url. Omitted -> an OS-assigned ephemeral
+      port, which will NOT match a fixed pre-set url, so set it explicitly.
     required: false
 runs:
   using: 'node24'

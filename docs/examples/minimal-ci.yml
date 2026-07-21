@@ -33,7 +33,10 @@ jobs:
         background: true
         env:
           # Selects the writable Actions-cache backend on trusted triggers
-          # (push / schedule). On a pull request the backend is read-only.
+          # (push / schedule; also pull_request/release on github.com). Fork/PR
+          # cache writes are contained by GitHub's server-side read-only cache
+          # guard + default-branch protection, not by the app -- see
+          # ../trust-and-security.md.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - run: npx nx affected -t build test

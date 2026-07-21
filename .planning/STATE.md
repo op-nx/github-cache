@@ -5,9 +5,8 @@ milestone_name: Greenfield MVP Rebuild
 current_phase: 6
 status: executing
 stopped_at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
-last_updated: "2026-07-21T07:40:10.175Z"
+last_updated: "2026-07-21T07:43:41.065Z"
 last_activity: 2026-07-21
-last_activity_desc: Phase 6 complete
 progress:
   total_phases: 7
   completed_phases: 7
@@ -31,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 Phase: 6
 Plan: Not started
 Status: Ready to execute
-Last activity: 2026-07-21 — Phase 6 complete
+Last activity: 2026-07-21
 
 Progress: [██████████] 100% of planned plans (phase 5 pending verification)
 

@@ -1,4 +1,5 @@
 import * as core from '@actions/core';
+import type { Hash } from '../lib/cache-key.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createReleasesReadBackend,
@@ -242,7 +243,9 @@ describe('createReleasesReadBackend read-only-local put re-assertion (TEST-06)',
     };
     const backend = createReleasesReadBackend(readOnlyClient);
 
-    expect(await backend.put('abc123', Buffer.from('x'))).toBe('forbidden');
+    expect(await backend.put('abc123' as Hash, Buffer.from('x'))).toBe(
+      'forbidden',
+    );
   });
 });
 

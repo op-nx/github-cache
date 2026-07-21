@@ -1,4 +1,5 @@
 import { tmpdir } from 'node:os';
+import type { Hash } from './cache-key.js';
 import { basename, dirname, isAbsolute } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
@@ -13,20 +14,24 @@ import { cacheArchivePath } from './cache-archive-path.js';
 // the same discipline as server.spec.ts's MAX_CACHE_BODY_BYTES pinned-value test.
 describe('cacheArchivePath', () => {
   it('produces exactly the file name nx-github-cache-abc123.tar for hash abc123 (ROBUST-03)', () => {
-    const path = cacheArchivePath('abc123');
+    const path = cacheArchivePath('abc123' as Hash);
 
     expect(basename(path)).toBe('nx-github-cache-abc123.tar');
   });
 
   it('returns an absolute path whose directory is the OS temp directory (ROBUST-03)', () => {
-    const path = cacheArchivePath('abc123');
+    const path = cacheArchivePath('abc123' as Hash);
 
     expect(isAbsolute(path)).toBe(true);
     expect(dirname(path)).toBe(tmpdir());
   });
 
   it('is byte-identical for the same hash and differs for a different hash (ROBUST-03)', () => {
-    expect(cacheArchivePath('abc123')).toBe(cacheArchivePath('abc123'));
-    expect(cacheArchivePath('abc123')).not.toBe(cacheArchivePath('def456'));
+    expect(cacheArchivePath('abc123' as Hash)).toBe(
+      cacheArchivePath('abc123' as Hash),
+    );
+    expect(cacheArchivePath('abc123' as Hash)).not.toBe(
+      cacheArchivePath('def456' as Hash),
+    );
   });
 });

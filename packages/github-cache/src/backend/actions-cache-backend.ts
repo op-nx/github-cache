@@ -1,7 +1,7 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import * as cache from '@actions/cache';
 import { cacheArchivePath } from '../lib/cache-archive-path.js';
-import { cacheKeyFor } from '../lib/cache-key.js';
+import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
 import type { CacheBackend, GetResult, PutResult } from './types.js';
 
 // The server-produced-key namespace + filter (prefix + HASH_PATTERN) now live in
@@ -25,7 +25,7 @@ import type { CacheBackend, GetResult, PutResult } from './types.js';
  */
 export function createActionsCacheBackend(): CacheBackend {
   return {
-    async get(hash: string): Promise<GetResult> {
+    async get(hash: Hash): Promise<GetResult> {
       const path = cacheArchivePath(hash);
       const matched = await cache.restoreCache([path], cacheKeyFor(hash));
 
@@ -45,7 +45,7 @@ export function createActionsCacheBackend(): CacheBackend {
       }
     },
 
-    async put(hash: string, bytes: Buffer): Promise<PutResult> {
+    async put(hash: Hash, bytes: Buffer): Promise<PutResult> {
       const path = cacheArchivePath(hash);
       await writeFile(path, bytes);
 

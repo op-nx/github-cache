@@ -4,6 +4,7 @@ import {
   createReleasesReadBackend,
   createReleasesReadClient,
 } from '../backend/releases-backend.js';
+import { parseHash } from '../lib/cache-key.js';
 
 /**
  * Live cross-OS publish/read-back round-trip (the leg deferred from Phase 3). The
@@ -31,9 +32,9 @@ async function run(): Promise<void> {
   // The publish seed keyed its entry on the workflow run id (the dogfood hash
   // convention: unique per run and already all-decimal, so it satisfies the server's
   // ^[a-f0-9]{1,512}$ validator without massaging).
-  const hash = process.env.GITHUB_RUN_ID ?? '';
+  const hash = parseHash(process.env.GITHUB_RUN_ID ?? '');
 
-  if (hash === '') {
+  if (hash === undefined) {
     throw new Error(
       'github-cache round-trip read-back: GITHUB_RUN_ID is required as the hash',
     );

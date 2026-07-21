@@ -1,7 +1,12 @@
 import * as core from '@actions/core';
 import { createActionsCacheBackend } from '../backend/actions-cache-backend.js';
 import type { GetResult } from '../backend/types.js';
-import { CACHE_KEY_PREFIX, isServerProducedKey } from '../lib/cache-key.js';
+import {
+  CACHE_KEY_PREFIX,
+  isServerProducedKey,
+  parseHash,
+  type Hash,
+} from '../lib/cache-key.js';
 import { statusOf } from '../lib/octokit-status.js';
 import { releaseAssetName } from '../lib/release-asset-name.js';
 import { shardTag } from '../lib/retention.js';
@@ -149,9 +154,13 @@ export async function publishMirror(
   const actionsCache = createActionsCacheBackend();
 
   const entries = await client.listCacheEntries();
-  const hashes = entries
+  const hashes: Hash[] = entries
     .filter((entry) => isServerProducedKey(entry.key))
-    .map((entry) => entry.key.slice(CACHE_KEY_PREFIX.length));
+    // isServerProducedKey already validated the suffix against HASH_PATTERN, so
+    // parseHash always succeeds here; the filter satisfies the Hash type and stays
+    // defensive if the two ever drift.
+    .map((entry) => parseHash(entry.key.slice(CACHE_KEY_PREFIX.length)))
+    .filter((hash): hash is Hash => hash !== undefined);
 
   let mirrored = 0;
   let skipped = 0;

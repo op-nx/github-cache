@@ -1,3 +1,4 @@
+import type { Hash } from '../lib/cache-key.js';
 import type { CacheBackend, GetResult, PutResult } from './types.js';
 
 function readFrom(store: Map<string, Buffer>, hash: string): GetResult {
@@ -25,11 +26,11 @@ export function createWritableMemoryBackend(): CacheBackend {
   const store = new Map<string, Buffer>();
 
   return {
-    async get(hash: string): Promise<GetResult> {
+    async get(hash: Hash): Promise<GetResult> {
       return readFrom(store, hash);
     },
 
-    async put(hash: string, bytes: Buffer): Promise<PutResult> {
+    async put(hash: Hash, bytes: Buffer): Promise<PutResult> {
       if (store.has(hash)) {
         return 'conflict';
       }
@@ -52,7 +53,7 @@ export function createReadOnlyMemoryBackend(): CacheBackend {
   const store = new Map<string, Buffer>();
 
   return {
-    async get(hash: string): Promise<GetResult> {
+    async get(hash: Hash): Promise<GetResult> {
       return readFrom(store, hash);
     },
 

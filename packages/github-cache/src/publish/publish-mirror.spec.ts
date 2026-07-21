@@ -1,5 +1,6 @@
 import * as core from '@actions/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Hash } from '../lib/cache-key.js';
 import { releaseAssetName } from '../lib/release-asset-name.js';
 import { octokitFault } from '../test/octokit-fault.js';
 import {
@@ -34,7 +35,7 @@ vi.mock('@actions/core', () => ({
   setFailed: vi.fn(),
 }));
 
-const HASH = 'abc123';
+const HASH = 'abc123' as Hash;
 const SHARD_ID = 555;
 
 /**
@@ -88,13 +89,16 @@ describe('publishMirror server-produced-key filter (D-16/D-08/TRUST-08)', () => 
     // is called only with the two valid-hex hashes. This proves the hardened
     // isServerProducedKey rejects a garbage suffix -- the D-08 improvement over the old
     // startsWith-only behavior, which would have restored nx-cache-zzz.
-    expect(getMock.mock.calls.map((call) => call[0])).toEqual(['aa11', 'bb22']);
+    expect(getMock.mock.calls.map((call) => call[0])).toEqual([
+      'aa11' as Hash,
+      'bb22' as Hash,
+    ]);
     const uploadedNames = vi
       .mocked(fake.uploadReleaseAsset)
       .mock.calls.map((call) => call[1]);
     expect(uploadedNames).toEqual([
-      releaseAssetName('aa11'),
-      releaseAssetName('bb22'),
+      releaseAssetName('aa11' as Hash),
+      releaseAssetName('bb22' as Hash),
     ]);
   });
 });

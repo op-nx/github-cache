@@ -20,8 +20,26 @@ export const CACHE_KEY_PREFIX = 'nx-cache-';
 /** Bounded lowercase-hex task hash (SRV-03); the shared server + filter hash space. */
 export const HASH_PATTERN = /^[a-f0-9]{1,512}$/;
 
+/**
+ * A task hash that has been VALIDATED against HASH_PATTERN. The opaque brand makes
+ * it unrepresentable to pass an unvalidated string -- a raw route param, or a full
+ * `nx-cache-<hash>` key mistaken for its hash suffix -- where a hash is required, a
+ * mixup class that was previously only caught by spec-pinning (type-design #3).
+ * Mint one ONLY via parseHash; the brand never exists at runtime (it erases).
+ */
+export type Hash = string & { readonly __hash: unique symbol };
+
+/**
+ * Validate a raw string as a Hash, or undefined when it is not a bounded lowercase-
+ * hex task hash. The single mint point for the Hash brand (SRV-03 uses it at the
+ * server route; the mirror path uses it on a server-produced key's suffix).
+ */
+export function parseHash(value: string): Hash | undefined {
+  return HASH_PATTERN.test(value) ? (value as Hash) : undefined;
+}
+
 /** Actions-cache key for a task hash: the prefix followed by the hash. */
-export function cacheKeyFor(hash: string): string {
+export function cacheKeyFor(hash: Hash): string {
   return `${CACHE_KEY_PREFIX}${hash}`;
 }
 

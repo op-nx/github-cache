@@ -1,5 +1,6 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { Hash } from './cache-key.js';
 
 /**
  * Single source of truth for the temp archive path passed to @actions/cache
@@ -15,6 +16,6 @@ import { join } from 'node:path';
  * restore in CI (the Plan 06 dogfood canary); the failure mode is a silent MISS,
  * not a crash. Its exact produced file name is pinned by cache-archive-path.spec.ts.
  */
-export function cacheArchivePath(hash: string): string {
+export function cacheArchivePath(hash: Hash): string {
   return join(tmpdir(), `nx-github-cache-${hash}.tar`);
 }

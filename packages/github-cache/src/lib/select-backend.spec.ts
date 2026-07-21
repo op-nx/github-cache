@@ -3,6 +3,7 @@ import * as cache from '@actions/cache';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
 import { resolveLocalReadToken, resolveRepoIdentity } from './local-context.js';
+import type { Hash } from './cache-key.js';
 import { resolveGitHubToken } from './github-identity.js';
 import { releaseAssetName } from './release-asset-name.js';
 import { selectBackend } from './select-backend.js';
@@ -28,7 +29,7 @@ const saveCache = vi.mocked(cache.saveCache);
 // files in parallel workers that share the filesystem, so reusing another spec's
 // hash (e.g. actions-cache-backend.spec.ts's 'abc123') would race on the same
 // temp file. Keep this value distinct from every other spec's hash.
-const HASH = 'selectbackendfixture';
+const HASH = 'selectbackendfixture' as Hash;
 const BYTES = Buffer.from('tar-bytes');
 
 // A well-formed trusted CI context: Actions on, a trusted event, a valid

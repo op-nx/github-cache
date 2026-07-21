@@ -1,3 +1,5 @@
+import type { Hash } from './cache-key.js';
+
 /**
  * Map the running platform to the OS discriminator folded into every Release
  * asset name (D-06). `win32 -> windows`, `darwin -> macos`, and every other value
@@ -39,7 +41,7 @@ export function cachePlatform(
  * surface: it cannot influence RW-vs-RO selection (TRUST-05 intact).
  */
 export function releaseAssetName(
-  hash: string,
+  hash: Hash,
   platform: NodeJS.Platform = process.platform,
 ): string {
   return `${hash}-${cachePlatform(platform)}`;

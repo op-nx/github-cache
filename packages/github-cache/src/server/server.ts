@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
-import { HASH_PATTERN } from '../lib/cache-key.js';
+import { parseHash, type Hash } from '../lib/cache-key.js';
 import type { CacheBackend, PutResult } from '../backend/types.js';
 
 const ROUTE = /^\/v1\/cache\/([^/]*)$/;
@@ -85,9 +85,12 @@ export function createCacheServer(
       return;
     }
 
-    const hash = match[1];
+    // Mint the validated Hash at the trust boundary (SRV-03): parseHash returns
+    // undefined for anything outside HASH_PATTERN, so nothing past this point can
+    // reach a backend with an unvalidated route param.
+    const hash = parseHash(match[1]);
 
-    if (!HASH_PATTERN.test(hash)) {
+    if (hash === undefined) {
       res.statusCode = 400;
       res.end();
 
@@ -110,7 +113,7 @@ export function createCacheServer(
  */
 async function handleGet(
   backend: CacheBackend,
-  hash: string,
+  hash: Hash,
   res: http.ServerResponse,
 ): Promise<void> {
   try {
@@ -141,7 +144,7 @@ async function handleGet(
  */
 async function handlePut(
   backend: CacheBackend,
-  hash: string,
+  hash: Hash,
   req: http.IncomingMessage,
   res: http.ServerResponse,
   maxBodyBytes: number,

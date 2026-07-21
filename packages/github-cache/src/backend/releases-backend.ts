@@ -4,6 +4,7 @@ import {
 } from '../lib/local-context.js';
 import * as assetNaming from '../lib/release-asset-name.js';
 import { resolveMaxAgeDays, shardTagsForWindow } from '../lib/retention.js';
+import type { Hash } from '../lib/cache-key.js';
 import type { CacheBackend, GetResult, PutResult } from './types.js';
 
 /**
@@ -67,7 +68,7 @@ export function createReleasesReadBackend(
   client: ReleaseReadClient,
 ): CacheBackend {
   return {
-    async get(hash: string): Promise<GetResult> {
+    async get(hash: Hash): Promise<GetResult> {
       try {
         const bytes = await client.fetchAsset(
           assetNaming.releaseAssetName(hash),

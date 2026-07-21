@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import type { Hash } from './cache-key.js';
 import { describe, expect, it } from 'vitest';
 import { cachePlatform, releaseAssetName } from './release-asset-name.js';
 
@@ -13,24 +14,24 @@ import { cachePlatform, releaseAssetName } from './release-asset-name.js';
 // cache-archive-path.spec.ts:6-13.
 describe('releaseAssetName (CORR-01)', () => {
   it('produces exactly abc123-linux for hash abc123 on linux (CORR-01)', () => {
-    expect(releaseAssetName('abc123', 'linux')).toBe('abc123-linux');
+    expect(releaseAssetName('abc123' as Hash, 'linux')).toBe('abc123-linux');
   });
 
   it('is byte-identical for the same hash and platform pair (CORR-01)', () => {
-    expect(releaseAssetName('abc123', 'linux')).toBe(
-      releaseAssetName('abc123', 'linux'),
+    expect(releaseAssetName('abc123' as Hash, 'linux')).toBe(
+      releaseAssetName('abc123' as Hash, 'linux'),
     );
   });
 
   it('differs for the same hash under a different platform (CORR-01)', () => {
-    expect(releaseAssetName('abc123', 'linux')).not.toBe(
-      releaseAssetName('abc123', 'win32'),
+    expect(releaseAssetName('abc123' as Hash, 'linux')).not.toBe(
+      releaseAssetName('abc123' as Hash, 'win32'),
     );
   });
 
   it('resolves the running platform when called with no platform argument (CORR-01)', () => {
-    expect(releaseAssetName('abc123')).toBe(
-      releaseAssetName('abc123', process.platform),
+    expect(releaseAssetName('abc123' as Hash)).toBe(
+      releaseAssetName('abc123' as Hash, process.platform),
     );
   });
 });

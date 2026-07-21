@@ -5,6 +5,7 @@ import {
   CACHE_KEY_PREFIX,
   HASH_PATTERN,
   isServerProducedKey,
+  type Hash,
 } from './cache-key.js';
 
 /**
@@ -62,11 +63,11 @@ describe('isServerProducedKey admit/reject (TRUST-08)', () => {
 
 describe('cacheKeyFor round-trip (TRUST-08, T-05-08-03)', () => {
   it('builds the prefix + hash key', () => {
-    expect(cacheKeyFor('deadbeef')).toBe('nx-cache-deadbeef');
+    expect(cacheKeyFor('deadbeef' as Hash)).toBe('nx-cache-deadbeef');
   });
 
   it('produces a key that isServerProducedKey admits for any hex hash', () => {
-    for (const hash of ['0', 'abc123', 'deadbeef', 'f'.repeat(512)]) {
+    for (const hash of ['0', 'abc123', 'deadbeef', 'f'.repeat(512)] as Hash[]) {
       expect(isServerProducedKey(cacheKeyFor(hash))).toBe(true);
     }
   });

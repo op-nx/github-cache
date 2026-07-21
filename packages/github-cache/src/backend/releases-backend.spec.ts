@@ -3,6 +3,7 @@ import {
   resolveLocalReadToken,
   resolveRepoIdentity,
 } from '../lib/local-context.js';
+import type { Hash } from '../lib/cache-key.js';
 import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
 import {
   createReleasesReadBackend,
@@ -25,8 +26,8 @@ const mockRepo = vi.mocked(resolveRepoIdentity);
 // filesystem -- the fake client is a plain in-memory Map -- so there is no shared
 // temp-file race like actions-cache-backend.spec.ts guards against with a
 // per-spec unique hash.
-const INVARIANT_HASH = 'deadbeef';
-const SENSITIVE_HASH = 'beefcafe';
+const INVARIANT_HASH = 'deadbeef' as Hash;
+const SENSITIVE_HASH = 'beefcafe' as Hash;
 
 // The OS discriminator this test process is NOT running under, so a "foreign OS"
 // seeded entry is genuinely foreign on every CI matrix leg (Windows, Linux,
@@ -126,9 +127,9 @@ describe('createReleasesReadBackend name derivation (TEST-05)', () => {
     const client = recordingClient(new Map());
     const backend = createReleasesReadBackend(client);
 
-    await backend.get('abc123');
+    await backend.get('abc123' as Hash);
 
-    expect(client.requested).toEqual([releaseAssetName('abc123')]);
+    expect(client.requested).toEqual([releaseAssetName('abc123' as Hash)]);
   });
 });
 
@@ -136,22 +137,28 @@ describe('createReleasesReadBackend put (D-02, TRUST-05)', () => {
   it('forbids a normal write (D-02)', async () => {
     const backend = createReleasesReadBackend(recordingClient(new Map()));
 
-    expect(await backend.put('abc123', Buffer.from('bytes'))).toBe('forbidden');
+    expect(await backend.put('abc123' as Hash, Buffer.from('bytes'))).toBe(
+      'forbidden',
+    );
   });
 
   it('forbids an empty-buffer write (D-02)', async () => {
     const backend = createReleasesReadBackend(recordingClient(new Map()));
 
-    expect(await backend.put('abc123', Buffer.alloc(0))).toBe('forbidden');
+    expect(await backend.put('abc123' as Hash, Buffer.alloc(0))).toBe(
+      'forbidden',
+    );
   });
 
   it('forbids a write for a hash already present in the client (D-02)', async () => {
     const seeded = new Map([
-      [releaseAssetName('abc123'), Buffer.from('bytes')],
+      [releaseAssetName('abc123' as Hash), Buffer.from('bytes')],
     ]);
     const backend = createReleasesReadBackend(recordingClient(seeded));
 
-    expect(await backend.put('abc123', Buffer.from('other'))).toBe('forbidden');
+    expect(await backend.put('abc123' as Hash, Buffer.from('other'))).toBe(
+      'forbidden',
+    );
   });
 });
 
@@ -160,14 +167,16 @@ describe('createReleasesReadBackend fault degradation (D-11, SRV-05)', () => {
     vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     const backend = createReleasesReadBackend(throwingClient);
 
-    await expect(backend.get('abc123')).resolves.toEqual({ kind: 'miss' });
+    await expect(backend.get('abc123' as Hash)).resolves.toEqual({
+      kind: 'miss',
+    });
   });
 
   it('returns a MISS and writes NOTHING to stderr for the ordinary absent-asset path (D-11)', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     const backend = createReleasesReadBackend(recordingClient(new Map()));
 
-    const result = await backend.get('abc123');
+    const result = await backend.get('abc123' as Hash);
 
     expect(result).toEqual({ kind: 'miss' });
     expect(stderr).not.toHaveBeenCalled();
@@ -185,8 +194,8 @@ describe('createReleasesReadBackend one-time warning (D-11, T-03-03, T-03-06)', 
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     const backend = freshBackend(throwingClient);
 
-    await backend.get('abc123');
-    await backend.get('def456');
+    await backend.get('abc123' as Hash);
+    await backend.get('def456' as Hash);
 
     expect(stderr).toHaveBeenCalledTimes(1);
   });
@@ -198,7 +207,7 @@ describe('createReleasesReadBackend one-time warning (D-11, T-03-03, T-03-06)', 
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     const backend = freshBackend(throwingClient);
 
-    await backend.get('abc123');
+    await backend.get('abc123' as Hash);
 
     const written = stderr.mock.calls.map((call) => String(call[0])).join('');
     expect(written).not.toContain('ghs_leakedtokenvalue');
@@ -500,7 +509,7 @@ describe('createReleasesReadClient fault matrix through the backend (SRV-05, D-1
       );
       const backend = createReleasesReadBackend(createReleasesReadClient({}));
 
-      expect(await backend.get('abc123')).toEqual({ kind: 'miss' });
+      expect(await backend.get('abc123' as Hash)).toEqual({ kind: 'miss' });
     },
   );
 
@@ -513,7 +522,7 @@ describe('createReleasesReadClient fault matrix through the backend (SRV-05, D-1
     );
     const backend = createReleasesReadBackend(createReleasesReadClient({}));
 
-    expect(await backend.get('abc123')).toEqual({ kind: 'miss' });
+    expect(await backend.get('abc123' as Hash)).toEqual({ kind: 'miss' });
   });
 
   it('a 404 shard is a silent MISS through the backend: no stderr warning (D-11)', async () => {
@@ -525,7 +534,7 @@ describe('createReleasesReadClient fault matrix through the backend (SRV-05, D-1
     );
     const backend = createReleasesReadBackend(createReleasesReadClient({}));
 
-    const result = await backend.get('abc123');
+    const result = await backend.get('abc123' as Hash);
 
     expect(result).toEqual({ kind: 'miss' });
     expect(stderr).not.toHaveBeenCalled();
@@ -552,7 +561,7 @@ describe('createReleasesReadClient fault matrix through the backend (SRV-05, D-1
       new Response(null, { status: 500 }),
     );
 
-    await freshBackend(freshClient({})).get('abc123');
+    await freshBackend(freshClient({})).get('abc123' as Hash);
 
     expect(stderr).toHaveBeenCalledTimes(1);
   });

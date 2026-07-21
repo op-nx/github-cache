@@ -56,6 +56,23 @@ describe('ppe/action.yml composite PPE-hygiene gate (TRUST-06)', () => {
     expect(codeLines).toMatch(/not\s+(?:a|the)?\s*containment/i);
   });
 
+  // The advisory contract ("a finding never fails your job") must hold for the tool
+  // INSTALL steps too, not only the audit flags: a composite run step executes under
+  // `bash -eo pipefail`, so a bare install failure would propagate and fail the
+  // consumer's job. These pin the non-fatal installs + the audit binary-guard so that
+  // contract cannot silently regress.
+  it('makes the zizmor install non-fatal so an install failure never fails the consumer job (advisory contract)', () => {
+    expect(codeLines).toMatch(/pipx install zizmor==1\.27\.0 \|\|/);
+  });
+
+  it('makes the actionlint install non-fatal so an install failure never fails the consumer job (advisory contract)', () => {
+    expect(codeLines).toMatch(/actionlint install failed/);
+  });
+
+  it('skips the zizmor audit when the binary is absent so a failed install never hard-fails (advisory contract)', () => {
+    expect(codeLines).toMatch(/command -v zizmor/);
+  });
+
   it('declares a shell for every run step (composite requirement) and no top-level env', () => {
     const runSteps = codeLines.match(/^\s+run:/gm) ?? [];
     const shellDecls = codeLines.match(/^\s+shell:\s*bash\b/gm) ?? [];

@@ -33,7 +33,17 @@ runs:
   steps:
     - name: Install zizmor (exact-pinned 1.27.0)
       shell: bash
-      run: pipx install zizmor==1.27.0
+      # Non-fatal install (advisory contract, TRUST-06/D-12). A composite `run:` step
+      # executes under `bash -eo pipefail`, so a bare `pipx install` failure -- no pipx
+      # on the runner (the consumer supplies runs-on: windows/macos/self-hosted), a PyPI
+      # flake, or a yanked 1.27.0 -- would propagate and FAIL the adopter's job. That is
+      # the exact CREEP-adjacent surprise the "a finding never fails your job" posture
+      # exists to prevent, and it must hold for the INSTALL path too, not only findings.
+      # `|| echo` keeps the step green; the audit step below no-ops when zizmor is absent.
+      # Block scalar (not an inline `run:`): the warning text contains a colon-space
+      # (`PPE: zizmor`), which a plain YAML scalar rejects as a nested mapping.
+      run: |
+        pipx install zizmor==1.27.0 || echo "::warning::github-cache PPE: zizmor install failed; skipping the advisory zizmor audit."
     - name: Install actionlint (exact-pinned 1.7.12)
       shell: bash
       run: |
@@ -44,8 +54,13 @@ runs:
         # tag points to), not the mutable v1.7.12 tag ref -- a tag can be moved, so
         # curl|bash of a tag-ref script is a supply-chain hole. The 1.7.12 arg still
         # selects the (immutable, per-version) release binary the script downloads.
+        # Non-fatal (advisory contract): if download-actionlint.bash itself exits
+        # non-zero (checksum mismatch, unsupported arch), `-e` would fail the step and
+        # thus the consumer's job. `|| echo` keeps it advisory; the actionlint audit step
+        # already ends in `|| true`, so an absent binary there is a no-op too.
         bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash) \
-          1.7.12 "${RUNNER_TEMP}/actionlint-bin"
+          1.7.12 "${RUNNER_TEMP}/actionlint-bin" \
+          || echo "::warning::github-cache PPE: actionlint install failed; skipping the advisory actionlint audit."
     - name: zizmor audit (advisory)
       # --no-exit-codes keeps it advisory (never exits 11-14 on a finding). The
       # default regular persona covers dangerous-triggers, template-injection,
@@ -56,7 +71,11 @@ runs:
       shell: bash
       env:
         AUDIT_PATH: ${{ inputs.path }}
-      run: zizmor "$AUDIT_PATH" --no-exit-codes
+      # If the install above failed, zizmor is absent -- skip rather than let a missing
+      # binary (exit 127 under `-e`) hard-fail the consumer's job (advisory contract).
+      run: |
+        command -v zizmor >/dev/null 2>&1 || { echo "::warning::github-cache PPE: zizmor not installed; skipping the advisory audit."; exit 0; }
+        zizmor "$AUDIT_PATH" --no-exit-codes
     - name: actionlint (advisory)
       # Swallow actionlint's exit 1 so a finding is advisory, never a job failure.
       # inputs.path is routed through env (not interpolated into run:) so the

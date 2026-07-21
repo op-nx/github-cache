@@ -28,19 +28,25 @@ let warned = false;
 
 /**
  * Emit one concise degradation notice to stderr, at most once per process (D-11,
- * T-03-03, T-03-06). The sentence is fixed plain ASCII: the caught error is never
- * interpolated, no subprocess output is echoed, and no token value is reachable
- * from here -- helper stderr can carry credential-adjacent material and is
- * localized noise. Modelled on serve.ts:144's process-stream write, on stderr.
+ * T-03-03, T-03-06). The caught error is STILL never interpolated (helper stderr
+ * can carry credential-adjacent material) -- the ONLY variable admitted is the
+ * numeric HTTP status, which the fault-split throw sites already treat as safe to
+ * surface. Including it lets a persistent misconfig (a 401/403 from a bad/expired
+ * token or a missing contents:read scope) be told apart from a transient blip,
+ * instead of one indistinguishable generic line before an all-MISS build. A
+ * non-numeric/absent status keeps the original generic sentence. Modelled on
+ * serve.ts's process-stream write, on stderr.
  */
-function warnOnce(): void {
+function warnOnce(status?: number): void {
   if (warned) {
     return;
   }
 
   warned = true;
+
+  const detail = typeof status === 'number' ? ` (HTTP ${status})` : '';
   process.stderr.write(
-    'github-cache: GitHub Releases cache read failed; continuing with a cache miss.\n',
+    `github-cache: GitHub Releases cache read failed${detail}; continuing with a cache miss.\n`,
   );
 }
 
@@ -75,13 +81,16 @@ export function createReleasesReadBackend(
         }
 
         return { kind: 'hit', bytes };
-      } catch {
+      } catch (error) {
         // D-11 / SRV-05: EVERY fault -- 401/403/404/429, DNS failure, timeout, an
         // injected client that throws -- degrades to MISS at this port boundary, so
         // a read fault can never break a build and never yields wrong bytes
         // (Pitfall 9). The catch lives in the backend, not the client, so an
-        // injected client that throws is covered too.
-        warnOnce();
+        // injected client that throws is covered too. Surface ONLY a numeric
+        // status (safe; never the error message/body) so a persistent auth
+        // misconfig is diagnosable.
+        const status = (error as { status?: unknown }).status;
+        warnOnce(typeof status === 'number' ? status : undefined);
 
         return { kind: 'miss' };
       }
@@ -111,6 +120,21 @@ const GITHUB_API = 'https://api.github.com';
  * AbortSignal.timeout (Node 24) keeps this zero-dependency (D-01/D-03).
  */
 const FETCH_TIMEOUT_MS = 5000;
+
+/**
+ * Upper bound (milliseconds) on the asset DOWNLOAD leg specifically. A cache
+ * archive can be tens of MB up to the ~2 GiB release-asset ceiling, and
+ * AbortSignal.timeout is an ABSOLUTE deadline -- reusing the 5s control-plane
+ * bound (FETCH_TIMEOUT_MS) for the body transfer would abort a perfectly healthy
+ * large download and degrade it to a warned MISS (needless rebuild), which is the
+ * dominant realistic failure of the mirror read path. The small JSON metadata and
+ * asset-list calls keep the tight 5s bound; only the binary transfer gets this
+ * larger one. ponytail: fixed absolute ceiling. If a legitimately huge asset over
+ * a slow link still trips it, upgrade to a per-chunk INACTIVITY timeout over
+ * downloadResponse.body (reset an AbortController timer on each chunk) rather than
+ * raising this constant further -- an inactivity bound has no size-dependent cap.
+ */
+const DOWNLOAD_TIMEOUT_MS = 300_000;
 
 /**
  * Headers for a GitHub JSON metadata call: a bearer Authorization plus the versioned
@@ -155,8 +179,11 @@ async function fetchAssetFromShard(
   }
 
   if (!releaseResponse.ok) {
-    throw new Error(
-      `github-cache: release lookup failed with status ${releaseResponse.status}`,
+    throw Object.assign(
+      new Error(
+        `github-cache: release lookup failed with status ${releaseResponse.status}`,
+      ),
+      { status: releaseResponse.status },
     );
   }
 
@@ -181,8 +208,11 @@ async function fetchAssetFromShard(
     }
 
     if (!listResponse.ok) {
-      throw new Error(
-        `github-cache: asset list failed with status ${listResponse.status}`,
+      throw Object.assign(
+        new Error(
+          `github-cache: asset list failed with status ${listResponse.status}`,
+        ),
+        { status: listResponse.status },
       );
     }
 
@@ -213,7 +243,9 @@ async function fetchAssetFromShard(
         authorization: `Bearer ${token}`,
         accept: 'application/octet-stream',
       },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      // Download leg gets the larger bound (DOWNLOAD_TIMEOUT_MS), not the 5s
+      // control-plane deadline -- a multi-MB body legitimately outlasts 5s.
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
     },
   );
 
@@ -222,8 +254,11 @@ async function fetchAssetFromShard(
   }
 
   if (!downloadResponse.ok) {
-    throw new Error(
-      `github-cache: asset download failed with status ${downloadResponse.status}`,
+    throw Object.assign(
+      new Error(
+        `github-cache: asset download failed with status ${downloadResponse.status}`,
+      ),
+      { status: downloadResponse.status },
     );
   }
 

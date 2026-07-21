@@ -189,9 +189,12 @@ export async function publishMirror(
 
     // D-12: deterministic pre-upload boundary check -- fail the whole run loud BEFORE any
     // upload, so an oversized artifact is never truncated or dropped (ROBUST-02).
-    if (bytes.byteLength >= RELEASE_ASSET_MAX_BYTES) {
+    // Uses strict `>` to match the server's body cap (server.ts handlePut, also `>`)
+    // so an entry the primary backend ACCEPTS (exactly RELEASE_ASSET_MAX_BYTES) can
+    // never hard-fail the mirror -- the two 2 GiB ceilings are documented to coincide.
+    if (bytes.byteLength > RELEASE_ASSET_MAX_BYTES) {
       core.error(
-        `github-cache: asset ${name} is ${bytes.byteLength} bytes, at or over the ~2 GiB Releases ceiling; refusing to upload (never truncate).`,
+        `github-cache: asset ${name} is ${bytes.byteLength} bytes, over the ~2 GiB Releases ceiling; refusing to upload (never truncate).`,
       );
 
       throw new Error(

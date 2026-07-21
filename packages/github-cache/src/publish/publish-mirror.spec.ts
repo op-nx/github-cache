@@ -318,8 +318,8 @@ describe('publishMirror 1000-asset cap skip-and-warn (ROBUST-05, D-11)', () => {
 });
 
 describe('publishMirror ~2 GiB boundary fail-loud (ROBUST-02, D-12)', () => {
-  it('uploads an entry just under the ~2 GiB ceiling (cap-1)', async () => {
-    getMock.mockResolvedValue(hit(RELEASE_ASSET_MAX_BYTES - 1));
+  it('uploads an entry at exactly the ~2 GiB ceiling (cap) -- the guard uses strict > to match the server body cap so an accepted entry can always be mirrored', async () => {
+    getMock.mockResolvedValue(hit(RELEASE_ASSET_MAX_BYTES));
     const fake = client();
 
     const result = await publishMirror(fake);
@@ -328,8 +328,8 @@ describe('publishMirror ~2 GiB boundary fail-loud (ROBUST-02, D-12)', () => {
     expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
   });
 
-  it('refuses to upload at the ~2 GiB ceiling: core.error + throw, NO upload attempted (cap)', async () => {
-    getMock.mockResolvedValue(hit(RELEASE_ASSET_MAX_BYTES));
+  it('refuses to upload above the ~2 GiB ceiling: core.error + throw, NO upload attempted (cap+1)', async () => {
+    getMock.mockResolvedValue(hit(RELEASE_ASSET_MAX_BYTES + 1));
     const fake = client();
 
     await expect(publishMirror(fake)).rejects.toThrow();

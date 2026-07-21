@@ -68155,6 +68155,9 @@ function cacheArchivePath(hash) {
 // packages/github-cache/src/lib/cache-key.ts
 var CACHE_KEY_PREFIX = "nx-cache-";
 var HASH_PATTERN = /^[a-f0-9]{1,512}$/;
+function parseHash(value) {
+  return HASH_PATTERN.test(value) ? value : void 0;
+}
 function cacheKeyFor(hash) {
   return `${CACHE_KEY_PREFIX}${hash}`;
 }
@@ -68428,6 +68431,18 @@ function githubJsonHeaders(token) {
     "x-github-api-version": "2022-11-28"
   };
 }
+function assertOkOrAbsent(response, what) {
+  if (response.status === 404) {
+    return true;
+  }
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(`github-cache: ${what} failed with status ${response.status}`),
+      { status: response.status }
+    );
+  }
+  return false;
+}
 async function fetchAssetFromShard(repo, token, tag, assetName) {
   const releaseResponse = await fetch(
     `${GITHUB_API}/repos/${repo}/releases/tags/${tag}`,
@@ -68436,16 +68451,8 @@ async function fetchAssetFromShard(repo, token, tag, assetName) {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
     }
   );
-  if (releaseResponse.status === 404) {
+  if (assertOkOrAbsent(releaseResponse, "release lookup")) {
     return void 0;
-  }
-  if (!releaseResponse.ok) {
-    throw Object.assign(
-      new Error(
-        `github-cache: release lookup failed with status ${releaseResponse.status}`
-      ),
-      { status: releaseResponse.status }
-    );
   }
   const release = await releaseResponse.json();
   let asset;
@@ -68457,16 +68464,8 @@ async function fetchAssetFromShard(repo, token, tag, assetName) {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
       }
     );
-    if (listResponse.status === 404) {
+    if (assertOkOrAbsent(listResponse, "asset list")) {
       return void 0;
-    }
-    if (!listResponse.ok) {
-      throw Object.assign(
-        new Error(
-          `github-cache: asset list failed with status ${listResponse.status}`
-        ),
-        { status: listResponse.status }
-      );
     }
     const batch = await listResponse.json();
     asset = batch.find((candidate) => candidate.name === assetName);
@@ -68489,16 +68488,8 @@ async function fetchAssetFromShard(repo, token, tag, assetName) {
       signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)
     }
   );
-  if (downloadResponse.status === 404) {
+  if (assertOkOrAbsent(downloadResponse, "asset download")) {
     return void 0;
-  }
-  if (!downloadResponse.ok) {
-    throw Object.assign(
-      new Error(
-        `github-cache: asset download failed with status ${downloadResponse.status}`
-      ),
-      { status: downloadResponse.status }
-    );
   }
   return Buffer.from(await downloadResponse.arrayBuffer());
 }
@@ -68543,21 +68534,21 @@ function hostSupportsWidenedTrust(env) {
 }
 function isWriteTrusted(env = process.env) {
   if (env.GITHUB_ACTIONS !== "true") {
-    return false;
+    return { trusted: false, reason: "not-ci" };
   }
   const event = env.GITHUB_EVENT_NAME ?? "";
   if (TRUSTED_EVENTS.includes(event)) {
-    return true;
+    return { trusted: true };
   }
   if (HOST_GATED_EVENTS.includes(event)) {
-    return hostSupportsWidenedTrust(env);
+    return hostSupportsWidenedTrust(env) ? { trusted: true } : { trusted: false, reason: "untrusted-host" };
   }
-  return false;
+  return { trusted: false, reason: "untrusted-event" };
 }
 
 // packages/github-cache/src/lib/select-backend.ts
 function selectBackend(env = process.env) {
-  if (!isWriteTrusted(env)) {
+  if (!isWriteTrusted(env).trusted) {
     return createReleasesReadBackend(createReleasesReadClient(env));
   }
   if (!GITHUB_REPOSITORY_PATTERN.test(env.GITHUB_REPOSITORY ?? "")) {
@@ -68627,8 +68618,8 @@ function createCacheServer(backend, token, maxBodyBytes = MAX_CACHE_BODY_BYTES) 
       res.end();
       return;
     }
-    const hash = match2[1];
-    if (!HASH_PATTERN.test(hash)) {
+    const hash = parseHash(match2[1]);
+    if (hash === void 0) {
       res.statusCode = 400;
       res.end();
       return;
@@ -68732,7 +68723,10 @@ async function serve(options = {}) {
   const inFlightPuts = /* @__PURE__ */ new Set();
   const backend = selectBackend(process.env);
   const tracked = {
-    get: (hash) => backend.get(hash),
+    // Spread the selected backend (its get passes through unchanged) and override
+    // only put to run under withHashLock + drain tracking. Safe because every
+    // backend factory returns closures over captured state, not this-bound methods.
+    ...backend,
     put: (hash, bytes) => {
       const op = withHashLock(hash, () => backend.put(hash, bytes));
       inFlightPuts.add(op);

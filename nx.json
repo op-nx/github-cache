@@ -56,11 +56,10 @@
         "{workspaceRoot}/docs/versioning.md",
         "{workspaceRoot}/docs/examples/minimal-ci.yml",
         "{workspaceRoot}/docs/examples/README.md",
+        "{workspaceRoot}/.github/workflows/cleanup.yml",
+        "{workspaceRoot}/.gitattributes",
+        "{workspaceRoot}/ppe/action.yml",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
-        {
-          "fileset": "{projectRoot}/tsconfig.storybook.json",
-          "dependencies": true
-        },
         {
           "json": "{workspaceRoot}/tsconfig.json",
           "fields": ["compilerOptions"]

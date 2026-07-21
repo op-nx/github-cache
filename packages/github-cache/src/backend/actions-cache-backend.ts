@@ -50,20 +50,43 @@ export function createActionsCacheBackend(): CacheBackend {
       await writeFile(path, bytes);
 
       try {
-        // D-04: saveCache resolves a positive cache id on a real write, or the
-        // ambiguous sentinel -1 ("an entry for this key already exists" OR "this
-        // token may not write"). A reserve-conflict rejection (ReserveCacheError,
-        // caught below) tells the same story. All of these are read as a benign
-        // no-op yielding 'stored', because a same-hash write is byte-identical
-        // (CORR-01) and, crucially, it is the upstream WRITE GATE (D-02) -- not
-        // this backend -- that stops a denied write from masking a real outage.
-        // Probing which of "exists" vs "denied" occurred is deliberately NOT
-        // attempted. Every OTHER rejection is rethrown (below) so the server's
-        // fail-closed write path surfaces it as a 500 instead of a silent success.
-        await cache.saveCache([path], cacheKeyFor(hash));
+        // D-04 / D-06 / SRV-05: saveCache resolves a positive cache id on a
+        // CONFIRMED write, or the ambiguous sentinel -1. -1 is NOT proof of a
+        // benign no-op: @actions/cache (verified v6.2.0, cache.js saveCacheV1/V2
+        // catch arms) swallows EVERY non-ValidationError fault -- 5xx, network
+        // errors, CacheWriteDeniedError, FinalizeCacheError, over-data-cap -- via
+        // core.warning/core.error and returns -1 WITHOUT throwing. The upstream
+        // WRITE GATE (D-02) only gates trust; it cannot detect a cache-service
+        // outage or a runtime token-scope regression. So a bare -1 would let a
+        // dropped write masquerade as a silent 200 -- exactly the fail-closed
+        // hole SRV-05/D-06 forbid.
+        //
+        // Disambiguate the two -1 causes with a lookupOnly existence probe (no
+        // download): if the entry IS present, it was a benign already-exists (or
+        // a concurrent job's write) and 'stored' is correct; if it is ABSENT, the
+        // -1 was a swallowed fault, so throw and let the server fail closed (500)
+        // rather than report a write that never persisted.
+        const cacheId = await cache.saveCache([path], cacheKeyFor(hash));
 
-        return 'stored';
+        if (cacheId > 0) {
+          return 'stored';
+        }
+
+        const present = await cache.restoreCache([path], cacheKeyFor(hash), [], {
+          lookupOnly: true,
+        });
+
+        if (present !== undefined) {
+          return 'stored';
+        }
+
+        throw new Error(
+          `github-cache: saveCache reported no write (id -1) and no entry exists for key ${cacheKeyFor(hash)}; treating as a failed write (fail-closed, SRV-05/D-06).`,
+        );
       } catch (error) {
+        // Defense-in-depth: if a future @actions/cache version throws a
+        // ReserveCacheError instead of returning -1, a reserve conflict still
+        // means another job is creating the same byte-identical entry (CORR-01).
         if (error instanceof Error && error.name === 'ReserveCacheError') {
           return 'stored';
         }

@@ -70,13 +70,33 @@ describe('createActionsCacheBackend put (ROBUST-03)', () => {
     expect(result).toBe('stored');
   });
 
-  it('returns "stored" when saveCache resolves -1 (benign no-op, D-04) (ROBUST-03)', async () => {
+  it('returns "stored" when saveCache resolves -1 AND a lookupOnly probe confirms the entry exists (benign already-exists, D-04) (ROBUST-03)', async () => {
     saveCache.mockResolvedValue(-1);
+    // The -1 probe finds the entry present -> benign already-exists.
+    restoreCache.mockResolvedValue(cacheKeyFor(HASH));
     const backend = createActionsCacheBackend();
 
     const result = await backend.put(HASH, Buffer.from('tar-bytes'));
 
     expect(result).toBe('stored');
+    // The probe must be a lookupOnly (no-download) existence check.
+    expect(restoreCache).toHaveBeenCalledWith(
+      [cacheArchivePath(HASH)],
+      cacheKeyFor(HASH),
+      [],
+      { lookupOnly: true },
+    );
+  });
+
+  it('throws when saveCache resolves -1 but no entry exists, so a swallowed write fault fails closed instead of a silent 200 (SRV-05/D-06) (ROBUST-03)', async () => {
+    saveCache.mockResolvedValue(-1);
+    // The -1 probe finds nothing -> the -1 was a swallowed fault, not an existing entry.
+    restoreCache.mockResolvedValue(undefined);
+    const backend = createActionsCacheBackend();
+
+    await expect(backend.put(HASH, Buffer.from('tar-bytes'))).rejects.toThrow(
+      /failed write \(fail-closed/,
+    );
   });
 
   it('returns "stored" when saveCache rejects with a ReserveCacheError (benign no-op, D-04) (ROBUST-03)', async () => {

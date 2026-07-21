@@ -30,8 +30,11 @@ export interface WritableBackend extends ReadableBackend {
 }
 
 /**
- * Backward-compatible alias for the read-write port (the historical public name a
- * consumer supplying its own writable backend to createCacheServer imports).
+ * Ergonomic public alias for the read-write port -- the friendly name a consumer
+ * supplying its own writable backend to createCacheServer imports, and the type the
+ * package's own test doubles annotate. Identical to WritableBackend; both are exported
+ * so callers use whichever reads best. It is NOT a compatibility shim (there is no
+ * prior release) -- just the read-write port's public name.
  */
 export type CacheBackend = WritableBackend;
 

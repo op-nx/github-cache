@@ -35,6 +35,10 @@
     // npm tarball file-list guard: the `pack:check` package script + the ci.yml
     // pack-check job invoke it as a standalone node bin; never imported (T-06-01-01).
     "packages/github-cache/pack-check.cjs",
+    // Integration vitest config: consumed by the `integration` target's
+    // `vitest run --config` command (project.json), not by any import. fallow
+    // auto-credits vitest.config.mts but not the .integration. variant, so declare it.
+    "packages/github-cache/vitest.integration.config.mts",
   ],
 
   // Files outside the product reachability graph, declared so a whole-repo

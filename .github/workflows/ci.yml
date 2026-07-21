@@ -137,9 +137,10 @@ jobs:
   # shell (PowerShell/Git-Bash/cmd) and across x64-vs-arm64 or arm64 emulation --
   # unlike `env:RUNNER_OS` (unset off-CI) or a plain `env` var (whose key MSYS
   # uppercases while Nx's env hasher is case-sensitive). fail-fast off so a
-  # Windows-only failure never hides the Ubuntu result. This is a green no-op until
-  # Phase 1 adds an `integration` target; the ubuntu+windows matrix is kept as the
-  # cross-OS scaffold Phase 3 stands on, not dead weight.
+  # Windows-only failure never hides the Ubuntu result. The `integration` target
+  # runs the real *.integration.spec.ts suite (vitest.integration.config.mts) -- an
+  # end-to-end createCacheServer PUT/GET round-trip over a real loopback socket --
+  # so both matrix legs prove the socket/HTTP path cross-OS.
   integration:
     strategy:
       fail-fast: false

@@ -6,6 +6,7 @@ import { resolveLocalReadToken, resolveRepoIdentity } from './local-context.js';
 import type { Hash } from './cache-key.js';
 import { resolveGitHubToken } from './github-identity.js';
 import { releaseAssetName } from './release-asset-name.js';
+import { isWritableBackend } from '../backend/types.js';
 import { selectBackend } from './select-backend.js';
 
 // @actions/cache only actually works inside a JS action on real CI, so the
@@ -30,7 +31,6 @@ const saveCache = vi.mocked(cache.saveCache);
 // hash (e.g. actions-cache-backend.spec.ts's 'abc123') would race on the same
 // temp file. Keep this value distinct from every other spec's hash.
 const HASH = 'selectbackendfixture' as Hash;
-const BYTES = Buffer.from('tar-bytes');
 
 // A well-formed trusted CI context: Actions on, a trusted event, a valid
 // owner/name repo, and a resolvable token. Individual tests spread over this to
@@ -57,9 +57,7 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
   it('CI + push yields a writable backend whose put is not forbidden (TEST-01)', async () => {
     const backend = selectBackend({ ...trusted, GITHUB_EVENT_NAME: 'push' });
 
-    const result = await backend.put(HASH, BYTES);
-
-    expect(result).not.toBe('forbidden');
+    expect(isWritableBackend(backend)).toBe(true);
   });
 
   it('CI + schedule yields a writable backend whose put is not forbidden (TEST-01)', async () => {
@@ -68,9 +66,7 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
       GITHUB_EVENT_NAME: 'schedule',
     });
 
-    const result = await backend.put(HASH, BYTES);
-
-    expect(result).not.toBe('forbidden');
+    expect(isWritableBackend(backend)).toBe(true);
   });
 
   // Assert the DECISION behaviorally (drive put and read the PutResult variant),
@@ -96,7 +92,7 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
         GITHUB_SERVER_URL: 'https://github.com',
       });
 
-      expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+      expect(isWritableBackend(backend)).toBe(false);
     },
   );
 
@@ -109,7 +105,7 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
 
     const backend = selectBackend(noEvent);
 
-    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+    expect(isWritableBackend(backend)).toBe(false);
   });
 
   it('a local developer machine (no GITHUB_ACTIONS) yields a read-only backend: put forbidden and get misses (TEST-01)', async () => {
@@ -119,7 +115,7 @@ describe('selectBackend context selection (TEST-01, TRUST-05)', () => {
     // the unit layer off a real keychain/gh/git/api.github.com and green on CI.
     const backend = selectBackend({ GITHUB_REPOSITORY: 'op-nx/github-cache' });
 
-    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+    expect(isWritableBackend(backend)).toBe(false);
     expect(await backend.get(HASH)).toEqual({ kind: 'miss' });
   });
 
@@ -177,7 +173,7 @@ describe('selectBackend host-gated widening flows through isWriteTrusted (TRUST-
         GITHUB_SERVER_URL: 'https://github.com',
       });
 
-      expect(await backend.put(HASH, BYTES)).not.toBe('forbidden');
+      expect(isWritableBackend(backend)).toBe(true);
     },
   );
 
@@ -190,7 +186,7 @@ describe('selectBackend host-gated widening flows through isWriteTrusted (TRUST-
         GITHUB_SERVER_URL: 'https://ghes.example.com',
       });
 
-      expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+      expect(isWritableBackend(backend)).toBe(false);
     },
   );
 });
@@ -227,7 +223,7 @@ describe('selectBackend fail-closed repository validation (TEST-01)', () => {
 
     const backend = selectBackend(env);
 
-    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+    expect(isWritableBackend(backend)).toBe(false);
   });
 
   it('degrades to a read-only backend when the only token present is set-but-empty (TEST-01)', async () => {
@@ -241,7 +237,7 @@ describe('selectBackend fail-closed repository validation (TEST-01)', () => {
 
     const backend = selectBackend(env);
 
-    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+    expect(isWritableBackend(backend)).toBe(false);
   });
 });
 
@@ -302,6 +298,6 @@ describe('TRUST-05: no caller-facing mode surface', () => {
 
     const backend = selectBackend(env);
 
-    expect(await backend.put(HASH, BYTES)).toBe('forbidden');
+    expect(isWritableBackend(backend)).toBe(false);
   });
 });

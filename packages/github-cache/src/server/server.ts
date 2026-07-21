@@ -1,7 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
 import { parseHash, type Hash } from '../lib/cache-key.js';
-import type { CacheBackend, PutResult } from '../backend/types.js';
+import {
+  isWritableBackend,
+  type PutResult,
+  type ReadableBackend,
+  type WritableBackend,
+} from '../backend/types.js';
 
 const ROUTE = /^\/v1\/cache\/([^/]*)$/;
 
@@ -50,7 +55,7 @@ function makeAuthGate(expectedToken: string): (header?: string) => boolean {
  * streaming abort quickly; it defaults to the 2 GiB ceiling.
  */
 export function createCacheServer(
-  backend: CacheBackend,
+  backend: ReadableBackend | WritableBackend,
   token: string,
   maxBodyBytes: number = MAX_CACHE_BODY_BYTES,
 ): http.Server {
@@ -101,6 +106,17 @@ export function createCacheServer(
       return handleGet(backend, hash, res);
     }
 
+    // PUT to a read-only backend -> the Nx contract's 403 ("read-only token used to
+    // write"). A ReadableBackend has no put, so the server (the protocol boundary)
+    // owns this response; the body is never read. Answered here, after auth (401)
+    // and hash validation, so a valid-but-read-only token maps to 403, not 401.
+    if (!isWritableBackend(backend)) {
+      res.statusCode = 403;
+      res.end();
+
+      return;
+    }
+
     return handlePut(backend, hash, req, res, maxBodyBytes);
   });
 }
@@ -112,7 +128,7 @@ export function createCacheServer(
  * behavioral change; dispatched only after the top-level route/auth/hash guards.
  */
 async function handleGet(
-  backend: CacheBackend,
+  backend: ReadableBackend,
   hash: Hash,
   res: http.ServerResponse,
 ): Promise<void> {
@@ -143,7 +159,7 @@ async function handleGet(
  * top-level route/auth/hash guards.
  */
 async function handlePut(
-  backend: CacheBackend,
+  backend: WritableBackend,
   hash: Hash,
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -217,12 +233,10 @@ async function handlePut(
       break;
     }
 
-    case 'forbidden': {
-      res.statusCode = 403;
-      break;
-    }
-
     default: {
+      // Exhaustiveness guard: PutResult is 'stored' | 'conflict'. The read-only 403
+      // is handled by the server BEFORE handlePut (a ReadableBackend has no put), so
+      // it never reaches this switch.
       const _exhaustive: never = result;
       res.statusCode = 500;
       void _exhaustive;

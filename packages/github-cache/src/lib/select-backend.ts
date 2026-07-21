@@ -4,7 +4,7 @@ import {
   createReleasesReadBackend,
   createReleasesReadClient,
 } from '../backend/releases-backend.js';
-import type { CacheBackend } from '../backend/types.js';
+import type { ReadableBackend, WritableBackend } from '../backend/types.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
@@ -28,7 +28,7 @@ import { isWriteTrusted } from './trust.js';
  */
 export function selectBackend(
   env: NodeJS.ProcessEnv = process.env,
-): CacheBackend {
+): ReadableBackend | WritableBackend {
   if (!isWriteTrusted(env).trusted) {
     // The local/untrusted branch returns the real cross-context GitHub Releases
     // reader (D-01), constructed with the real default client. selectBackend stays
@@ -36,7 +36,7 @@ export function selectBackend(
     // client's fetchAsset (run at get-time), never at construction -- which is what
     // keeps Function.length at 0 and the serve.ts call site synchronous (TRUST-05).
     // The env bag is threaded through so the client resolves against the injected
-    // environment. put is 'forbidden' by construction (read-only).
+    // environment. Read-only by construction (a ReadableBackend with no put).
     return createReleasesReadBackend(createReleasesReadClient(env));
   }
 

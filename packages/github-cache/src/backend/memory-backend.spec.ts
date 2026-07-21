@@ -4,6 +4,7 @@ import {
   createReadOnlyMemoryBackend,
   createWritableMemoryBackend,
 } from './memory-backend.js';
+import { isWritableBackend } from './types.js';
 
 describe('createWritableMemoryBackend', () => {
   it('put stores a new hash and returns "stored"', async () => {
@@ -46,15 +47,13 @@ describe('createWritableMemoryBackend', () => {
 });
 
 describe('createReadOnlyMemoryBackend', () => {
-  it('put always yields "forbidden" (the 403 read-only seam, D-04)', async () => {
+  it('is read-only by construction: exposes NO put method (write is unrepresentable, D-04)', () => {
     const backend = createReadOnlyMemoryBackend();
 
-    const result = await backend.put(
-      'abc123' as Hash,
-      Buffer.from('tar-bytes'),
-    );
-
-    expect(result).toBe('forbidden');
+    // The read-only seam has no put at all -- the server, not a put() return value,
+    // produces the contract's 403. isWritableBackend must reject it.
+    expect(isWritableBackend(backend)).toBe(false);
+    expect('put' in backend).toBe(false);
   });
 
   it('get still returns a valid GetResult (miss on an unseeded store)', async () => {

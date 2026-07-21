@@ -331,7 +331,9 @@ describe('createCacheServer', () => {
     expect(second.status).toBe(409);
   });
 
-  // 403: the D-04 read-only seam -- a read-only backend's put yields 'forbidden'.
+  // 403: the D-04 read-only seam + Nx contract ("read-only token used to write").
+  // A read-only backend (ReadableBackend) has NO put; the SERVER answers the PUT
+  // with 403 directly -- there is no put()->'forbidden' anymore.
   it('returns 403 on a PUT against a read-only backend (D-04 seam)', async () => {
     const token = generateToken();
     server = createCacheServer(createReadOnlyMemoryBackend(), token);

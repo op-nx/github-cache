@@ -10,6 +10,7 @@ import {
   createReleasesReadClient,
   type ReleaseReadClient,
 } from './releases-backend.js';
+import { isWritableBackend } from './types.js';
 
 // The real default ReleaseReadClient resolves the developer's token and repo
 // identity through local-context, which is subprocess-backed (gh / git) on a real
@@ -133,32 +134,16 @@ describe('createReleasesReadBackend name derivation (TEST-05)', () => {
   });
 });
 
-describe('createReleasesReadBackend put (D-02, TRUST-05)', () => {
-  it('forbids a normal write (D-02)', async () => {
+describe('createReleasesReadBackend read-only by construction (D-02, TRUST-05)', () => {
+  it('exposes NO put method -- a write is unrepresentable, not a runtime forbidden', () => {
     const backend = createReleasesReadBackend(recordingClient(new Map()));
 
-    expect(await backend.put('abc123' as Hash, Buffer.from('bytes'))).toBe(
-      'forbidden',
-    );
-  });
-
-  it('forbids an empty-buffer write (D-02)', async () => {
-    const backend = createReleasesReadBackend(recordingClient(new Map()));
-
-    expect(await backend.put('abc123' as Hash, Buffer.alloc(0))).toBe(
-      'forbidden',
-    );
-  });
-
-  it('forbids a write for a hash already present in the client (D-02)', async () => {
-    const seeded = new Map([
-      [releaseAssetName('abc123' as Hash), Buffer.from('bytes')],
-    ]);
-    const backend = createReleasesReadBackend(recordingClient(seeded));
-
-    expect(await backend.put('abc123' as Hash, Buffer.from('other'))).toBe(
-      'forbidden',
-    );
+    // The Releases reader is a ReadableBackend: no write path exists at all. The
+    // server, not a put() return value, produces the Nx contract's 403 for a PUT
+    // routed to a read-only backend (all three former scenarios -- normal write,
+    // empty buffer, already-present -- collapse to "there is no put").
+    expect(isWritableBackend(backend)).toBe(false);
+    expect('put' in backend).toBe(false);
   });
 });
 

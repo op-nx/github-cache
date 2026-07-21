@@ -29450,6 +29450,11 @@ function info(message) {
 // packages/github-cache/src/serve.ts
 var import_node_url2 = require("node:url");
 
+// packages/github-cache/src/backend/types.ts
+function isWritableBackend(backend) {
+  return "put" in backend;
+}
+
 // packages/github-cache/src/backend/actions-cache-backend.ts
 var import_promises = require("node:fs/promises");
 
@@ -68225,10 +68230,9 @@ function createReadOnlyMemoryBackend() {
   return {
     async get(hash) {
       return readFrom(store, hash);
-    },
-    async put() {
-      return "forbidden";
     }
+    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // 'forbidden'. The server answers a PUT here with the contract's 403.
   };
 }
 
@@ -68412,13 +68416,10 @@ function createReleasesReadBackend(client) {
         warnOnce(typeof status === "number" ? status : void 0);
         return { kind: "miss" };
       }
-    },
-    // D-02: read-only by construction. There is no local write path at all -- this
-    // is the absence of a write path, not a disabled feature (TRUST-05). Declared
-    // with zero parameters, mirroring createReadOnlyMemoryBackend.
-    async put() {
-      return "forbidden";
     }
+    // D-02: read-only by CONSTRUCTION -- there is no put method at all (ReadableBackend),
+    // so a write is unrepresentable, not a disabled feature (TRUST-05). The server
+    // answers a PUT routed to this backend with the contract's 403.
   };
 }
 var GITHUB_API = "https://api.github.com";
@@ -68627,6 +68628,11 @@ function createCacheServer(backend, token, maxBodyBytes = MAX_CACHE_BODY_BYTES) 
     if (req.method === "GET") {
       return handleGet(backend, hash, res);
     }
+    if (!isWritableBackend(backend)) {
+      res.statusCode = 403;
+      res.end();
+      return;
+    }
     return handlePut(backend, hash, req, res, maxBodyBytes);
   });
 }
@@ -68694,10 +68700,6 @@ async function handlePut(backend, hash, req, res, maxBodyBytes) {
       res.statusCode = 409;
       break;
     }
-    case "forbidden": {
-      res.statusCode = 403;
-      break;
-    }
     default: {
       const _exhaustive = result;
       res.statusCode = 500;
@@ -68722,21 +68724,24 @@ async function serve(options = {}) {
   const graceMs = options.shutdownGraceMs ?? DEFAULT_SHUTDOWN_GRACE_MS;
   const inFlightPuts = /* @__PURE__ */ new Set();
   const backend = selectBackend(process.env);
-  const tracked = {
-    // Spread the selected backend (its get passes through unchanged) and override
-    // only put to run under withHashLock + drain tracking. Safe because every
-    // backend factory returns closures over captured state, not this-bound methods.
-    ...backend,
-    put: (hash, bytes) => {
-      const op = withHashLock(hash, () => backend.put(hash, bytes));
-      inFlightPuts.add(op);
-      void op.then(
-        () => inFlightPuts.delete(op),
-        () => inFlightPuts.delete(op)
-      );
-      return op;
-    }
-  };
+  let tracked;
+  if (isWritableBackend(backend)) {
+    const writable = backend;
+    tracked = {
+      ...writable,
+      put: (hash, bytes) => {
+        const op = withHashLock(hash, () => writable.put(hash, bytes));
+        inFlightPuts.add(op);
+        void op.then(
+          () => inFlightPuts.delete(op),
+          () => inFlightPuts.delete(op)
+        );
+        return op;
+      }
+    };
+  } else {
+    tracked = backend;
+  }
   const server = createCacheServer(tracked, token);
   await new Promise((resolve2) => {
     server.listen(port, "127.0.0.1", () => resolve2());

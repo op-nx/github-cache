@@ -1,5 +1,10 @@
 import type { Hash } from '../lib/cache-key.js';
-import type { CacheBackend, GetResult, PutResult } from './types.js';
+import type {
+  CacheBackend,
+  GetResult,
+  PutResult,
+  ReadableBackend,
+} from './types.js';
 
 function readFrom(store: Map<string, Buffer>, hash: string): GetResult {
   const bytes = store.get(hash);
@@ -49,16 +54,14 @@ export function createWritableMemoryBackend(): CacheBackend {
  * Phase 3), so get always misses here. RW-vs-RO is which factory constructs the
  * server, never a caller-facing mode flag (TRUST-05).
  */
-export function createReadOnlyMemoryBackend(): CacheBackend {
+export function createReadOnlyMemoryBackend(): ReadableBackend {
   const store = new Map<string, Buffer>();
 
   return {
     async get(hash: Hash): Promise<GetResult> {
       return readFrom(store, hash);
     },
-
-    async put(): Promise<PutResult> {
-      return 'forbidden';
-    },
+    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // 'forbidden'. The server answers a PUT here with the contract's 403.
   };
 }

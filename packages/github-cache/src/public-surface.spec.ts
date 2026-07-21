@@ -44,6 +44,8 @@ const EXPECTED_TYPE_EXPORTS = [
   'GetHit',
   'GetResult',
   'PutResult',
+  'ReadableBackend',
+  'WritableBackend',
 ];
 
 /** D-04 group (b): the consumer JS action inputs. */

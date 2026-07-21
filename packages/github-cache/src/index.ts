@@ -7,4 +7,6 @@ export type {
   GetHit,
   GetResult,
   PutResult,
+  ReadableBackend,
+  WritableBackend,
 } from './backend/types.js';

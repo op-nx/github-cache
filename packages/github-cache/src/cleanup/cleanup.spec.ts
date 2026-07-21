@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import type { Hash } from '../lib/cache-key.js';
+import { isWritableBackend } from '../backend/types.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createReleasesReadBackend,
@@ -235,7 +235,7 @@ describe('createReleasesReadBackend read-only-local put re-assertion (TEST-06)',
   // 'forbidden' / 403 -- there is no local write path) with this phase's date-cleanup,
   // so it is re-asserted here alongside the prune/retain tests. The put path itself is
   // unchanged from Phase 3; this pins the coupling in a Phase 4 spec.
-  it("resolves 'forbidden' for a local put -- there is no local write path (TEST-06)", async () => {
+  it('exposes NO local write path -- read-only by construction (TEST-06)', () => {
     const readOnlyClient: ReleaseReadClient = {
       async fetchAsset(): Promise<Buffer | undefined> {
         return undefined;
@@ -243,9 +243,10 @@ describe('createReleasesReadBackend read-only-local put re-assertion (TEST-06)',
     };
     const backend = createReleasesReadBackend(readOnlyClient);
 
-    expect(await backend.put('abc123' as Hash, Buffer.from('x'))).toBe(
-      'forbidden',
-    );
+    // No put at all: the write refusal is structural (ReadableBackend), not a
+    // runtime 'forbidden'. The server produces the contract's 403.
+    expect(isWritableBackend(backend)).toBe(false);
+    expect('put' in backend).toBe(false);
   });
 });
 

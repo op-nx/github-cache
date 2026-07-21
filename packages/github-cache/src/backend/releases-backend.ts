@@ -5,7 +5,7 @@ import {
 import * as assetNaming from '../lib/release-asset-name.js';
 import { resolveMaxAgeDays, shardTagsForWindow } from '../lib/retention.js';
 import type { Hash } from '../lib/cache-key.js';
-import type { CacheBackend, GetResult, PutResult } from './types.js';
+import type { GetResult, ReadableBackend } from './types.js';
 
 /**
  * The D-04 injected read seam. Exactly one method on purpose: the seam sits at the
@@ -66,7 +66,7 @@ function warnOnce(status?: number): void {
  */
 export function createReleasesReadBackend(
   client: ReleaseReadClient,
-): CacheBackend {
+): ReadableBackend {
   return {
     async get(hash: Hash): Promise<GetResult> {
       try {
@@ -97,12 +97,9 @@ export function createReleasesReadBackend(
       }
     },
 
-    // D-02: read-only by construction. There is no local write path at all -- this
-    // is the absence of a write path, not a disabled feature (TRUST-05). Declared
-    // with zero parameters, mirroring createReadOnlyMemoryBackend.
-    async put(): Promise<PutResult> {
-      return 'forbidden';
-    },
+    // D-02: read-only by CONSTRUCTION -- there is no put method at all (ReadableBackend),
+    // so a write is unrepresentable, not a disabled feature (TRUST-05). The server
+    // answers a PUT routed to this backend with the contract's 403.
   };
 }
 

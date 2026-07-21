@@ -1,7 +1,13 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { pathToFileURL } from 'node:url';
-import type { CacheBackend } from './backend/types.js';
+import {
+  isWritableBackend,
+  type PutResult,
+  type ReadableBackend,
+  type WritableBackend,
+} from './backend/types.js';
+import type { Hash } from './lib/cache-key.js';
 import { selectBackend } from './lib/select-backend.js';
 import { withHashLock } from './lib/with-hash-lock.js';
 import { createCacheServer, generateToken } from './server/server.js';
@@ -80,24 +86,34 @@ export async function serve(
   // records its promise so the drain can await it.
   const inFlightPuts = new Set<Promise<unknown>>();
   const backend = selectBackend(process.env);
-  const tracked: CacheBackend = {
-    // Spread the selected backend (its get passes through unchanged) and override
-    // only put to run under withHashLock + drain tracking. Safe because every
-    // backend factory returns closures over captured state, not this-bound methods.
-    ...backend,
-    put: (hash, bytes) => {
-      const op = withHashLock(hash, () => backend.put(hash, bytes));
-      inFlightPuts.add(op);
-      // Remove on settle in a way that cannot itself reject; return the ORIGINAL
-      // promise so the caller still observes the true PutResult (or rejection).
-      void op.then(
-        () => inFlightPuts.delete(op),
-        () => inFlightPuts.delete(op),
-      );
+  // A writable backend gets its put wrapped in withHashLock + drain tracking; a
+  // read-only backend (ReadableBackend, no put) is passed through unchanged -- there
+  // is no write path to serialize or drain, and the server answers a PUT to it with
+  // the contract's 403. Spread is safe: backend factories return closures over
+  // captured state, not this-bound methods.
+  let tracked: ReadableBackend | WritableBackend;
 
-      return op;
-    },
-  };
+  if (isWritableBackend(backend)) {
+    const writable = backend;
+    tracked = {
+      ...writable,
+      put: (hash: Hash, bytes: Buffer): Promise<PutResult> => {
+        const op = withHashLock(hash, () => writable.put(hash, bytes));
+        inFlightPuts.add(op);
+        // Remove on settle in a way that cannot itself reject; return the ORIGINAL
+        // promise so the caller still observes the true PutResult (or rejection).
+        void op.then(
+          () => inFlightPuts.delete(op),
+          () => inFlightPuts.delete(op),
+        );
+
+        return op;
+      },
+    };
+  } else {
+    tracked = backend;
+  }
+
   const server = createCacheServer(tracked, token);
 
   await new Promise<void>((resolve) => {

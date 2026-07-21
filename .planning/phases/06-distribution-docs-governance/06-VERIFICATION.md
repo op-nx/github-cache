@@ -1,10 +1,11 @@
 ---
 phase: 06-distribution-docs-governance
 verified: 2026-07-21T00:14:02Z
-status: human_needed
-score: 20/21 must-haves verified
-behavior_unverified: 1
+status: passed
+score: 21/21 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
+live_close: "consumer-smoke GREEN on CI run 29792990244 (push to main, all 18 jobs pass) -- the DOCS-06 background-step round-trip (export-var propagation + real PUT/GET + cancel: teardown) proven live 2026-07-21. The live proof surfaced and fixed 3 real distribution bugs local gates could not: cross-OS lockfile drift (esbuild -> missing @emnapi, npm ci), the background-step export handshake (inverted to consumer-pre-sets/action-adopts), and a readiness-poll/cache-key collision. main was restored to its pre-milestone baseline per the maintainer; the green milestone lives on origin/gsd/v0.0.1-greenfield-rebuild."
 behavior_unverified_items:
   - truth: "The consumer background-step CI round-trip actually works live: `background: true` export-variable propagation to a later step, a real PUT/GET through the write-trusted Actions-cache backend over the loopback sidecar, and the `cancel:` teardown draining the never-exiting `serve()` process (SIGTERM -> ROBUST-04 drain -> clean exit)."
     test: "On the next default-branch push, observe the `consumer-smoke` job in `.github/workflows/ci.yml` (uses `./start-cache-server` with `background: true`, exports `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`/`_ACCESS_TOKEN`, runs a scripted PUT+GET against `deadbeef`/the run-id hash, then `cancel: cache-server`)."
@@ -19,9 +20,9 @@ human_verification:
 # Phase 6: Distribution + Docs + Governance Verification Report
 
 **Phase Goal:** Ship the consumer-facing distribution (npm package + JS Action, not composite), the CI background-step consumption pattern, an enumerated/tested public surface, split adoption docs, a trust/security section, and governance so outside repos can adopt the cache safely and know what "breaking" means.
-**Verified:** 2026-07-21T00:14:02Z
-**Status:** human_needed
-**Re-verification:** No -- initial verification
+**Verified:** 2026-07-21T00:14:02Z (live-closed 2026-07-21 -- consumer-smoke green on CI run 29792990244)
+**Status:** passed
+**Re-verification:** No -- initial verification; the one behavior-unverified item was live-closed on a real push (see live_close in frontmatter)
 
 ## Goal Achievement
 

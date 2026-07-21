@@ -1,9 +1,9 @@
 ---
-status: testing
+status: passed
 phase: 06-distribution-docs-governance
 source: [06-VERIFICATION.md]
 started: 2026-07-21T00:20:00Z
-updated: 2026-07-21T00:20:00Z
+updated: 2026-07-21T01:20:00Z
 ---
 
 ## Current Test
@@ -17,7 +17,7 @@ expected: |
   PUT+GET, then `cancel: cache-server`) goes green: the readiness poll succeeds,
   PUT returns 200, the GET byte-matches the PUT payload, and the job does not hang
   at teardown.
-awaiting: user response
+awaiting: none -- passed (CI run 29792990244, 2026-07-21)
 
 ## Tests
 
@@ -33,14 +33,14 @@ why_manual: core.exportVariable propagation from a `background: true` step and t
   origin and unmerged, so this exact code has not run on a real push yet. Same
   first-push live-close pattern as Phase 4 (cross-OS mirror round-trip) and Phase 5
   (PPE live-findings proof).
-result: [pending]
+result: passed (consumer-smoke green on CI run 29792990244, all 18 jobs; 2026-07-21)
 
 ## Summary
 
 total: 1
-passed: 0
+passed: 1
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 

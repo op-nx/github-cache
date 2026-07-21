@@ -169,7 +169,7 @@ None yet.
 | 260719-in3 | Fix cross-OS lockfile drift blocking CI npm ci + dogfood canary | 2026-07-19 | b9c513d | Verified | [260719-in3-fix-cross-os-lockfile-drift-blocking-ci-](./quick/260719-in3-fix-cross-os-lockfile-drift-blocking-ci-/) |
 | 260720-fal | Break releases-backend<->select-backend import cycle (github-identity leaf) + format phase-4 sources; fallow:ci + format:check green | 2026-07-20 | 77163a6 | Verified | (inline /gsd:fast --validate) |
 | 260721-eac | Address A1 and A2: remove orphaned trust.generated write-trust loop (TRUST-04) + flip TRUST-07 checkbox; residual-ref scrub | 2026-07-21 | 70213b0 | Verified | [260721-eac-address-a1-and-a2-in-this-branch](./quick/260721-eac-address-a1-and-a2-in-this-branch/) |
-| 260721-g1p | Address v0.0.1 PR #3 review findings (C1 Critical + all silent-failure + I5/I6 coverage + I1 integration tests + dedup/type/comment); hedged refactors deferred | 2026-07-21 | 7413363 | CI green | [260721-g1p-audit-and-triage-all-findings-then-addre](./quick/260721-g1p-audit-and-triage-all-findings-then-addre/) |
+| 260721-g1p | Address v0.0.1 PR #3 review findings (C1 Critical + all silent-failure + I5/I6 coverage + I1 integration tests + dedup/branded-Hash/trust-union/comments); 2 items deliberately not taken (would degrade shipped code) | 2026-07-21 | 6d268ac | Verified | [260721-g1p-audit-and-triage-all-findings-then-addre](./quick/260721-g1p-audit-and-triage-all-findings-then-addre/) |
 
 ## Deferred Items
 

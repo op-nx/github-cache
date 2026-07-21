@@ -4,7 +4,7 @@ title: Address v0.0.1 PR #3 review findings
 status: complete
 pr: 3
 branch: gsd/v0.0.1-greenfield-rebuild
-verification: CI green (all 9 pull_request jobs, incl. integration matrix ubuntu + windows) on 7413363
+verification: CI green (all 9 pull_request jobs, incl. integration matrix ubuntu + windows) on 6d268ac; gsd-verifier gate passed
 ---
 
 # Quick Task 260721-g1p - Address PR #3 review findings
@@ -30,8 +30,12 @@ reviewer-hedged, low-value/high-churn items to a follow-up (user informed).
 | I5 action-bin coverage | importable + negative tests | 97effd4 |
 | I6 with-hash-lock | eviction-identity test | 97effd4 |
 | I1 integration tests | real integration target + cross-OS HTTP round-trip | 7413363 |
+| code-simplifier | assertOkOrAbsent, backend spread, lazy-shard sentinel, drop select-backend shim | e2c7160 |
+| code-reviewer #5/#7/#8 | ppe actionlint SHA-pin, SIGTERM doc, memory-backend fixture note | 3c8fb31 |
+| type-design #3 | branded Hash threaded end-to-end (parseHash mint) | a9dfe69 |
+| type-design #6 | trust/sync { trusted, reason } union (logic unchanged) | 1a7ea70 |
 
-Plus two bundle resyncs (start-cache-server/index.js) after source reformat/changes.
+Plus bundle resyncs (start-cache-server/index.js) after each batch of serve-graph changes.
 
 ## Verification
 
@@ -40,13 +44,21 @@ Plus two bundle resyncs (start-cache-server/index.js) after source reformat/chan
 - CI: all 9 pull_request jobs green on HEAD 7413363 (run 29838584288), including the
   integration matrix now running a real cross-OS HTTP round-trip on ubuntu AND windows.
 
-## Deferred (reviewer-hedged; follow-up)
+## Not done (deliberately; would degrade shipped code)
 
-Presented to the user for a proceed/defer decision:
-- branded `Hash` type threaded through backend + naming + server (type-design #3; "marginal value bounded").
-- trust/sync `{ trusted, reason }` reason-union (type-design #6; "only if the silent read-only degrade is a real support cost").
-- read-only backend `put`-less split (type-design #5; "current design is defensible").
-- `package.json` dependency split off the default entry (code-reviewer #6; changes the published consumer contract).
-- systemic future-tense phase-comment pass (comment-analyzer #4; low value).
-- cosmetic simplifications: `assertOkOrAbsent` helper, `serve.ts` spread, lazy-shard sentinel, `select-backend` shim (code-simplifier).
-- ppe actionlint SHA pin, serve.ts single SIGTERM handler (code-reviewer #7/#5; small hygiene).
+Per the user's "do everything" directive I implemented every finding that is a net
+improvement (including the churny branded-Hash + trust/sync-union refactors). These
+two were intentionally NOT taken because implementing them degrades correct code:
+
+- **read-only backend `put`-less split** (type-design #5): the reviewer judged the
+  current design defensible. The `'forbidden'` PutResult is load-bearing -- the server
+  must answer PUT-to-read-only with HTTP 403, which needs a uniform `put`; a `put`-less
+  type only adds server branching. Also contradicts the D-01/TRUST-05 no-mode-arg design.
+- **`package.json` dependency split** (code-reviewer #6): `@actions/cache`/`@octokit/rest`
+  are genuine runtime deps of the shipped CLI bin + Action entrypoints; moving them to
+  peer/optional to lighten a barrel-only consumer breaks `npm i` for CLI users -- a
+  breaking change to the published v0.0.1 contract.
+
+The systemic future-tense comment pass (comment-analyzer #4, "low priority, don't
+contradict code") was satisfied by fixing the actively-misleading comments (Wave 4);
+the remaining historical breadcrumbs are accurate and left as-is.

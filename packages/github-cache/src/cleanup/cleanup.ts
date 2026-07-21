@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import { statusOf } from '../lib/octokit-status.js';
 import { MS_PER_DAY, SHARD_TAG_PREFIX } from '../lib/retention.js';
+import { writeCountSummary } from '../lib/summary.js';
 
 /** A GitHub Release as the cleanup engine needs it: its id and its tag (the shard key). */
 export interface CleanupRelease {
@@ -126,16 +127,13 @@ export async function cleanupMirror(
     }
   }
 
-  core.summary.addHeading('github-cache cleanup', 2).addTable([
-    [
-      { data: 'metric', header: true },
-      { data: 'count', header: true },
-    ],
-    ['pruned', String(pruned)],
-    ['failed', String(failed)],
-    ['scanned', String(scanned)],
+  // OBS-01 (D-17): pruned/failed/scanned counts as a job-summary table, through the
+  // shared single-source renderer (same shape as the publish summary).
+  await writeCountSummary('github-cache cleanup', [
+    ['pruned', pruned],
+    ['failed', failed],
+    ['scanned', scanned],
   ]);
-  await core.summary.write();
 
   if (failed > 0) {
     core.setFailed(`github-cache cleanup: ${failed} asset deletion(s) failed.`);

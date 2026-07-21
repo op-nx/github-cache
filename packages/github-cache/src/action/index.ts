@@ -3,6 +3,7 @@ import * as core from '@actions/core';
 import { Octokit } from '@octokit/rest';
 import { serve } from '../serve.js';
 import { isSyncTrusted } from '../lib/sync-gate.js';
+import { writeCountSummary } from '../lib/summary.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
@@ -158,18 +159,13 @@ export async function runPublish(): Promise<void> {
     createPublishClient(octokit, owner, repo, ref),
   );
 
-  // D-17 (OBS-01): the "is the cache working" signal -- a job-summary table of the
-  // mirrored/skipped/failed counts the engine returns. Mirrors the cleanup summary.
-  core.summary.addHeading('github-cache publish', 2).addTable([
-    [
-      { data: 'metric', header: true },
-      { data: 'count', header: true },
-    ],
-    ['mirrored', String(result.mirrored)],
-    ['skipped', String(result.skipped)],
-    ['failed', String(result.failed)],
+  // D-17 (OBS-01): the "is the cache working" signal -- the mirrored/skipped/failed
+  // counts as a job-summary table, through the shared single-source renderer.
+  await writeCountSummary('github-cache publish', [
+    ['mirrored', result.mirrored],
+    ['skipped', result.skipped],
+    ['failed', result.failed],
   ]);
-  await core.summary.write();
 }
 
 /**

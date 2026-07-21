@@ -288,7 +288,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Nx cache round-trip over the loopback sidecar
         env:
-          RUN_HASH: ${{ github.run_id }}
+          # `cafe` prefix keeps the key valid hex (^[a-f0-9]+$) yet DISTINCT from the
+          # dogfood-seed / publish `nx-cache-<run_id>` key. All three ubuntu jobs share
+          # this run's Actions-cache scope; a bare run_id collides -- this job's PUT
+          # would land in the very key dogfood-verify reads back (Actions cache is
+          # first-write-wins), returning consumer-smoke's payload as wrong data.
+          RUN_HASH: cafe${{ github.run_id }}
         run: |
           set -euo pipefail
           server="${NX_SELF_HOSTED_REMOTE_CACHE_SERVER:?NX_SELF_HOSTED_REMOTE_CACHE_SERVER not set (pre-set regular step missing?)}"

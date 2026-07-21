@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 Phase: 6
 Plan: Not started
 Status: Ready to execute
-Last activity: 2026-07-21
+Last activity: 2026-07-21 - Completed quick task 260721-eac: Address A1 and A2 (findings-A cleanup)
 
 Progress: [██████████] 100% of planned plans (phase 5 pending verification)
 
@@ -168,6 +168,7 @@ None yet.
 | 260719-3el | Add worktree strategy to AGENTS.md | 2026-07-19 | fb5e51a | Verified | [260719-3el-add-worktree-strategy-to-agents-md](./quick/260719-3el-add-worktree-strategy-to-agents-md/) |
 | 260719-in3 | Fix cross-OS lockfile drift blocking CI npm ci + dogfood canary | 2026-07-19 | b9c513d | Verified | [260719-in3-fix-cross-os-lockfile-drift-blocking-ci-](./quick/260719-in3-fix-cross-os-lockfile-drift-blocking-ci-/) |
 | 260720-fal | Break releases-backend<->select-backend import cycle (github-identity leaf) + format phase-4 sources; fallow:ci + format:check green | 2026-07-20 | 77163a6 | Verified | (inline /gsd:fast --validate) |
+| 260721-eac | Address A1 and A2: remove orphaned trust.generated write-trust loop (TRUST-04) + flip TRUST-07 checkbox; residual-ref scrub | 2026-07-21 | 70213b0 | Verified | [260721-eac-address-a1-and-a2-in-this-branch](./quick/260721-eac-address-a1-and-a2-in-this-branch/) |
 
 ## Deferred Items
 
@@ -181,7 +182,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-20T23:48:42.125Z
-Stopped at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
-Resume file: .planning/phases/06-distribution-docs-governance/06-CONTEXT.md
-Next: verify phase 5 (verify-work / secure-phase / validate-phase), then extract-learnings; the advisory PPE CI job's findings-produced behavior is a first-push live close
+Last session: 2026-07-21
+Stopped at: Findings-A cleanup complete (quick 260721-eac). A1 (removed the orphaned trust.generated write-trust loop, TRUST-04) + A2 (flipped TRUST-07 checkbox) + residual-ref scrub, all on gsd/v0.0.1-greenfield-rebuild. Gates green: nx test github-cache (330), fallow:ci (0 issues), check:action, pack:check. Verifier passed (6/6); code review clean (0 blocker/warning).
+Resume file: none - the findings-A HANDOFF.json + .continue-here.md were resolved and removed.
+Next: milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land on main via a PR from this feature branch. Milestone is audit-passed; origin/main is at the pre-milestone baseline (98da97a).

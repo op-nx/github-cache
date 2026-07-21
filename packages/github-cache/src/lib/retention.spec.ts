@@ -63,6 +63,14 @@ describe('resolveMaxAgeDays one coupled knob (D-07, T-04-04)', () => {
   it('floors a fractional value', () => {
     expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '10.9' })).toBe(10);
   });
+
+  it('floors a sub-1-day value up to the 1-day floor, never 0', () => {
+    // A value in (0,1) passes the raw<=0 guard but Math.floor is 0. Without the
+    // Math.max(1, ...) floor that 0 makes cleanup's cutoff = now, pruning the entire
+    // in-window (retention-locked) mirror. The floor keeps at least a one-day window.
+    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '0.5' })).toBe(1);
+    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '0.99' })).toBe(1);
+  });
 });
 
 describe('shardTagsForWindow calendar-month walk, newest first (D-08)', () => {

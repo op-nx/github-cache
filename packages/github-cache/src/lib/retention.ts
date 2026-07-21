@@ -49,8 +49,16 @@ export function shardTag(date: Date = new Date()): string {
  * Resolve the single coupled retention knob `CACHE_MIRROR_MAX_AGE_DAYS` (D-07). It is
  * untrusted numeric input from the consumer env, so it is validated + clamped at this
  * trust boundary (T-04-04): an unset, non-numeric, zero, or negative value falls back to
- * `DEFAULT_MAX_AGE_DAYS` (30); a finite positive value is floored and clamped to
- * `MAX_AGE_CEILING_DAYS` (365). Both the reader window and the cleanup scan resolve here.
+ * `DEFAULT_MAX_AGE_DAYS` (30); a finite positive value is floored, then clamped into
+ * `[1, MAX_AGE_CEILING_DAYS]` (1..365). Both the reader window and the cleanup scan
+ * resolve here.
+ *
+ * The 1-day FLOOR is load-bearing, not cosmetic: a sub-1-day value like `0.5` passes the
+ * `raw <= 0` guard yet `Math.floor(0.5)` is 0, and a 0-day window makes cleanup's
+ * `cutoff = Date.now() - 0 = now`, so EVERY asset (all created before now) is pruned --
+ * wiping the whole in-window mirror, including the retention-locked set the one
+ * non-negotiable rule says must never be deleted. Flooring to 1 keeps at least a
+ * one-day window (matching the shard quantum's smallest safe value).
  */
 export function resolveMaxAgeDays(
   env: NodeJS.ProcessEnv = process.env,
@@ -61,7 +69,7 @@ export function resolveMaxAgeDays(
     return DEFAULT_MAX_AGE_DAYS;
   }
 
-  return Math.min(Math.floor(raw), MAX_AGE_CEILING_DAYS);
+  return Math.max(1, Math.min(Math.floor(raw), MAX_AGE_CEILING_DAYS));
 }
 
 /**

@@ -68369,7 +68369,7 @@ function resolveMaxAgeDays(env = process.env) {
   if (!Number.isFinite(raw) || raw <= 0) {
     return DEFAULT_MAX_AGE_DAYS;
   }
-  return Math.min(Math.floor(raw), MAX_AGE_CEILING_DAYS);
+  return Math.max(1, Math.min(Math.floor(raw), MAX_AGE_CEILING_DAYS));
 }
 function shardTagsForWindow(maxAgeDays, now = /* @__PURE__ */ new Date()) {
   const oldest = new Date(now.getTime() - maxAgeDays * MS_PER_DAY);

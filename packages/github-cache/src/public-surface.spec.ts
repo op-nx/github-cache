@@ -31,6 +31,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import * as barrel from './index.js';
 import { MAX_CACHE_BODY_BYTES } from './server/server.js';
+import { EXPECTED_ENV_KNOBS } from './test/consumer-contract.js';
 
 // --- The enumerated consumer contract. An intentional, reviewed surface change
 // edits the lists below; that edit IS the human-readable diff a reviewer sees. ---
@@ -51,16 +52,9 @@ const EXPECTED_TYPE_EXPORTS = [
 /** D-04 group (b): the consumer JS action inputs. */
 const EXPECTED_ACTION_INPUTS = ['port'];
 
-/** D-04 group (a): the consumer-set process.env knobs. */
-const EXPECTED_ENV_KNOBS = [
-  'NX_SELF_HOSTED_REMOTE_CACHE_SERVER',
-  'NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN',
-  'PORT',
-  'CACHE_MIRROR_MAX_AGE_DAYS',
-  'GH_TOKEN',
-  'GITHUB_TOKEN',
-  'GITHUB_REPOSITORY',
-];
+// D-04 group (a): the consumer-set process.env knobs. Sourced from the shared
+// test/consumer-contract.ts so this guard and docs-adoption.spec.ts cannot drift;
+// the inline sorted-literal self-check below is the human-reviewable pin.
 
 /**
  * The fixed set of package source files a documented env knob must still appear

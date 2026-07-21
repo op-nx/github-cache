@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { EXPECTED_ENV_KNOBS } from './test/consumer-contract.js';
 
 /**
  * DOCS-01/02/04/06 adoption-docs content guard.
@@ -34,17 +35,6 @@ const REQUIRED_DOCS = [
   'docs/advanced.md',
   'docs/examples/minimal-ci.yml',
   'docs/examples/README.md',
-];
-
-/** Mirrors the DOCS-05 public-surface guard's EXPECTED_ENV_KNOBS (key_links). */
-const EXPECTED_ENV_KNOBS = [
-  'NX_SELF_HOSTED_REMOTE_CACHE_SERVER',
-  'NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN',
-  'PORT',
-  'CACHE_MIRROR_MAX_AGE_DAYS',
-  'GH_TOKEN',
-  'GITHUB_TOKEN',
-  'GITHUB_REPOSITORY',
 ];
 
 /** The background-step lifecycle tokens both the README and the example must show. */

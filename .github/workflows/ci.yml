@@ -46,7 +46,7 @@ jobs:
   # after a build -- so the committed esbuild bundle must stay in sync with
   # entry.ts and its inlined deps. check:action rebuilds it with the exact-pinned
   # esbuild and byte-diffs the committed file, exiting non-zero on staleness or a
-  # hand edit (mirrors the selfcheck.cjs trust-copy tripwire). Kept a distinct
+  # hand edit. Kept a distinct
   # named job so a drift surfaces as a red action-bundle-drift job.
   action-bundle-drift:
     runs-on: ubuntu-24.04-arm
@@ -84,7 +84,7 @@ jobs:
   # -- containment stays the sync gate + default-branch protection, never this
   # job. It targets ppe/fixtures/unsafe-workflow.yml (deliberately outside
   # .github/workflows so GitHub never runs it). Kept a distinct named job (like
-  # selfcheck/fallow) separate from the typecheck/test battery. Its
+  # fallow) separate from the typecheck/test battery. Its
   # "produces findings" behavior is the first-push live close for TRUST-06
   # (expect a human_needed/live confirm on the CI run).
   ppe:

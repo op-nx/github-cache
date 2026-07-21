@@ -5,8 +5,7 @@
 // Azure SDK graph pulled in through serve()) must be inlined (Pitfall 1). Kept a
 // node script rather than an inline `esbuild ...` npm command because the
 // import.meta.url shim below needs a computed banner, which is not expressible in
-// a cross-platform npm-script flag without fragile shell quoting; this mirrors
-// the selfcheck.cjs generator-script convention. Deterministic output (fixed
+// a cross-platform npm-script flag without fragile shell quoting. Deterministic output (fixed
 // esbuild pin + banner + inputs) so `npm run check:action` can git-diff it.
 import { build } from 'esbuild';
 

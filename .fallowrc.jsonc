@@ -30,7 +30,7 @@
     // it is never imported, so reachability analysis cannot infer it (D-09, Phase 6).
     "start-cache-server/entry.ts",
     // Consumer-action bundler: the `build:action` / `check:action` package scripts
-    // invoke it as a standalone node bin; never imported (mirrors selfcheck.cjs).
+    // invoke it as a standalone node bin; never imported.
     "esbuild.action.mjs",
     // npm tarball file-list guard: the `pack:check` package script + the ci.yml
     // pack-check job invoke it as a standalone node bin; never imported (T-06-01-01).

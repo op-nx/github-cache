@@ -25,10 +25,6 @@
     // cannot infer it. Resolves the mirrored asset through the real Releases reader
     // behind a pathToFileURL(main) guard.
     "packages/github-cache/src/roundtrip/read-back.ts",
-    // Trust-copy drift tripwire + generator: ci.yml's selfcheck job + the `selfcheck`
-    // / `generate:trust` package scripts invoke it as a standalone bin via node; never
-    // imported, so reachability analysis cannot infer it (TRUST-04 / D-07).
-    "packages/github-cache/selfcheck.cjs",
     // Consumer JS action entry: esbuild.action.mjs bundles it to
     // start-cache-server/index.js, which the runner invokes as action.yml's `main`;
     // it is never imported, so reachability analysis cannot infer it (D-09, Phase 6).
@@ -49,10 +45,6 @@
     "**/skills/monitor-ci/scripts/*.mjs",
     // sha256-pinned vendored Nx OpenAPI fixture, referenced only by conformance.spec.ts.
     "packages/github-cache/src/conformance/nx-cache-openapi.v23.1.0.json",
-    // Generated dependency-free write-gate copy: referenced by require() in
-    // trust.generated.spec.ts + regenerated/diffed by selfcheck.cjs, not an ES import
-    // in the product graph (mirrors the vendored-json fixture entry, TRUST-04 / D-06).
-    "packages/github-cache/src/action/trust.generated.cjs",
     // Generated esbuild bundle of the consumer JS action: bytes owned by
     // esbuild.action.mjs, byte-diffed in CI by `npm run check:action`; a 2.4mb
     // dependency-inlined artifact, not product source to analyze (Phase 6, Pitfall 1).

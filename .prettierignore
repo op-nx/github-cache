@@ -9,12 +9,6 @@
 # the TEST-07 conformance drift guard; MUST NOT be reformatted (would break the hash)
 packages/github-cache/src/conformance/nx-cache-openapi.v23.1.0.json
 
-# Generated dependency-free write-gate copy - bytes owned by selfcheck.cjs (D-06/D-07),
-# byte-diffed against a fresh regeneration in CI; prettier must not reformat it (would
-# create a false drift-guard trip with no trust.ts change). Regenerate via
-# `node packages/github-cache/selfcheck.cjs --write`, never by hand or by prettier.
-packages/github-cache/src/action/trust.generated.cjs
-
 # Committed esbuild bundle of the consumer JS action - bytes owned by
 # esbuild.action.mjs and byte-diffed by `npm run check:action`; prettier must not
 # reformat it (would create a false drift-guard trip with no entry.ts change).

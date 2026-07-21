@@ -7,12 +7,12 @@
  * PUBLISHED tarball ships ONLY the consumer artifacts -- dist/ + LICENSE +
  * README.md + package.json -- and EXCLUDES every repo/dogfood/CI internal:
  * src/, .github/, .planning/, nx.json, start-cache-server/, any .env, and this
- * package's own dogfood files (action.yml, selfcheck.cjs, pack-check.cjs,
+ * package's own dogfood files (action.yml, pack-check.cjs,
  * tsconfig*, the vitest config). This proves files:["dist"] keeps
  * dogfood-stays-local -- nothing authored for THIS repo's CI leaks into the
  * consumer package (T-06-01-01).
  *
- * Dependency-free (node builtins only), mirroring selfcheck.cjs, so CI can run
+ * Dependency-free (node builtins only), so CI can run
  * it right after `npm ci` with no extra install. Fail-loud: any violation exits
  * 1 with a clear stderr message; a clean tarball exits 0.
  *
@@ -63,7 +63,6 @@ const REQUIRED = ['LICENSE', 'README.md', 'package.json'];
 const FORBIDDEN = [
   { label: 'src/ sources', test: (p) => p.startsWith('src/') },
   { label: 'the dogfood action.yml', test: (p) => p === 'action.yml' },
-  { label: 'the selfcheck generator', test: (p) => p === 'selfcheck.cjs' },
   { label: 'this pack guard', test: (p) => p === 'pack-check.cjs' },
   { label: 'a tsconfig file', test: (p) => /^tsconfig.*\.json$/.test(p) },
   {

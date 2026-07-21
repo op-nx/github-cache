@@ -41,28 +41,6 @@ jobs:
       - run: npm ci
       - run: npm run fallow:ci
 
-  # The trust-copy drift tripwire (TRUST-04 / D-07). selfcheck.cjs regenerates the
-  # dependency-free trust.generated.cjs from src/lib/trust.ts in-memory and byte-diffs
-  # the committed copy, exiting non-zero on drift in the extracted allowlist arrays
-  # (TRUSTED_EVENTS / HOST_GATED_EVENTS) or a hand edit to the .cjs. It does NOT diff
-  # host-gate LOGIC: that parity is verified by src/lib/trust.generated.spec.ts (the
-  # semantic-parity suite), since a trust.ts logic change with unchanged arrays
-  # regenerates byte-identically here. A JS action runs that committed copy as its
-  # write gate BEFORE npm ci, so a silent divergence from the server's gate must fail
-  # the build. Kept a distinct named job (like fallow/typecheck) so a drift surfaces as a
-  # red `selfcheck` job. It needs no build (it reads trust.ts source, not dist) and no
-  # npm ci (node builtins only), but runs npm ci for cache-warm parity with the battery.
-  selfcheck:
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.node-version'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run selfcheck
-
   # The consumer-action bundle drift guard (DOCS-06, Pitfall 1). A `uses:` action
   # resolves start-cache-server/index.js from the git ref -- never from npm, never
   # after a build -- so the committed esbuild bundle must stay in sync with

@@ -72,9 +72,14 @@ export function createActionsCacheBackend(): CacheBackend {
           return 'stored';
         }
 
-        const present = await cache.restoreCache([path], cacheKeyFor(hash), [], {
-          lookupOnly: true,
-        });
+        const present = await cache.restoreCache(
+          [path],
+          cacheKeyFor(hash),
+          [],
+          {
+            lookupOnly: true,
+          },
+        );
 
         if (present !== undefined) {
           return 'stored';

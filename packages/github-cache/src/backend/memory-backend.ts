@@ -13,6 +13,11 @@ function readFrom(store: Map<string, Buffer>, hash: string): GetResult {
 /**
  * Trivial in-process Map-backed CacheBackend in its writable form.
  *
+ * TEST FIXTURE (intentional, not dead code): selectBackend never constructs the
+ * writable memory backend on any runtime path -- it is the writable seam that lets
+ * serve.spec and the public-server integration round-trip drive a real PUT/GET
+ * without the Actions-cache runtime. Kept exported for those tests.
+ *
  * RW-vs-RO is which factory the caller constructs the server with, never a
  * caller-facing mode flag (TRUST-05).
  */

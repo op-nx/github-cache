@@ -40,7 +40,11 @@ runs:
         # download-actionlint.bash requires the target DIR to already exist; it
         # does not create it (verified live: exit 1 "Directory ... does not exist").
         mkdir -p "${RUNNER_TEMP}/actionlint-bin"
-        bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) \
+        # Fetch the installer script from a PINNED COMMIT SHA (the sha the v1.7.12
+        # tag points to), not the mutable v1.7.12 tag ref -- a tag can be moved, so
+        # curl|bash of a tag-ref script is a supply-chain hole. The 1.7.12 arg still
+        # selects the (immutable, per-version) release binary the script downloads.
+        bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash) \
           1.7.12 "${RUNNER_TEMP}/actionlint-bin"
     - name: zizmor audit (advisory)
       # --no-exit-codes keeps it advisory (never exits 11-14 on a finding). The

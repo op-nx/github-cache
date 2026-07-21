@@ -128,6 +128,11 @@ export async function serve(
     void shutdown().then(() => process.exit(0));
   }
 
+  // One listener per serve(), removed symmetrically in shutdown() (asserted by
+  // serve.spec). The documented production deployment is ONE server per process (the
+  // sidecar / dogfood bins), so these never accumulate; multiple concurrent
+  // serve() instances in a single long-lived process would each add a listener until
+  // their own shutdown() -- a test-only shape, not a production one.
   process.once('SIGTERM', onSigterm);
 
   const address = server.address() as AddressInfo;

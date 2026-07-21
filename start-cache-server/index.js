@@ -68179,8 +68179,19 @@ function createActionsCacheBackend() {
       const path11 = cacheArchivePath(hash);
       await (0, import_promises.writeFile)(path11, bytes);
       try {
-        await saveCache2([path11], cacheKeyFor(hash));
-        return "stored";
+        const cacheId = await saveCache2([path11], cacheKeyFor(hash));
+        if (cacheId > 0) {
+          return "stored";
+        }
+        const present = await restoreCache([path11], cacheKeyFor(hash), [], {
+          lookupOnly: true
+        });
+        if (present !== void 0) {
+          return "stored";
+        }
+        throw new Error(
+          `github-cache: saveCache reported no write (id -1) and no entry exists for key ${cacheKeyFor(hash)}; treating as a failed write (fail-closed, SRV-05/D-06).`
+        );
       } catch (error2) {
         if (error2 instanceof Error && error2.name === "ReserveCacheError") {
           return "stored";
@@ -68271,6 +68282,8 @@ function runHelper(file, args, stdin) {
       resolve2(void 0);
     });
     if (stdin !== void 0) {
+      child2.stdin?.on("error", () => {
+      });
       child2.stdin?.end(stdin);
     }
   });
@@ -68363,13 +68376,15 @@ function shardTagsForWindow(maxAgeDays, now = /* @__PURE__ */ new Date()) {
 
 // packages/github-cache/src/backend/releases-backend.ts
 var warned = false;
-function warnOnce() {
+function warnOnce(status) {
   if (warned) {
     return;
   }
   warned = true;
+  const detail = typeof status === "number" ? ` (HTTP ${status})` : "";
   process.stderr.write(
-    "github-cache: GitHub Releases cache read failed; continuing with a cache miss.\n"
+    `github-cache: GitHub Releases cache read failed${detail}; continuing with a cache miss.
+`
   );
 }
 function createReleasesReadBackend(client) {
@@ -68383,8 +68398,9 @@ function createReleasesReadBackend(client) {
           return { kind: "miss" };
         }
         return { kind: "hit", bytes };
-      } catch {
-        warnOnce();
+      } catch (error2) {
+        const status = error2.status;
+        warnOnce(typeof status === "number" ? status : void 0);
         return { kind: "miss" };
       }
     },
@@ -68398,6 +68414,7 @@ function createReleasesReadBackend(client) {
 }
 var GITHUB_API = "https://api.github.com";
 var FETCH_TIMEOUT_MS = 5e3;
+var DOWNLOAD_TIMEOUT_MS = 3e5;
 function githubJsonHeaders(token) {
   return {
     authorization: `Bearer ${token}`,
@@ -68417,8 +68434,11 @@ async function fetchAssetFromShard(repo, token, tag, assetName) {
     return void 0;
   }
   if (!releaseResponse.ok) {
-    throw new Error(
-      `github-cache: release lookup failed with status ${releaseResponse.status}`
+    throw Object.assign(
+      new Error(
+        `github-cache: release lookup failed with status ${releaseResponse.status}`
+      ),
+      { status: releaseResponse.status }
     );
   }
   const release = await releaseResponse.json();
@@ -68435,8 +68455,11 @@ async function fetchAssetFromShard(repo, token, tag, assetName) {
       return void 0;
     }
     if (!listResponse.ok) {
-      throw new Error(
-        `github-cache: asset list failed with status ${listResponse.status}`
+      throw Object.assign(
+        new Error(
+          `github-cache: asset list failed with status ${listResponse.status}`
+        ),
+        { status: listResponse.status }
       );
     }
     const batch = await listResponse.json();
@@ -68455,15 +68478,20 @@ async function fetchAssetFromShard(repo, token, tag, assetName) {
         authorization: `Bearer ${token}`,
         accept: "application/octet-stream"
       },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+      // Download leg gets the larger bound (DOWNLOAD_TIMEOUT_MS), not the 5s
+      // control-plane deadline -- a multi-MB body legitimately outlasts 5s.
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)
     }
   );
   if (downloadResponse.status === 404) {
     return void 0;
   }
   if (!downloadResponse.ok) {
-    throw new Error(
-      `github-cache: asset download failed with status ${downloadResponse.status}`
+    throw Object.assign(
+      new Error(
+        `github-cache: asset download failed with status ${downloadResponse.status}`
+      ),
+      { status: downloadResponse.status }
     );
   }
   return Buffer.from(await downloadResponse.arrayBuffer());
@@ -68757,7 +68785,18 @@ async function run() {
     );
     return;
   }
-  const port = getInput("port") || void 0;
+  const portInput = getInput("port");
+  let port;
+  if (portInput) {
+    const parsed = Number(portInput);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+      setFailed(
+        `github-cache sidecar: invalid port input ${JSON.stringify(portInput)}; expected an integer 1-65535 matching the fixed port the consumer published to NX_SELF_HOSTED_REMOTE_CACHE_SERVER. Refusing to bind an ephemeral port the Nx client could never reach.`
+      );
+      return;
+    }
+    port = portInput;
+  }
   const running = await serve({ port });
   setSecret(running.token);
   info(`github-cache sidecar listening on ${running.url}`);

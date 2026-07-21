@@ -35,7 +35,33 @@ async function run(): Promise<void> {
     return;
   }
 
-  const port = core.getInput('port') || undefined;
+  // Validate the port here, in the sidecar, BEFORE binding. serve()'s resolvePort
+  // deliberately degrades any bad value to an OS-assigned ephemeral port (Pitfall 7,
+  // never throw synchronously) -- correct for the general library case, but WRONG
+  // for this handshake: the consumer has already published a FIXED port to
+  // NX_SELF_HOSTED_REMOTE_CACHE_SERVER in a prior step, so a silent fallback to a
+  // random port binds one the Nx client can never reach (silent all-MISS /
+  // connection-refused). Fail loud on an explicitly-supplied-but-unusable port.
+  const portInput = core.getInput('port');
+  let port: string | undefined;
+
+  if (portInput) {
+    const parsed = Number(portInput);
+
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+      core.setFailed(
+        `github-cache sidecar: invalid port input ${JSON.stringify(portInput)}; ` +
+          'expected an integer 1-65535 matching the fixed port the consumer published to ' +
+          'NX_SELF_HOSTED_REMOTE_CACHE_SERVER. Refusing to bind an ephemeral port the Nx ' +
+          'client could never reach.',
+      );
+
+      return;
+    }
+
+    port = portInput;
+  }
+
   const running = await serve({ port });
 
   // Mask the adopted bearer token in this action's own logs, then log the

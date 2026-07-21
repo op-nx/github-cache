@@ -240,9 +240,10 @@ jobs:
 
   # DOCS-06 LIVE PROOF: the consumer background-step round-trip (a first-push live
   # close, like dogfood/ppe). It consumes the PUBLIC start-cache-server action
-  # exactly as an adopter would -- `uses: ./start-cache-server` with
-  # `background: true` -- then drives a scripted PUT+GET against the exported
-  # NX_SELF_HOSTED_REMOTE_CACHE_SERVER using the exported token, proving the
+  # exactly as an adopter would -- pre-set the two NX_* vars in a REGULAR step,
+  # then `uses: ./start-cache-server` with `background: true` and a matching
+  # `port` -- then drives a scripted PUT+GET against the pre-set
+  # NX_SELF_HOSTED_REMOTE_CACHE_SERVER using the pre-set token, proving the
   # loopback sidecar serves a real round-trip through the write-trusted
   # Actions-cache backend. The `cancel:` teardown is MANDATORY: the implicit
   # wait-all before post-job cleanup would otherwise hang forever on the
@@ -254,10 +255,11 @@ jobs:
   # (D-06). No job-level permissions block: the workflow-default contents:read
   # plus the JS-action-only runtime cache creds suffice (T-06-01-05).
   #
-  # FIRST-PUSH LIVE CLOSE: whether core.exportVariable propagates from a
-  # background step to a later run: step is a background-steps-engine behavior
-  # this job validates live; the round-trip fails loud with a clear message if
-  # the vars are absent (surfaced as a human_needed item at verify-work).
+  # HANDSHAKE: a background step cannot export env to later steps (its
+  # exportVariable $GITHUB_ENV writes are only processed after the step COMPLETES,
+  # which for a background step is its `cancel:` teardown). So the consumer sets
+  # the two NX_* vars in the prior regular step below (whose $GITHUB_ENV writes DO
+  # propagate) and passes the matching fixed port; serve() adopts both.
   consumer-smoke:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04-arm
@@ -269,9 +271,19 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build:action
+      # Pre-set the Nx client vars HERE, in a regular step: a background step
+      # cannot export env to later steps, but this step's $GITHUB_ENV writes do
+      # propagate. The sidecar below adopts the pre-set token + matching port.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - uses: ./start-cache-server
         id: cache-server
         background: true
+        with:
+          port: '3000'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Nx cache round-trip over the loopback sidecar
@@ -279,8 +291,8 @@ jobs:
           RUN_HASH: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          server="${NX_SELF_HOSTED_REMOTE_CACHE_SERVER:?background start-cache-server step did not export the server url}"
-          token="${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN:?background start-cache-server step did not export the access token}"
+          server="${NX_SELF_HOSTED_REMOTE_CACHE_SERVER:?NX_SELF_HOSTED_REMOTE_CACHE_SERVER not set (pre-set regular step missing?)}"
+          token="${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN:?NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN not set (pre-set regular step missing?)}"
           auth="Authorization: Bearer ${token}"
           # Wait for the loopback sidecar to accept connections: an authed GET on
           # an unknown hash returns 404 (up); connection-refused keeps code=000.

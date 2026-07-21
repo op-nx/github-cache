@@ -23,7 +23,8 @@ const DEFAULT_MAX_AGE_DAYS = 30;
 /** Clamp ceiling so a fat-fingered knob cannot explode the shard walk or the prune scan (V5, T-04-04). */
 const MAX_AGE_CEILING_DAYS = 365;
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/** Milliseconds per day. Exported as the single time-window source shared by the cleanup engine's cutoff (I8: one home). */
+export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * The month-shard release tag: `cache-mirror-` plus the UTC year and zero-padded month

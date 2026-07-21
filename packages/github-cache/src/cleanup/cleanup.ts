@@ -1,8 +1,6 @@
 import * as core from '@actions/core';
 import { statusOf } from '../lib/octokit-status.js';
-import { SHARD_TAG_PREFIX } from '../lib/retention.js';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+import { MS_PER_DAY, SHARD_TAG_PREFIX } from '../lib/retention.js';
 
 /** A GitHub Release as the cleanup engine needs it: its id and its tag (the shard key). */
 export interface CleanupRelease {

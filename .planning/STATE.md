@@ -4,8 +4,8 @@ milestone: v0.0.1
 milestone_name: Greenfield MVP Rebuild
 current_phase: 6
 status: "Milestone v0.0.1 shipped -- PR #3"
-stopped_at: Phase 6 context gathered (--analyze --auto; 1 gray area escalated + resolved)
-last_updated: "2026-07-21T09:01:10.973Z"
+stopped_at: Completed quick 260721-wtl (PR #3 round 8) - cleanup in-code trust gate (narrow isTrustedSyncEvent); schedule-payload probe on main confirmed default_branch present, gate kept narrow
+last_updated: "2026-07-21T22:56:04.000Z"
 last_activity: 2026-07-21
 progress:
   total_phases: 7
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 Phase: 6
 Plan: Not started
 Status: Milestone v0.0.1 shipped -- PR #3 (post-review remediation quicks 260721-g1p + 260721-pej + 260721-qk1; CI green)
-Last activity: 2026-07-21 - Completed quick task 260721-vdn: hardened the Releases-mirror cleanup delete scope (security-review defense-in-depth) with an exact month-shard tag check + a <hash>-<os> asset-name allowlist (pure narrowing, retention-locked); 373 tests + full CI battery green
+Last activity: 2026-07-21 - Completed quick task 260721-wtl: added the deferred cleanup in-code trust gate (narrow isTrustedSyncEvent, retention-safe). A temporary schedule-payload probe on main empirically confirmed repository.default_branch IS present on a real schedule run; the gate is kept narrow on robustness grounds. 384 tests + full CI battery + PR #3 cross-OS matrix green
 
 Progress: [██████████] 100% of planned plans (phase 5 pending verification)
 
@@ -176,6 +176,7 @@ None yet.
 | 260721-tj7 | Apply triaged /simplify cleanup findings on PR #3 (reuse/simplification/altitude): MS_PER_DAY sourced from retention leaf, releases-backend fault status via statusOf, writeCountSummary leaf for OBS-01 tables, isEntrypoint leaf for the 4 direct-invocation guards; 5 findings triaged out with reasons; full CI battery green | 2026-07-21 | ab5553d | Verified | [260721-tj7-apply-triaged-simplify-cleanup-findings-](./quick/260721-tj7-apply-triaged-simplify-cleanup-findings-/) |
 | 260721-uao | Apply triaged ponytail-review over-engineering finding on PR #3: inline the dead `run` wrapper in withHashLock (`prior.then(fn, fn)`); 4 of 5 candidates rejected on read (documented deliberate decisions + one actively-wrong `.finally` suggestion that would unhandled-reject); 344 tests + tsc green | 2026-07-21 | d4ba437 | Verified | [260721-uao-inline-the-run-wrapper-in-with-hash-lock](./quick/260721-uao-inline-the-run-wrapper-in-with-hash-lock/) |
 | 260721-vdn | Harden Releases-mirror cleanup delete scope (PR #3 security-review defense-in-depth, retention-locked): exact `^cache-mirror-\d{6}$` shard-tag scope (isShardTag, single-sourced from SHARD_TAG_PREFIX) + `<hash>-<os>` asset-name allowlist (isServerProducedAssetName, reuses HASH_PATTERN + CACHE_OS_VALUES); pure narrowing (still prunes genuine assets, regression-guarded); 373 tests + full CI battery green | 2026-07-21 | 602824b | Verified | [260721-vdn-harden-releases-mirror-cleanup-delete-sc](./quick/260721-vdn-harden-releases-mirror-cleanup-delete-sc/) |
+| 260721-wtl | Add deferred cleanup in-code trust gate (PR #3 round 8, defense-in-depth C2/RETAIN-03): narrow isTrustedSyncEvent (GITHUB_ACTIONS + SYNC_EVENTS, deliberately NOT isSyncTrusted -- no repository.default_branch dep) wired first in cleanup run(), gated-out => clean no-op; anti-fail-closed unit proof + gate-wiring tests. Temp schedule-payload probe on main (add ca2124b / revert c06664f, main net-unchanged) confirmed repository.default_branch IS present on a real schedule run -- gate kept narrow on robustness grounds. 384 tests + full CI battery + PR #3 cross-OS matrix green | 2026-07-21 | f7e7f74 | Verified | [260721-wtl-add-deferred-cleanup-in-code-trust-gate-](./quick/260721-wtl-add-deferred-cleanup-in-code-trust-gate-/) |
 
 ## Deferred Items
 
@@ -191,6 +192,6 @@ Items acknowledged and carried forward:
 ## Session Continuity
 
 Last session: 2026-07-21
-Stopped at: Findings-A cleanup complete (quick 260721-eac). A1 (removed the orphaned trust.generated write-trust loop, TRUST-04) + A2 (flipped TRUST-07 checkbox) + residual-ref scrub, all on gsd/v0.0.1-greenfield-rebuild. Gates green: nx test github-cache (330), fallow:ci (0 issues), check:action, pack:check. Verifier passed (6/6); code review clean (0 blocker/warning).
-Resume file: none - the findings-A HANDOFF.json + .continue-here.md were resolved and removed.
-Next: milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land on main via a PR from this feature branch. Milestone is audit-passed; origin/main is at the pre-milestone baseline (98da97a).
+Stopped at: Completed quick 260721-wtl (PR #3 remediation round 8): added the deferred cleanup in-code trust gate. Narrow isTrustedSyncEvent (GITHUB_ACTIONS + SYNC_EVENTS, deliberately NOT isSyncTrusted -- no repository.default_branch dependency) wired first in cleanup/index.ts run(); gated-out => clean no-op (never setFailed). A temporary schedule-payload probe on main (add ca2124b / revert c06664f; main net-unchanged) EMPIRICALLY CONFIRMED repository.default_branch IS present on a real schedule run (29874290591) -- isSyncTrusted would not fail-closed today; the narrow gate is kept on robustness grounds (uncontracted synthetic payload + redundant branch check for a schedule-only, default-branch-only workflow). 384 tests + full CI battery + PR #3 cross-OS matrix green. Commits 44df14d + f7e7f74.
+Resume file: none - the wtl HANDOFF.json + .continue-here.md are resolved and removed.
+Next: A SECOND session is concurrently working quick 260722-0od (address-pr-3-review-findings) on this branch (paused from repo writes at hand-off). Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.

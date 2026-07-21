@@ -1,10 +1,10 @@
-import { pathToFileURL } from 'node:url';
 import * as core from '@actions/core';
 import {
   createReleasesReadBackend,
   createReleasesReadClient,
 } from '../backend/releases-backend.js';
 import { parseHash } from '../lib/cache-key.js';
+import { isEntrypoint } from '../lib/is-entrypoint.js';
 
 /**
  * Live cross-OS publish/read-back round-trip (the leg deferred from Phase 3). The
@@ -62,13 +62,9 @@ async function run(): Promise<void> {
 
 // Direct-invocation guard: run() only when this module is the entrypoint (the built
 // dist/roundtrip/read-back.js invoked by ci.yml's publish-verify job), never when
-// imported. Use pathToFileURL(process.argv[1]).href -- the naive 'file://' + argv[1]
-// form is permanently false on Windows (Pitfall 6). A whole-run fault reaches
+// imported. isEntrypoint owns the Windows Pitfall-6 idiom. A whole-run fault reaches
 // core.setFailed (non-zero exit) so the round-trip fails loud (OBS-01/D-15).
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isEntrypoint(import.meta.url)) {
   run().catch((error: unknown) => {
     core.setFailed(error instanceof Error ? error.message : String(error));
   });

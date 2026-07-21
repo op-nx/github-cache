@@ -1,6 +1,6 @@
-import { pathToFileURL } from 'node:url';
 import * as core from '@actions/core';
 import { Octokit } from '@octokit/rest';
+import { isEntrypoint } from '../lib/is-entrypoint.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
@@ -94,13 +94,9 @@ async function run(): Promise<void> {
 
 // Direct-invocation guard: run() only when this module is the entrypoint (the built
 // dist/cleanup/index.js invoked by cleanup.yml), never when createCleanupClient is
-// imported. Use pathToFileURL(process.argv[1]).href -- the naive 'file://' + argv[1]
-// form is permanently false on Windows (Pitfall 6). A whole-run fault reaches
+// imported. isEntrypoint owns the Windows Pitfall-6 idiom. A whole-run fault reaches
 // core.setFailed (non-zero exit) so the scheduled job fails loud (OBS-01/D-15).
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isEntrypoint(import.meta.url)) {
   run().catch((error: unknown) => {
     core.setFailed(error instanceof Error ? error.message : String(error));
   });

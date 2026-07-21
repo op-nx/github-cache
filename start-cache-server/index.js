@@ -29447,12 +29447,15 @@ function info(message) {
   process.stdout.write(message + os4.EOL);
 }
 
-// packages/github-cache/src/serve.ts
-var import_node_url2 = require("node:url");
-
 // packages/github-cache/src/backend/types.ts
 function isWritableBackend(backend) {
   return "put" in backend;
+}
+
+// packages/github-cache/src/lib/is-entrypoint.ts
+var import_node_url = require("node:url");
+function isEntrypoint(moduleUrl) {
+  return !!process.argv[1] && moduleUrl === (0, import_node_url.pathToFileURL)(process.argv[1]).href;
 }
 
 // packages/github-cache/src/backend/actions-cache-backend.ts
@@ -40495,14 +40498,14 @@ var import_node_stream3 = __toESM(require("node:stream"), 1);
 // node_modules/@azure/storage-common/dist/esm/crc64.js
 var import_node_module = require("node:module");
 var import_node_path = require("node:path");
-var import_node_url = require("node:url");
+var import_node_url2 = require("node:url");
 var __isNode__ = typeof process === "object" && typeof process.versions === "object" && typeof process.versions.node === "string";
 var require2;
 var __filename;
 var __dirname;
 if (__isNode__) {
   require2 = (0, import_node_module.createRequire)(__actionImportMetaUrl);
-  __filename = (0, import_node_url.fileURLToPath)(__actionImportMetaUrl);
+  __filename = (0, import_node_url2.fileURLToPath)(__actionImportMetaUrl);
   __dirname = (0, import_node_path.dirname)(__filename);
 }
 var NativeCRC64 = (() => {
@@ -68785,7 +68788,7 @@ async function main() {
   process.stdout.write(`bearer token: ${running.token}
 `);
 }
-if (process.argv[1] && __actionImportMetaUrl === (0, import_node_url2.pathToFileURL)(process.argv[1]).href) {
+if (isEntrypoint(__actionImportMetaUrl)) {
   void main();
 }
 

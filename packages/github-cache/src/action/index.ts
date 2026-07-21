@@ -1,7 +1,7 @@
-import { pathToFileURL } from 'node:url';
 import * as core from '@actions/core';
 import { Octokit } from '@octokit/rest';
 import { serve } from '../serve.js';
+import { isEntrypoint } from '../lib/is-entrypoint.js';
 import { isSyncTrusted } from '../lib/sync-gate.js';
 import { writeCountSummary } from '../lib/summary.js';
 import {
@@ -304,13 +304,9 @@ export async function run(): Promise<void> {
 // dist/action/index.js invoked by this repo's dogfood action.yml), never when
 // runPublish/createPublishClient/run are imported for unit tests (I5: the old
 // unconditional run() left the sync-gate-first ordering, the keyless-row filter, and
-// the dogfood fail-loud branches untestable-by-import). Use
-// pathToFileURL(process.argv[1]).href -- the naive 'file://' + argv[1] form is
-// permanently false on Windows (Pitfall 6), matching the cleanup + read-back bins.
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+// the dogfood fail-loud branches untestable-by-import). isEntrypoint owns the Windows
+// Pitfall-6 idiom, shared with the cleanup + read-back bins.
+if (isEntrypoint(import.meta.url)) {
   run().catch((error: unknown) => {
     core.setFailed(error instanceof Error ? error.message : String(error));
   });

@@ -17,11 +17,14 @@ import { build } from 'esbuild';
 // resolve; the embedded base64 crc64.wasm means no external asset is needed.
 //
 // The shim MUST NOT resolve to the bundle's own path: serve.ts guards its main()
-// with `import.meta.url === pathToFileURL(process.argv[1]).href`, and the runner
-// invokes the action as `node index.js` (argv[1] === the bundle). A matching URL
-// would run serve.ts's main() -- spawning a SECOND server and printing the bearer
-// token UNMASKED. Pointing at a sibling `index.mjs` (never emitted) keeps that
-// guard false while still giving Azure a valid directory to resolve builtins from.
+// with `isEntrypoint(import.meta.url)`, and esbuild's `define` replaces that
+// `import.meta.url` argument with this shim -- so at runtime the guard compares the
+// shim URL against `pathToFileURL(process.argv[1]).href`. The runner invokes the
+// action as `node index.js` (argv[1] === the bundle). A shim resolving to the
+// bundle's own path would make the guard true and run serve.ts's main() -- spawning
+// a SECOND server and printing the bearer token UNMASKED. Pointing at a sibling
+// `index.mjs` (never emitted) keeps that guard false while still giving Azure a
+// valid directory to resolve builtins from.
 const IMPORT_META_URL_SHIM =
   'require("node:url").pathToFileURL(require("node:path").join(__dirname,"index.mjs")).href';
 

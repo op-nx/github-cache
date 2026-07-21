@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { pathToFileURL } from 'node:url';
 import {
   isWritableBackend,
   type PutResult,
@@ -9,6 +8,7 @@ import {
   type WritableBackend,
 } from './backend/types.js';
 import type { Hash } from './lib/cache-key.js';
+import { isEntrypoint } from './lib/is-entrypoint.js';
 import { selectBackend } from './lib/select-backend.js';
 import { withHashLock } from './lib/with-hash-lock.js';
 import { createCacheServer, generateToken } from './server/server.js';
@@ -170,12 +170,8 @@ async function main(): Promise<void> {
   process.stdout.write(`bearer token: ${running.token}\n`);
 }
 
-// Direct-invocation guard: run main() only when this module is the entrypoint.
-// Use pathToFileURL(process.argv[1]).href -- the naive 'file://' + argv[1] form
-// is permanently false on Windows (Pitfall 6).
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+// Direct-invocation guard: run main() only when this module is the process
+// entrypoint (see isEntrypoint -- the one home for the Windows Pitfall-6 idiom).
+if (isEntrypoint(import.meta.url)) {
   void main();
 }

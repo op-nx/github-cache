@@ -10,7 +10,6 @@ import {
 import type { Hash } from './lib/cache-key.js';
 import { isEntrypoint } from './lib/is-entrypoint.js';
 import { selectBackend } from './lib/select-backend.js';
-import { withHashLock } from './lib/with-hash-lock.js';
 import { createCacheServer, generateToken } from './server/server.js';
 
 /** Production grace (ms) for the bounded SIGTERM drain (ROBUST-04). */
@@ -62,9 +61,9 @@ function resolvePort(value: number | string | undefined): number {
 /**
  * SC4 composition root: resolve the port, mint (or inherit) a CSPRNG bearer
  * token, select the backend from runtime context (D-01/TRUST-05), wrap its write
- * path with the per-hash lock plus in-flight tracking, wire it into the
- * Nx-contract server, bind `127.0.0.1` only (SRV-01), and drain in-flight writes
- * on SIGTERM within a bounded grace (ROBUST-04).
+ * path with in-flight tracking, wire it into the Nx-contract server, bind
+ * `127.0.0.1` only (SRV-01), and drain in-flight writes on SIGTERM within a
+ * bounded grace (ROBUST-04).
  *
  * The token env fallback uses `||` (not `??`) so a set-but-empty value falls
  * through to a fresh generated token rather than binding an empty secret
@@ -80,18 +79,20 @@ export async function serve(
     generateToken();
   const graceMs = options.shutdownGraceMs ?? DEFAULT_SHUTDOWN_GRACE_MS;
 
-  // The single composition point where BOTH the per-hash write lock (D-03/TEST-02)
-  // and the SIGTERM in-flight drain (ROBUST-04) attach. Keeping the decorator here
-  // is why server.ts needs no change: the server still receives a plain
-  // CacheBackend. get delegates straight through; put runs under withHashLock and
-  // records its promise so the drain can await it.
+  // The composition point where the SIGTERM in-flight drain (ROBUST-04) attaches --
+  // and ONLY that. The per-hash lock is deliberately NOT here: it lives in
+  // actions-cache-backend.ts, next to the shared deterministic archive path it
+  // guards, where it also covers `get`. Re-adding it here would nest the same-hash
+  // lock and self-deadlock. Keeping the decorator here is why server.ts needs no
+  // change: the server still receives a plain CacheBackend. get delegates straight
+  // through; put records its promise so the drain can await it.
   const inFlightPuts = new Set<Promise<unknown>>();
   const backend = selectBackend(process.env);
-  // A writable backend gets its put wrapped in withHashLock + drain tracking; a
-  // read-only backend (ReadableBackend, no put) is passed through unchanged -- there
-  // is no write path to serialize or drain, and the server answers a PUT to it with
-  // the contract's 403. Spread is safe: backend factories return closures over
-  // captured state, not this-bound methods.
+  // A writable backend gets its put wrapped in drain tracking; a read-only backend
+  // (ReadableBackend, no put) is passed through unchanged -- there is no write path
+  // to drain, and the server answers a PUT to it with the contract's 403. Spread is
+  // safe: backend factories return closures over captured state, not this-bound
+  // methods.
   let tracked: ReadableBackend | WritableBackend;
 
   if (isWritableBackend(backend)) {
@@ -99,7 +100,7 @@ export async function serve(
     tracked = {
       ...writable,
       put: (hash: Hash, bytes: Buffer): Promise<PutResult> => {
-        const op = withHashLock(hash, () => writable.put(hash, bytes));
+        const op = writable.put(hash, bytes);
         inFlightPuts.add(op);
         // Remove on settle in a way that cannot itself reject; return the ORIGINAL
         // promise so the caller still observes the true PutResult (or rejection).

@@ -1,7 +1,12 @@
+import { rm } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
+import * as cache from '@actions/cache';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createActionsCacheBackend } from './backend/actions-cache-backend.js';
 import { createWritableMemoryBackend } from './backend/memory-backend.js';
 import type { CacheBackend, PutResult } from './backend/types.js';
+import { cacheArchivePath } from './lib/cache-archive-path.js';
+import type { Hash } from './lib/cache-key.js';
 import { selectBackend } from './lib/select-backend.js';
 import { type RunningServer, serve } from './serve.js';
 
@@ -12,6 +17,11 @@ import { type RunningServer, serve } from './serve.js';
 // without depending on ambient CI env. createWritableMemoryBackend stays exported
 // from memory-backend.ts precisely so specs like this can feed it back in.
 vi.mock('./lib/select-backend.js');
+
+// The no-self-deadlock proof below drives the REAL Actions-cache backend (the one
+// that now owns the per-hash lock) through serve(), so @actions/cache must be
+// mocked here too -- it only works inside a JS action on real CI.
+vi.mock('@actions/cache');
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
@@ -254,11 +264,11 @@ describe('serve SIGTERM drain (ROBUST-04)', () => {
     // process.exit is stubbed) and proves exit is deferred until the drain
     // actually completes.
     //
-    // A hash distinct from every other test in this file: with-hash-lock's
-    // module-global map means the prior "never settles" case above leaves
-    // 'abcdef' permanently queued behind an abandoned promise (its gate is
-    // deliberately never released) -- reusing that hash here would wedge this
-    // test forever behind a DIFFERENT test's deliberately-hung write.
+    // A hash distinct from every other test in this file. serve() no longer
+    // applies the per-hash lock (it moved into actions-cache-backend.ts), so these
+    // fakes are not queued -- but the prior "never settles" case above leaves an
+    // abandoned in-flight promise on 'abcdef', and keeping the hashes distinct
+    // keeps each case's drain assertion about its own write only.
     const fake = gatedPutBackend();
     vi.mocked(selectBackend).mockReturnValue(fake.backend);
 
@@ -301,8 +311,13 @@ describe('serve SIGTERM drain (ROBUST-04)', () => {
   });
 });
 
-describe('serve write path is locked per hash (TEST-02 wiring)', () => {
-  it('serializes two concurrent PUTs of the same hash through the per-hash lock (TEST-02)', async () => {
+describe('serve write path is NOT double-locked (TEST-02 wiring)', () => {
+  // The per-hash serialization proofs live in actions-cache-backend.spec.ts now:
+  // the lock moved into the module that owns the shared deterministic archive
+  // path, and covers `get` there too. What serve() still owns is drain tracking
+  // (asserted above) and the negative property below.
+
+  it('does not itself serialize same-hash puts -- a fake writable backend sees both concurrently (TEST-02)', async () => {
     const tracker = orderTrackingBackend();
     vi.mocked(selectBackend).mockReturnValue(tracker.backend);
 
@@ -316,56 +331,42 @@ describe('serve write path is locked per hash (TEST-02 wiring)', () => {
       });
 
     const first = putSameHash();
-
-    await tracker.whenStarted(1);
-
     const second = putSameHash();
 
-    tracker.order.push('release:1');
-    tracker.gates[0]('stored');
-
+    // If serve() still wrapped put in withHashLock, whenStarted(2) would never
+    // resolve and this test would time out -- so reaching this line IS the proof
+    // that the composition root no longer holds the lock. The memory backend has
+    // no shared temp path, so there is nothing here to protect.
     await tracker.whenStarted(2);
 
+    tracker.gates[0]('stored');
     tracker.gates[1]('stored');
     await Promise.all([first, second]);
-
-    // Non-vacuous: put #2 entered the backend only AFTER put #1 was released.
-    // If the composition did not wrap put in withHashLock, put #2 would enter
-    // before 'release:1' -- so this exact order is the wiring proof.
-    expect(tracker.order).toEqual([
-      'start:aaaaaa',
-      'release:1',
-      'start:aaaaaa',
-    ]);
   }, 4000);
 
-  it('runs concurrent PUTs of different hashes in parallel (TEST-02)', async () => {
-    const tracker = orderTrackingBackend();
-    vi.mocked(selectBackend).mockReturnValue(tracker.backend);
+  it('completes a same-hash PUT through the real Actions-cache backend -- no self-deadlock from a doubled lock (TEST-02)', async () => {
+    const HASH = 'facade01' as Hash;
+    vi.mocked(cache.saveCache).mockResolvedValue(42);
+    vi.mocked(selectBackend).mockReturnValue(createActionsCacheBackend());
 
     running = await serve();
 
-    const put = (hash: string) =>
-      fetch(`${running!.url}/v1/cache/${hash}`, {
+    const put = () =>
+      fetch(`${running!.url}/v1/cache/${HASH}`, {
         method: 'PUT',
         headers: auth(running!.token),
-        body: Buffer.from('x'),
+        body: Buffer.from('tar-bytes'),
       });
 
-    const putA = put('aaaaaa');
-    const putB = put('bbbbbb');
+    // Both same-hash writes go through serve()'s drain tracking AND the backend's
+    // per-hash lock. If serve() re-applied the lock, the inner call would wait on
+    // the outer call's tail -- which cannot settle until the inner one resolves --
+    // and neither response would ever arrive.
+    const [first, second] = await Promise.all([put(), put()]);
 
-    // BOTH puts reach the backend before EITHER gate is released -- different
-    // hashes are not serialized. If they were, whenStarted(2) would never
-    // resolve and this test would time out.
-    await tracker.whenStarted(2);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
 
-    expect(
-      tracker.order.filter((entry) => entry.startsWith('start:')),
-    ).toHaveLength(2);
-
-    tracker.gates[0]('stored');
-    tracker.gates[1]('stored');
-    await Promise.all([putA, putB]);
+    await rm(cacheArchivePath(HASH), { force: true });
   }, 4000);
 });

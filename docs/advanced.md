@@ -45,7 +45,9 @@ bounded. They are opt-in and run in CI, not on a developer machine.
   never by the write gate -- widening write-trust must never widen sync, or a
   pull-request-influenced entry could reach the shared store. It needs
   `contents: write` (create the release and upload assets) and `actions: read`
-  (enumerate the cache).
+  (enumerate the cache). **Publish must not share a job with a running sidecar** --
+  both resolve the same deterministic temp archive path per cache entry, and the
+  per-hash lock that protects it is in-process only.
 - **Cleanup.** Prunes mirror assets older than
   [`CACHE_MIRROR_MAX_AGE_DAYS`](configuration.md#cache_mirror_max_age_days) from
   the month-shard Releases. It is **storage hygiene, not poison-containment** --

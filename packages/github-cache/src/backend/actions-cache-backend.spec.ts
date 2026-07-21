@@ -170,6 +170,124 @@ describe('createActionsCacheBackend put (ROBUST-03)', () => {
   });
 });
 
+// A deferred lets a test drive settle order deterministically -- no timers.
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+
+  return { promise, resolve };
+}
+
+/** Flush the microtask queue so a queued lock waiter gets its chance to enter. */
+function tick(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe('createActionsCacheBackend serializes same-hash operations (TEST-02, Pitfall 7)', () => {
+  // These live HERE, not in serve.spec.ts, because the lock moved to the module
+  // that owns the shared deterministic archive path. serve() no longer wraps put,
+  // so a fake writable backend behind serve() is no longer serialized at all.
+  const LOCK_A = 'aa11bb' as Hash;
+  const LOCK_B = 'cc22dd' as Hash;
+
+  afterEach(async () => {
+    await rm(cacheArchivePath(LOCK_A), { force: true });
+    await rm(cacheArchivePath(LOCK_B), { force: true });
+  });
+
+  it('does not interleave two concurrent same-hash gets -- the second starts only after the first settles (TEST-02)', async () => {
+    const order: string[] = [];
+    const gates: Array<(value: string | undefined) => void> = [];
+    restoreCache.mockImplementation(() => {
+      order.push('restore');
+      const gate = deferred<string | undefined>();
+      gates.push(gate.resolve);
+
+      return gate.promise;
+    });
+    const backend = createActionsCacheBackend();
+
+    const first = backend.get(LOCK_A);
+    await tick();
+
+    const second = backend.get(LOCK_A);
+    await tick();
+
+    // Non-vacuous: WITHOUT the lock both gets would have entered restoreCache by
+    // now, and this would read 2.
+    expect(order).toHaveLength(1);
+
+    gates[0](undefined);
+    await first;
+    await tick();
+
+    expect(order).toHaveLength(2);
+
+    gates[1](undefined);
+    await second;
+  });
+
+  it('does not interleave a same-hash get and put -- the pair the shared archive path actually races (TEST-02, Pitfall 7)', async () => {
+    const order: string[] = [];
+    const saveGate = deferred<number>();
+    saveCache.mockImplementation(() => {
+      order.push('save');
+
+      return saveGate.promise;
+    });
+    restoreCache.mockImplementation(async () => {
+      order.push('restore');
+
+      return undefined;
+    });
+    const backend = createActionsCacheBackend();
+
+    const put = backend.put(LOCK_A, Buffer.from('tar-bytes'));
+    await tick();
+
+    const get = backend.get(LOCK_A);
+    await tick();
+
+    // The get is queued BEHIND the in-flight put: its restoreCache has not run, so
+    // its `rm` cannot delete the archive saveCache is still reading.
+    expect(order).toEqual(['save']);
+
+    saveGate.resolve(42);
+    await expect(put).resolves.toBe('stored');
+    await tick();
+
+    expect(order).toEqual(['save', 'restore']);
+    await expect(get).resolves.toEqual({ kind: 'miss' });
+  });
+
+  it('still runs distinct hashes concurrently (TEST-02)', async () => {
+    const order: string[] = [];
+    const gates: Array<(value: string | undefined) => void> = [];
+    restoreCache.mockImplementation(() => {
+      order.push('restore');
+      const gate = deferred<string | undefined>();
+      gates.push(gate.resolve);
+
+      return gate.promise;
+    });
+    const backend = createActionsCacheBackend();
+
+    const a = backend.get(LOCK_A);
+    const b = backend.get(LOCK_B);
+    await tick();
+
+    // BOTH gets reached restoreCache before EITHER gate was released.
+    expect(order).toHaveLength(2);
+
+    gates[0](undefined);
+    gates[1](undefined);
+    await Promise.all([a, b]);
+  });
+});
+
 describe('createActionsCacheBackend path + key agreement (ROBUST-03)', () => {
   // Non-vacuous: the assertion below compares the RECORDED first argument of both
   // toolkit calls to each other AND to cacheArchivePath(hash) imported from the

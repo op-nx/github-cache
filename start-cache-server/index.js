@@ -68170,53 +68170,75 @@ function cacheKeyFor(hash) {
   return `${CACHE_KEY_PREFIX}${hash}`;
 }
 
+// packages/github-cache/src/lib/with-hash-lock.ts
+var inFlight = /* @__PURE__ */ new Map();
+function withHashLock(hash, fn) {
+  const prior = inFlight.get(hash) ?? Promise.resolve();
+  const result = prior.then(fn, fn);
+  const tail = result.then(
+    () => void 0,
+    () => void 0
+  );
+  inFlight.set(hash, tail);
+  void tail.then(() => {
+    if (inFlight.get(hash) === tail) {
+      inFlight.delete(hash);
+    }
+  });
+  return result;
+}
+
 // packages/github-cache/src/backend/actions-cache-backend.ts
 function createActionsCacheBackend() {
   return {
-    async get(hash) {
-      const path11 = cacheArchivePath(hash);
-      const matched = await restoreCache([path11], cacheKeyFor(hash));
-      if (matched === void 0) {
-        return { kind: "miss" };
-      }
-      try {
-        const bytes = await (0, import_promises.readFile)(path11);
-        return { kind: "hit", bytes };
-      } finally {
-        await (0, import_promises.rm)(path11, { force: true });
-      }
+    get(hash) {
+      return withHashLock(hash, async () => {
+        const path11 = cacheArchivePath(hash);
+        const matched = await restoreCache([path11], cacheKeyFor(hash));
+        if (matched === void 0) {
+          return { kind: "miss" };
+        }
+        try {
+          const bytes = await (0, import_promises.readFile)(path11);
+          return { kind: "hit", bytes };
+        } finally {
+          await (0, import_promises.rm)(path11, { force: true });
+        }
+      });
     },
-    async put(hash, bytes) {
-      const path11 = cacheArchivePath(hash);
-      await (0, import_promises.writeFile)(path11, bytes);
-      try {
-        const cacheId = await saveCache2([path11], cacheKeyFor(hash));
-        if (cacheId > 0) {
-          return "stored";
-        }
-        const present = await restoreCache(
-          [path11],
-          cacheKeyFor(hash),
-          [],
-          {
-            lookupOnly: true
+    put(hash, bytes) {
+      return withHashLock(hash, async () => {
+        const path11 = cacheArchivePath(hash);
+        await (0, import_promises.writeFile)(path11, bytes);
+        try {
+          const cacheId = await saveCache2([path11], cacheKeyFor(hash));
+          if (cacheId > 0) {
+            return "stored";
           }
-        );
-        if (present !== void 0) {
-          return "stored";
+          const present = await restoreCache(
+            [path11],
+            cacheKeyFor(hash),
+            [],
+            {
+              lookupOnly: true
+            }
+          );
+          if (present !== void 0) {
+            return "stored";
+          }
+          warning(
+            `github-cache: saveCache reported no write (id -1) and no entry exists for key ${cacheKeyFor(hash)}; reporting a 409 no-op. Either the runner's cache scope is read-only (a base-scope PR activity type) or the cache service dropped the write.`
+          );
+          return "conflict";
+        } catch (error2) {
+          if (error2 instanceof Error && error2.name === "ReserveCacheError") {
+            return "stored";
+          }
+          throw error2;
+        } finally {
+          await (0, import_promises.rm)(path11, { force: true });
         }
-        warning(
-          `github-cache: saveCache reported no write (id -1) and no entry exists for key ${cacheKeyFor(hash)}; reporting a 409 no-op. Either the runner's cache scope is read-only (a base-scope PR activity type) or the cache service dropped the write.`
-        );
-        return "conflict";
-      } catch (error2) {
-        if (error2 instanceof Error && error2.name === "ReserveCacheError") {
-          return "stored";
-        }
-        throw error2;
-      } finally {
-        await (0, import_promises.rm)(path11, { force: true });
-      }
+      });
     }
   };
 }
@@ -68575,24 +68597,6 @@ function selectBackend(env = process.env) {
   return createActionsCacheBackend();
 }
 
-// packages/github-cache/src/lib/with-hash-lock.ts
-var inFlight = /* @__PURE__ */ new Map();
-function withHashLock(hash, fn) {
-  const prior = inFlight.get(hash) ?? Promise.resolve();
-  const result = prior.then(fn, fn);
-  const tail = result.then(
-    () => void 0,
-    () => void 0
-  );
-  inFlight.set(hash, tail);
-  void tail.then(() => {
-    if (inFlight.get(hash) === tail) {
-      inFlight.delete(hash);
-    }
-  });
-  return result;
-}
-
 // packages/github-cache/src/server/server.ts
 var import_node_crypto4 = require("node:crypto");
 var http3 = __toESM(require("node:http"), 1);
@@ -68741,7 +68745,7 @@ async function serve(options = {}) {
     tracked = {
       ...writable,
       put: (hash, bytes) => {
-        const op = withHashLock(hash, () => writable.put(hash, bytes));
+        const op = writable.put(hash, bytes);
         inFlightPuts.add(op);
         void op.then(
           () => inFlightPuts.delete(op),

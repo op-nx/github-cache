@@ -88,3 +88,28 @@ export function isSyncTrusted(
     ? { trusted: true }
     : { trusted: false, reason: 'not-default-branch' };
 }
+
+/**
+ * Defense-in-depth in-code trust gate for the scheduled cleanup path (CREEP C2 /
+ * RETAIN-03). True ONLY inside GitHub Actions on a SYNC_EVENTS trigger.
+ *
+ * DELIBERATELY narrower than `isSyncTrusted`: it does NOT read the repository default
+ * branch. `isSyncTrusted` resolves `repository.default_branch` from the event payload,
+ * but the `schedule` event GitHub synthesizes is not a documented webhook and does not
+ * CONTRACTUALLY carry that field. If it were ever absent, reusing `isSyncTrusted` on the
+ * cleanup path would return not-default-branch, cleanup would SILENTLY no-op every run,
+ * and the mirror would leak toward the 1000-asset-per-release cap -- the exact
+ * retention-LOCKED failure retention.ts guards. The default-branch check is also
+ * redundant for cleanup: GitHub runs `schedule` ONLY on the default branch, and the
+ * cleanup workflow is schedule-only. So this predicate gates on CI + trusted event alone
+ * and CANNOT fail-closed on the happy path (schedule inside Actions). SYNC_EVENTS stays
+ * the single source of truth for the trusted-event list -- never a second literal.
+ */
+export function isTrustedSyncEvent(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return (
+    env.GITHUB_ACTIONS === 'true' &&
+    (SYNC_EVENTS as readonly string[]).includes(env.GITHUB_EVENT_NAME ?? '')
+  );
+}

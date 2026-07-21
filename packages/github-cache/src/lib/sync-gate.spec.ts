@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SYNC_EVENTS, isSyncTrusted } from './sync-gate.js';
+import { SYNC_EVENTS, isSyncTrusted, isTrustedSyncEvent } from './sync-gate.js';
 
 // isSyncTrusted now returns a discriminated { trusted, reason } union; this helper
 // extracts the boolean so the existing true/false assertions stay unchanged (the
@@ -140,6 +140,68 @@ describe('isSyncTrusted', () => {
     const result = syncTrusted({}, readMain);
 
     expect(result).toBe(false);
+  });
+});
+
+describe('isTrustedSyncEvent (cleanup defense-in-depth gate, CREEP C2 / RETAIN-03)', () => {
+  it('trusts a schedule event inside GitHub Actions', () => {
+    expect(
+      isTrustedSyncEvent({
+        GITHUB_ACTIONS: 'true',
+        GITHUB_EVENT_NAME: 'schedule',
+      }),
+    ).toBe(true);
+  });
+
+  it('trusts a push event inside GitHub Actions', () => {
+    expect(
+      isTrustedSyncEvent({ GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'push' }),
+    ).toBe(true);
+  });
+
+  it('CANNOT fail-closed: trusts schedule with NO GITHUB_EVENT_PATH / no repository.default_branch (RETAIN-03 anti-fail-closed proof)', () => {
+    // The whole reason this gate is NOT isSyncTrusted: the synthesized schedule payload
+    // does not contractually carry repository.default_branch. This env bag has NO
+    // GITHUB_EVENT_PATH at all (and no GITHUB_REF/GITHUB_REF_NAME), so ANY default-branch
+    // dependency would return false and silently disable scheduled retention cleanup.
+    // isTrustedSyncEvent must stay true here -- that is the retention-LOCKED guarantee.
+    expect(
+      isTrustedSyncEvent({
+        GITHUB_ACTIONS: 'true',
+        GITHUB_EVENT_NAME: 'schedule',
+      }),
+    ).toBe(true);
+  });
+
+  it('refuses pull_request even inside GitHub Actions', () => {
+    expect(
+      isTrustedSyncEvent({
+        GITHUB_ACTIONS: 'true',
+        GITHUB_EVENT_NAME: 'pull_request',
+      }),
+    ).toBe(false);
+  });
+
+  it('refuses workflow_dispatch even inside GitHub Actions', () => {
+    expect(
+      isTrustedSyncEvent({
+        GITHUB_ACTIONS: 'true',
+        GITHUB_EVENT_NAME: 'workflow_dispatch',
+      }),
+    ).toBe(false);
+  });
+
+  it('refuses a schedule event outside GitHub Actions (GITHUB_ACTIONS !== "true")', () => {
+    expect(
+      isTrustedSyncEvent({
+        GITHUB_ACTIONS: 'false',
+        GITHUB_EVENT_NAME: 'schedule',
+      }),
+    ).toBe(false);
+  });
+
+  it('default-denies an empty env bag', () => {
+    expect(isTrustedSyncEvent({})).toBe(false);
   });
 });
 

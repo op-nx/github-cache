@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import type { Hash } from './cache-key.js';
 import { describe, expect, it } from 'vitest';
-import { cachePlatform, releaseAssetName } from './release-asset-name.js';
+import {
+  CACHE_OS_VALUES,
+  cachePlatform,
+  isServerProducedAssetName,
+  releaseAssetName,
+} from './release-asset-name.js';
 
 // CORR-01 / TEST-05, non-vacuous: the expected asset names below are spelled out
 // as string literals ON PURPOSE, not rebuilt from the same `${hash}-${platform}`
@@ -53,6 +58,45 @@ describe('cachePlatform (CORR-01)', () => {
 
   it('resolves the running platform when called with no argument (CORR-01)', () => {
     expect(cachePlatform()).toBe(cachePlatform(process.platform));
+  });
+});
+
+describe('isServerProducedAssetName server-produced <hash>-<os> guard', () => {
+  // The exact accept/reject sets are pinned so the cleanup asset-name narrowing
+  // cannot silently widen. Mirrors the isServerProducedKey discipline: only a valid
+  // lowercase-hex hash + a known OS discriminator is ours.
+  it.each([
+    'abc123-linux',
+    'deadbeef-windows',
+    '0-macos',
+    `${'a'.repeat(512)}-linux`,
+  ])('accepts the genuine asset name %s', (name) => {
+    expect(isServerProducedAssetName(name)).toBe(true);
+  });
+
+  it.each([
+    'ABC123-linux',
+    'abc123-Linux',
+    'abc123-freebsd',
+    'abc123',
+    '-linux',
+    'abc123-',
+    'xyz-linux',
+    'notes-backup',
+  ])('rejects the non-server-produced name %s', (name) => {
+    expect(isServerProducedAssetName(name)).toBe(false);
+  });
+
+  it('round-trips with releaseAssetName so the accepter never drifts from the producer', () => {
+    for (const platform of ['win32', 'darwin', 'linux'] as const) {
+      expect(
+        isServerProducedAssetName(releaseAssetName('abc123' as Hash, platform)),
+      ).toBe(true);
+    }
+  });
+
+  it('validates the OS half against the single-sourced CACHE_OS_VALUES', () => {
+    expect(CACHE_OS_VALUES).toEqual(['windows', 'macos', 'linux']);
   });
 });
 

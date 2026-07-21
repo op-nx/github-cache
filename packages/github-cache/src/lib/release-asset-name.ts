@@ -1,4 +1,11 @@
-import type { Hash } from './cache-key.js';
+import { HASH_PATTERN, type Hash } from './cache-key.js';
+
+/**
+ * The OS discriminators folded into every Release asset name (D-06). Authored ONCE
+ * as a runtime tuple so `isServerProducedAssetName` can validate the OS half against
+ * a real value set without a second copy of the literals; `CacheOs` derives from it.
+ */
+export const CACHE_OS_VALUES = ['windows', 'macos', 'linux'] as const;
 
 /**
  * Map the running platform to the OS discriminator folded into every Release
@@ -7,7 +14,7 @@ import type { Hash } from './cache-key.js';
  * `process.platform` -- compiled-in, emulation-proof, and shell-invariant -- not
  * `env:RUNNER_OS`, which is CI-only and absent locally.
  */
-export type CacheOs = 'windows' | 'macos' | 'linux';
+export type CacheOs = (typeof CACHE_OS_VALUES)[number];
 
 export function cachePlatform(
   platform: NodeJS.Platform = process.platform,
@@ -45,4 +52,32 @@ export function releaseAssetName(
   platform: NodeJS.Platform = process.platform,
 ): string {
   return `${hash}-${cachePlatform(platform)}`;
+}
+
+/**
+ * Whether an asset name is the publisher's `<hash>-<os>` shape -- a valid
+ * lowercase-hex hash followed by one of the CACHE_OS_VALUES discriminators
+ * (equivalent to `^[a-f0-9]{1,512}-(windows|macos|linux)$`). Mirrors the
+ * `isServerProducedKey` discipline: the cleanup delete filter uses it so a foreign
+ * asset dropped into a genuine month-shard release is never pruned as ours.
+ *
+ * Reuses HASH_PATTERN for the hash half and CACHE_OS_VALUES for the OS half so
+ * neither the hex char-class nor the OS literals are re-authored. Splits on the
+ * LAST `-` (a hash is hex, so it holds no dash -- the last dash is the separator);
+ * a name with no dash, an empty hash, a non-hex hash, or an unknown OS is rejected.
+ */
+export function isServerProducedAssetName(name: string): boolean {
+  const separator = name.lastIndexOf('-');
+
+  if (separator < 0) {
+    return false;
+  }
+
+  const hash = name.slice(0, separator);
+  const os = name.slice(separator + 1);
+
+  return (
+    HASH_PATTERN.test(hash) &&
+    (CACHE_OS_VALUES as readonly string[]).includes(os)
+  );
 }

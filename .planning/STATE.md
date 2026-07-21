@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 6
 Plan: Not started
-Status: Milestone v0.0.1 shipped -- PR #3 (post-review remediation quicks 260721-g1p + 260721-pej; CI green)
-Last activity: 2026-07-21 - Completed quick task 260721-pej: read-only backend put-less split (spec-compliant; verifier passed)
+Status: Milestone v0.0.1 shipped -- PR #3 (post-review remediation quicks 260721-g1p + 260721-pej + 260721-qk1; CI green)
+Last activity: 2026-07-21 - Completed quick task 260721-qk1: PR #3 /code-review max remediation (retention sub-1-day floor + POSIX bin shebang + nx test-input wiring + meta-guard strengthenings); full CI battery green
 
 Progress: [██████████] 100% of planned plans (phase 5 pending verification)
 
@@ -171,6 +171,7 @@ None yet.
 | 260721-eac | Address A1 and A2: remove orphaned trust.generated write-trust loop (TRUST-04) + flip TRUST-07 checkbox; residual-ref scrub | 2026-07-21 | 70213b0 | Verified | [260721-eac-address-a1-and-a2-in-this-branch](./quick/260721-eac-address-a1-and-a2-in-this-branch/) |
 | 260721-g1p | Address v0.0.1 PR #3 review findings (C1 Critical + all silent-failure + I5/I6 coverage + I1 integration tests + dedup/branded-Hash/trust-union/comments); 2 items deliberately not taken (would degrade shipped code) | 2026-07-21 | 6d268ac | Verified | [260721-g1p-audit-and-triage-all-findings-then-addre](./quick/260721-g1p-audit-and-triage-all-findings-then-addre/) |
 | 260721-pej | Read-only backend put-less split (type-design #5), spec-compliant: read-only backends drop put, server owns the Nx-OpenAPI 403-on-PUT-to-read-only; 'forbidden' PutResult removed (supersedes g1p's declined verdict) | 2026-07-21 | ebb62fd | Verified | [260721-pej-read-only-backend-put-less-split-in-comp](./quick/260721-pej-read-only-backend-put-less-split-in-comp/) |
+| 260721-qk1 | PR #3 review remediation round 3 (/code-review max, 16 findings triaged): retention sub-1-day floor (HIGH, retention-locked violation), POSIX bin shebang, nx test-input wiring + dead storybook input, 3 meta-guard strengthenings (one uncovered an unscanned-manifest path bug); full CI battery green | 2026-07-21 | dd71737 | Verified | [260721-qk1-address-triaged-code-review-findings-on-](./quick/260721-qk1-address-triaged-code-review-findings-on-/) |
 
 ## Deferred Items
 

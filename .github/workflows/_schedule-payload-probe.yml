@@ -1,0 +1,31 @@
+name: schedule payload probe (temporary)
+
+# TEMPORARY diagnostic. Proves whether the SYNTHESIZED `schedule` event payload
+# carries `repository.default_branch` (the field `isSyncTrusted` reads). Reverted
+# after one scheduled run. No `${{ }}` interpolation into run: (no injection);
+# reads everything from runtime env + jq on $GITHUB_EVENT_PATH.
+on:
+  schedule:
+    # Tightest allowed cadence (5 min) so the first real schedule run lands soon.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump event context
+        run: |
+          echo "event_name=$GITHUB_EVENT_NAME"
+          echo "ref=$GITHUB_REF"
+          echo "ref_name=$GITHUB_REF_NAME"
+          echo "GITHUB_ACTIONS=$GITHUB_ACTIONS"
+          echo "----- repository.default_branch from GITHUB_EVENT_PATH -----"
+          jq -r '.repository.default_branch // "<ABSENT>"' "$GITHUB_EVENT_PATH"
+          echo "----- top-level keys of the event payload -----"
+          jq -r 'keys' "$GITHUB_EVENT_PATH"
+          echo "----- full payload -----"
+          cat "$GITHUB_EVENT_PATH"

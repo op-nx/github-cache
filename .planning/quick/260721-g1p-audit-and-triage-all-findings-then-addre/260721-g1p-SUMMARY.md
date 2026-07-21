@@ -57,7 +57,10 @@ two were intentionally NOT taken because implementing them degrades correct code
 - **`package.json` dependency split** (code-reviewer #6): `@actions/cache`/`@octokit/rest`
   are genuine runtime deps of the shipped CLI bin + Action entrypoints; moving them to
   peer/optional to lighten a barrel-only consumer breaks `npm i` for CLI users -- a
-  breaking change to the published v0.0.1 contract.
+  breaking change to the published v0.0.1 contract. **DEFERRED to a later milestone as
+  PKG-SPLIT** (ROADMAP.md "Deferred to a later milestone"; STATE.md Deferred Items) per
+  the maintainer -- the only non-breaking fix is a real package restructure (zero-dep
+  barrel package + a separate CLI/Action package), its own planned change.
 
 The systemic future-tense comment pass (comment-analyzer #4, "low priority, don't
 contradict code") was satisfied by fixing the actively-misleading comments (Wave 4);

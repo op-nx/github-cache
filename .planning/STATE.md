@@ -180,6 +180,7 @@ Items acknowledged and carried forward:
 | Storage | GHCR/OCI as an additional synced store (GHCR-01) | later-milestone revisit trigger (with PROV-01 + Docker) | 2026-07-18 |
 | Provenance | Cosign keyless attestation (PROV-01) | a later milestone | 2026-07-18 |
 | Distribution | Docker container form (FOUND-03) | a later milestone | 2026-07-18 |
+| Packaging | Zero-dep barrel vs CLI/Action package split (PKG-SPLIT, PR #3 review code-reviewer #6) | a later milestone (needs a package restructure; peer/optional half-measure would break the published CLI-bin contract) | 2026-07-21 |
 
 ## Session Continuity
 

@@ -662,6 +662,16 @@ Listed for completeness. These are NOT v0.0.1 work and are intentionally unmappe
   GA background-step pattern (DOCS-06) + the `&` fallback; residual niche is hermetic / non-Node
   CI (FOUND-03).
 
+- **PKG-SPLIT** (a later milestone): split the npm package so the zero-dep public barrel
+  (`createCacheServer` + port types, Node-builtins-only) ships separately from the CLI bin +
+  JS-Action/publish/cleanup entrypoints that carry the `@actions/cache` (Azure SDK graph) +
+  `@octokit/rest` runtime deps. A programmatic `createCacheServer` consumer currently `npm i`s the
+  whole heavy tree it never executes (PR #3 review code-reviewer #6). Deferred because the only
+  non-breaking fix is a real package restructure: making the deps peer/optional in the single
+  package would break `npm i` + the `github-cache` CLI bin (dist/serve.js needs `@actions/cache` at
+  runtime) - a breaking change to the published v0.0.1 consumer contract + the pack-check/
+  docs-adoption gates. Best done as its own planned change, not a review-remediation quick task.
+
 - **Out of scope entirely:** synchronous write fan-out; a local read-write store; multiple
   simultaneous stores; CONTRIBUTING / maintenance statement; LRU via a stateful manifest;
   content signing as a CREEP control; hosted/managed cache service; streaming large bodies; a

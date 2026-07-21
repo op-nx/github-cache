@@ -295,14 +295,22 @@ jobs:
           token="${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN:?NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN not set (pre-set regular step missing?)}"
           auth="Authorization: Bearer ${token}"
           # Wait for the loopback sidecar to accept connections: an authed GET on
-          # an unknown hash returns 404 (up); connection-refused keeps code=000.
+          # an unknown hash returns 404 (up). On connection-refused, curl's -w
+          # already prints 000 and exits non-zero, so swallow the exit with `|| true`
+          # -- NOT `|| echo 000`, which appends a second 000 so code becomes "000000"
+          # (!= "000") and breaks the poll on iteration 1 before the server binds.
+          code=000
           for _ in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${server}/v1/cache/deadbeef" || echo 000)
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${server}/v1/cache/deadbeef" || true)
             if [ "${code}" != "000" ]; then
               break
             fi
             sleep 1
           done
+          if [ "${code}" = "000" ]; then
+            echo "sidecar never accepted connections on ${server} after 30s" >&2
+            exit 1
+          fi
           # PUT a payload keyed on the run id (all-decimal -> valid ^[a-f0-9]+$),
           # then read it back and byte-compare: a real round-trip through the
           # write-trusted Actions-cache backend.

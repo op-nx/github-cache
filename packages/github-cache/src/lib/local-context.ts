@@ -104,6 +104,14 @@ function runHelper(
     });
 
     if (stdin !== undefined) {
+      // Never-crash contract: child.on('error') above only covers spawn faults
+      // (ENOENT), NOT errors on the stdin stream. If git is missing or the child
+      // dies before draining, writing to stdin emits an 'error' (EPIPE) on THIS
+      // emitter; with no listener that becomes an unhandled 'error' and crashes
+      // the process -- the exact wedge this module must degrade past. Swallow it:
+      // a failed credential-helper write just means this tier yielded nothing,
+      // and the 'close'/'error' handlers already resolve(undefined).
+      child.stdin?.on('error', () => {});
       child.stdin?.end(stdin);
     }
   });

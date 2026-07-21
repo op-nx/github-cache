@@ -30,14 +30,16 @@ interface Outcome {
 interface FakeChild {
   stdout: EventEmitter;
   stderr: EventEmitter;
-  stdin: { end: ReturnType<typeof vi.fn> };
+  stdin: { end: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> };
   on(event: string, handler: (arg: unknown) => void): FakeChild;
 }
 
 // A minimal fake child: stdout/stderr are EventEmitters, stdin records what end()
-// received, and on() captures the wrapper's error/close listeners. The events are
-// driven on the next microtask so the wrapper has attached all of its listeners
-// synchronously first (it does so immediately after spawn returns).
+// received and exposes on() (a real stdin Writable has one; the wrapper attaches an
+// 'error' listener to swallow EPIPE), and child.on() captures the wrapper's
+// error/close listeners. The events are driven on the next microtask so the wrapper
+// has attached all of its listeners synchronously first (it does so immediately
+// after spawn returns).
 function fakeChild(outcome: Outcome): FakeChild {
   const stdout = new EventEmitter();
   const stderr = new EventEmitter();
@@ -46,7 +48,7 @@ function fakeChild(outcome: Outcome): FakeChild {
   const child: FakeChild = {
     stdout,
     stderr,
-    stdin: { end: vi.fn() },
+    stdin: { end: vi.fn(), on: vi.fn() },
     on(event, handler) {
       listeners.set(event, handler);
 

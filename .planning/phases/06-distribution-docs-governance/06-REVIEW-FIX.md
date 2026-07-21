@@ -68,6 +68,37 @@ public-surface guard tests.
 
 None.
 
+## Post-review live-CI fix: DOCS-06 background-step export handshake
+
+**Surfaced by:** a live GitHub Actions push. The `consumer-smoke` job failed with
+`NX_SELF_HOSTED_REMOTE_CACHE_SERVER: background start-cache-server step did not
+export the server url`.
+
+**Root cause:** a `background: true` step's `core.exportVariable(...)` writes to
+`$GITHUB_ENV`, which the runner only processes AFTER a step COMPLETES -- and a
+background step does not complete until its `cancel:` teardown. So the action's
+`exportVariable('NX_SELF_HOSTED_REMOTE_CACHE_SERVER'/'_ACCESS_TOKEN', ...)` calls
+never reached later steps. The "action generates + exports the URL/token"
+handshake cannot work for a background step.
+
+**Fix (consumer-pre-sets / action-adopts):** `serve()` already adopts
+`process.env.NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` (via `||`) and
+`options.port ?? process.env.PORT`, so the consumer pre-sets the token + a fixed
+port in a REGULAR step (whose `$GITHUB_ENV` writes propagate) and the action
+adopts them.
+
+| Commit    | Change                                                                                  |
+| --------- | --------------------------------------------------------------------------------------- |
+| `c47fa1c` | `entry.ts`: drop both `exportVariable` calls; fail fast if the token is unset; adopt token (env) + port (input); mask token + log the url. Rebuilt esbuild bundle `index.js`; `action.yml` documents the pre-set/adopt pattern. |
+| `fb23e92` | `.github/workflows/ci.yml`: `consumer-smoke` pre-sets both `NX_*` vars in a regular step + passes `port: '3000'` to the background step. |
+| `a92243a` | `README.md`, `docs/examples/minimal-ci.yml`, `docs/configuration.md`: consumer docs show the pre-set/adopt pattern. |
+
+**Local verification:** `check:action` exit 0 (bundle in sync); `nx test
+github-cache` 474 passed (docs-adoption + public-surface guards); `pack:check`
+exit 0 (no tarball leaks); `nx format:check --all` clean; `package-lock.json`
+untouched. `docs/advanced.md`'s `&`-fallback (WR-02) already used the pre-set
+pattern, so it was left unchanged.
+
 ---
 
 _Fixed: 2026-07-21_

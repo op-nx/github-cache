@@ -15,9 +15,9 @@ export function withHashLock<T>(
 ): Promise<T> {
   const prior = inFlight.get(hash) ?? Promise.resolve();
   // Chain AFTER prior settles (resolve OR reject) so one rejection never wedges
-  // the queue -- `.then(run, run)` runs `fn` in both branches.
-  const run = (): Promise<T> => fn();
-  const result = prior.then(run, run);
+  // the queue -- `.then(fn, fn)` runs `fn` in both branches (fn ignores the
+  // settled value/reason `.then` passes it).
+  const result = prior.then(fn, fn);
   // Store a non-rejecting tail so a failed op cannot reject a later waiter's chain.
   const tail = result.then(
     () => undefined,

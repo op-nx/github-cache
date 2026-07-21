@@ -68577,8 +68577,7 @@ function selectBackend(env = process.env) {
 var inFlight = /* @__PURE__ */ new Map();
 function withHashLock(hash, fn) {
   const prior = inFlight.get(hash) ?? Promise.resolve();
-  const run2 = () => fn();
-  const result = prior.then(run2, run2);
+  const result = prior.then(fn, fn);
   const tail = result.then(
     () => void 0,
     () => void 0

@@ -68205,9 +68205,10 @@ function createActionsCacheBackend() {
         if (present !== void 0) {
           return "stored";
         }
-        throw new Error(
-          `github-cache: saveCache reported no write (id -1) and no entry exists for key ${cacheKeyFor(hash)}; treating as a failed write (fail-closed, SRV-05/D-06).`
+        warning(
+          `github-cache: saveCache reported no write (id -1) and no entry exists for key ${cacheKeyFor(hash)}; reporting a 409 no-op. Either the runner's cache scope is read-only (a base-scope PR activity type) or the cache service dropped the write.`
         );
+        return "conflict";
       } catch (error2) {
         if (error2 instanceof Error && error2.name === "ReserveCacheError") {
           return "stored";

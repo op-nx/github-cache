@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { rm, writeFile } from 'node:fs/promises';
 import * as cache from '@actions/cache';
+import * as core from '@actions/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cacheArchivePath } from '../lib/cache-archive-path.js';
 import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
@@ -14,8 +15,15 @@ import { createActionsCacheBackend } from './actions-cache-backend.js';
 // auto-replaces each @actions/cache export with a vi.fn().
 vi.mock('@actions/cache');
 
+// @actions/core is mocked so the ambiguous-denial warning is spy-assertable and
+// never touches a real workflow-command stream (D-14).
+vi.mock('@actions/core', () => ({
+  warning: vi.fn(),
+}));
+
 const restoreCache = vi.mocked(cache.restoreCache);
 const saveCache = vi.mocked(cache.saveCache);
+const warning = vi.mocked(core.warning);
 
 const HASH = 'abc123' as Hash;
 
@@ -88,15 +96,39 @@ describe('createActionsCacheBackend put (ROBUST-03)', () => {
     );
   });
 
-  it('throws when saveCache resolves -1 but no entry exists, so a swallowed write fault fails closed instead of a silent 200 (SRV-05/D-06) (ROBUST-03)', async () => {
+  // The real trigger is a base-scope read-only PR activity type (for example
+  // `pull_request` `[closed]`), NOT "all fork PRs" -- an ordinary fork PR writes its
+  // own isolated scope and succeeds.
+  it('returns "conflict" when saveCache resolves -1 but no entry exists, so an ambiguous denial answers 409 rather than 500 (ADR C1, D-04) (ROBUST-03)', async () => {
     saveCache.mockResolvedValue(-1);
-    // The -1 probe finds nothing -> the -1 was a swallowed fault, not an existing entry.
+    // The -1 probe finds nothing -> the -1 was a swallowed fault or a scope denial.
     restoreCache.mockResolvedValue(undefined);
     const backend = createActionsCacheBackend();
 
-    await expect(backend.put(HASH, Buffer.from('tar-bytes'))).rejects.toThrow(
-      /failed write \(fail-closed/,
-    );
+    const result = await backend.put(HASH, Buffer.from('tar-bytes'));
+
+    expect(result).toBe('conflict');
+  });
+
+  it('emits exactly one warning naming the cache key on the ambiguous-denial branch (OBS-01) (ROBUST-03)', async () => {
+    saveCache.mockResolvedValue(-1);
+    restoreCache.mockResolvedValue(undefined);
+    const backend = createActionsCacheBackend();
+
+    await backend.put(HASH, Buffer.from('tar-bytes'));
+
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning.mock.calls[0][0]).toContain(cacheKeyFor(HASH));
+  });
+
+  it('still removes the temp archive on the ambiguous-denial branch (T-2-11) (ROBUST-03)', async () => {
+    saveCache.mockResolvedValue(-1);
+    restoreCache.mockResolvedValue(undefined);
+    const backend = createActionsCacheBackend();
+
+    await backend.put(HASH, Buffer.from('tar-bytes'));
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(false);
   });
 
   it('returns "stored" when saveCache rejects with a ReserveCacheError (benign no-op, D-04) (ROBUST-03)', async () => {

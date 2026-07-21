@@ -1,5 +1,6 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import * as cache from '@actions/cache';
+import * as core from '@actions/core';
 import { cacheArchivePath } from '../lib/cache-archive-path.js';
 import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
 import type { CacheBackend, GetResult, PutResult } from './types.js';
@@ -19,9 +20,9 @@ import type { CacheBackend, GetResult, PutResult } from './types.js';
  * that is the upstream write gate's job (D-01) -- and this factory must never
  * grow a mode argument (TRUST-05).
  *
- * This backend never returns 'forbidden' (403 is the read-only backend's job) and
- * never returns 'conflict' (409 belongs to the contract layer, and to Phase 4 for
- * the mirror), so a reader should not go looking for those branches here.
+ * This backend never returns 'forbidden' (403 is the read-only backend's job). It
+ * DOES return 'conflict' on one branch: an ambiguous saveCache no-op, which the
+ * contract layer maps to the Nx client's benign 409 (see put).
  */
 export function createActionsCacheBackend(): CacheBackend {
   return {
@@ -64,8 +65,22 @@ export function createActionsCacheBackend(): CacheBackend {
         // Disambiguate the two -1 causes with a lookupOnly existence probe (no
         // download): if the entry IS present, it was a benign already-exists (or
         // a concurrent job's write) and 'stored' is correct; if it is ABSENT, the
-        // -1 was a swallowed fault, so throw and let the server fail closed (500)
-        // rather than report a write that never persisted.
+        // write did not land and the response must not be a silent 200.
+        //
+        // That absent branch answers 'conflict' (409), not a throw.
+        // ARCHITECTURE-DECISION.md control C1 states a blocked PR write is a
+        // benign 409/no-op, and the Nx client treats 409 as a graceful no-op -- so
+        // 409 satisfies SRV-05/D-06's actual requirement (no silent 200) without
+        // the build-breaking 500 the throw produced via server.ts's put-fault
+        // handler. The predecessor did exactly this
+        // (`cacheId === -1 ? 'conflict' : 'stored'`). The real trigger is a
+        // base-scope read-only PR activity type (for example `pull_request`
+        // `[closed]`); an ordinary fork PR writes its own isolated scope and
+        // succeeds.
+        //
+        // The warning exists because a scope denial and a genuine cache-service
+        // outage are indistinguishable at this layer BY DESIGN -- @actions/cache
+        // collapses both to -1. Warn, never fail the build.
         const cacheId = await cache.saveCache([path], cacheKeyFor(hash));
 
         if (cacheId > 0) {
@@ -85,9 +100,11 @@ export function createActionsCacheBackend(): CacheBackend {
           return 'stored';
         }
 
-        throw new Error(
-          `github-cache: saveCache reported no write (id -1) and no entry exists for key ${cacheKeyFor(hash)}; treating as a failed write (fail-closed, SRV-05/D-06).`,
+        core.warning(
+          `github-cache: saveCache reported no write (id -1) and no entry exists for key ${cacheKeyFor(hash)}; reporting a 409 no-op. Either the runner's cache scope is read-only (a base-scope PR activity type) or the cache service dropped the write.`,
         );
+
+        return 'conflict';
       } catch (error) {
         // Defense-in-depth: if a future @actions/cache version throws a
         // ReserveCacheError instead of returning -1, a reserve conflict still

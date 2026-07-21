@@ -31,11 +31,18 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * tag scheme has exactly one home. Computed from the clock (not a fixed constant) so it
  * already tracks the current month.
  */
+/**
+ * The month-shard tag prefix. Authored HERE, the one home for the tag scheme, so the
+ * cleanup engine's `startsWith` scope filter cannot drift from the tag shardTag builds
+ * (I8). Never inline a second copy of this literal.
+ */
+export const SHARD_TAG_PREFIX = 'cache-mirror-';
+
 export function shardTag(date: Date = new Date()): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
 
-  return `cache-mirror-${year}${month}`;
+  return `${SHARD_TAG_PREFIX}${year}${month}`;
 }
 
 /**

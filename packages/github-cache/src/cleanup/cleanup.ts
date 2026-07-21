@@ -1,4 +1,6 @@
 import * as core from '@actions/core';
+import { statusOf } from '../lib/octokit-status.js';
+import { SHARD_TAG_PREFIX } from '../lib/retention.js';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -37,23 +39,6 @@ export interface CleanupResult {
 }
 
 /**
- * Duck-type the numeric status off an Octokit-shaped fault (ROBUST-01, D-04). Never
- * `instanceof RequestError` (two @octokit/request-error versions can coexist in the
- * dependency tree) and never stderr text: discrimination is STRUCTURAL on error.status.
- */
-function statusOf(error: unknown): number | undefined {
-  if (
-    error !== null &&
-    typeof error === 'object' &&
-    typeof (error as { status?: unknown }).status === 'number'
-  ) {
-    return (error as { status: number }).status;
-  }
-
-  return undefined;
-}
-
-/**
  * Age-based prune of the GitHub Releases mirror (D-06/D-09/D-10, RETAIN-01/TEST-04),
  * behind the injected CleanupClient so it runs with no network. Two strictly ordered
  * phases:
@@ -89,7 +74,7 @@ export async function cleanupMirror(
   let scanned = 0;
 
   for (const release of releases) {
-    if (!release.tag_name.startsWith('cache-mirror-')) {
+    if (!release.tag_name.startsWith(SHARD_TAG_PREFIX)) {
       continue;
     }
 

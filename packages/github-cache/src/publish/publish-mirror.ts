@@ -1,6 +1,8 @@
 import * as core from '@actions/core';
 import { createActionsCacheBackend } from '../backend/actions-cache-backend.js';
+import type { GetResult } from '../backend/types.js';
 import { CACHE_KEY_PREFIX, isServerProducedKey } from '../lib/cache-key.js';
+import { statusOf } from '../lib/octokit-status.js';
 import { releaseAssetName } from '../lib/release-asset-name.js';
 import { shardTag } from '../lib/retention.js';
 
@@ -20,9 +22,12 @@ export const RELEASE_ASSET_MAX_BYTES = 2 * 1024 * 1024 * 1024;
  */
 export const RELEASE_ASSET_CAP = 1000;
 
-/** The single restore-result shape the engine consumes (mirrors the CacheBackend get). */
-export type GetResult =
-  { readonly kind: 'hit'; readonly bytes: Buffer } | { readonly kind: 'miss' };
+// The restore-result the engine consumes IS the CacheBackend's GetResult
+// (actionsCache.get returns it), so re-export the single-source type from
+// backend/types instead of re-declaring a structurally-identical copy that would
+// silently diverge if the canonical hit variant ever grew a field (I7). Consumers
+// (publish-mirror.spec) keep importing GetResult from this module unchanged.
+export type { GetResult };
 
 /** An Actions-cache entry as the publisher needs it: only its key drives the mirror. */
 export interface CacheEntry {
@@ -68,25 +73,6 @@ export interface PublishResult {
 /** Test-injection knobs only (no runtime mode surface). `now` pins the shard tag. */
 export interface PublishOptions {
   readonly now?: Date;
-}
-
-/**
- * Duck-type the numeric status off an Octokit-shaped fault (ROBUST-01, D-04). Never
- * `instanceof RequestError` (two @octokit/request-error versions can coexist in the
- * dependency tree) and never stderr text: discrimination is STRUCTURAL on error.status.
- * Inlined rather than shared with cleanup.ts so this engine imports nothing from a
- * sibling module (the same 8-line duck-type ships in both, matching the 04-03 precedent).
- */
-function statusOf(error: unknown): number | undefined {
-  if (
-    error !== null &&
-    typeof error === 'object' &&
-    typeof (error as { status?: unknown }).status === 'number'
-  ) {
-    return (error as { status: number }).status;
-  }
-
-  return undefined;
 }
 
 /**

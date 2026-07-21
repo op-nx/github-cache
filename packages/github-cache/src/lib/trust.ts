@@ -46,26 +46,46 @@ function hostSupportsWidenedTrust(env: NodeJS.ProcessEnv): boolean {
 }
 
 /**
- * Default-deny write-trust predicate (TRUST-01/TRUST-03): true only when the
+ * Why a write-trust check degraded to read-only. Surfaced so a silent read-only
+ * degrade (e.g. a mis-set GHES host, or a non-CI invocation) is observable at the
+ * call site instead of an opaque `false` (type-design #6).
+ */
+export type WriteUntrustedReason =
+  'not-ci' | 'untrusted-event' | 'untrusted-host';
+
+/** Discriminated write-trust result: trusted, or not-trusted WITH the reason. */
+export type WriteTrust =
+  | { readonly trusted: true }
+  | { readonly trusted: false; readonly reason: WriteUntrustedReason };
+
+/**
+ * Default-deny write-trust predicate (TRUST-01/TRUST-03): trusted only when the
  * process runs in GitHub Actions AND either the event is a host-independent base
  * writer, or a host-gated widened event on a host that carries GitHub's guard.
  * Pure and injectable -- the env bag is the sole input; no caller/mode flag
- * (TRUST-05 / D-02: exactly one env parameter with a default).
+ * (TRUST-05 / D-02: exactly one env parameter with a default). Returns a
+ * discriminated union so the DEGRADE REASON is observable, never a bare boolean;
+ * the trust DECISION for every input is unchanged from the prior boolean form.
  */
-export function isWriteTrusted(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isWriteTrusted(
+  env: NodeJS.ProcessEnv = process.env,
+): WriteTrust {
   if (env.GITHUB_ACTIONS !== 'true') {
-    return false; // not CI -> never RW
+    return { trusted: false, reason: 'not-ci' }; // not CI -> never RW
   }
 
   const event = env.GITHUB_EVENT_NAME ?? '';
 
   if ((TRUSTED_EVENTS as readonly string[]).includes(event)) {
-    return true; // base writers: trusted on any host
+    return { trusted: true }; // base writers: trusted on any host
   }
 
   if ((HOST_GATED_EVENTS as readonly string[]).includes(event)) {
-    return hostSupportsWidenedTrust(env); // widened: only where the guard exists
+    // widened: only where the guard exists
+    return hostSupportsWidenedTrust(env)
+      ? { trusted: true }
+      : { trusted: false, reason: 'untrusted-host' };
   }
 
-  return false; // default-deny, no denylist
+  return { trusted: false, reason: 'untrusted-event' }; // default-deny, no denylist
 }

@@ -46,29 +46,45 @@ function defaultBranch(env: NodeJS.ProcessEnv): string | undefined {
  * runtime input and `readDefaultBranch` is injected in tests so the predicate
  * never touches the filesystem.
  */
+/**
+ * Why a sync-trust check refused to publish. Surfaced so a skipped mirror is
+ * observable with its cause rather than an opaque `false` (type-design #6).
+ */
+export type SyncUntrustedReason =
+  'not-ci' | 'untrusted-event' | 'not-default-branch';
+
+/** Discriminated sync-trust result: trusted, or not-trusted WITH the reason. */
+export type SyncTrust =
+  | { readonly trusted: true }
+  | { readonly trusted: false; readonly reason: SyncUntrustedReason };
+
 export function isSyncTrusted(
   env: NodeJS.ProcessEnv = process.env,
   readDefaultBranch: (
     e: NodeJS.ProcessEnv,
   ) => string | undefined = defaultBranch,
-): boolean {
+): SyncTrust {
   if (env.GITHUB_ACTIONS !== 'true') {
-    return false; // not CI -> never sync
+    return { trusted: false, reason: 'not-ci' }; // not CI -> never sync
   }
 
   if (
     !(SYNC_EVENTS as readonly string[]).includes(env.GITHUB_EVENT_NAME ?? '')
   ) {
-    return false; // rejects pull_request/release/dispatch/merge_group/delete/etc.
+    // rejects pull_request/release/dispatch/merge_group/delete/etc.
+    return { trusted: false, reason: 'untrusted-event' };
   }
 
   const ref = env.GITHUB_REF ?? '';
 
   if (!ref.startsWith('refs/heads/')) {
-    return false; // rejects tags and other non-branch refs
+    // rejects tags and other non-branch refs
+    return { trusted: false, reason: 'not-default-branch' };
   }
 
   const def = readDefaultBranch(env);
 
-  return def !== undefined && (env.GITHUB_REF_NAME ?? '') === def;
+  return def !== undefined && (env.GITHUB_REF_NAME ?? '') === def
+    ? { trusted: true }
+    : { trusted: false, reason: 'not-default-branch' };
 }

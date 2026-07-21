@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SYNC_EVENTS, isSyncTrusted } from './sync-gate.js';
 
+// isSyncTrusted now returns a discriminated { trusted, reason } union; this helper
+// extracts the boolean so the existing true/false assertions stay unchanged (the
+// trust DECISION is what these tests pin, not the result shape).
+const syncTrusted = (...args: Parameters<typeof isSyncTrusted>): boolean =>
+  isSyncTrusted(...args).trusted;
+
 // Every trigger that must be REFUSED even inside GitHub Actions on the default
 // branch (TRUST-02 / D-01). Fork-reachable, dispatch, and other non-sync events
 // the publish path must never mirror for. This list is DISTINCT from trust.ts's
@@ -40,7 +46,7 @@ function syncEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 
 describe('isSyncTrusted', () => {
   it('trusts push on the default branch inside GitHub Actions (TRUST-02)', () => {
-    const result = isSyncTrusted(
+    const result = syncTrusted(
       syncEnv({ GITHUB_EVENT_NAME: 'push' }),
       readMain,
     );
@@ -49,7 +55,7 @@ describe('isSyncTrusted', () => {
   });
 
   it('trusts schedule on the default branch inside GitHub Actions (TRUST-02)', () => {
-    const result = isSyncTrusted(
+    const result = syncTrusted(
       syncEnv({ GITHUB_EVENT_NAME: 'schedule' }),
       readMain,
     );
@@ -59,7 +65,7 @@ describe('isSyncTrusted', () => {
 
   for (const event of REFUSED_EVENTS) {
     it(`refuses ${event} even on the default branch inside GitHub Actions (TRUST-02)`, () => {
-      const result = isSyncTrusted(
+      const result = syncTrusted(
         syncEnv({ GITHUB_EVENT_NAME: event }),
         readMain,
       );
@@ -71,7 +77,7 @@ describe('isSyncTrusted', () => {
   it('refuses a push on a non-default branch (TRUST-02)', () => {
     // Non-vacuous default-branch check: event + refs/heads/ prefix both pass, so
     // the ONLY failing condition is branch != repository.default_branch.
-    const result = isSyncTrusted(
+    const result = syncTrusted(
       syncEnv({
         GITHUB_REF: 'refs/heads/feature-x',
         GITHUB_REF_NAME: 'feature-x',
@@ -83,7 +89,7 @@ describe('isSyncTrusted', () => {
   });
 
   it('refuses a refs/tags/* ref for a trusted event (TRUST-02)', () => {
-    const result = isSyncTrusted(
+    const result = syncTrusted(
       syncEnv({ GITHUB_REF: 'refs/tags/v1.0.0', GITHUB_REF_NAME: 'v1.0.0' }),
       readMain,
     );
@@ -95,7 +101,7 @@ describe('isSyncTrusted', () => {
     // Non-vacuous refs/heads/ guard: the ref name equals the default branch, so
     // the branch-equality check would pass -- only the refs/heads/ prefix guard
     // can reject this (a tag push also sets GITHUB_REF_NAME).
-    const result = isSyncTrusted(
+    const result = syncTrusted(
       syncEnv({ GITHUB_REF: 'refs/tags/main', GITHUB_REF_NAME: 'main' }),
       readMain,
     );
@@ -104,16 +110,13 @@ describe('isSyncTrusted', () => {
   });
 
   it('refuses when GITHUB_ACTIONS is not exactly "true" (TRUST-02)', () => {
-    const result = isSyncTrusted(
-      syncEnv({ GITHUB_ACTIONS: 'false' }),
-      readMain,
-    );
+    const result = syncTrusted(syncEnv({ GITHUB_ACTIONS: 'false' }), readMain);
 
     expect(result).toBe(false);
   });
 
   it('refuses a trusted event outside GitHub Actions (TRUST-02)', () => {
-    const result = isSyncTrusted(
+    const result = syncTrusted(
       {
         GITHUB_EVENT_NAME: 'push',
         GITHUB_REF: 'refs/heads/main',
@@ -128,13 +131,13 @@ describe('isSyncTrusted', () => {
   it('fails closed when the event payload is unreadable/absent (TRUST-02)', () => {
     // readDefaultBranch returns undefined (absent/unreadable payload) -> the
     // default-branch check can never pass, so the run is not sync-eligible.
-    const result = isSyncTrusted(syncEnv(), () => undefined);
+    const result = syncTrusted(syncEnv(), () => undefined);
 
     expect(result).toBe(false);
   });
 
   it('default-denies an empty env bag (TRUST-02)', () => {
-    const result = isSyncTrusted({}, readMain);
+    const result = syncTrusted({}, readMain);
 
     expect(result).toBe(false);
   });

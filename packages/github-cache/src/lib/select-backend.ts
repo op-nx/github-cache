@@ -29,7 +29,7 @@ import { isWriteTrusted } from './trust.js';
 export function selectBackend(
   env: NodeJS.ProcessEnv = process.env,
 ): CacheBackend {
-  if (!isWriteTrusted(env)) {
+  if (!isWriteTrusted(env).trusted) {
     // The local/untrusted branch returns the real cross-context GitHub Releases
     // reader (D-01), constructed with the real default client. selectBackend stays
     // SYNCHRONOUS: the async token and repo-identity resolution defer into the

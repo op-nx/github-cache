@@ -57,7 +57,10 @@ afterEach(() => {
 
 describe('runPublish sync gate + fail-closed identity (TRUST-02, CREEP C2)', () => {
   it('gates on isSyncTrusted FIRST and returns without constructing a client or calling the engine when untrusted', async () => {
-    isSyncTrustedMock.mockReturnValue(false);
+    isSyncTrustedMock.mockReturnValue({
+      trusted: false,
+      reason: 'untrusted-event',
+    });
 
     await runPublish();
 
@@ -68,7 +71,7 @@ describe('runPublish sync gate + fail-closed identity (TRUST-02, CREEP C2)', () 
   });
 
   it('throws on a corrupted GITHUB_REPOSITORY (fail-closed, never resolve into another namespace)', async () => {
-    isSyncTrustedMock.mockReturnValue(true);
+    isSyncTrustedMock.mockReturnValue({ trusted: true });
     process.env.GITHUB_REPOSITORY = 'not-a-valid-owner-repo/extra/segment';
 
     await expect(runPublish()).rejects.toThrow(/owner\/name/);
@@ -76,7 +79,7 @@ describe('runPublish sync gate + fail-closed identity (TRUST-02, CREEP C2)', () 
   });
 
   it('throws when no upload token resolves (fail loud once, not per-request 401s)', async () => {
-    isSyncTrustedMock.mockReturnValue(true);
+    isSyncTrustedMock.mockReturnValue({ trusted: true });
     process.env.GITHUB_REPOSITORY = 'op-nx/github-cache';
     resolveGitHubTokenMock.mockReturnValue(undefined);
 

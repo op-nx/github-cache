@@ -120,9 +120,11 @@ export async function runPublish(): Promise<void> {
   // return, never an error. isSyncTrusted, NOT isWriteTrusted -- Phase 5 widens the
   // WRITE allowlist to pull_request/release and a shared predicate would silently
   // widen SYNC with it (the CREEP precondition C2 exists to prevent).
-  if (!isSyncTrusted(process.env)) {
+  const sync = isSyncTrusted(process.env);
+
+  if (!sync.trusted) {
     core.info(
-      'github-cache publish: not a trusted sync context; skipping (no mirror).',
+      `github-cache publish: not a trusted sync context (${sync.reason}); skipping (no mirror).`,
     );
 
     return;

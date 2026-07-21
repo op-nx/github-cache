@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { isSyncTrusted } from './sync-gate.js';
 import { HOST_GATED_EVENTS, TRUSTED_EVENTS, isWriteTrusted } from './trust.js';
 
+// The predicates now return a discriminated { trusted, reason } union; these
+// helpers extract the boolean so the existing true/false assertions below stay
+// unchanged (the trust DECISION is what these tests pin, not the result shape).
+const writeTrusted = (...args: Parameters<typeof isWriteTrusted>): boolean =>
+  isWriteTrusted(...args).trusted;
+const syncTrusted = (...args: Parameters<typeof isSyncTrusted>): boolean =>
+  isSyncTrusted(...args).trusted;
+
 // The host-independent base allowlist: trusted on ANY host (TRUST-01 / D-01).
 const BASE_EVENTS = ['push', 'schedule'];
 
@@ -48,7 +56,7 @@ const FAIL_CLOSED_SERVER_URLS = [
 describe('isWriteTrusted base events (host-independent)', () => {
   for (const event of BASE_EVENTS) {
     it(`trusts ${event} inside GitHub Actions with no host (TRUST-01)`, () => {
-      const result = isWriteTrusted({
+      const result = writeTrusted({
         GITHUB_ACTIONS: 'true',
         GITHUB_EVENT_NAME: event,
       });
@@ -57,7 +65,7 @@ describe('isWriteTrusted base events (host-independent)', () => {
     });
 
     it(`trusts ${event} even on a GHES host (base events are host-independent) (TRUST-01)`, () => {
-      const result = isWriteTrusted({
+      const result = writeTrusted({
         GITHUB_ACTIONS: 'true',
         GITHUB_EVENT_NAME: event,
         GITHUB_SERVER_URL: 'https://ghes.example.com',
@@ -72,7 +80,7 @@ describe('isWriteTrusted host-gated widened events (TRUST-01, D-01, ADR C1)', ()
   for (const event of WIDENED_EVENTS) {
     for (const serverUrl of GUARDED_SERVER_URLS) {
       it(`trusts ${event} on ${serverUrl} (guard present)`, () => {
-        const result = isWriteTrusted({
+        const result = writeTrusted({
           GITHUB_ACTIONS: 'true',
           GITHUB_EVENT_NAME: event,
           GITHUB_SERVER_URL: serverUrl,
@@ -84,7 +92,7 @@ describe('isWriteTrusted host-gated widened events (TRUST-01, D-01, ADR C1)', ()
 
     for (const serverUrl of FAIL_CLOSED_SERVER_URLS) {
       it(`refuses ${event} on ${JSON.stringify(serverUrl)} (fail-closed)`, () => {
-        const result = isWriteTrusted({
+        const result = writeTrusted({
           GITHUB_ACTIONS: 'true',
           GITHUB_EVENT_NAME: event,
           GITHUB_SERVER_URL: serverUrl,
@@ -95,7 +103,7 @@ describe('isWriteTrusted host-gated widened events (TRUST-01, D-01, ADR C1)', ()
     }
 
     it(`refuses ${event} when GITHUB_SERVER_URL is unset (fail-closed on missing)`, () => {
-      const result = isWriteTrusted({
+      const result = writeTrusted({
         GITHUB_ACTIONS: 'true',
         GITHUB_EVENT_NAME: event,
       });
@@ -110,7 +118,7 @@ describe('isWriteTrusted dangerous / unlisted events (refused on every host)', (
     it(`refuses ${event} even with a github.com host present (Pitfall 1, TRUST-01)`, () => {
       // A guarded host must NOT rescue a dangerous/unlisted event: it is in
       // neither allowlist, so default-deny applies regardless of host.
-      const result = isWriteTrusted({
+      const result = writeTrusted({
         GITHUB_ACTIONS: 'true',
         GITHUB_EVENT_NAME: event,
         GITHUB_SERVER_URL: 'https://github.com',
@@ -123,19 +131,19 @@ describe('isWriteTrusted dangerous / unlisted events (refused on every host)', (
 
 describe('isWriteTrusted default-deny guards', () => {
   it('refuses an unset event name inside GitHub Actions (TRUST-01)', () => {
-    const result = isWriteTrusted({ GITHUB_ACTIONS: 'true' });
+    const result = writeTrusted({ GITHUB_ACTIONS: 'true' });
 
     expect(result).toBe(false);
   });
 
   it('refuses a base event outside GitHub Actions (TRUST-01)', () => {
-    const result = isWriteTrusted({ GITHUB_EVENT_NAME: 'push' });
+    const result = writeTrusted({ GITHUB_EVENT_NAME: 'push' });
 
     expect(result).toBe(false);
   });
 
   it('refuses a widened event outside GitHub Actions even on github.com (TRUST-01)', () => {
-    const result = isWriteTrusted({
+    const result = writeTrusted({
       GITHUB_EVENT_NAME: 'pull_request',
       GITHUB_SERVER_URL: 'https://github.com',
     });
@@ -144,7 +152,7 @@ describe('isWriteTrusted default-deny guards', () => {
   });
 
   it('refuses when GITHUB_ACTIONS is not exactly "true" (TRUST-01)', () => {
-    const result = isWriteTrusted({
+    const result = writeTrusted({
       GITHUB_ACTIONS: 'false',
       GITHUB_EVENT_NAME: 'push',
     });
@@ -153,7 +161,7 @@ describe('isWriteTrusted default-deny guards', () => {
   });
 
   it('default-denies an empty env bag (TRUST-01)', () => {
-    const result = isWriteTrusted({});
+    const result = writeTrusted({});
 
     expect(result).toBe(false);
   });
@@ -187,7 +195,7 @@ describe('write-widen did NOT widen the sync gate (ADR C2 cross-check)', () => {
 
   for (const event of ['pull_request', 'release']) {
     it(`isSyncTrusted refuses ${event} even on a github.com host on the default branch (TRUST-01 guard)`, () => {
-      const result = isSyncTrusted(
+      const result = syncTrusted(
         {
           GITHUB_ACTIONS: 'true',
           GITHUB_EVENT_NAME: event,

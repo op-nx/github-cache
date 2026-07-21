@@ -98,6 +98,55 @@ describe('withHashLock', () => {
     expect(inFlightHashCount()).toBe(before);
   });
 
+  it('does not evict a re-locked hash entry when a prior tail settles while a later op is still in flight (eviction identity, TEST-02)', async () => {
+    // Guards the `inFlight.get(hash) === tail` identity check: when A settles but B
+    // has already re-locked the same hash, A's eviction must NOT delete B's entry.
+    // Without the identity check, A's evict would drop B's tail, so a third op C
+    // would find no entry and run CONCURRENTLY with B -- breaking serialization on
+    // the write hot path.
+    const before = inFlightHashCount();
+    const order: string[] = [];
+    const aGate = deferred<void>();
+    const bGate = deferred<void>();
+
+    const opA = withHashLock('relock-hash', async () => {
+      order.push('A-start');
+      await aGate.promise;
+      order.push('A-end');
+    });
+    const opB = withHashLock('relock-hash', async () => {
+      order.push('B-start');
+      await bGate.promise;
+      order.push('B-end');
+    });
+
+    // One entry for the hash (B's tail replaced A's).
+    expect(inFlightHashCount()).toBe(before + 1);
+
+    // Let A fully settle. Its tail-eviction callback fires but must see B's tail as
+    // the current entry and leave it in place.
+    aGate.resolve();
+    await opA;
+    await flushMicrotasks();
+
+    expect(inFlightHashCount()).toBe(before + 1);
+    expect(order).toEqual(['A-start', 'A-end', 'B-start']);
+
+    // C re-locks again; it must queue behind B, not run while B holds.
+    const opC = withHashLock('relock-hash', async () => {
+      order.push('C-start');
+    });
+    await flushMicrotasks();
+    expect(order).not.toContain('C-start');
+
+    bGate.resolve();
+    await Promise.all([opB, opC]);
+    await flushMicrotasks();
+
+    expect(order).toEqual(['A-start', 'A-end', 'B-start', 'B-end', 'C-start']);
+    expect(inFlightHashCount()).toBe(before);
+  });
+
   it('does not wedge the queue when an operation rejects (TEST-02)', async () => {
     const rejected = withHashLock('no-wedge-hash', () =>
       Promise.reject(new Error('boom')),

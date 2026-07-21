@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import * as core from '@actions/core';
 import { Octokit } from '@octokit/rest';
 import { serve } from '../serve.js';
@@ -33,7 +34,7 @@ function dogfoodBody(hash: string): Buffer {
  * the tag first -- ensureShardRelease inside the engine handles both. The engine
  * imports NO @octokit/rest; octokit lives here in the bin/action.
  */
-function createPublishClient(
+export function createPublishClient(
   octokit: Octokit,
   owner: string,
   repo: string,
@@ -112,7 +113,7 @@ function createPublishClient(
  * annotated inside the engine (D-13), and a nonzero aggregate `failed` count fails
  * the run loud via the engine's core.setFailed (OBS-01/D-15), mirroring cleanupMirror.
  */
-async function runPublish(): Promise<void> {
+export async function runPublish(): Promise<void> {
   // D-01/TRUST-02: the sync gate is the FIRST statement of the publish path -- the
   // default-branch check lives in the predicate, not the workflow `if:` alone. A
   // gated-out run (a PR, a non-default ref, a tag) is a clean exit 0: core.info +
@@ -176,7 +177,7 @@ async function runPublish(): Promise<void> {
  * body, and drains on exit. This same entry is the `test:act` canary: off-CI it
  * self-skips (exit 0) because the Actions-cache runtime does not exist locally.
  */
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   // ACTIONS_RUNTIME_TOKEN / ACTIONS_RESULTS_URL are injected ONLY into a JS-action
   // runtime, never into an ordinary shell step or a local shell. Outside that
   // runtime the cache primitive silently no-ops, so a green run would prove
@@ -301,6 +302,18 @@ async function run(): Promise<void> {
   }
 }
 
-run().catch((error: unknown) => {
-  core.setFailed(error instanceof Error ? error.message : String(error));
-});
+// Direct-invocation guard: run() only when this module is the entrypoint (the built
+// dist/action/index.js invoked by this repo's dogfood action.yml), never when
+// runPublish/createPublishClient/run are imported for unit tests (I5: the old
+// unconditional run() left the sync-gate-first ordering, the keyless-row filter, and
+// the dogfood fail-loud branches untestable-by-import). Use
+// pathToFileURL(process.argv[1]).href -- the naive 'file://' + argv[1] form is
+// permanently false on Windows (Pitfall 6), matching the cleanup + read-back bins.
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  run().catch((error: unknown) => {
+    core.setFailed(error instanceof Error ? error.message : String(error));
+  });
+}

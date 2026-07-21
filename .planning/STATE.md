@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 Phase: 6
 Plan: Not started
 Status: Milestone v0.0.1 shipped -- PR #3 (post-review remediation quicks 260721-g1p + 260721-pej + 260721-qk1; CI green)
-Last activity: 2026-07-21 - Completed quick task 260721-uao: inlined the dead run wrapper in withHashLock (ponytail-review finding); 4 of 5 candidates rejected on read; 344 tests + tsc green
+Last activity: 2026-07-21 - Completed quick task 260721-vdn: hardened the Releases-mirror cleanup delete scope (security-review defense-in-depth) with an exact month-shard tag check + a <hash>-<os> asset-name allowlist (pure narrowing, retention-locked); 373 tests + full CI battery green
 
 Progress: [██████████] 100% of planned plans (phase 5 pending verification)
 
@@ -175,6 +175,7 @@ None yet.
 | 260721-rdp | PR #3 thermos-review remediation (dual thermo-nuclear, no Critical/High): PPE advisory-install non-fatal guards + audit binary-guard (M1, real consumer-job hard-fail bug; also fixed an inline-YAML colon-space break) + env-knob test dedup (Q5) + CacheBackend comment fix (Q3) + PUT buffering ponytail note (L3); Q1/Q2/Q4/Q6/Q7/L2 deferred/rejected with reasons; full CI battery green | 2026-07-21 | 8b1e1e4e | Verified | [260721-rdp-address-triaged-thermos-review-findings-](./quick/260721-rdp-address-triaged-thermos-review-findings-/) |
 | 260721-tj7 | Apply triaged /simplify cleanup findings on PR #3 (reuse/simplification/altitude): MS_PER_DAY sourced from retention leaf, releases-backend fault status via statusOf, writeCountSummary leaf for OBS-01 tables, isEntrypoint leaf for the 4 direct-invocation guards; 5 findings triaged out with reasons; full CI battery green | 2026-07-21 | ab5553d | Verified | [260721-tj7-apply-triaged-simplify-cleanup-findings-](./quick/260721-tj7-apply-triaged-simplify-cleanup-findings-/) |
 | 260721-uao | Apply triaged ponytail-review over-engineering finding on PR #3: inline the dead `run` wrapper in withHashLock (`prior.then(fn, fn)`); 4 of 5 candidates rejected on read (documented deliberate decisions + one actively-wrong `.finally` suggestion that would unhandled-reject); 344 tests + tsc green | 2026-07-21 | d4ba437 | Verified | [260721-uao-inline-the-run-wrapper-in-with-hash-lock](./quick/260721-uao-inline-the-run-wrapper-in-with-hash-lock/) |
+| 260721-vdn | Harden Releases-mirror cleanup delete scope (PR #3 security-review defense-in-depth, retention-locked): exact `^cache-mirror-\d{6}$` shard-tag scope (isShardTag, single-sourced from SHARD_TAG_PREFIX) + `<hash>-<os>` asset-name allowlist (isServerProducedAssetName, reuses HASH_PATTERN + CACHE_OS_VALUES); pure narrowing (still prunes genuine assets, regression-guarded); 373 tests + full CI battery green | 2026-07-21 | 602824b | Verified | [260721-vdn-harden-releases-mirror-cleanup-delete-sc](./quick/260721-vdn-harden-releases-mirror-cleanup-delete-sc/) |
 
 ## Deferred Items
 

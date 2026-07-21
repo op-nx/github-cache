@@ -37,9 +37,14 @@ describe('SECURITY.md disclosure policy content stays intact (GOV-01)', () => {
     expect(securityDoc).toContain('0.x');
   });
 
-  it('states a coordinated-disclosure window with a concrete day count', () => {
+  it('states the concrete coordinated-disclosure windows (triage + backstop)', () => {
     expect(securityDoc).toMatch(/coordinated disclosure/i);
-    expect(securityDoc).toMatch(/\d+\s*days?/i);
+    // Concrete documented windows, not any "N days" substring anywhere in the file:
+    // the 7-day triage response target and the 90-day backstop disclosure deadline.
+    // Dropping the section or changing either window now fails here, unlike the old
+    // loose /\d+\s*days?/ that any "N days" line in the doc satisfied.
+    expect(securityDoc).toMatch(/within\s*7\s*days/i);
+    expect(securityDoc).toMatch(/90\s*days/i);
   });
 });
 

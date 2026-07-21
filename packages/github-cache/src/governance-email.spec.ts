@@ -32,7 +32,12 @@ describe('governance email hygiene (allowlist-inversion, GOV-01)', () => {
     '../../../SECURITY.md',
     '../../../LICENSE',
     '../../../package.json',
-    '../../package.json',
+    // This package's manifest is one level up from src/ (packages/github-cache/).
+    // The previous '../../package.json' resolved to packages/package.json, which
+    // does not exist, so the old silent-skip meant this file (which carries the
+    // maintainer author email) was NEVER actually scanned -- the existence
+    // assertion below now makes that class of miss fail loudly.
+    '../package.json',
   ];
 
   // General email-shaped token: local-part @ domain with a TLD. Deliberately
@@ -44,9 +49,10 @@ describe('governance email hygiene (allowlist-inversion, GOV-01)', () => {
     it(`only the approved public email may appear in ${relativePath}`, () => {
       const fileUrl = new URL(relativePath, import.meta.url);
 
-      if (!existsSync(fileUrl)) {
-        return;
-      }
+      // A scanned maintainer file must EXIST: a rename/move that drops it has to
+      // fail loudly, not silently skip its email-hygiene coverage. All four scanned
+      // files are committed, so absence is a real regression, never the normal path.
+      expect(existsSync(fileUrl)).toBe(true);
 
       const content = readFileSync(fileUrl, 'utf8');
       const tokens = content.match(EMAIL_TOKEN) ?? [];

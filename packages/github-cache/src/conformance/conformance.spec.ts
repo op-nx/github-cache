@@ -52,8 +52,14 @@ async function listen(created: Server): Promise<string> {
 
 describe('Nx contract conformance (TEST-07)', () => {
   describe('Layer (a): vendored-spec drift guard', () => {
+    // The vendored spec filename embeds the Nx version. It is READ through this
+    // constant and ASSERTED against PINNED_NX_VERSION below, so a version bump that
+    // forgets to re-vendor (or a rename that forgets the constant) fails here --
+    // unlike the old same-file `PINNED_NX_VERSION === '23.1.0'` tautology, which
+    // edited the constant and its assertion in one motion and could never fail.
+    const SPEC_FILENAME = 'nx-cache-openapi.v23.1.0.json';
     const specBytes = readFileSync(
-      new URL('./nx-cache-openapi.v23.1.0.json', import.meta.url),
+      new URL(`./${SPEC_FILENAME}`, import.meta.url),
     );
 
     it('matches the pinned sha256 of the full committed spec file (drift guard)', () => {
@@ -62,8 +68,8 @@ describe('Nx contract conformance (TEST-07)', () => {
       expect(digest).toBe(VENDORED_SPEC_SHA256);
     });
 
-    it('pins the documented Nx version, not the spec info.version', () => {
-      expect(PINNED_NX_VERSION).toBe('23.1.0');
+    it('vendors a spec file whose name embeds PINNED_NX_VERSION (non-tautological)', () => {
+      expect(SPEC_FILENAME).toContain(`v${PINNED_NX_VERSION}.json`);
     });
 
     it('vendors the /v1/cache/{hash} path with put and get operations', () => {

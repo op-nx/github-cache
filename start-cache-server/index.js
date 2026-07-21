@@ -68183,9 +68183,14 @@ function createActionsCacheBackend() {
         if (cacheId > 0) {
           return "stored";
         }
-        const present = await restoreCache([path11], cacheKeyFor(hash), [], {
-          lookupOnly: true
-        });
+        const present = await restoreCache(
+          [path11],
+          cacheKeyFor(hash),
+          [],
+          {
+            lookupOnly: true
+          }
+        );
         if (present !== void 0) {
           return "stored";
         }
@@ -68346,10 +68351,11 @@ function releaseAssetName(hash, platform2 = process.platform) {
 var DEFAULT_MAX_AGE_DAYS = 30;
 var MAX_AGE_CEILING_DAYS = 365;
 var MS_PER_DAY = 24 * 60 * 60 * 1e3;
+var SHARD_TAG_PREFIX = "cache-mirror-";
 function shardTag(date = /* @__PURE__ */ new Date()) {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `cache-mirror-${year}${month}`;
+  return `${SHARD_TAG_PREFIX}${year}${month}`;
 }
 function resolveMaxAgeDays(env = process.env) {
   const raw = Number(env.CACHE_MIRROR_MAX_AGE_DAYS);

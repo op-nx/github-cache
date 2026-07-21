@@ -175,6 +175,12 @@ async function handlePut(
     return;
   }
 
+  // ponytail: the whole body is buffered in memory (up to the 2 GiB cap) before
+  // backend.put. withHashLock serializes same-hash puts, but distinct hashes run
+  // concurrently (serve.ts), so N concurrent distinct-hash PUTs hold up to N x 2 GiB
+  // resident. Fine for the documented single-tenant loopback sidecar (one Nx client);
+  // if a multi-client deployment ever appears, stream to a temp file instead of
+  // Buffer.concat rather than raising the count ceiling.
   let bytes: Buffer;
 
   try {

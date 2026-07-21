@@ -2,7 +2,7 @@ import * as core from '@actions/core';
 import type { Octokit } from '@octokit/rest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSyncTrusted } from '../lib/sync-gate.js';
-import { resolveGitHubToken } from '../lib/select-backend.js';
+import { resolveGitHubToken } from '../lib/github-identity.js';
 import { publishMirror } from '../publish/publish-mirror.js';
 import { serve } from '../serve.js';
 import { createPublishClient, run, runPublish } from './index.js';
@@ -32,8 +32,8 @@ vi.mock('../lib/sync-gate.js', () => ({ isSyncTrusted: vi.fn() }));
 vi.mock('../publish/publish-mirror.js', () => ({ publishMirror: vi.fn() }));
 vi.mock('@octokit/rest', () => ({ Octokit: vi.fn() }));
 // Keep the real GITHUB_REPOSITORY_PATTERN; only stub the token resolver.
-vi.mock('../lib/select-backend.js', async (orig) => {
-  const actual = await orig<typeof import('../lib/select-backend.js')>();
+vi.mock('../lib/github-identity.js', async (orig) => {
+  const actual = await orig<typeof import('../lib/github-identity.js')>();
 
   return { ...actual, resolveGitHubToken: vi.fn() };
 });

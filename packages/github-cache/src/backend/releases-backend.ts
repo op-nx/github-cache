@@ -150,6 +150,28 @@ function githubJsonHeaders(token: string): Record<string, string> {
 }
 
 /**
+ * Fault-split for a GitHub REST response (D-11), centralizing the 404-vs-fault
+ * contract each fetch site otherwise authored identically. Returns `true` for a 404
+ * (genuine absence -- the caller's cue to try the next shard / MISS), `false` for a
+ * 2xx (proceed); ANY other non-ok status THROWS with the numeric status attached
+ * (never body text -- the port surfaces only the safe status).
+ */
+function assertOkOrAbsent(response: Response, what: string): boolean {
+  if (response.status === 404) {
+    return true;
+  }
+
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(`github-cache: ${what} failed with status ${response.status}`),
+      { status: response.status },
+    );
+  }
+
+  return false;
+}
+
+/**
  * Resolve one asset from a SINGLE month-shard release, or undefined when the shard or the
  * asset is genuinely absent (a 404 at any step) -- the caller's cue to try the next shard
  * in the retention window (D-08). Every non-404 status still THROWS so the port degrades it
@@ -174,17 +196,8 @@ async function fetchAssetFromShard(
     },
   );
 
-  if (releaseResponse.status === 404) {
+  if (assertOkOrAbsent(releaseResponse, 'release lookup')) {
     return undefined;
-  }
-
-  if (!releaseResponse.ok) {
-    throw Object.assign(
-      new Error(
-        `github-cache: release lookup failed with status ${releaseResponse.status}`,
-      ),
-      { status: releaseResponse.status },
-    );
   }
 
   const release = (await releaseResponse.json()) as { id: number };
@@ -203,17 +216,8 @@ async function fetchAssetFromShard(
       },
     );
 
-    if (listResponse.status === 404) {
+    if (assertOkOrAbsent(listResponse, 'asset list')) {
       return undefined;
-    }
-
-    if (!listResponse.ok) {
-      throw Object.assign(
-        new Error(
-          `github-cache: asset list failed with status ${listResponse.status}`,
-        ),
-        { status: listResponse.status },
-      );
     }
 
     const batch = (await listResponse.json()) as {
@@ -249,17 +253,8 @@ async function fetchAssetFromShard(
     },
   );
 
-  if (downloadResponse.status === 404) {
+  if (assertOkOrAbsent(downloadResponse, 'asset download')) {
     return undefined;
-  }
-
-  if (!downloadResponse.ok) {
-    throw Object.assign(
-      new Error(
-        `github-cache: asset download failed with status ${downloadResponse.status}`,
-      ),
-      { status: downloadResponse.status },
-    );
   }
 
   return Buffer.from(await downloadResponse.arrayBuffer());

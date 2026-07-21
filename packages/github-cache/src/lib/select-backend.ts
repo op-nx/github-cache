@@ -11,14 +11,10 @@ import {
 } from './github-identity.js';
 import { isWriteTrusted } from './trust.js';
 
-// GITHUB_REPOSITORY_PATTERN and resolveGitHubToken moved to the ./github-identity.js
-// leaf module to break the releases-backend -> local-context -> select-backend cycle.
-// Re-exported here so every existing `from './select-backend.js'` import (TEST-01
-// included) keeps resolving them unchanged.
-export {
-  GITHUB_REPOSITORY_PATTERN,
-  resolveGitHubToken,
-} from './github-identity.js';
+// GITHUB_REPOSITORY_PATTERN and resolveGitHubToken live in the ./github-identity.js
+// leaf module (extracted to break the releases-backend -> local-context ->
+// select-backend cycle); selectBackend uses them internally below. Consumers import
+// them from ./github-identity.js directly -- this module no longer re-exports them.
 
 /**
  * The single context-derived backend selection point (D-01, TRUST-05). RW-vs-RO

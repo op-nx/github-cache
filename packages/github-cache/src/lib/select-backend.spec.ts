@@ -3,8 +3,9 @@ import * as cache from '@actions/cache';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
 import { resolveLocalReadToken, resolveRepoIdentity } from './local-context.js';
+import { resolveGitHubToken } from './github-identity.js';
 import { releaseAssetName } from './release-asset-name.js';
-import { resolveGitHubToken, selectBackend } from './select-backend.js';
+import { selectBackend } from './select-backend.js';
 
 // @actions/cache only actually works inside a JS action on real CI, so the
 // writable-path cases below (which drive the returned backend's put) must mock

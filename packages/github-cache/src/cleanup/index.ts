@@ -4,7 +4,7 @@ import { Octokit } from '@octokit/rest';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
-} from '../lib/select-backend.js';
+} from '../lib/github-identity.js';
 import { resolveMaxAgeDays } from '../lib/retention.js';
 import {
   cleanupMirror,

@@ -160,9 +160,9 @@ export async function publishMirror(
   // 422-race). Tracked separately to detect an all-restore-MISS run below.
   let readMisses = 0;
 
-  // The shard release + its asset set, resolved lazily on the first restorable entry.
-  let releaseId: number | undefined;
-  let existingNames: Set<string> | undefined;
+  // The shard release + its asset set, resolved lazily (as ONE sentinel: the two
+  // were always set together) on the first restorable entry.
+  let shard: { id: number; names: Set<string> } | undefined;
 
   for (const hash of hashes) {
     const restored: GetResult = await actionsCache.get(hash);
@@ -192,13 +192,13 @@ export async function publishMirror(
       );
     }
 
-    if (releaseId === undefined || existingNames === undefined) {
-      releaseId = await ensureShardRelease(client, tag);
-      existingNames = new Set(await client.listReleaseAssets(releaseId));
+    if (shard === undefined) {
+      const id = await ensureShardRelease(client, tag);
+      shard = { id, names: new Set(await client.listReleaseAssets(id)) };
     }
 
     // D-11: the 1000-asset per-release cap degrades to skip-and-warn, never a hard fail.
-    if (existingNames.size >= RELEASE_ASSET_CAP && !existingNames.has(name)) {
+    if (shard.names.size >= RELEASE_ASSET_CAP && !shard.names.has(name)) {
       core.warning(
         `github-cache: month-shard release ${tag} is at the ${RELEASE_ASSET_CAP}-asset cap; skipping ${name} (cache MISS-on-write, not an error).`,
       );
@@ -209,15 +209,15 @@ export async function publishMirror(
 
     // D-05 first-write-wins: an already-present name is a benign no-op (byte-identical
     // under CORR-01) -- no upload, never an overwrite.
-    if (existingNames.has(name)) {
+    if (shard.names.has(name)) {
       skipped++;
 
       continue;
     }
 
     try {
-      await client.uploadReleaseAsset(releaseId, name, bytes);
-      existingNames.add(name);
+      await client.uploadReleaseAsset(shard.id, name, bytes);
+      shard.names.add(name);
       mirrored++;
     } catch (error) {
       if (statusOf(error) === 422) {

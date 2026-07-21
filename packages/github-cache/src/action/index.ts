@@ -6,7 +6,7 @@ import { isSyncTrusted } from '../lib/sync-gate.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
-} from '../lib/select-backend.js';
+} from '../lib/github-identity.js';
 import {
   publishMirror,
   type PublishClient,

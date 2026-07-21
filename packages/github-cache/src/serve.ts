@@ -81,7 +81,10 @@ export async function serve(
   const inFlightPuts = new Set<Promise<unknown>>();
   const backend = selectBackend(process.env);
   const tracked: CacheBackend = {
-    get: (hash) => backend.get(hash),
+    // Spread the selected backend (its get passes through unchanged) and override
+    // only put to run under withHashLock + drain tracking. Safe because every
+    // backend factory returns closures over captured state, not this-bound methods.
+    ...backend,
     put: (hash, bytes) => {
       const op = withHashLock(hash, () => backend.put(hash, bytes));
       inFlightPuts.add(op);

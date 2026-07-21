@@ -68,10 +68,18 @@ background-step engine, background the server with a shell `&` instead:
 
 ```yaml
 - run: |
-    npx @op-nx/github-cache serve &
-    # serve prints its loopback URL; wire the two NX_* vars for the Nx step.
-    echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://localhost:3000" >> "$GITHUB_ENV"
-    echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$MY_TOKEN" >> "$GITHUB_ENV"
+    # Pin the port and bearer token BEFORE backgrounding: with PORT unset the
+    # server binds a random ephemeral port, and with the token unset it mints a
+    # fresh CSPRNG one -- either mismatch makes the Nx client MISS every read.
+    # Exporting both here means serve() adopts them, so the values written to
+    # GITHUB_ENV for the next step match what the server actually listens on.
+    export PORT=3000
+    export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN="$(openssl rand -hex 32)"
+    npx @op-nx/github-cache &
+    {
+      echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:${PORT}"
+      echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+    } >> "$GITHUB_ENV"
 - run: npx nx affected -t build test
 ```
 

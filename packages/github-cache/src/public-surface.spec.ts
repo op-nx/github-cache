@@ -82,18 +82,23 @@ function readSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8');
 }
 
-/** Parse the `export type { ... }` names out of the barrel source. */
+/**
+ * Parse the `export type { ... }` names out of the barrel source. Iterates ALL
+ * type-export blocks (global regex + matchAll) and unions their names, so a
+ * second `export type { ... }` statement cannot escape the contract guard.
+ */
 function parseTypeExports(indexSource: string): string[] {
-  const match = /export\s+type\s*\{([^}]*)\}/.exec(indexSource);
+  const names: string[] = [];
 
-  if (!match) {
-    return [];
+  for (const match of indexSource.matchAll(/export\s+type\s*\{([^}]*)\}/g)) {
+    for (const name of match[1].split(',').map((entry) => entry.trim())) {
+      if (name.length > 0) {
+        names.push(name);
+      }
+    }
   }
 
-  return match[1]
-    .split(',')
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
+  return names;
 }
 
 /**

@@ -186,6 +186,41 @@ describe('createCacheServer', () => {
     expect(res.status).toBe(400);
   });
 
+  // A route MATCH with an unsupported method is a 405, not a 404. The predecessor
+  // answered 405; the greenfield guard collapsed both cases into one bare 404,
+  // which tells a caller the route does not exist when it does.
+  it('returns 405 with an Allow header for a route-matched request whose method is neither GET nor PUT', async () => {
+    const token = generateToken();
+    server = createCacheServer(createWritableMemoryBackend(), token);
+    const base = await listen();
+
+    for (const method of ['DELETE', 'POST', 'PATCH']) {
+      const res = await fetch(`${base}/v1/cache/abc123`, {
+        method,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.status).toBe(405);
+      expect(res.headers.get('allow')).toBe('GET, PUT');
+    }
+  });
+
+  it('still returns 404 for a URL that does not match the route, regardless of method', async () => {
+    const token = generateToken();
+    server = createCacheServer(createWritableMemoryBackend(), token);
+    const base = await listen();
+
+    for (const method of ['GET', 'PUT', 'DELETE']) {
+      const res = await fetch(`${base}/not-the-route`, {
+        method,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.status).toBe(404);
+      expect(res.headers.get('allow')).toBeNull();
+    }
+  });
+
   // SRV-04: fast path -- an oversized Content-Length is rejected on the header.
   it('rejects an oversized Content-Length with 413 before buffering (SRV-04 fast path)', async () => {
     const token = generateToken();
@@ -201,24 +236,19 @@ describe('createCacheServer', () => {
     server = createCacheServer(spy, token, 8);
     const base = await listen();
 
-    let status: number | undefined;
-
-    try {
-      const res = await fetch(`${base}/v1/cache/abc123`, {
-        method: 'PUT',
-        headers: { authorization: `Bearer ${token}` },
-        body: Buffer.from('123456789'),
-      });
-      status = res.status;
-    } catch {
-      // socket destroyed on the oversized upload: acceptable, the abort is the point
-    }
+    // Asserted UNCONDITIONALLY. The previous shape wrapped this in try/catch and
+    // only checked the status behind `if (status !== undefined)`, so it passed
+    // whether the client observed a 413 OR an ECONNRESET -- structurally incapable
+    // of detecting a response destroyed before it flushed, which is the exact
+    // defect this pins.
+    const res = await fetch(`${base}/v1/cache/abc123`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${token}` },
+      body: Buffer.from('123456789'),
+    });
 
     expect(putCalled).toBe(false);
-
-    if (status !== undefined) {
-      expect(status).toBe(413);
-    }
+    expect(res.status).toBe(413);
   });
 
   // SRV-04: streaming path -- a body that only overflows mid-stream (no
@@ -243,25 +273,17 @@ describe('createCacheServer', () => {
       },
     });
 
-    let status: number | undefined;
-
-    try {
-      const res = await fetch(`${base}/v1/cache/abc123`, {
-        method: 'PUT',
-        headers: { authorization: `Bearer ${token}` },
-        body,
-        duplex: 'half',
-      } as RequestInit & { duplex: 'half' });
-      status = res.status;
-    } catch {
-      // socket destroyed mid-stream: fetch rejects; the abort is the point
-    }
+    // Asserted UNCONDITIONALLY -- see the fast-path case above for why the former
+    // try/catch + `if (status !== undefined)` tolerance had to go.
+    const res = await fetch(`${base}/v1/cache/abc123`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${token}` },
+      body,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
 
     expect(putCalled).toBe(false);
-
-    if (status !== undefined) {
-      expect(status).toBe(413);
-    }
+    expect(res.status).toBe(413);
   });
 
   // SRV-05: a read fault degrades to a 404 MISS, never a build-breaking 5xx.

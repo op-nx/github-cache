@@ -47,8 +47,9 @@ function makeAuthGate(expectedToken: string): (header?: string) => boolean {
  *
  * The backend is injected at construction (the D-04 RW/RO seam) -- there is no
  * caller-facing mode flag (TRUST-05). The handler is a fixed guard-clause ladder
- * whose order is load-bearing: route/method (404) -> auth (401) -> hash validate
- * (400, before any backend call, SRV-03) -> PUT body cap (413, SRV-04) ->
+ * whose order is load-bearing: route (404) -> method (405 + Allow) -> auth (401)
+ * -> hash validate (400, before any backend call, SRV-03) -> PUT body cap (413,
+ * SRV-04) ->
  * backend -> status map. Reads are best-effort (any get fault degrades to a 404
  * MISS, never a 5xx); writes fail closed (a put fault surfaces as 500, never a
  * silent 200) -- SRV-05/D-06. maxBodyBytes is injectable so tests can drive the
@@ -76,8 +77,22 @@ export function createCacheServer(
   return http.createServer(async (req, res) => {
     const match = req.url ? ROUTE.exec(req.url) : null;
 
-    if (!match || (req.method !== 'GET' && req.method !== 'PUT')) {
+    if (!match) {
       res.statusCode = 404;
+      res.end();
+
+      return;
+    }
+
+    // A route MATCH with an unsupported method is a 405, not a 404 -- collapsing
+    // the two told a caller the route does not exist when it does. Answered here,
+    // in the same position the combined guard occupied (BEFORE authGate), so the
+    // ordering is unchanged: an unauthenticated caller learns only the method
+    // vocabulary of a route it could already discover by probing GET. Not a
+    // contract break either -- the Nx OpenAPI defines no 405.
+    if (req.method !== 'GET' && req.method !== 'PUT') {
+      res.statusCode = 405;
+      res.setHeader('Allow', 'GET, PUT');
       res.end();
 
       return;

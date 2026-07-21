@@ -68624,8 +68624,14 @@ function createCacheServer(backend, token, maxBodyBytes = MAX_CACHE_BODY_BYTES) 
   const authGate = makeAuthGate(token);
   return http3.createServer(async (req, res) => {
     const match2 = req.url ? ROUTE.exec(req.url) : null;
-    if (!match2 || req.method !== "GET" && req.method !== "PUT") {
+    if (!match2) {
       res.statusCode = 404;
+      res.end();
+      return;
+    }
+    if (req.method !== "GET" && req.method !== "PUT") {
+      res.statusCode = 405;
+      res.setHeader("Allow", "GET, PUT");
       res.end();
       return;
     }

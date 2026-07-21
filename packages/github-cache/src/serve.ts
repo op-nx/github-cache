@@ -123,21 +123,42 @@ export async function serve(
   });
 
   async function shutdown(): Promise<void> {
-    if (server.listening) {
-      server.close(); // stop accepting new connections
-    }
+    // The executor body runs synchronously, so server.close() still lands before
+    // shutdown's first await (serve.spec asserts `listening` is false the instant
+    // the SIGTERM handler fires). closeIdleConnections() releases sockets parked on
+    // keep-alive -- the Nx client holds one by default -- which is what lets the
+    // close callback actually fire. NOT closeAllConnections(): that would kill an
+    // in-flight PUT and defeat the drain below.
+    const closed = new Promise<void>((resolve) => {
+      if (!server.listening) {
+        resolve();
 
-    // Bounded drain: await in-flight puts but only up to graceMs, backed by an
-    // unref'd timer. The runner sends SIGTERM and then SIGKILL after a short
-    // grace, so an UNBOUNDED await would deadlock the implicit wait before job
+        return;
+      }
+
+      server.close(() => resolve());
+      server.closeIdleConnections();
+    });
+
+    // Bounded drain: await in-flight puts AND the close, but only up to graceMs,
+    // backed by an unref'd timer. The runner sends SIGTERM and then SIGKILL after a
+    // short grace, so an UNBOUNDED await would deadlock the implicit wait before job
     // cleanup -- a hung write must yield to the kill rather than block teardown.
-    const drained = Promise.allSettled([...inFlightPuts]);
+    // The close is folded INTO the raced side for exactly that reason: awaiting it
+    // unconditionally is the deadlock this comment warns about.
+    const drained = Promise.allSettled([...inFlightPuts]).then(() => {
+      // A socket carrying an in-flight PUT was ACTIVE, not idle, when the first
+      // closeIdleConnections() ran, so it survived. Now that its write has settled
+      // and its response is on the way out it can go, and the close can complete
+      // without burning the whole grace.
+      server.closeIdleConnections();
+    });
     const bounded = new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, graceMs);
       timer.unref();
     });
 
-    await Promise.race([drained, bounded]);
+    await Promise.race([Promise.all([drained, closed]), bounded]);
 
     process.removeListener('SIGTERM', onSigterm);
   }

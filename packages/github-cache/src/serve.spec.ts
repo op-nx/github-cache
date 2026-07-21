@@ -1,4 +1,5 @@
 import { rm } from 'node:fs/promises';
+import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as cache from '@actions/cache';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -239,6 +240,56 @@ describe('serve SIGTERM drain (ROBUST-04)', () => {
     running.server.closeAllConnections();
     await hung;
   });
+
+  it('closes an idle keep-alive connection and awaits the close before resolving (ROBUST-04)', async () => {
+    // The Nx client holds a keep-alive socket by default. shutdown() called
+    // server.close() and then never awaited it, so it resolved off the (empty)
+    // drain while the listening socket was still tearing down -- reporting a
+    // teardown that had not happened. closeIdleConnections() is the belt-and-braces
+    // half (on the node24 runtime both actions declare, server.close() already
+    // releases idle sockets); awaiting the close is the load-bearing half.
+    running = await serve();
+
+    const agent = new http.Agent({ keepAlive: true });
+    const url = new URL(`${running.url}/v1/cache/abc123`);
+
+    await new Promise<void>((resolve, reject) => {
+      const request = http.request(
+        url,
+        { agent, headers: auth(running!.token) },
+        (res) => {
+          res.resume();
+          res.on('end', () => resolve());
+        },
+      );
+      request.on('error', reject);
+      request.end();
+    });
+
+    const connections = () =>
+      new Promise<number>((resolve) =>
+        running!.server.getConnections((_error, count) => resolve(count)),
+      );
+
+    // Non-vacuous: the socket really is parked on the server before shutdown.
+    expect(await connections()).toBe(1);
+
+    let closeCompleted = false;
+    running.server.on('close', () => {
+      closeCompleted = true;
+    });
+
+    await running.shutdown();
+
+    // The assertion that reddens: without the close folded into shutdown's race,
+    // shutdown resolves on the drain microtask and the 'close' event has not fired
+    // yet, so this reads false.
+    expect(closeCompleted).toBe(true);
+    expect(await connections()).toBe(0);
+    expect(running.server.listening).toBe(false);
+
+    agent.destroy();
+  }, 8000);
 
   it('registers exactly one SIGTERM listener on serve() and removes it on shutdown() (ROBUST-04)', async () => {
     const before = process.listeners('SIGTERM').length;

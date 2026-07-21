@@ -68768,15 +68768,22 @@ async function serve(options = {}) {
     server.listen(port, "127.0.0.1", () => resolve2());
   });
   async function shutdown() {
-    if (server.listening) {
-      server.close();
-    }
-    const drained = Promise.allSettled([...inFlightPuts]);
+    const closed = new Promise((resolve2) => {
+      if (!server.listening) {
+        resolve2();
+        return;
+      }
+      server.close(() => resolve2());
+      server.closeIdleConnections();
+    });
+    const drained = Promise.allSettled([...inFlightPuts]).then(() => {
+      server.closeIdleConnections();
+    });
     const bounded = new Promise((resolve2) => {
       const timer = setTimeout(resolve2, graceMs);
       timer.unref();
     });
-    await Promise.race([drained, bounded]);
+    await Promise.race([Promise.all([drained, closed]), bounded]);
     process.removeListener("SIGTERM", onSigterm);
   }
   function onSigterm() {

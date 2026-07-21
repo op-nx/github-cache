@@ -25,12 +25,20 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # Start the loopback cache sidecar as a background step. It exports
-      # NX_SELF_HOSTED_REMOTE_CACHE_SERVER and
-      # NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN for the Nx step below.
+      # A background step cannot export env to later steps, so pre-set the two
+      # NX_* vars here in a regular step (its $GITHUB_ENV writes propagate). The
+      # sidecar below adopts the pre-set token and the matching port.
+      - run: |
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      # Start the loopback cache sidecar as a background step. It adopts the
+      # pre-set NX_* vars and binds the matching port on 127.0.0.1.
       - uses: op-nx/github-cache/start-cache-server@v0
         id: cache-server
         background: true
+        with:
+          port: '3000'
         env:
           # Selects the writable Actions-cache backend on trusted triggers
           # (push / schedule; also pull_request/release on github.com). Fork/PR

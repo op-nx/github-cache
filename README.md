@@ -15,9 +15,10 @@ already have.
 **Prerequisites:** an Nx workspace on Nx 21 or later (the self-hosted remote
 cache API) and a GitHub Actions workflow.
 
-Add the sidecar as a background step in your existing build job. It runs the
-loopback cache server for the length of the job and exports the two `NX_*`
-variables the Nx client reads:
+Add the sidecar as a background step in your existing build job. Because a
+background step cannot export environment variables to later steps, you set the
+two `NX_*` variables the Nx client reads in a regular step first, then start the
+sidecar with a matching `port`; the sidecar adopts the values you set:
 
 ```yaml
 jobs:
@@ -26,19 +27,28 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Start the Nx remote-cache sidecar as a background step. It binds a
-      # loopback server and exports NX_SELF_HOSTED_REMOTE_CACHE_SERVER and
-      # NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN for the Nx step below.
+      # A background step cannot export env to later steps, so PRE-SET the two
+      # Nx client vars here in a regular step (whose $GITHUB_ENV writes DO
+      # propagate). Pick any free loopback port and a fresh per-run token; the
+      # sidecar below adopts both.
+      - run: |
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      # Start the Nx remote-cache sidecar as a background step. It adopts the
+      # pre-set NX_* vars and binds the matching port on 127.0.0.1.
       - uses: op-nx/github-cache/start-cache-server@v0
         id: cache-server
         background: true
+        with:
+          port: '3000'
         env:
           # Selects the writable Actions-cache backend on trusted triggers
           # (push / schedule). Without a resolvable token the sidecar serves a
           # read-only backend and every task is a cache MISS on write.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Nx reads the exported NX_* vars and talks to the loopback sidecar.
+      # Nx reads the pre-set NX_* vars and talks to the loopback sidecar.
       - run: npx nx affected -t build test
 
       # MANDATORY teardown. serve() never exits on its own, so the implicit
@@ -54,10 +64,12 @@ cache.
 ## How it works
 
 - **Background sidecar.** `start-cache-server` is a JS action that runs the cache
-  server on `127.0.0.1` as a [background step][background-steps], then exports
+  server on `127.0.0.1` as a [background step][background-steps]. A background
+  step cannot export env to later steps, so you set
   `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` (the loopback URL) and
-  `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` (a per-run bearer token) so the next
-  Nx step reaches it.
+  `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` (a per-run bearer token) in a regular
+  step first and pass a matching `port`; the sidecar adopts them so the next Nx
+  step reaches it.
 - **Read-write only where it is safe.** The backend is chosen from runtime
   context, never a caller flag: a trusted CI trigger with a resolvable token gets
   the writable Actions-cache backend; everything else is read-only. See

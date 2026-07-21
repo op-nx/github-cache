@@ -2,10 +2,11 @@
 
 Every consumer-facing configuration knob for `@op-nx/github-cache`, what sets it,
 and its default. In the default [quickstart](../README.md#quickstart-5-minutes)
-you set none of these by hand -- the `start-cache-server` action exports the two
-`NX_*` variables for you and everything else has a safe default. This reference
-is for the cases where you need to override a default or wire the server
-yourself.
+you set the two `NX_*` variables (plus a matching `port`) in a regular step and
+the `start-cache-server` action adopts them -- a background step cannot export
+env to later steps, so the action generates nothing. Everything else has a safe
+default. This reference is for the cases where you need to override a default or
+wire the server yourself.
 
 These knobs, plus the package exports and the action inputs, are the versioned
 consumer contract (see [Versioning](versioning.md)) and are locked by the
@@ -13,15 +14,15 @@ consumer contract (see [Versioning](versioning.md)) and are locked by the
 
 ## Environment variables
 
-| Variable                                   | Set by                                          | Purpose                                                                             | Default                       |
-| ------------------------------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
-| `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`       | the action (exported); or you, for the fallback | Loopback URL the Nx client uses to reach the sidecar (`http://localhost:<port>`)    | exported by the action        |
-| `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` | the action (exported); or you, to pin a token   | Bearer token the Nx client presents and the server checks                           | a fresh per-run CSPRNG token  |
-| `PORT`                                     | you (optional)                                  | Loopback port to bind (`resolvePort`)                                               | an OS-assigned ephemeral port |
-| `CACHE_MIRROR_MAX_AGE_DAYS`                | you (optional)                                  | The one coupled retention knob (`resolveMaxAgeDays`) for the opt-in Releases mirror | `30` (clamped to `365`)       |
-| `GH_TOKEN`                                 | you / the runner                                | GitHub token, first choice (`resolveGitHubToken`)                                   | none                          |
-| `GITHUB_TOKEN`                             | you / the runner                                | GitHub token, fallback when `GH_TOKEN` is unset                                     | none                          |
-| `GITHUB_REPOSITORY`                        | the runner (CI); you, to override locally       | `owner/name` identity (`resolveRepoIdentity`)                                       | the `origin` git remote       |
+| Variable                                   | Set by                                    | Purpose                                                                             | Default                       |
+| ------------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
+| `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`       | you, before the background step (adopted) | Loopback URL the Nx client uses to reach the sidecar (`http://localhost:<port>`)    | none (you set it)             |
+| `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` | you, before the background step (adopted) | Bearer token the Nx client presents and the server checks                           | a fresh per-run CSPRNG token  |
+| `PORT`                                     | you (optional)                            | Loopback port to bind (`resolvePort`)                                               | an OS-assigned ephemeral port |
+| `CACHE_MIRROR_MAX_AGE_DAYS`                | you (optional)                            | The one coupled retention knob (`resolveMaxAgeDays`) for the opt-in Releases mirror | `30` (clamped to `365`)       |
+| `GH_TOKEN`                                 | you / the runner                          | GitHub token, first choice (`resolveGitHubToken`)                                   | none                          |
+| `GITHUB_TOKEN`                             | you / the runner                          | GitHub token, fallback when `GH_TOKEN` is unset                                     | none                          |
+| `GITHUB_REPOSITORY`                        | the runner (CI); you, to override locally | `owner/name` identity (`resolveRepoIdentity`)                                       | the `origin` git remote       |
 
 `MAX_CACHE_BODY_BYTES` is **not** an environment variable -- see
 [The body-size limit is fixed](#the-body-size-limit-is-fixed) below.
@@ -32,19 +33,21 @@ consumer contract (see [Versioning](versioning.md)) and are locked by the
 
 These two are the [Nx self-hosted remote cache][nx-self-hosted] client variables.
 Nx (not this package) reads them to decide where to send `GET` / `PUT` cache
-requests and which bearer token to present. The `start-cache-server` action
-exports both after it binds the sidecar, so a later Nx step in the same job picks
-them up automatically. You only set them by hand on the
-[`&` fallback path](advanced.md#the--fallback-older-runners-and-ghes) or when
+requests and which bearer token to present. A background step cannot export env
+to later steps, so you set both in a regular step BEFORE the `start-cache-server`
+background step (passing the same `port`); the action adopts them and binds the
+matching loopback port. The same applies on the
+[`&` fallback path](advanced.md#the--fallback-older-runners-and-ghes) and when
 running the server as a library / `npx` process.
 
 ### `PORT`
 
 `resolvePort` reads `PORT` (or the action's `port` input). A missing, non-integer,
 negative, or out-of-range value falls back to `0`, which asks the OS for an
-ephemeral port; the server binds `127.0.0.1` only. Read the actual URL back from
-the exported `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` rather than assuming a fixed
-port.
+ephemeral port; the server binds `127.0.0.1` only. For the background-step action
+set a fixed `port` that matches the port in the `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`
+url you pre-set -- an ephemeral port would not match a fixed pre-set url and the
+Nx client would MISS every read.
 
 ### `CACHE_MIRROR_MAX_AGE_DAYS`
 

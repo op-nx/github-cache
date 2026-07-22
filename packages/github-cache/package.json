@@ -24,8 +24,16 @@
     "github-cache": "./dist/serve.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/action",
+    "!dist/roundtrip",
+    "!dist/test",
+    "!dist/**/*.tsbuildinfo",
+    "!dist/**/*.d.ts.map"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "publishConfig": {
     "access": "public"
   },

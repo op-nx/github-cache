@@ -4,13 +4,21 @@
  * DOCS-06 / T-06-01-01: the npm tarball file-list guard (A1, Pitfall 2).
  *
  * Runs `npm pack --dry-run --json` for @op-nx/github-cache and asserts the
- * PUBLISHED tarball ships ONLY the consumer artifacts -- dist/ + LICENSE +
- * README.md + package.json -- and EXCLUDES every repo/dogfood/CI internal:
- * src/, .github/, .planning/, nx.json, start-cache-server/, any .env, and this
- * package's own dogfood files (action.yml, pack-check.cjs,
- * tsconfig*, the vitest config). This proves files:["dist"] keeps
- * dogfood-stays-local -- nothing authored for THIS repo's CI leaks into the
- * consumer package (T-06-01-01).
+ * PUBLISHED tarball ships ONLY the consumer artifacts -- the CONSUMER subset of
+ * dist/ + LICENSE + README.md + package.json -- and EXCLUDES every
+ * repo/dogfood/CI internal: src/, .github/, .planning/, nx.json,
+ * start-cache-server/, any .env, and this package's own dogfood files
+ * (action.yml, pack-check.cjs, tsconfig*, the vitest config).
+ *
+ * dogfood-stays-local applies INSIDE dist/ too, not only at the repo root: the
+ * `files` negated globs exclude dist/action (the internal dogfood action's built
+ * main), dist/roundtrip (the CI round-trip bin), dist/test (spec-only helpers),
+ * and the *.tsbuildinfo / *.d.ts.map build metadata. tsc still EMITS all of it
+ * (action.yml resolves dist/action/index.js from the repo checkout, ci.yml runs
+ * dist/roundtrip/read-back.js, specs import dist/test) -- npm just does not PACK
+ * it. This guard proves both halves: the internal subtrees are absent AND the
+ * genuine consumer entry points are present, so an over-narrow `files` edit
+ * cannot silently ship an empty package (T-06-01-01).
  *
  * Dependency-free (node builtins only), so CI can run
  * it right after `npm ci` with no extra install. Fail-loud: any violation exits
@@ -56,8 +64,19 @@ function packFileList() {
   return entry.files.map((file) => file.path.replace(/\\/g, '/'));
 }
 
-/** Consumer artifacts that MUST be present in the tarball. */
-const REQUIRED = ['LICENSE', 'README.md', 'package.json'];
+/**
+ * Consumer artifacts that MUST be present in the tarball. Includes the real dist/
+ * entry points so an over-narrow `files` edit (e.g. a negated glob that
+ * accidentally excludes the barrel) cannot silently ship an empty package.
+ */
+const REQUIRED = [
+  'LICENSE',
+  'README.md',
+  'package.json',
+  'dist/index.js',
+  'dist/index.d.ts',
+  'dist/serve.js',
+];
 
 /** Internal paths that MUST NOT ship; a match on any predicate is a leak. */
 const FORBIDDEN = [
@@ -81,6 +100,26 @@ const FORBIDDEN = [
   {
     label: 'the start-cache-server action',
     test: (p) => p.startsWith('start-cache-server/'),
+  },
+  // dogfood-stays-local INSIDE dist/: these subtrees are built (tsc emits them so
+  // the repo's own action.yml/ci.yml/specs resolve them) but must NOT ship to
+  // consumers -- excluded via the `files` negated globs, asserted here so a
+  // reintroduction fails the guard.
+  {
+    label: 'the internal dogfood action build output',
+    test: (p) => p.startsWith('dist/action/'),
+  },
+  {
+    label: 'the CI round-trip build output',
+    test: (p) => p.startsWith('dist/roundtrip/'),
+  },
+  {
+    label: 'test-support build output',
+    test: (p) => p.startsWith('dist/test/'),
+  },
+  {
+    label: 'a tsbuildinfo build artifact',
+    test: (p) => p.endsWith('.tsbuildinfo'),
   },
 ];
 
@@ -112,16 +151,19 @@ function main() {
     process.stderr.write(
       `pack-check: the ${PACKAGE_NAME} tarball file list is WRONG:\n` +
         problems.map((m) => '  - ' + m).join('\n') +
-        '\n\nThe published package must ship ONLY dist/ + LICENSE + README.md + ' +
-        'package.json (files:["dist"]); no src/, CI, or dogfood internals ' +
-        '(dogfood-stays-local).\n',
+        '\n\nThe published package must ship ONLY the CONSUMER subset of dist/ + ' +
+        'LICENSE + README.md + package.json; no src/, CI, or dogfood internals, ' +
+        'and INSIDE dist/ no dist/action, dist/roundtrip, dist/test, or build ' +
+        'metadata (dogfood-stays-local applies inside dist/, not just at the repo ' +
+        'root).\n',
     );
     process.exit(1);
   }
 
   process.stdout.write(
     `pack-check: ${PACKAGE_NAME} tarball ships ${files.length} files -- ` +
-      'dist/ + LICENSE + README.md + package.json only; no internals leaked.\n',
+      'the consumer subset of dist/ + LICENSE + README.md + package.json only; ' +
+      'no internals leaked (dist/action, dist/roundtrip, dist/test excluded).\n',
   );
   process.exit(0);
 }

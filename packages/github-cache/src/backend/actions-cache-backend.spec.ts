@@ -181,9 +181,53 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-/** Flush the microtask queue so a queued lock waiter gets its chance to enter. */
-function tick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+/**
+ * Records entry into a mock and lets a test await a specific entry count -- no
+ * timers, so it cannot be starved by CPU contention the way a fixed setTimeout(0)
+ * `tick()` can (that flaked once under parallel load). `mark()` is called from the
+ * mock body; `reached(n)` resolves the instant the count hits n, or immediately if
+ * it already has.
+ */
+function entryTracker() {
+  const order: string[] = [];
+  const waiters = new Map<number, () => void>();
+
+  function mark(label: string): void {
+    order.push(label);
+    waiters.get(order.length)?.();
+  }
+
+  function reached(n: number): Promise<void> {
+    if (order.length >= n) {
+      return Promise.resolve();
+    }
+
+    const gate = deferred<void>();
+    waiters.set(n, gate.resolve);
+
+    return gate.promise;
+  }
+
+  /**
+   * Assert that NO further entry appears after the current count settles. Awaits a
+   * bounded number of microtask turns; if an unexpected entry were going to slip in
+   * (the lock failing to hold), it would have by then. This is the one place a
+   * timer-free "nothing else happened" check needs a settle window -- kept as
+   * microtask flushes, not a wall-clock delay.
+   */
+  async function stableAt(n: number): Promise<void> {
+    for (let i = 0; i < 50; i++) {
+      await Promise.resolve();
+    }
+
+    if (order.length !== n) {
+      throw new Error(
+        `expected the entry count to stay ${n}, saw ${order.length}: ${order.join(',')}`,
+      );
+    }
+  }
+
+  return { order, mark, reached, stableAt };
 }
 
 describe('createActionsCacheBackend serializes same-hash operations (TEST-02, Pitfall 7)', () => {
@@ -199,10 +243,10 @@ describe('createActionsCacheBackend serializes same-hash operations (TEST-02, Pi
   });
 
   it('does not interleave two concurrent same-hash gets -- the second starts only after the first settles (TEST-02)', async () => {
-    const order: string[] = [];
+    const tracker = entryTracker();
     const gates: Array<(value: string | undefined) => void> = [];
     restoreCache.mockImplementation(() => {
-      order.push('restore');
+      tracker.mark('restore');
       const gate = deferred<string | undefined>();
       gates.push(gate.resolve);
 
@@ -211,63 +255,62 @@ describe('createActionsCacheBackend serializes same-hash operations (TEST-02, Pi
     const backend = createActionsCacheBackend();
 
     const first = backend.get(LOCK_A);
-    await tick();
+    await tracker.reached(1);
 
     const second = backend.get(LOCK_A);
-    await tick();
 
-    // Non-vacuous: WITHOUT the lock both gets would have entered restoreCache by
-    // now, and this would read 2.
-    expect(order).toHaveLength(1);
+    // Non-vacuous: WITHOUT the lock the second get would enter restoreCache too;
+    // stableAt(1) proves it does NOT until the first settles.
+    await tracker.stableAt(1);
 
     gates[0](undefined);
     await first;
-    await tick();
+    await tracker.reached(2);
 
-    expect(order).toHaveLength(2);
+    expect(tracker.order).toEqual(['restore', 'restore']);
 
     gates[1](undefined);
     await second;
   });
 
   it('does not interleave a same-hash get and put -- the pair the shared archive path actually races (TEST-02, Pitfall 7)', async () => {
-    const order: string[] = [];
+    const tracker = entryTracker();
     const saveGate = deferred<number>();
     saveCache.mockImplementation(() => {
-      order.push('save');
+      tracker.mark('save');
 
       return saveGate.promise;
     });
     restoreCache.mockImplementation(async () => {
-      order.push('restore');
+      tracker.mark('restore');
 
       return undefined;
     });
     const backend = createActionsCacheBackend();
 
     const put = backend.put(LOCK_A, Buffer.from('tar-bytes'));
-    await tick();
+    await tracker.reached(1);
 
     const get = backend.get(LOCK_A);
-    await tick();
 
     // The get is queued BEHIND the in-flight put: its restoreCache has not run, so
     // its `rm` cannot delete the archive saveCache is still reading.
-    expect(order).toEqual(['save']);
+    await tracker.stableAt(1);
+    expect(tracker.order).toEqual(['save']);
 
     saveGate.resolve(42);
     await expect(put).resolves.toBe('stored');
-    await tick();
+    await tracker.reached(2);
 
-    expect(order).toEqual(['save', 'restore']);
+    expect(tracker.order).toEqual(['save', 'restore']);
     await expect(get).resolves.toEqual({ kind: 'miss' });
   });
 
   it('still runs distinct hashes concurrently (TEST-02)', async () => {
-    const order: string[] = [];
+    const tracker = entryTracker();
     const gates: Array<(value: string | undefined) => void> = [];
     restoreCache.mockImplementation(() => {
-      order.push('restore');
+      tracker.mark('restore');
       const gate = deferred<string | undefined>();
       gates.push(gate.resolve);
 
@@ -277,10 +320,10 @@ describe('createActionsCacheBackend serializes same-hash operations (TEST-02, Pi
 
     const a = backend.get(LOCK_A);
     const b = backend.get(LOCK_B);
-    await tick();
 
-    // BOTH gets reached restoreCache before EITHER gate was released.
-    expect(order).toHaveLength(2);
+    // BOTH gets reach restoreCache before EITHER gate is released -- if distinct
+    // hashes were serialized, reached(2) would never resolve and this would hang.
+    await tracker.reached(2);
 
     gates[0](undefined);
     gates[1](undefined);

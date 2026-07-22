@@ -43,8 +43,14 @@ describe('ppe/action.yml composite PPE-hygiene gate (TRUST-06)', () => {
     expect(codeLines).toMatch(/zizmor==1\.27\.0/);
   });
 
-  it('self-installs actionlint exact-pinned to 1.7.12 via the official download script (D-11)', () => {
-    expect(codeLines).toMatch(/download-actionlint\.bash\D+1\.7\.12/);
+  it('self-installs actionlint exact-pinned to 1.7.12 via the official download script fetched from a pinned commit SHA (D-11)', () => {
+    // Pin BOTH halves of the supply-chain guard, now on separate lines (the installer
+    // is downloaded to a file and bashed, not process-substituted): the immutable
+    // commit-SHA URL of download-actionlint.bash, and the 1.7.12 version passed to it.
+    expect(codeLines).toMatch(
+      /914e7df21a07ef503a81201c76d2b11c789d3fca\/scripts\/download-actionlint\.bash/,
+    );
+    expect(codeLines).toMatch(/bash "\$installer" 1\.7\.12/);
   });
 
   it('runs zizmor advisory with --no-exit-codes so a finding never fails the consumer job (D-12)', () => {
@@ -71,6 +77,17 @@ describe('ppe/action.yml composite PPE-hygiene gate (TRUST-06)', () => {
 
   it('skips the zizmor audit when the binary is absent so a failed install never hard-fails (advisory contract)', () => {
     expect(codeLines).toMatch(/command -v zizmor/);
+  });
+
+  it('splits the actionlint installer download from its execution so a failed download warns (F10)', () => {
+    // The old `bash <(curl ...)` process substitution masked curl's exit; the fixed
+    // shape checks the download explicitly and warns on failure.
+    expect(codeLines).toMatch(/actionlint installer download failed/);
+  });
+
+  it('guards the actionlint audit on the binary being present so a failed install never hard-fails (F10, advisory contract)', () => {
+    expect(codeLines).toMatch(/command -v "\$actionlint"/);
+    expect(codeLines).toMatch(/actionlint not installed/);
   });
 
   it('declares a shell for every run step (composite requirement) and no top-level env', () => {

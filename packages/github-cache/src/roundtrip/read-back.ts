@@ -4,14 +4,16 @@ import {
   createReleasesReadClient,
 } from '../backend/releases-backend.js';
 import { parseHash } from '../lib/cache-key.js';
+import { dogfoodBody } from '../lib/dogfood-body.js';
 import { isEntrypoint } from '../lib/is-entrypoint.js';
 
 /**
  * Live cross-OS publish/read-back round-trip (the leg deferred from Phase 3). The
  * per-OS publish matrix mirrored a known nx-cache-<run_id> entry to the current
  * month-shard GitHub Release as <run_id>-<os> (releaseAssetName); this bin resolves
- * it back through the REAL GitHub Releases reader on THIS OS and asserts a HIT,
- * proving the real publisher writes exactly what the real reader finds.
+ * it back through the REAL GitHub Releases reader on THIS OS and asserts a HIT WHOSE
+ * BYTES equal dogfoodBody(hash), proving the real publisher writes exactly what the
+ * real reader finds -- not merely that some asset resolves.
  *
  * It invokes the reader DIRECTLY -- createReleasesReadBackend(createReleasesReadClient
  * (process.env)) -- NOT selectBackend, which in a push (write-trusted) context returns
@@ -51,6 +53,17 @@ async function run(): Promise<void> {
         'The real Releases reader did not resolve the asset the per-OS publish matrix ' +
         'mirrored this run -- suspect the month-shard tag, the OS asset-name discriminator, ' +
         'or a publish leg that never uploaded.',
+    );
+  }
+
+  // A HIT alone only proves an asset resolved; assert the BYTES are what the publisher
+  // wrote (dogfoodBody(hash)), so a mirrored asset with the wrong contents fails the
+  // round-trip instead of passing it.
+  if (!result.bytes.equals(dogfoodBody(hash))) {
+    throw new Error(
+      `github-cache round-trip read-back: cache HIT for ${hash} on ${process.platform} ` +
+        'but the returned bytes are not what the publisher wrote -- suspect the ' +
+        'asset-name discriminator colliding across runs, or a partial upload.',
     );
   }
 

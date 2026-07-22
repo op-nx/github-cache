@@ -4,6 +4,7 @@ import { serve } from '../serve.js';
 import { isEntrypoint } from '../lib/is-entrypoint.js';
 import { isSyncTrusted } from '../lib/sync-gate.js';
 import { createResilientOctokit } from '../lib/resilient-octokit.js';
+import { dogfoodBody } from '../lib/dogfood-body.js';
 import { writeCountSummary } from '../lib/summary.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
@@ -13,16 +14,6 @@ import {
   publishMirror,
   type PublishClient,
 } from '../publish/publish-mirror.js';
-
-/**
- * Deterministic dogfood payload for a given cache hash. The seed job PUTs it and
- * the verify job GETs it and asserts an exact byte match, so both jobs agree on
- * the expected bytes without passing anything between them -- the only shared
- * input is the workflow run id used as the hash.
- */
-function dogfoodBody(hash: string): Buffer {
-  return Buffer.from(`nx-github-cache-dogfood:${hash}`);
-}
 
 /**
  * The real PublishClient adapter over @octokit/rest (D-04), mirroring the cleanup

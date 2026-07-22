@@ -58,6 +58,12 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run check:action
+      # Type-check the committed bundle's whole esbuild-reachable graph via the
+      # root tsconfig.action.json (entry.ts lives outside the package tsconfig, so
+      # it otherwise ships in the bundle with zero type checking). This job already
+      # owns "the committed bundle is correct", so the typecheck belongs here rather
+      # than a new job. noEmit, so it never touches the bundle or the drift diff.
+      - run: npm run typecheck:action
 
   # The npm tarball file-list guard (DOCS-06 / GOV-02, A1, Pitfall 2). Proves
   # files:["dist"] ships ONLY dist/ + LICENSE + README.md + package.json and
@@ -241,6 +247,12 @@ jobs:
   # propagate) and passes the matching fixed port; serve() adopts both.
   consumer-smoke:
     if: github.event_name == 'push'
+    # Depend on action-bundle-drift so a drifted committed bundle short-circuits
+    # this job instead of being silently papered over by a fresh rebuild. This job
+    # now runs the COMMITTED start-cache-server/index.js as-is (no build:action
+    # step) -- exactly the artifact an adopter resolves from the git ref -- so the
+    # smoke test proves the shipped bytes work, not that a rebuild does.
+    needs: action-bundle-drift
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
@@ -249,7 +261,6 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      - run: npm run build:action
       # Pre-set the Nx client vars HERE, in a regular step: a background step
       # cannot export env to later steps, but this step's $GITHUB_ENV writes do
       # propagate. The sidecar below adopts the pre-set token + matching port.

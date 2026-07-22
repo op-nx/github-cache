@@ -14,10 +14,10 @@ public and private** GitHub repositories - not only for dogfooding in this repo.
 **one backend per process, chosen by runtime context** (default: Actions-cache CI-RW only);
 an opt-in reader/cross-context store and its publish/cleanup are a separate, reader-specific
 step. Write-trust is an allowlist; the full CREEP control ledger is in
-`.planning/ARCHITECTURE-DECISION.md`. **The current implementation is a spike/PoC (reference,
-rebuildable; sunk cost = 0).** The reader adapter is **LOCKED = GitHub Releases** (FOUND-01
-spike, forward merits) and the Docker container form is **deferred to a later milestone** (FOUND-03); GHCR/OCI
-is the later-milestone revisit trigger (with cosign + Docker).
+`.planning/ARCHITECTURE-DECISION.md`. **v0.0.1 (the greenfield MVP rebuild) shipped
+2026-07-22** — merged to `main` and tagged. The reader adapter is **LOCKED = GitHub Releases**
+(FOUND-01 spike, forward merits) and the Docker container form is **deferred to a later
+milestone** (FOUND-03); GHCR/OCI is the later-milestone revisit trigger (with cosign + Docker).
 
 ## Core Value
 
@@ -31,39 +31,34 @@ never a broken build) and writes must stay gated.
 
 ### Validated
 
-<!-- Inferred from the existing codebase (.planning/codebase/) - shipped and dogfooded in this repo, not yet fully test-covered. Describes the CURRENT spike/PoC implementation; the storage-primitive choice is being re-verified (see Key Decisions). Reconciliation: the PoC mirror serves anonymous reads, but FOUND-02 supersedes it - the forward requirement is authenticated, private-repo-capable local read, with anonymous public read demoted to an optional OSS bonus (not a dependency). -->
+Shipped and verified in **v0.0.1 Greenfield MVP Rebuild** (all 7 phases verified `passed`,
+6/6 E2E flows wired, all threats closed). Full per-requirement traceability:
+`milestones/v0.0.1-REQUIREMENTS.md`.
 
-> **These describe the spike/PoC that is being deleted and rebuilt greenfield** (ROADMAP Phase 0-1, MVP/vertical). They are the **target spec** the rebuild re-establishes test-first, not shipped current state.
-
-- [x] Nx self-hosted remote-cache HTTP server: loopback bind, timing-safe bearer auth, hash validation, body-size cap, best-effort read degradation - existing
-- [x] Runtime-context backend selection (no caller-facing mode flag) - existing
-- [x] Read-write cache in CI on trusted events (Actions cache backend) - existing
-- [x] Read-only enforcement locally (local `put()` always forbidden -> 403) - existing
-- [x] CREEP (CVE-2025-36852) write-trust gate: `isWriteTrusted(env)`, defense-in-depth alongside GitHub's server-side read-only cache token - existing
-- [x] Date-based auto-cleanup via `CACHE_MIRROR_MAX_AGE_DAYS`, coupled to the read-lookback window so retained assets stay readable and expired ones stay cleanable - existing
-- [x] Daily scheduled single-writer mirror cleanup, decoupled from pushes - existing
-- [x] Cross-OS content-hash parity (`.gitattributes` `eol=lf`; OS-discriminated integration hash) and per-OS publish-mirror matrix (ubuntu + windows) - existing
-- [x] Published npm package `@op-nx/github-cache` with three bins; two dependency-free GitHub JS actions (`start-cache-server`, `publish-mirror`) - existing
+- ✓ Nx self-hosted remote-cache HTTP server: loopback bind, timing-safe bearer auth, hash validation, 2 GB body cap, best-effort read degradation / fail-closed write (SRV-01..05) — v0.0.1
+- ✓ Runtime-context backend selection, one backend per process, no caller-facing mode flag (TRUST-05) — v0.0.1
+- ✓ Read-write Actions-cache backend in CI on trusted `{push,schedule}` events; per-hash lock; SIGTERM drain (ROBUST-04) — v0.0.1
+- ✓ Authenticated GitHub Releases read-only reader for cross-context/local read, private-repo-capable (FOUND-01/02); local `put()` always 403 — v0.0.1
+- ✓ OS-namespaced store so a cross-OS hit never serves a wrong-OS artifact (CORR-01) — v0.0.1
+- ✓ CREEP (CVE-2025-36852) write-trust: host-detected fail-closed allowlist + separate `{push,schedule}` sync gate + server-produced-key mirror filter (TRUST-01..08) — v0.0.1
+- ✓ `{push,schedule}`-gated publish/sync engine + fail-loud observability + ~2 GiB and 1000-asset graceful degradation (ROBUST-01/02/05, OBS-01) — v0.0.1
+- ✓ Age-based cleanup coupled to the read-lookback window via one `CACHE_MIRROR_MAX_AGE_DAYS` knob; daily single-writer scheduled cleanup (RETAIN-01/03) — v0.0.1
+- ✓ Shipped installable advisory PPE-hygiene gate (zizmor/actionlint) (TRUST-06) — v0.0.1
+- ✓ Cross-OS content-hash parity (`.gitattributes` `eol=lf`; OS-discriminated hash) + per-OS publish-mirror matrix (TEST-05) — v0.0.1
+- ✓ Published npm package `@op-nx/github-cache` + `uses:`-consumable `start-cache-server` JS action + background-step CI sidecar pattern; enumerated/tested public surface; SECURITY.md/LICENSE/semver (DOCS-01..06, GOV-01..03, FOUND-03) — v0.0.1
 
 ### Active
 
-<!-- New scope for this milestone. Hypotheses until shipped and validated. -->
+_None — v0.0.1 shipped the full MVP requirement set. Run `/gsd:new-milestone` to define the
+next version (fresh REQUIREMENTS.md)._
 
-**FOUNDATION (P0):**
+Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per the FOUND-01 ledger):
 
-- [x] **Reader / cross-context storage adapter = GitHub Releases (LOCKED, FOUND-01 spike):** decided on forward merits - fewer incident/operational hazards + no public poison-remediation gap vs GHCR (spike `.planning/spikes/001-005`). Actions cache stays the CI-RW default; git-native and Actions artifacts are out; GHCR is the later-milestone revisit trigger. See `.planning/ARCHITECTURE-DECISION.md`.
-- [ ] **Local read uses the developer's existing GitHub authentication** (git credential helper and/or `gh` CLI, or `GH_TOKEN`/`GITHUB_TOKEN`) and MUST work for **private repositories**. Anonymous zero-credential read is an optional convenience for public repos only - never a design driver.
-- [x] **Distribution forms = npm package + JS Action (v0.0.1); Docker deferred to a later milestone (LOCKED, FOUND-03).** The JS Action is mandatory for the Actions-cache CI-RW role. The Docker container's CI `services:` motivation is covered by running `serve` as a GitHub Actions background step (`background`/`cancel`) + a plain `&` fallback; residual niche (hermetic / non-Node CI) is a later-milestone item.
+- [ ] **GHCR-01** — GHCR/OCI as an additional synced store (additive; multi-store keeps Releases)
+- [ ] **PROV-01** — optional reader-verified cosign keyless provenance attestation
+- [ ] **FOUND-03 (Docker)** — Docker container distribution form (CI-sidecar motivation already covered by the background-step pattern)
 
-**Feature work (see REQUIREMENTS.md for the full, security-reviewed set):**
-
-- [ ] `pull_request`/`release` write-trust, **gated on GitHub's server-side read-only-token backstop** (default off on GHES below the floor)
-- [ ] Document + test the runtime-context-derived RW/RO mode (no caller-facing mode flag)
-- [ ] Comprehensive test coverage for the untested paths (publish/cleanup orchestration, `selectBackend`, cleanup wrapper, `withHashLock`)
-- [ ] Structural (Octokit) error discrimination on the publish AND cleanup paths
-- [ ] Shipped PPE-hygiene gate + repo-wide safety controls; cross-OS correctness (CORR-01); consumer adoption docs (public + private); governance (SECURITY.md/LICENSE)
-
-(LRU via a manifest is out of scope - native Actions-cache LRU + age-only RO; see Key Decisions.)
+(LRU via a manifest remains out of scope — native Actions-cache LRU + age-only RO; see Key Decisions.)
 
 ### Out of Scope
 
@@ -77,7 +72,7 @@ never a broken build) and writes must stay gated.
 
 ## Context
 
-- **Greenfield rebuild.** A substantial PoC exists and is dogfooded, but it is being **deleted and rebuilt from scratch** (Phase 0 teardown -> MVP/vertical slices; sunk cost = 0). The PoC's `.planning/codebase/*` map and the platform facts/gotchas in `.planning/research/PITFALLS.md` carry forward as **reference/spec only**, never as code to extend. The codebase map is regenerated against the torn-down workspace between Phase 0 and Phase 1 (see ROADMAP.md).
+- **Current state: v0.0.1 shipped (2026-07-22).** The greenfield rebuild is complete — the PoC was torn down (Phase 0) and rebuilt across MVP/vertical slices (Phases 1-6), merged to `main` via PR #3, and tagged `v0.0.1`. The `.planning/codebase/*` map should be regenerated against the shipped tree (`/gsd:map-codebase`); the platform facts/gotchas in `.planning/research/PITFALLS.md` remain reference.
 - **Ports-and-adapters** around a single `CacheBackend` port, with a thin HTTP protocol layer and side-effect-free pure domain modules (`shard`, `cleanup`, `trust`, `types`) for testability. The port isolates any future storage-primitive pivot to a new factory behind `selectBackend`.
 - **Auth assumption:** because the platform is GitHub, local developer environments are assumed already authenticated to GitHub (git credential helper and/or `gh`). Requiring auth is free; depending on anonymous access is not (it excludes private repos).
 - **Three credentials, never mixed:** per-process CSPRNG bearer token (Nx <-> server), `ACTIONS_RUNTIME_TOKEN` (Actions cache service, passed only by process inheritance into JS actions), and `GITHUB_TOKEN`/`GH_TOKEN` (gh/Octokit REST).
@@ -139,4 +134,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-18 - Phase 1 (Walking Skeleton) complete: the greenfield `@op-nx/github-cache` lib speaks the Nx self-hosted-cache HTTP contract end-to-end (`GET`/`PUT /v1/cache/{hash}`) against a trivial in-process backend, built test-first (TDD). Delivered SRV-01..05 (loopback bind, timing-safe bearer auth, hash validation, body cap, best-effort MISS) + TEST-07 (conformance fixture hashing the full vendored Nx spec, hard-200/Nx-21+ floor); zero runtime dependencies, `node:http` + `node:crypto` only. Prior (2026-07-17): FOUND-01/03 LOCKED after the reader spike (`.planning/spikes/001-005`): reader adapter = GitHub Releases; Docker deferred to a later milestone; GHCR = later-milestone revisit trigger. 6-panel triage + Sonnet `/lz-security-review` + targeted research (host-based fail-closed write-trust detection; GHCR no-overwrite best-effort/low-severity; Nx PUT floor hard 200/Nx-21+). See ARCHITECTURE-DECISION.md.*
+*Last updated: 2026-07-22 after v0.0.1 milestone (Greenfield MVP Rebuild) complete. Shipped 7 phases / 33 plans: the Nx self-hosted-cache HTTP server (SRV-01..05), Actions-cache CI-RW backend + context-derived `selectBackend` (TRUST-05, ROBUST-04), authenticated GitHub Releases reader with OS-namespacing (FOUND-01/02, CORR-01), `{push,schedule}`-gated publish/cleanup + coupled retention + fail-loud observability (TRUST-02, RETAIN-01/03, ROBUST-01/02/05, OBS-01), host-detected trust-widening + server-produced-key filter + advisory PPE gate (TRUST-01/06/08), and npm package + `start-cache-server` JS action + docs/governance (DOCS-01..06, GOV-01..03). Merged via PR #3, tagged v0.0.1. Milestone audit passed (6/6 E2E flows wired, all threats closed). Later-milestone triggers: GHCR-01, PROV-01, FOUND-03 (Docker). See milestones/v0.0.1-* and ARCHITECTURE-DECISION.md.*

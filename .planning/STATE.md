@@ -2,11 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.0.1
 milestone_name: Greenfield MVP Rebuild
-current_phase: 6
-status: "Milestone v0.0.1 shipped -- PR #3"
-stopped_at: Completed quick 260721-wtl (PR #3 round 8) - cleanup in-code trust gate (narrow isTrustedSyncEvent); schedule-payload probe on main confirmed default_branch present, gate kept narrow
-last_updated: "2026-07-21T22:56:04.000Z"
-last_activity: 2026-07-21
+current_phase: 0.1
+status: Awaiting next milestone
+stopped_at: "Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-review findings). 19 bisect-safe atomic commits landed on gsd/v0.0.1-greenfield-rebuild (c0d1ebf..4c64aff), covering F01-F27 except the two deliberately-excluded items (deleted-rationale sweep + v0 tag, both now Deferred Items rows) plus a flake-hardening follow-up. 430 tests (up from the 384 baseline); every commit green on the full battery (format:check, build, typecheck, test, fallow:ci, check:action, pack:check) and typecheck:action from Task 15 on. Task 10 added @octokit/plugin-retry@8.1.0 + @octokit/plugin-throttling@11.0.3 with a linux/arm64-regenerated, additive-only lockfile (no Windows prune)."
+last_updated: "2026-07-22T01:31:12.273Z"
+last_activity: 2026-07-22
+last_activity_desc: Milestone v0.0.1 completed and archived
 progress:
   total_phases: 7
   completed_phases: 7
@@ -27,12 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 ## Current Position
 
-Phase: 6
-Plan: Not started
-Status: Milestone v0.0.1 shipped -- PR #3 (post-review remediation quicks 260721-g1p + 260721-pej + 260721-qk1; CI green)
-Last activity: 2026-07-21 - Completed quick task 260721-wtl: added the deferred cleanup in-code trust gate (narrow isTrustedSyncEvent, retention-safe). A temporary schedule-payload probe on main empirically confirmed repository.default_branch IS present on a real schedule run; the gate is kept narrow on robustness grounds. 384 tests + full CI battery + PR #3 cross-OS matrix green
-
-Progress: [██████████] 100% of planned plans (phase 5 pending verification)
+Phase: Milestone v0.0.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-22 — Milestone v0.0.1 completed and archived
 
 ## Performance Metrics
 
@@ -201,3 +200,7 @@ HELD (deliberately, for the lead): the branch push and the PR-body update. The l
 Final local battery at HEAD cb2832d: fmt / build / typecheck / typecheck:action / test (430) / fallow:ci / check:action / pack:check all exit 0.
 Resume file: none. Full task->SHA mapping + deviations + battery table in ./quick/260722-0od-address-pr-3-review-findings/260722-0od-SUMMARY.md.
 Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates the PR #3 body. Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

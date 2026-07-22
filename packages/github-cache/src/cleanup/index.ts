@@ -68,14 +68,18 @@ export async function run(): Promise<void> {
   // Defense-in-depth in-code trust gate (CREEP C2 / RETAIN-03), mirroring runPublish's
   // gate-FIRST ordering in action/index.ts. cleanup DELETES release assets, so it must
   // never run outside a trusted CI sync context even if a workflow ever wired this bin
-  // in. A gated-out context is a clean no-op exit 0 (core.info + return, NEVER
+  // in. A gated-out context is a clean no-op exit 0 (core.warning + return, NEVER
   // setFailed): a non-sync context is simply not a cleanup context, not a fault to
-  // surface. isTrustedSyncEvent is deliberately narrower than isSyncTrusted -- it does
-  // NOT depend on repository.default_branch, which the synthesized `schedule` payload
-  // does not contractually carry; a missing field must never silently disable scheduled
+  // surface, and an aborting guard is itself a way for retention to silently stop
+  // running. The skip is a WARNING, not info, matching publish-mirror's OBS-01 pattern:
+  // on a green scheduled job an info line is invisible, so a permanently-gated-out
+  // cleanup would be indistinguishable from a healthy one. isTrustedSyncEvent is
+  // deliberately narrower than isSyncTrusted -- it does NOT depend on
+  // repository.default_branch, which the synthesized `schedule` payload does not
+  // contractually carry; a missing field must never silently disable scheduled
   // retention cleanup (the retention-LOCKED failure retention.ts guards).
   if (!isTrustedSyncEvent(process.env)) {
-    core.info(
+    core.warning(
       'github-cache cleanup: not a trusted sync context (event/CI gate); skipping (no deletes).',
     );
 

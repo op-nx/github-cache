@@ -153,10 +153,10 @@ describe('isTrustedSyncEvent (cleanup defense-in-depth gate, CREEP C2 / RETAIN-0
     ).toBe(true);
   });
 
-  it('trusts a push event inside GitHub Actions', () => {
+  it('refuses a push event inside GitHub Actions (the cleanup workflow is schedule-only, so push is outside the gate)', () => {
     expect(
       isTrustedSyncEvent({ GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'push' }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('CANNOT fail-closed: trusts schedule with NO GITHUB_EVENT_PATH / no repository.default_branch (RETAIN-03 anti-fail-closed proof)', () => {

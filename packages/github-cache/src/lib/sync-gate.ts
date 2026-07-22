@@ -91,25 +91,29 @@ export function isSyncTrusted(
 
 /**
  * Defense-in-depth in-code trust gate for the scheduled cleanup path (CREEP C2 /
- * RETAIN-03). True ONLY inside GitHub Actions on a SYNC_EVENTS trigger.
+ * RETAIN-03). True ONLY inside GitHub Actions on the literal `schedule` event.
  *
- * DELIBERATELY narrower than `isSyncTrusted`: it does NOT read the repository default
- * branch. `isSyncTrusted` resolves `repository.default_branch` from the event payload,
- * but the `schedule` event GitHub synthesizes is not a documented webhook and does not
- * CONTRACTUALLY carry that field. If it were ever absent, reusing `isSyncTrusted` on the
- * cleanup path would return not-default-branch, cleanup would SILENTLY no-op every run,
- * and the mirror would leak toward the 1000-asset-per-release cap -- the exact
- * retention-LOCKED failure retention.ts guards. The default-branch check is also
- * redundant for cleanup: GitHub runs `schedule` ONLY on the default branch, and the
- * cleanup workflow is schedule-only. So this predicate gates on CI + trusted event alone
- * and CANNOT fail-closed on the happy path (schedule inside Actions). SYNC_EVENTS stays
- * the single source of truth for the trusted-event list -- never a second literal.
+ * Gated on `'schedule'` specifically, NOT on SYNC_EVENTS membership. SYNC_EVENTS
+ * also contains `push`, but the cleanup workflow is schedule-only, so accepting a
+ * push here would trust an event the cleanup path never legitimately runs on. The
+ * justification below only ever covered schedule, so the predicate now matches it.
+ *
+ * DELIBERATELY narrower than `isSyncTrusted`, and deliberately NOT `isSyncTrusted`:
+ * it does NOT read the repository default branch. `isSyncTrusted` resolves
+ * `repository.default_branch` from the event payload, but the `schedule` event GitHub
+ * synthesizes is not a documented webhook and does not CONTRACTUALLY carry that field.
+ * If it were ever absent, reusing `isSyncTrusted` on the cleanup path would return
+ * not-default-branch, cleanup would SILENTLY no-op every run, and the mirror would leak
+ * toward the 1000-asset-per-release cap -- the exact retention-LOCKED failure
+ * retention.ts guards. The default-branch check is also redundant for cleanup: GitHub
+ * runs `schedule` ONLY on the default branch, and the cleanup workflow is schedule-only.
+ * So a schedule-only gate needs no ref check and CANNOT fail-closed on the happy path
+ * (schedule inside Actions). Quick 260721-wtl empirically confirmed the
+ * default_branch field IS present in the synthesized schedule payload today; the narrow
+ * gate is kept anyway on robustness grounds.
  */
 export function isTrustedSyncEvent(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return (
-    env.GITHUB_ACTIONS === 'true' &&
-    (SYNC_EVENTS as readonly string[]).includes(env.GITHUB_EVENT_NAME ?? '')
-  );
+  return env.GITHUB_ACTIONS === 'true' && env.GITHUB_EVENT_NAME === 'schedule';
 }

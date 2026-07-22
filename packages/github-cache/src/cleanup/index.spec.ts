@@ -15,6 +15,7 @@ import { run } from './index.js';
 
 vi.mock('@actions/core', () => ({
   info: vi.fn(),
+  warning: vi.fn(),
   setFailed: vi.fn(),
 }));
 vi.mock('../lib/sync-gate.js', () => ({ isTrustedSyncEvent: vi.fn() }));
@@ -58,7 +59,14 @@ describe('cleanup run() trust gate (CREEP C2 / RETAIN-03)', () => {
     // never reaches the delete engine.
     expect(OctokitMock).not.toHaveBeenCalled();
     expect(cleanupMirrorMock).not.toHaveBeenCalled();
-    expect(core.info).toHaveBeenCalledWith(expect.stringContaining('skipping'));
+    // A gated-out cleanup is a WARNING, not info: on a green scheduled job, an
+    // info line is invisible, so a permanently-gated-out cleanup would look
+    // identical to a healthy one (OBS-01). Never setFailed -- a non-sync context
+    // is not a fault, and an aborting guard is itself a way for retention to stop.
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('skipping'),
+    );
+    expect(core.setFailed).not.toHaveBeenCalled();
   });
 
   it('throws on a corrupted GITHUB_REPOSITORY once trusted (fail-closed, never resolve into another namespace)', async () => {

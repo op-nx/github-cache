@@ -10,13 +10,14 @@ the **GitHub Actions cache** (read-write, in CI) and a **read-only GitHub Releas
 mirror** (for local reads). It is meant for **other projects to adopt** - across **both
 public and private** GitHub repositories - not only for dogfooding in this repo.
 
-**Architecture decided; one primitive choice pending a spike.** `selectBackend` returns
+**Architecture + storage primitives decided.** `selectBackend` returns
 **one backend per process, chosen by runtime context** (default: Actions-cache CI-RW only);
 an opt-in reader/cross-context store and its publish/cleanup are a separate, reader-specific
 step. Write-trust is an allowlist; the full CREEP control ledger is in
 `.planning/ARCHITECTURE-DECISION.md`. **The current implementation is a spike/PoC (reference,
-rebuildable; sunk cost = 0).** The single open choice is the reader adapter (GHCR/OCI vs
-Releases), resolved by `/gsd:spike` on forward merits.
+rebuildable; sunk cost = 0).** The reader adapter is **LOCKED = GitHub Releases** (FOUND-01
+spike, forward merits) and the Docker container form is **deferred to a later milestone** (FOUND-03); GHCR/OCI
+is the later-milestone revisit trigger (with cosign + Docker).
 
 ## Core Value
 
@@ -31,6 +32,8 @@ never a broken build) and writes must stay gated.
 ### Validated
 
 <!-- Inferred from the existing codebase (.planning/codebase/) - shipped and dogfooded in this repo, not yet fully test-covered. Describes the CURRENT spike/PoC implementation; the storage-primitive choice is being re-verified (see Key Decisions). Reconciliation: the PoC mirror serves anonymous reads, but FOUND-02 supersedes it - the forward requirement is authenticated, private-repo-capable local read, with anonymous public read demoted to an optional OSS bonus (not a dependency). -->
+
+> **These describe the spike/PoC that is being deleted and rebuilt greenfield** (ROADMAP Phase 0-1, MVP/vertical). They are the **target spec** the rebuild re-establishes test-first, not shipped current state.
 
 - [x] Nx self-hosted remote-cache HTTP server: loopback bind, timing-safe bearer auth, hash validation, body-size cap, best-effort read degradation - existing
 - [x] Runtime-context backend selection (no caller-facing mode flag) - existing
@@ -48,9 +51,9 @@ never a broken build) and writes must stay gated.
 
 **FOUNDATION (P0):**
 
-- [ ] **Reader / cross-context storage adapter (spike-gated):** GHCR/OCI vs GitHub Releases. Actions cache is the decided CI-RW default; git-native and Actions artifacts are out. The security review reweighted GHCR vs Releases to ~even for public OSS (GHCR needs digest-pin + app-enforced no-overwrite + child-manifest cleanup and hits the >5000-download-undeletable wall; Releases sidesteps it). Resolve via `/gsd:spike`. See `.planning/ARCHITECTURE-DECISION.md`.
+- [x] **Reader / cross-context storage adapter = GitHub Releases (LOCKED, FOUND-01 spike):** decided on forward merits - fewer incident/operational hazards + no public poison-remediation gap vs GHCR (spike `.planning/spikes/001-005`). Actions cache stays the CI-RW default; git-native and Actions artifacts are out; GHCR is the later-milestone revisit trigger. See `.planning/ARCHITECTURE-DECISION.md`.
 - [ ] **Local read uses the developer's existing GitHub authentication** (git credential helper and/or `gh` CLI, or `GH_TOKEN`/`GITHUB_TOKEN`) and MUST work for **private repositories**. Anonymous zero-credential read is an optional convenience for public repos only - never a design driver.
-- [ ] **Distribution forms:** published **Docker containers** and **npm packages** (local + CI) and **GitHub Actions** (CI). The JS Action is mandatory for the Actions-cache CI-RW role; the Docker container is clean for the reader role only.
+- [x] **Distribution forms = npm package + JS Action (v0.0.1); Docker deferred to a later milestone (LOCKED, FOUND-03).** The JS Action is mandatory for the Actions-cache CI-RW role. The Docker container's CI `services:` motivation is covered by running `serve` as a GitHub Actions background step (`background`/`cancel`) + a plain `&` fallback; residual niche (hermetic / non-Node CI) is a later-milestone item.
 
 **Feature work (see REQUIREMENTS.md for the full, security-reviewed set):**
 
@@ -69,11 +72,12 @@ never a broken build) and writes must stay gated.
 - Streaming of large bodies - fully buffered up to 2 GB; revisit only if real workloads demand it
 - Multi-tenant / persistent shared self-hosted runners - deployment assumes ephemeral single-tenant runners (predictable temp path + in-process lock are safe only there)
 - Local read-write mode - by design local is read-only only; only CI may write
-- Per-release asset-count limits (the 1000-assets-per-release Release cap) - a **Release-specific** limit under reconsideration in the primitive verification; primitives like ghcr.io/OCI do not have it
+
+(The 1000-assets-per-release Release cap is now **in scope** as ROBUST-05, since FOUND-01 = Releases is locked - handled by month-sharding + skip-and-warn, no longer under reconsideration.)
 
 ## Context
 
-- **Brownfield.** A substantial, well-architected implementation already exists and is dogfooded in this repo; it is early in **test coverage and public-consumption readiness**, not in implementation. See `.planning/codebase/` (ARCHITECTURE, STACK, CONCERNS, TESTING, CONVENTIONS, STRUCTURE, INTEGRATIONS).
+- **Greenfield rebuild.** A substantial PoC exists and is dogfooded, but it is being **deleted and rebuilt from scratch** (Phase 0 teardown -> MVP/vertical slices; sunk cost = 0). The PoC's `.planning/codebase/*` map and the platform facts/gotchas in `.planning/research/PITFALLS.md` carry forward as **reference/spec only**, never as code to extend. The codebase map is regenerated against the torn-down workspace between Phase 0 and Phase 1 (see ROADMAP.md).
 - **Ports-and-adapters** around a single `CacheBackend` port, with a thin HTTP protocol layer and side-effect-free pure domain modules (`shard`, `cleanup`, `trust`, `types`) for testability. The port isolates any future storage-primitive pivot to a new factory behind `selectBackend`.
 - **Auth assumption:** because the platform is GitHub, local developer environments are assumed already authenticated to GitHub (git credential helper and/or `gh`). Requiring auth is free; depending on anonymous access is not (it excludes private repos).
 - **Three credentials, never mixed:** per-process CSPRNG bearer token (Nx <-> server), `ACTIONS_RUNTIME_TOKEN` (Actions cache service, passed only by process inheritance into JS actions), and `GITHUB_TOKEN`/`GH_TOKEN` (gh/Octokit REST).
@@ -107,7 +111,7 @@ never a broken build) and writes must stay gated.
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | **One backend per process, context-selected** (`selectBackend`); default = Actions-cache CI-RW only; opt-in reader store + its publish/cleanup are a separate reader-specific step | Matches the ecosystem norm; minimal default, pay-as-you-compose; the publisher/cleanup subsystem is reader-specific (not port-isolated) | [OK] Decided (see ARCHITECTURE-DECISION.md) |
-| Reader / cross-context adapter: **GHCR/OCI vs GitHub Releases** | Decided on **forward merits only** (impl is a spike/PoC; sunk cost void) - ~even: GHCR carries digest-pin + atomic-no-overwrite + child-manifest + >5000-undeletable; Releases carries the 1000-asset + ~2 GiB ceilings | - Pending spike (FOUND-01) |
+| Reader / cross-context adapter: **GitHub Releases** (v0.0.1) | Forward merits (FOUND-01 spike): fewer incident/operational hazards + no public poison-remediation gap (vs GHCR's >5000 wall, child-manifest, delete-cred, visibility); reversible/additive. GHCR = later-milestone trigger with cosign + Docker | [OK] LOCKED (FOUND-01) |
 | **Write-trust = allowlist-only** (default-deny; no denylist); `pull_request`/`release` on **only where GitHub's untrusted-default-branch cache guard exists — host-detected from `GITHUB_SERVER_URL`** (`github.com`/`*.ghe.com` → ON; all GHES → OFF, fail-closed; no caller flag) | In-code gate is fork-spoofable defense-in-depth; the host-based check is a pure env-var function; no GA GHES has the guard yet (floor unpublished) | [OK] Decided |
 | **Sync gate = a separate predicate = `{push, schedule}` only**, test-locked to reject all other events + non-default refs | Syncing a PR- or dispatch-influenced entry into a shared store recreates the CREEP precondition | [OK] Decided (load-bearing) |
 | **Shipped installable PPE-hygiene gate** (best-effort/advisory) + default-branch-protection prerequisite | Heuristic linters can't catch novel evasions, so the load-bearing containment is the `{push,schedule}` sync gate + branch protection; the gate is defense-in-depth | [OK] Decided |
@@ -115,7 +119,7 @@ never a broken build) and writes must stay gated.
 | Retention: native Actions LRU (CI tier) + age-only (RO tier); **no LRU manifest** | A manifest adds mutable retention state (security-negative); GHCR exposes no last-accessed signal | [OK] Decided |
 | **OS-namespace the store by default** (or documented consumer OS-discrimination) | Cross-OS cache hit must never serve a wrong-OS artifact (Core Value: never a wrong result) | [OK] Decided |
 | Runtime-context backend selection instead of a mode flag | No caller can misconfigure read-write vs read-only | [OK] Good |
-| `gh` CLI (stderr text-matching) for publish/cleanup | Fragile across `gh` versions | [WARN] Revisit - rebuild on Octokit structural errors (publish AND cleanup) |
+| Publish/cleanup I/O uses Octokit (`error.status`) from the start, never `gh` stderr text-matching | `gh` gives no structured errors for already-exists/404 and is version-fragile; Octokit discriminates structurally | [OK] Decided (greenfield - no gh-CLI to migrate from) |
 
 ## Evolution
 
@@ -135,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-17 after the 6-panel triage + Sonnet `/lz-security-review` + targeted research (host-based fail-closed write-trust detection; GHCR no-overwrite is best-effort/low-severity; Nx PUT floor is a hard 200/Nx-21+); reader adapter pending spike. See ARCHITECTURE-DECISION.md.*
+*Last updated: 2026-07-18 - Phase 1 (Walking Skeleton) complete: the greenfield `@op-nx/github-cache` lib speaks the Nx self-hosted-cache HTTP contract end-to-end (`GET`/`PUT /v1/cache/{hash}`) against a trivial in-process backend, built test-first (TDD). Delivered SRV-01..05 (loopback bind, timing-safe bearer auth, hash validation, body cap, best-effort MISS) + TEST-07 (conformance fixture hashing the full vendored Nx spec, hard-200/Nx-21+ floor); zero runtime dependencies, `node:http` + `node:crypto` only. Prior (2026-07-17): FOUND-01/03 LOCKED after the reader spike (`.planning/spikes/001-005`): reader adapter = GitHub Releases; Docker deferred to a later milestone; GHCR = later-milestone revisit trigger. 6-panel triage + Sonnet `/lz-security-review` + targeted research (host-based fail-closed write-trust detection; GHCR no-overwrite best-effort/low-severity; Nx PUT floor hard 200/Nx-21+). See ARCHITECTURE-DECISION.md.*

@@ -1,0 +1,12 @@
+{
+  "name": "@op-nx/github-cache",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "targets": {
+    "integration": {
+      "command": "vitest run --config vitest.integration.config.mts",
+      "options": {
+        "cwd": "packages/github-cache"
+      }
+    }
+  }
+}

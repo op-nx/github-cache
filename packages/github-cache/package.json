@@ -1,0 +1,47 @@
+{
+  "name": "@op-nx/github-cache",
+  "version": "0.0.1",
+  "license": "MIT",
+  "author": "Lars Gyrup Brink Nielsen <larsbrinknielsen@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/op-nx/github-cache.git"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@op-nx/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "github-cache": "./dist/serve.js"
+  },
+  "files": [
+    "dist",
+    "!dist/action",
+    "!dist/roundtrip",
+    "!dist/test",
+    "!dist/**/*.tsbuildinfo",
+    "!dist/**/*.d.ts.map"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@actions/cache": "6.2.0",
+    "@actions/core": "3.0.1",
+    "@octokit/plugin-retry": "8.1.0",
+    "@octokit/plugin-throttling": "11.0.3",
+    "@octokit/rest": "22.0.1"
+  }
+}

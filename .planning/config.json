@@ -46,7 +46,8 @@
     "security_enforcement": true,
     "security_asvs_level": 1,
     "security_block_on": "high",
-    "_auto_chain_active": false
+    "_auto_chain_active": false,
+    "tdd_mode": true
   },
   "ship": {
     "pr_body_sections": [
@@ -87,35 +88,22 @@
     "source_grounding_authority": "grep"
   },
   "mode": "yolo",
-  "granularity": "coarse",
+  "granularity": "standard",
   "context_window": 1000000,
   "quick_branch_template": null,
-  "model_overrides": {
-    "gsd-planner": "opus",
-    "gsd-roadmapper": "opus",
-    "gsd-executor": "opus",
-    "gsd-phase-researcher": "opus",
-    "gsd-project-researcher": "opus",
-    "gsd-research-synthesizer": "opus",
-    "gsd-debugger": "opus",
-    "gsd-codebase-mapper": "opus",
-    "gsd-verifier": "opus",
-    "gsd-plan-checker": "opus",
-    "gsd-integration-checker": "opus",
-    "gsd-nyquist-auditor": "opus",
-    "gsd-security-auditor": "opus",
-    "gsd-ui-researcher": "opus",
-    "gsd-ui-checker": "opus",
-    "gsd-ui-auditor": "opus",
-    "gsd-doc-writer": "opus",
-    "gsd-doc-verifier": "opus"
-  },
   "features": {
     "global_learnings": true
   },
   "code_quality": {
     "fallow": {
-      "enabled": false
+      "enabled": true
+    }
+  },
+  "manager": {
+    "flags": {
+      "discuss": "--analyze --auto",
+      "plan": "--research --tdd --mvp",
+      "execute": "--validate --tdd"
     }
   }
 }

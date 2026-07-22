@@ -1,0 +1,58 @@
+# Minimal @op-nx/github-cache adopter workflow.
+#
+# Copy this into .github/workflows/ in your Nx repository. It turns on the
+# default read-write cache (backed by the GitHub Actions cache) with nothing to
+# host. For the opt-in Releases store, publish / sync, and cleanup, see
+# ../advanced.md.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+
+      # A background step cannot export env to later steps, so pre-set the two
+      # NX_* vars here in a regular step (its $GITHUB_ENV writes propagate). The
+      # sidecar below adopts the pre-set token and the matching port.
+      - run: |
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          # Mask the token BEFORE writing it to $GITHUB_ENV so it is redacted from
+          # every later log line, not only from inside the action.
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+
+      # Start the loopback cache sidecar as a background step. It adopts the
+      # pre-set NX_* vars and binds the matching port on 127.0.0.1.
+      - uses: op-nx/github-cache/start-cache-server@v0
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          # Selects the writable Actions-cache backend on trusted triggers
+          # (push / schedule; also pull_request/release on github.com). Fork/PR
+          # cache writes are contained by GitHub's server-side read-only cache
+          # guard + default-branch protection, not by the app -- see
+          # ../trust-and-security.md.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: npx nx affected -t build test
+
+      # Mandatory teardown: the never-exiting sidecar would otherwise hang the
+      # job at the implicit wait-all before post-job cleanup.
+      - cancel: cache-server

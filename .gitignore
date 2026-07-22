@@ -41,6 +41,9 @@ Thumbs.db
 .nx/cache
 .nx/workspace-data
 
+# fallow dead-code analysis cache (self-ignored via .fallow/.gitignore too)
+.fallow/
+
 # op-nx/github-cache act test harness (test-only, never a runtime dep)
 .act-cache
 .act-artifacts

@@ -1,0 +1,35 @@
+# INTERNAL to this repository's CI dogfood ONLY. This is NOT the published,
+# enumerated consumer surface -- that ships as start-cache-server/action.yml. It exists solely to prove the
+# Actions-cache backend end-to-end in this repo's own CI (ROADMAP SC5) and to
+# gate an @actions/cache upgrade (ROBUST-03); it is not meant to be consumed by
+# any other workspace.
+#
+# `main` points into the BUILD OUTPUT (dist/action/index.js), not into src, so
+# any job that uses this action MUST build the package first. The CI jobs run
+# `npm run build` before the action step, and `test:act` runs `nx build github-cache`
+# before invoking the same built entry.
+name: 'github-cache dogfood (internal)'
+description: >-
+  Internal CI dogfood for this repository only. Runs serve() against the
+  Actions-cache backend in its own foreground process and drives one scripted PUT
+  or GET to prove a real cache round-trip, OR mirrors this OS's Actions-cache
+  entries to a month-shard GitHub Release (the sync-gated 'publish' operation).
+  NOT the published consumer action (that ships as start-cache-server/action.yml).
+inputs:
+  hash:
+    description: >-
+      Cache hash to seed or verify (the workflow run id in CI). Required by the
+      'seed' and 'verify' operations; unused by 'publish', so it is optional here
+      and each operation enforces its own requirement at runtime.
+    required: false
+  operation:
+    description: >-
+      Which operation to run. 'seed' (PUT) and 'verify' (GET) drive the dogfood
+      cache round-trip; 'publish' mirrors this OS's server-produced Actions-cache
+      entries to the current month-shard GitHub Release, gated FIRST on
+      isSyncTrusted (default-branch {push,schedule} only, D-01). None of these
+      affect read-vs-write capability, which is derived from runtime context.
+    required: true
+runs:
+  using: 'node24'
+  main: 'dist/action/index.js'

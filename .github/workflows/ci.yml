@@ -7,7 +7,6 @@ on:
   pull_request:
 
 permissions:
-  actions: read
   contents: read
 
 jobs:
@@ -24,10 +23,15 @@ jobs:
       # default git-diff base, so diff-based format:check always fails here.
       - run: npx nx format:check --all
 
-  build:
+  # `fallow dead-code --fail-on-issues` gates the whole repo against dead code
+  # (unused files/exports/deps + reachability). It is config-declared-clean via
+  # .fallowrc.jsonc and base-independent, so it works identically on push and on
+  # shallow pull_request checkouts -- unlike `fallow audit`, which needs an
+  # origin/main diff base and fails open (exits 0) when that ref is absent.
+  # Future option: `fallow audit --changed-since origin/main` for faster,
+  # diff-scoped gating once the repo grows large enough to want it.
+  fallow:
     runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -35,33 +39,81 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap build, cold: no server is up yet, so this pass only writes the
-      # local cache and produces dist/bin/serve.js. It cannot itself seed the
-      # remote -- that is what the reset + second build below are for.
-      - run: npm run build
-      # Start the cache server from the JUST-BUILT binary (never a prebuilt or
-      # published copy) so CI dogfoods THIS build's server. A JS action so GitHub
-      # hands it the Actions cache runtime env, which it passes to the server.
-      - uses: ./start-cache-server
+      - run: npm run fallow:ci
+
+  # The consumer-action bundle drift guard (DOCS-06, Pitfall 1). A `uses:` action
+  # resolves start-cache-server/index.js from the git ref -- never from npm, never
+  # after a build -- so the committed esbuild bundle must stay in sync with
+  # entry.ts and its inlined deps. check:action rebuilds it with the exact-pinned
+  # esbuild and byte-diffs the committed file, exiting non-zero on staleness or a
+  # hand edit. Kept a distinct
+  # named job so a drift surfaces as a red action-bundle-drift job.
+  action-bundle-drift:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
-          command: node packages/op-nx-github-cache/dist/bin/serve.js
-      # Break the chicken-and-egg: the bootstrap left `build` as a local hit, and
-      # a local hit is never re-uploaded, so `build` would never reach the remote
-      # (and thus never the Release mirror). Dropping the local cache forces the
-      # next build to be a genuine miss -> Nx PUTs the outputs to the server
-      # (gated to trusted events server-side). This is what makes `build` -- and
-      # any future build target -- restorable cross-OS/-arch from the mirror.
-      - run: npx nx reset
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run check:action
+      # Type-check the committed bundle's whole esbuild-reachable graph via the
+      # root tsconfig.action.json (entry.ts lives outside the package tsconfig, so
+      # it otherwise ships in the bundle with zero type checking). This job already
+      # owns "the committed bundle is correct", so the typecheck belongs here rather
+      # than a new job. noEmit, so it never touches the bundle or the drift diff.
+      - run: npm run typecheck:action
+
+  # The npm tarball file-list guard (DOCS-06 / GOV-02, A1, Pitfall 2). Proves
+  # files:["dist"] ships ONLY dist/ + LICENSE + README.md + package.json and
+  # excludes every src/CI/dogfood internal (dogfood-stays-local, T-06-01-01). It
+  # needs dist built first because the tarball includes the build output, so it
+  # runs npm run build before the guard. Dependency-free node guard; distinct job.
+  pack-check:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run pack:check
+
+  # Advisory PPE-hygiene dogfood (TRUST-06 / D-12). Runs the shipped composite
+  # action (ppe/action.yml) against a KNOWN-unsafe fixture workflow to prove it
+  # self-installs exact-pinned zizmor + actionlint and emits findings. ADVISORY
+  # only: the action runs its tools non-failing (zizmor --no-exit-codes,
+  # actionlint exit swallowed), so findings surface as annotations, NEVER a gate
+  # -- containment stays the sync gate + default-branch protection, never this
+  # job. It targets ppe/fixtures/unsafe-workflow.yml (deliberately outside
+  # .github/workflows so GitHub never runs it). Kept a distinct named job (like
+  # fallow) separate from the typecheck/test battery. Its
+  # "produces findings" behavior is the first-push live close for TRUST-06
+  # (expect a human_needed/live confirm on the CI run).
+  ppe:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./ppe
+        with:
+          path: ppe/fixtures/unsafe-workflow.yml
+
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
       - run: npm run build
 
   typecheck:
     runs-on: ubuntu-24.04-arm
-    # contents: read only. The Actions-cache backend authenticates with
-    # ACTIONS_RUNTIME_TOKEN (handed to the server by the start-cache-server
-    # action, a JS action), not GITHUB_TOKEN, so no actions:write is needed;
-    # writes are gated to trusted events by GitHub server-side regardless.
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -69,28 +121,10 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
-      - run: npx nx build @op-nx/github-cache
-      # A JS action so GitHub hands it the Actions cache runtime env
-      # (ACTIONS_RUNTIME_TOKEN / ACTIONS_RESULTS_URL), which it passes to the
-      # server by inheritance. Self-gates to trusted events; fails loudly if that
-      # env is missing. `command` points at the built bin directly because npm
-      # only links the bin shim when dist/ exists at install time.
-      - uses: ./start-cache-server
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run typecheck
 
-  # Unit tests are OS-portable by construction (pure logic / mocked IO), so their
-  # Nx hash is byte-identical on every OS. Running them on a single OS seeds ONE
-  # cache entry that both Linux and Windows devs hit locally -- running the matrix
-  # here would just make the second leg a redundant cache hit. OS-specific behavior
-  # lives in test-integration below.
   test:
     runs-on: ubuntu-24.04-arm
-    # See typecheck job: contents: read only; cache auth uses ACTIONS_RUNTIME_TOKEN.
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -98,37 +132,27 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
-      - run: npx nx build @op-nx/github-cache
-      - uses: ./start-cache-server
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run test
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
-  # so their hash carries a `{ runtime: "node -p process.platform" }` discriminator
-  # (see nx.json's integration inputs): "win32" on any Windows, "linux" on Linux, so
-  # (a) the Linux and Windows hashes differ -> BOTH matrix legs run and a Linux cache
-  # never satisfies a Windows run, and (b) a local Windows `nx integration` computes
-  # the SAME "win32" hash and HITS this cache. process.platform is compiled into node,
-  # so it is "win32" regardless of shell (PowerShell/Git-Bash/cmd) and regardless of
-  # x64-vs-arm64 or the arm64 runner's x86-64 emulation -- unlike `env:RUNNER_OS`
-  # (unset off-CI, so a local run never hits) or a plain `env` var (whose key
-  # MSYS/Git-Bash uppercases while Nx's env hasher is case-sensitive, so it would miss
-  # from a bash-launched run). Requires the Nx runtime-input cache fix (nrwl/nx#34971,
-  # in 22.7.0+; this repo is on 23.1.0) -- before it, the hasher-level cache returned
-  # a stale runtime value whenever the daemon was disabled (as it is on CI). fail-fast
-  # off so a Windows-only failure never hides the Ubuntu result. windows-11-arm also
-  # exercises start-cache-server's detached-spawn path (deferred by the selfcheck on
-  # win32).
+  # so their Nx hash carries a `{ runtime: "node -p process.platform" }`
+  # discriminator (see nx.json's integration inputs): the Linux and Windows hashes
+  # differ, so both matrix legs run and a Linux cache never satisfies a Windows
+  # run, while a local Windows `nx integration` computes the same "win32" hash and
+  # hits that cache. process.platform is compiled into node, so it is stable across
+  # shell (PowerShell/Git-Bash/cmd) and across x64-vs-arm64 or arm64 emulation --
+  # unlike `env:RUNNER_OS` (unset off-CI) or a plain `env` var (whose key MSYS
+  # uppercases while Nx's env hasher is case-sensitive). fail-fast off so a
+  # Windows-only failure never hides the Ubuntu result. The `integration` target
+  # runs the real *.integration.spec.ts suite (vitest.integration.config.mts) -- an
+  # end-to-end createCacheServer PUT/GET round-trip over a real loopback socket --
+  # so both matrix legs prove the socket/HTTP path cross-OS.
   integration:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -136,59 +160,259 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap the package so dist/bin/serve.js exists for the action to run.
-      - run: npx nx build @op-nx/github-cache
-      - uses: ./start-cache-server
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/serve.js
       - run: npm run integration
 
-  # The two JS actions are otherwise exercised only on Ubuntu. These standalone
-  # self-checks cover their gate/guard/skip logic (and publish-mirror's exit-status
-  # propagation) on Windows -- paths the test matrix's cache-server start does not
-  # reach. Node built-ins only -- no npm ci. Arch has no value here (pure JS), so
-  # x64 windows-latest is fine.
-  windows-selfcheck:
-    runs-on: windows-latest
+  # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
+  # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the
+  # exact-pinned @actions/cache dependency (ROBUST-03): a version bump that changes
+  # the archive version hash surfaces here as a failed verify job, not a silently
+  # degraded cache. The round-trip is split across TWO jobs keyed on the workflow
+  # run id because a same-run, same-process read-back can succeed from local state
+  # while the upload never reached GitHub's cache service -- two jobs prove the
+  # bytes actually crossed the service. The jobs deliberately drive a DIRECT
+  # scripted PUT/GET through the internal action rather than real Nx cached tasks,
+  # because a task runner short-circuits on its own local hit and would leave the
+  # server inert behind a green result (Pitfall 6). NO job-level permission block is
+  # added on purpose: the runtime cache credentials (injected only into a JS action)
+  # are independent of the workflow token grant, and a job-level block would REPLACE
+  # the workflow-level grant wholesale rather than extend it. Both jobs run ONLY on
+  # the default-branch push trigger, because the write gate trusts no other trigger
+  # (push/schedule only) and the read-only path is exhaustively unit-tested instead.
+  # action.yml's main points into the build output, so each job builds first.
+  dogfood-seed:
+    # run id as the cache hash: unique per run and already all-decimal, so it
+    # satisfies the server's ^[a-f0-9]{1,512}$ hash validator with no massaging.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
-      - run: node start-cache-server/selfcheck.cjs
-      - run: node publish-mirror/selfcheck.cjs
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - uses: ./packages/github-cache
+        with:
+          hash: ${{ github.run_id }}
+          operation: seed
+        env:
+          # selectBackend hands back the writable Actions-cache backend only when a
+          # token resolves (GH_TOKEN || GITHUB_TOKEN); pass it by process inheritance
+          # into the action step, never through the workflow environment file (D-06).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-mirror:
-    # WAIT for every cache-producing job so their hashes are already in the Actions
-    # cache when this mirrors. But do NOT let a test/integration FAILURE block
-    # mirroring: `!cancelled()` + an explicit build-success gate keeps this running
-    # whenever build passed, regardless of the other legs (34de6eb's concern -- a
-    # single failing leg must never block build/typecheck).
-    #
-    # One leg per OS: a leg can only restore -- and therefore mirror -- the
-    # Actions-cache entries saved on ITS OWN platform. @actions/cache's version
-    # folds in the os.tmpdir() path, a `windows-only` salt, AND the compression
-    # method -- and windows-11-arm omits zstd (falls back to gzip) while ubuntu
-    # uses zstd -- so a Windows-saved entry (e.g. the OS-sensitive `integration`
-    # hash a local Windows dev is meant to hit) is unrestorable from ubuntu even
-    # with enableCrossOsArchive (actions/cache#1622). An ubuntu-only publish-mirror
-    # therefore NEVER mirrors the Windows hash; the Windows leg does. Both legs are
-    # UPLOAD-ONLY -- pruning is a separate daily workflow (mirror-cleanup.yml), so
-    # there is no cross-leg cleanup coordination here. fail-fast off so one leg's
-    # failure never cancels the other's mirroring.
+  dogfood-verify:
+    # Reads back exactly what dogfood-seed wrote, keyed on the same run id, so a real
+    # cross-job HIT is the only way this job passes; a MISS fails the job loudly.
+    if: github.event_name == 'push'
+    needs: dogfood-seed
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - uses: ./packages/github-cache
+        with:
+          hash: ${{ github.run_id }}
+          operation: verify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # DOCS-06 LIVE PROOF: the consumer background-step round-trip (a first-push live
+  # close, like dogfood/ppe). It consumes the PUBLIC start-cache-server action
+  # exactly as an adopter would -- pre-set the two NX_* vars in a REGULAR step,
+  # then `uses: ./start-cache-server` with `background: true` and a matching
+  # `port` -- then drives a scripted PUT+GET against the pre-set
+  # NX_SELF_HOSTED_REMOTE_CACHE_SERVER using the pre-set token, proving the
+  # loopback sidecar serves a real round-trip through the write-trusted
+  # Actions-cache backend. The `cancel:` teardown is MANDATORY: the implicit
+  # wait-all before post-job cleanup would otherwise hang forever on the
+  # never-exiting serve (Pitfall 3); cancel sends SIGTERM -> serve() drains
+  # in-flight puts (ROBUST-04) -> clean exit. Push-gated: the write gate trusts
+  # push/schedule only. GITHUB_TOKEN is passed to the action step by process
+  # inheritance (mirroring dogfood-seed) -- without it selectBackend degrades to
+  # the read-only memory backend and the proof would exercise the WRONG backend
+  # (D-06). No job-level permissions block: the workflow-default contents:read
+  # plus the JS-action-only runtime cache creds suffice (T-06-01-05).
+  #
+  # HANDSHAKE: a background step cannot export env to later steps (its
+  # exportVariable $GITHUB_ENV writes are only processed after the step COMPLETES,
+  # which for a background step is its `cancel:` teardown). So the consumer sets
+  # the two NX_* vars in the prior regular step below (whose $GITHUB_ENV writes DO
+  # propagate) and passes the matching fixed port; serve() adopts both.
+  consumer-smoke:
+    if: github.event_name == 'push'
+    # Depend on action-bundle-drift so a drifted committed bundle short-circuits
+    # this job instead of being silently papered over by a fresh rebuild. This job
+    # now runs the COMMITTED start-cache-server/index.js as-is (no build:action
+    # step) -- exactly the artifact an adopter resolves from the git ref -- so the
+    # smoke test proves the shipped bytes work, not that a rebuild does.
+    needs: action-bundle-drift
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Pre-set the Nx client vars HERE, in a regular step: a background step
+      # cannot export env to later steps, but this step's $GITHUB_ENV writes do
+      # propagate. The sidecar below adopts the pre-set token + matching port.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          # Mask the bearer token BEFORE writing it to $GITHUB_ENV. entry.ts's
+          # core.setSecret runs far too late -- it only redacts once the action
+          # step starts, so anything echoing the value between here and there would
+          # land unredacted. ::add-mask:: redacts from the moment it is processed.
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Nx cache round-trip over the loopback sidecar
+        env:
+          # `cafe` prefix keeps the key valid hex (^[a-f0-9]+$) yet DISTINCT from the
+          # dogfood-seed / publish `nx-cache-<run_id>` key. All three ubuntu jobs share
+          # this run's Actions-cache scope; a bare run_id collides -- this job's PUT
+          # would land in the very key dogfood-verify reads back (Actions cache is
+          # first-write-wins), returning consumer-smoke's payload as wrong data.
+          RUN_HASH: cafe${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          server="${NX_SELF_HOSTED_REMOTE_CACHE_SERVER:?NX_SELF_HOSTED_REMOTE_CACHE_SERVER not set (pre-set regular step missing?)}"
+          token="${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN:?NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN not set (pre-set regular step missing?)}"
+          auth="Authorization: Bearer ${token}"
+          # Wait for the loopback sidecar to accept connections: an authed GET on
+          # an unknown hash returns 404 (up). On connection-refused, curl's -w
+          # already prints 000 and exits non-zero, so swallow the exit with `|| true`
+          # -- NOT `|| echo 000`, which appends a second 000 so code becomes "000000"
+          # (!= "000") and breaks the poll on iteration 1 before the server binds.
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${server}/v1/cache/deadbeef" || true)
+            if [ "${code}" != "000" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" = "000" ]; then
+            echo "sidecar never accepted connections on ${server} after 30s" >&2
+            exit 1
+          fi
+          # PUT a payload keyed on the run id (all-decimal -> valid ^[a-f0-9]+$),
+          # then read it back and byte-compare: a real round-trip through the
+          # write-trusted Actions-cache backend.
+          printf 'consumer-smoke-%s' "${RUN_HASH}" > payload.bin
+          put=$(curl -s -o /dev/null -w '%{http_code}' -X PUT --data-binary @payload.bin -H "${auth}" "${server}/v1/cache/${RUN_HASH}")
+          test "${put}" = "200"
+          curl -fsS -H "${auth}" "${server}/v1/cache/${RUN_HASH}" -o roundtrip.bin
+          cmp payload.bin roundtrip.bin
+          echo "[OK] consumer sidecar round-trip: PUT 200 + GET byte-match on ${RUN_HASH}"
+      - cancel: cache-server
+
+  # The per-OS publish matrix is this phase's LIVE mirror path (D-03, TRUST-02): on a
+  # default-branch push each leg enumerates the default-branch Actions-cache entries via
+  # getActionsCacheList, restores the nx-cache-* ones IT CAN restore on ITS OWN OS, and
+  # uploads them to the current month-shard GitHub Release. The matrix is LOAD-BEARING and
+  # self-enforcing: @actions/cache folds the per-OS tmpdir path + a windows-only salt + the
+  # compression method into the cache version hash, so an ubuntu leg can NEVER restore a
+  # Windows-saved entry (restoreCache returns undefined and the engine skips it). Collapsing
+  # this to one OS SILENTLY drops the other OS's entries (D-03) -- keep BOTH legs; fail-fast
+  # off so a Windows-only failure never hides the ubuntu result. It runs as `operation: publish`
+  # on the node24 JS action, NOT a `run: node` step, because @actions/cache restoreCache needs
+  # the JS-action-only ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL runtime (a plain run: step
+  # silently MISSes -- verified Phase 2). needs: build (NOT test): a failing test leg must never
+  # skip the mirror and drop already-built entries (RESEARCH Anti-Patterns). if: !cancelled() &&
+  # push -- the mirror runs only on the trusted push trigger, and isSyncTrusted re-checks the
+  # default branch in-process as the load-bearing gate (D-01), not the workflow if: alone.
+  publish:
+    if: ${{ !cancelled() && github.event_name == 'push' }}
+    needs: build
+    strategy:
+      fail-fast: false
+      # max-parallel 1 serializes the OS legs (WR-01). Run concurrently, each leg
+      # snapshots the shard's asset count once and caches it for the rest of its run,
+      # so both legs can observe the shard at 999 and both pass the soft 1000-asset cap
+      # check, pushing it to 1001 -- one past the documented cap. Serializing makes the
+      # later leg's listReleaseAssets see the earlier leg's uploads, so its cap check is
+      # accurate. Per-OS isolation is unchanged (each leg still runs on its own OS and
+      # mirrors only the entries IT can restore); the only cost is a little wall-clock on
+      # this push-only background mirror job. fail-fast stays off so a Windows-only
+      # failure never hides the ubuntu result.
+      max-parallel: 1
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    # A job-level permissions block REPLACES the workflow grant (contents: read) WHOLESALE --
+    # it does NOT merge. So this block MUST restate BOTH scopes: contents: write (create the
+    # month-shard release + upload assets) AND actions: read (getActionsCacheList; omitting it
+    # 404s the cache enumeration -- Pitfall 3). Least-privilege: exactly these two, nothing more.
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      # This repo runs Nx on the LOCAL cache, so the only nx-cache-* Actions-cache
+      # entries that ever exist are the ones we seed. Seed a known entry keyed on the
+      # run id (all-decimal, satisfies the ^[a-f0-9]{1,512}$ hash validator) so each OS
+      # leg has a DETERMINISTIC entry to mirror -- and so the live cross-OS round-trip
+      # has a producer: publish-verify reads <run_id> back through the real Releases
+      # reader below (the leg deferred from Phase 3). Seed runs as a JS-action operation
+      # for the same reason publish does (the Actions-cache runtime is JS-action-only).
+      - uses: ./packages/github-cache
+        with:
+          hash: ${{ github.run_id }}
+          operation: seed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ./packages/github-cache
+        with:
+          operation: publish
+        env:
+          # Token by process inheritance into the action step (D-06), never through the
+          # workflow environment file. resolveGitHubToken reads GH_TOKEN || GITHUB_TOKEN.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The live cross-OS publish/read-back round-trip (the leg deferred from Phase 3). It
+  # runs after the WHOLE publish matrix and, per OS, resolves the run-id entry that
+  # matrix mirrored THROUGH THE REAL GitHub Releases reader -- invoked DIRECTLY
+  # (createReleasesReadBackend(createReleasesReadClient(process.env)) in read-back.ts),
+  # NOT selectBackend, which in a push (write-trusted) context returns the writable
+  # Actions-cache backend rather than the reader (TRUST-05). Each OS leg reads back ONLY
+  # its own-OS asset (<run_id>-<os> via releaseAssetName), so this proves the same-OS
+  # publisher->reader contract against REAL published assets and exercises the 04-02
+  # shard-window walk live; the wrong-OS MISS stays unit-proven. The reader is native
+  # fetch (no ACTIONS_RUNTIME_TOKEN), so this is a plain `node` step, not a JS action.
+  # It needs only the workflow-default contents: read to fetch a release asset, so it
+  # adds NO job-level permissions block and never touches the write gate. Mirrors the
+  # dogfood-verify shape: push-gated, needs the producer, a MISS fails the job loud
+  # (the reader swallows faults to a MISS, so any MISS is a round-trip failure).
+  publish-verify:
+    if: github.event_name == 'push'
+    needs: publish
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
-    needs: [build, typecheck, test, integration]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' }}
-    # actions: read to list the Actions cache entries being mirrored
-    # (GET /repos/.../actions/caches); contents: write to upload the
-    # Release-asset mirror. Job-level permissions replace the workflow block
-    # wholesale, so actions: read must be restated here or the caches API 404s.
-    permissions:
-      actions: read
-      contents: write
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -197,12 +421,9 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Bootstrap so dist/bin/publish-mirror.js exists for the action to run.
-      - run: npx nx build @op-nx/github-cache
-      # A JS action so @actions/cache's restoreCache is handed the Actions cache
-      # runtime env (there is no gh/REST download for cache content). command
-      # points at the built bin directly (the bin shim isn't linked until dist/
-      # exists at install time); token defaults to the job's GITHUB_TOKEN.
-      - uses: ./publish-mirror
-        with:
-          command: node packages/op-nx-github-cache/dist/bin/publish-mirror.js
+      - run: npm run build
+      - run: node packages/github-cache/dist/roundtrip/read-back.js
+        env:
+          # The reader resolves its token from GH_TOKEN || GITHUB_TOKEN (tier 1) and the
+          # repo from GITHUB_REPOSITORY (runner-injected); GITHUB_RUN_ID is the hash.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

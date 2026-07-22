@@ -1,0 +1,166 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { EXPECTED_ENV_KNOBS } from './test/consumer-contract.js';
+
+/**
+ * DOCS-01/02/04/06 adoption-docs content guard.
+ *
+ * A lightweight presence / required-topic guard over the adoption docs. It fails
+ * `nx test github-cache` when a required doc goes missing, a documented env knob
+ * or a required note disappears from the config reference, the README or the
+ * minimal example stops showing the background-step lifecycle, or the minimal
+ * example drifts into this repo's dogfood-only shape. It asserts stable topic
+ * TOKENS (presence), never full prose, so ordinary doc edits do not churn it.
+ *
+ * The docs live at the repo root (../../../ from src/), reached via
+ * import.meta.url -- the docs-trust.spec.ts / ppe-action.spec.ts idiom. Because
+ * these files live OUTSIDE this project's graph, they are wired into the `test`
+ * target inputs in nx.json (the 06-02/06-03 stale-cache precedent) so an edit to
+ * any of them busts the Nx cache and re-runs this guard instead of replaying a
+ * stale pass.
+ */
+const repoRoot = new URL('../../../', import.meta.url);
+
+function docUrl(relativePath: string): URL {
+  return new URL(relativePath, repoRoot);
+}
+
+function read(relativePath: string): string {
+  return readFileSync(docUrl(relativePath), 'utf8');
+}
+
+const REQUIRED_DOCS = [
+  'README.md',
+  'docs/configuration.md',
+  'docs/advanced.md',
+  'docs/examples/minimal-ci.yml',
+  'docs/examples/README.md',
+];
+
+/** The background-step lifecycle tokens both the README and the example must show. */
+const LIFECYCLE_TOKENS = ['start-cache-server', 'background:', 'cancel:'];
+
+describe('adoption docs exist (DOCS-01/02/04)', () => {
+  it.each(REQUIRED_DOCS)('%s exists', (path) => {
+    expect(existsSync(docUrl(path))).toBe(true);
+  });
+});
+
+describe('configuration.md documents the consumer contract (DOCS-02)', () => {
+  const config = read('docs/configuration.md');
+
+  it.each(EXPECTED_ENV_KNOBS)('documents env knob %s', (knob) => {
+    expect(config).toContain(knob);
+  });
+
+  it('documents MAX_CACHE_BODY_BYTES as a fixed contract limit, in one sentence', () => {
+    expect(config).toContain('MAX_CACHE_BODY_BYTES');
+    // Anchored: the constant name and the word "fixed" must sit in the SAME
+    // sentence (no sentence terminator between them, bounded gap), in either
+    // order. The previous whole-document /fixed/i passed on any stray "fixed"
+    // anywhere in the file, decoupled from the claim it guards.
+    expect(config).toMatch(
+      /MAX_CACHE_BODY_BYTES[^.!?]{0,80}fixed|fixed[^.!?]{0,80}MAX_CACHE_BODY_BYTES/i,
+    );
+  });
+
+  it('documents the Actions-cache 10 GB per-repo limit', () => {
+    expect(config).toContain('10 GB');
+  });
+
+  it('documents the no-default-local-read note', () => {
+    expect(config).toMatch(/no anonymous default local-read/i);
+  });
+});
+
+describe('versioning.md documents every consumer env knob (DOCS-02/DOCS-05)', () => {
+  // docs-trust.spec.ts never checked versioning.md, so a knob could be present in
+  // the consumer-contract constant and configuration.md yet missing from the
+  // versioning surface -- exactly what happened to GITHUB_REPOSITORY.
+  const versioning = read('docs/versioning.md');
+
+  it.each(EXPECTED_ENV_KNOBS)('lists env knob %s', (knob) => {
+    expect(versioning).toContain(knob);
+  });
+});
+
+describe('documented snippets mask the bearer token before writing $GITHUB_ENV (F17)', () => {
+  // The pre-set step generates NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN and appends
+  // it to $GITHUB_ENV. Masking happens later, inside entry.ts via core.setSecret,
+  // which is far too late -- anything echoing the value between the generation step
+  // and the action step lands unredacted in the log. Because this is the documented
+  // copy-paste pattern, every adopter inherits the gap. A doc that writes the token
+  // to $GITHUB_ENV MUST emit an ::add-mask:: for it first.
+  const TOKEN = 'NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN';
+  const DOCS_WITH_ENV_WRITE = [
+    'README.md',
+    'docs/advanced.md',
+    'docs/examples/minimal-ci.yml',
+  ];
+
+  it.each(DOCS_WITH_ENV_WRITE)(
+    '%s masks the token before appending it to $GITHUB_ENV',
+    (path) => {
+      const doc = read(path);
+
+      // Only assert on docs that actually write the token to $GITHUB_ENV.
+      if (!(doc.includes(TOKEN) && doc.includes('GITHUB_ENV'))) {
+        return;
+      }
+
+      expect(doc).toContain('::add-mask::');
+    },
+  );
+});
+
+describe('advanced.md documents all four selectBackend outcomes (F11)', () => {
+  // selectBackend has FOUR outcomes, two of which were invisible in the old binary
+  // read-write-versus-reader prose: the fail-closed THROW on a malformed identity,
+  // and the empty-memory permanent-MISS degrade on a trusted-but-tokenless context
+  // (the one adopters actually hit). A future selectBackend change not reflected
+  // here is caught by this guard.
+  const advanced = read('docs/advanced.md');
+
+  it('names the untrusted read-only Releases reader outcome', () => {
+    expect(advanced).toMatch(/Releases \*\*reader\*\*|Releases reader/);
+  });
+
+  it('names the fail-closed throw outcome on a malformed identity', () => {
+    expect(advanced).toMatch(/throws?/i);
+    expect(advanced).toContain('GITHUB_REPOSITORY');
+  });
+
+  it('names the empty-memory permanent-MISS degrade outcome', () => {
+    expect(advanced).toMatch(/memory backend/i);
+    expect(advanced).toMatch(/permanent MISS/i);
+  });
+
+  it('names the writable Actions-cache backend outcome', () => {
+    expect(advanced).toMatch(/Actions-cache backend/i);
+  });
+});
+
+describe('README + minimal example show the background-step lifecycle (DOCS-06)', () => {
+  const readme = read('README.md');
+  const example = read('docs/examples/minimal-ci.yml');
+
+  it.each(LIFECYCLE_TOKENS)('README references %s', (token) => {
+    expect(readme).toContain(token);
+  });
+
+  it.each(LIFECYCLE_TOKENS)('minimal example references %s', (token) => {
+    expect(example).toContain(token);
+  });
+});
+
+describe('minimal example is distinct from the dogfood config (DOCS-04)', () => {
+  const example = read('docs/examples/minimal-ci.yml');
+
+  it('does not include dogfood-only action operations', () => {
+    expect(example).not.toContain('operation:');
+  });
+
+  it('does not include a dogfood-only OS matrix', () => {
+    expect(example).not.toMatch(/matrix:/);
+  });
+});

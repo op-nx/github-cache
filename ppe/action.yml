@@ -1,0 +1,102 @@
+# github-cache PPE-hygiene gate (TRUST-06 / D-10, D-11, D-12).
+#
+# ADVISORY / best-effort defense-in-depth ONLY. This is NOT the containment
+# control -- containment stays the TRUST-02 sync gate + default-branch
+# protection (ADR C4). A finding here NEVER fails the consumer's job by
+# default: zizmor runs with --no-exit-codes and actionlint's exit is swallowed.
+#
+# Consumed as a STEP inside the adopter's own job:
+#   - uses: actions/checkout@v7
+#   - uses: op-nx/github-cache/ppe@vX
+#     with:
+#       path: .        # optional; audit target, defaults to the repo root
+# The consumer supplies runs-on + actions/checkout; the action self-installs its
+# exact-pinned tools (the consumer never provides zizmor/actionlint).
+name: 'github-cache PPE hygiene (advisory)'
+description: >-
+  Best-effort/ADVISORY PPE-hygiene gate: self-installs exact-pinned zizmor and
+  actionlint and audits workflows for unsafe triggers (no pull_request_target +
+  PR-checkout; no issue_comment/workflow_run executing PR code). It is advisory
+  defense-in-depth, not the containment control -- containment stays
+  default-branch protection + the sync gate. A finding is an annotation, never a
+  job failure. The consumer supplies runs-on and actions/checkout.
+inputs:
+  path:
+    description: >-
+      Audit target passed to zizmor and actionlint. Defaults to the repository
+      root so the whole workflow set is scanned; narrow it to a single file to
+      scope the advisory audit.
+    required: false
+    default: '.'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install zizmor (exact-pinned 1.27.0)
+      shell: bash
+      # Non-fatal install (advisory contract, TRUST-06/D-12). A composite `run:` step
+      # executes under `bash -eo pipefail`, so a bare `pipx install` failure -- no pipx
+      # on the runner (the consumer supplies runs-on: windows/macos/self-hosted), a PyPI
+      # flake, or a yanked 1.27.0 -- would propagate and FAIL the adopter's job. That is
+      # the exact CREEP-adjacent surprise the "a finding never fails your job" posture
+      # exists to prevent, and it must hold for the INSTALL path too, not only findings.
+      # `|| echo` keeps the step green; the audit step below no-ops when zizmor is absent.
+      # Block scalar (not an inline `run:`): the warning text contains a colon-space
+      # (`PPE: zizmor`), which a plain YAML scalar rejects as a nested mapping.
+      run: |
+        pipx install zizmor==1.27.0 || echo "::warning::github-cache PPE: zizmor install failed; skipping the advisory zizmor audit."
+    - name: Install actionlint (exact-pinned 1.7.12)
+      shell: bash
+      run: |
+        # download-actionlint.bash requires the target DIR to already exist; it
+        # does not create it (verified live: exit 1 "Directory ... does not exist").
+        mkdir -p "${RUNNER_TEMP}/actionlint-bin"
+        # Fetch the installer script from a PINNED COMMIT SHA (the sha the v1.7.12
+        # tag points to), not the mutable v1.7.12 tag ref -- a tag can be moved, so
+        # curl|bash of a tag-ref script is a supply-chain hole. The 1.7.12 arg still
+        # selects the (immutable, per-version) release binary the script downloads.
+        #
+        # Download to a file and check curl's exit EXPLICITLY, THEN bash the file. The
+        # old `bash <(curl -sSf ...)` used process substitution, so the pipeline's exit
+        # status was bash's, not curl's: a failed download made bash run an EMPTY script
+        # and exit 0, so the promised "install failed" warning was unreachable. Splitting
+        # them lets a download failure warn-and-skip, and a script failure (checksum
+        # mismatch, unsupported arch) warn too -- both non-fatal (advisory contract), so
+        # neither fails the consumer's job. The actionlint audit step below also guards
+        # on the binary's presence, so an absent binary there is a no-op.
+        installer="${RUNNER_TEMP}/actionlint-bin/download-actionlint.bash"
+        curl -sSf -o "$installer" \
+          https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash \
+          || { echo "::warning::github-cache PPE: actionlint installer download failed; skipping the advisory actionlint audit."; exit 0; }
+        bash "$installer" 1.7.12 "${RUNNER_TEMP}/actionlint-bin" \
+          || echo "::warning::github-cache PPE: actionlint install failed; skipping the advisory actionlint audit."
+    - name: zizmor audit (advisory)
+      # --no-exit-codes keeps it advisory (never exits 11-14 on a finding). The
+      # default regular persona covers dangerous-triggers, template-injection,
+      # cache-poisoning, artipacked and github-env -- the named PPE patterns.
+      # inputs.path is routed through env (not interpolated into run:) so the
+      # value cannot break out of the shell quoting -- avoiding the exact
+      # template-injection shape this scan targets in other workflows.
+      shell: bash
+      env:
+        AUDIT_PATH: ${{ inputs.path }}
+      # If the install above failed, zizmor is absent -- skip rather than let a missing
+      # binary (exit 127 under `-e`) hard-fail the consumer's job (advisory contract).
+      run: |
+        command -v zizmor >/dev/null 2>&1 || { echo "::warning::github-cache PPE: zizmor not installed; skipping the advisory audit."; exit 0; }
+        zizmor "$AUDIT_PATH" --no-exit-codes
+    - name: actionlint (advisory)
+      # Mirror the zizmor step's presence guard: a `command -v` probe warns and exits 0
+      # when the binary is absent (a failed install), so a missing binary is a clean
+      # skip rather than an exit-127 hard fail under `-e`. The old step invoked the
+      # binary directly with `|| true`, which swallowed a genuine finding and a missing
+      # binary identically and had no presence guard. The audit's own exit is still
+      # swallowed with `|| true` so a real finding stays advisory, never a job failure.
+      # inputs.path is routed through env (not interpolated into run:) so the value
+      # cannot break out of the shell quoting.
+      shell: bash
+      env:
+        AUDIT_PATH: ${{ inputs.path }}
+      run: |
+        actionlint="${RUNNER_TEMP}/actionlint-bin/actionlint"
+        command -v "$actionlint" >/dev/null 2>&1 || { echo "::warning::github-cache PPE: actionlint not installed; skipping the advisory audit."; exit 0; }
+        "$actionlint" "$AUDIT_PATH" || true

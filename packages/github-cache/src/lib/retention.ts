@@ -1,0 +1,153 @@
+/**
+ * Retention resolution for the GitHub Releases mirror (D-07/D-08). ONE coupled knob,
+ * `CACHE_MIRROR_MAX_AGE_DAYS`, drives BOTH the reader's month-shard read window
+ * (`shardTagsForWindow`) AND the scheduled cleanup's prune window, through this single
+ * resolver. Never introduce a second knob: a read window that drifts from the retention
+ * window makes an asset simultaneously unreadable (reads never scan its shard) and
+ * unprunable (cleanup never visits it), leaking toward the 1000-asset-per-release cap.
+ *
+ * LOAD-BEARING, comment-locked (Pitfall 7). The `cache-mirror-YYYYMM` month-shard tag
+ * scheme lives HERE and nowhere else -- both the Phase 3 reader and the Phase 4 publisher
+ * derive their tags through these helpers, and `shardTagsForWindow` reuses `shardTag` so
+ * the template exists in exactly one place. A drift between two tag derivations is a
+ * SILENT cross-OS MISS -- no error, no crash, just a wave of rebuilds when a reader looks
+ * under a tag the publisher never wrote. Never inline the template, never "tidy" it, and
+ * never change the separator or the UTC/zero-pad rules without re-verifying an end-to-end
+ * cross-OS read; the failure mode is a silent MISS, not a crash. The exact produced tags
+ * are pinned by retention.spec.ts.
+ */
+
+/** Retention/read window when the knob is unset or invalid (D-07); matches the shard quantum. */
+const DEFAULT_MAX_AGE_DAYS = 30;
+
+/** Clamp ceiling so a fat-fingered knob cannot explode the shard walk or the prune scan (V5, T-04-04). */
+const MAX_AGE_CEILING_DAYS = 365;
+
+/**
+ * Policy floor (F09): a retention window below this is refused loudly unless the
+ * consumer sets `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION`. This is restic's
+ * empty-policy refusal, NOT a ratio circuit breaker -- prior art (restic, borg)
+ * guards the POLICY and the SCOPE, never the outcome volume. A ratio breaker that
+ * aborts a run is itself a way for retention to silently stop running forever
+ * (CONTEXT.md); this floor can ONLY reject a bad CONFIG at resolve time, so a run
+ * with a valid policy is never blocked and steady-state cleanup can never be
+ * stopped by it.
+ */
+const MIN_AGE_DAYS = 7;
+
+/** Milliseconds per day. Exported as the single time-window source shared by the cleanup engine's cutoff (I8: one home). */
+export const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * The month-shard release tag: `cache-mirror-` plus the UTC year and zero-padded month
+ * (e.g. cache-mirror-202607). Moved verbatim from the Phase 3 releases-backend seam so the
+ * tag scheme has exactly one home. Computed from the clock (not a fixed constant) so it
+ * already tracks the current month.
+ */
+/**
+ * The month-shard tag prefix. Authored HERE, the one home for the tag scheme, so the
+ * cleanup engine's `startsWith` scope filter cannot drift from the tag shardTag builds
+ * (I8). Never inline a second copy of this literal.
+ */
+export const SHARD_TAG_PREFIX = 'cache-mirror-';
+
+export function shardTag(date: Date = new Date()): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+
+  return `${SHARD_TAG_PREFIX}${year}${month}`;
+}
+
+/**
+ * Exact month-shard tag pattern: the prefix followed by a 6-digit `YYYYMM`
+ * (equivalent to `/^cache-mirror-\d{6}$/`). Built FROM `SHARD_TAG_PREFIX` so the
+ * prefix literal is not copied a second time (I8: one home for the tag scheme).
+ * The `\d{6}` deliberately matches ALL month shards (wider than the reader window,
+ * per Pitfall 4) -- it only excludes non-shard `cache-mirror-*` tags such as
+ * `cache-mirror-latest` / `cache-mirror-backup`.
+ */
+export const SHARD_TAG_PATTERN = new RegExp('^' + SHARD_TAG_PREFIX + '\\d{6}$');
+
+/**
+ * Whether a release tag is a genuine `cache-mirror-YYYYMM` month shard. The exact
+ * accepter the cleanup scope filter uses instead of a loose `startsWith` prefix,
+ * so a `cache-mirror-latest` / `cache-mirror-backup` tag is never scoped for
+ * pruning. Round-trip-safe with `shardTag`: `isShardTag(shardTag(anyDate))` is
+ * always true, so the accepter can never drift from the producer.
+ */
+export function isShardTag(tag: string): boolean {
+  return SHARD_TAG_PATTERN.test(tag);
+}
+
+/**
+ * Resolve the single coupled retention knob `CACHE_MIRROR_MAX_AGE_DAYS` (D-07). It is
+ * untrusted numeric input from the consumer env, so it is validated + clamped at this
+ * trust boundary (T-04-04): an unset, non-numeric, zero, or negative value falls back to
+ * `DEFAULT_MAX_AGE_DAYS` (30); a finite positive value is floored, then clamped into
+ * `[1, MAX_AGE_CEILING_DAYS]` (1..365). Both the reader window and the cleanup scan
+ * resolve here.
+ *
+ * The 1-day FLOOR is load-bearing, not cosmetic: a sub-1-day value like `0.5` passes the
+ * `raw <= 0` guard yet `Math.floor(0.5)` is 0, and a 0-day window makes cleanup's
+ * `cutoff = Date.now() - 0 = now`, so EVERY asset (all created before now) is pruned --
+ * wiping the whole in-window mirror, including the retention-locked set the one
+ * non-negotiable rule says must never be deleted. Flooring to 1 keeps at least a
+ * one-day window (matching the shard quantum's smallest safe value).
+ *
+ * On top of that hard 1-day clamp sits the 7-day POLICY floor (F09): a finite positive
+ * value below MIN_AGE_DAYS throws unless `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION` is set,
+ * with a self-remediating message naming both. The asymmetry is deliberate and the whole
+ * reason a ratio breaker was rejected: this ONLY rejects a bad CONFIG at resolve time,
+ * never a run with a valid policy, so steady-state cleanup can never be blocked by it.
+ * The override widens what is allowed but does NOT remove the 1-day/365-day clamp.
+ *
+ * ponytail: `releases-backend` resolves through here too on the READ path, and its
+ * degrade-to-MISS discipline swallows this throw into a MISS. That is accepted -- the
+ * actionable loud signal is the RED cleanup job; duplicating it on the read path would
+ * break SRV-05 (a read fault must never break the build).
+ */
+export function resolveMaxAgeDays(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const raw = Number(env.CACHE_MIRROR_MAX_AGE_DAYS);
+
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_MAX_AGE_DAYS;
+  }
+
+  if (raw < MIN_AGE_DAYS && !env.CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION) {
+    throw new Error(
+      `github-cache: CACHE_MIRROR_MAX_AGE_DAYS=${env.CACHE_MIRROR_MAX_AGE_DAYS} is below the ${MIN_AGE_DAYS}-day retention floor. A window this short can prune almost the entire mirror on the next scheduled cleanup. Set it to ${MIN_AGE_DAYS} or more, or set CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION to opt in to an aggressive window deliberately.`,
+    );
+  }
+
+  return Math.max(1, Math.min(Math.floor(raw), MAX_AGE_CEILING_DAYS));
+}
+
+/**
+ * The month-shard tags covering `[now - maxAgeDays, now]`, NEWEST FIRST. Uses calendar-month
+ * arithmetic via a UTC month cursor -- NOT `maxAgeDays / 30`, which would under-scan short
+ * months and mis-handle month boundaries (a 30-day window in early March reaches back into
+ * January). The reader walks these newest-first and stops at the first hit; only exhausting
+ * every tag is a MISS (D-08). Pure with an injectable `now` for deterministic tests.
+ */
+export function shardTagsForWindow(
+  maxAgeDays: number,
+  now: Date = new Date(),
+): string[] {
+  const oldest = new Date(now.getTime() - maxAgeDays * MS_PER_DAY);
+  const oldestMonthStart = Date.UTC(
+    oldest.getUTCFullYear(),
+    oldest.getUTCMonth(),
+    1,
+  );
+  const cursor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const tags: string[] = [];
+
+  while (cursor.getTime() >= oldestMonthStart) {
+    tags.push(shardTag(cursor));
+    cursor.setUTCMonth(cursor.getUTCMonth() - 1);
+  }
+
+  return tags;
+}

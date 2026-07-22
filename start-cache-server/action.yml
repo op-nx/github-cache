@@ -1,21 +1,48 @@
-name: 'Start @op-nx/github-cache server'
+# Consumer sidecar action (Channel B) -- the PUBLIC, uses:-consumable surface,
+# SEPARATE from packages/github-cache/action.yml (that one is the INTERNAL CI
+# dogfood action and must never be presented as the consumer surface, D-09).
+#
+# A background step CANNOT export env to later steps: core.exportVariable writes
+# $GITHUB_ENV, which the runner only processes AFTER a step COMPLETES -- and a
+# background step does not complete until its `cancel:` teardown. So the CONSUMER
+# pre-sets the two NX_* vars in a REGULAR step first (its $GITHUB_ENV writes DO
+# propagate); serve() ADOPTS the pre-set token + port.
+#
+# Consumed inside the adopter's own job:
+#   - uses: actions/checkout@v7
+#   - run: |                                # regular step: $GITHUB_ENV propagates
+#       echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+#       token="$(openssl rand -hex 32)"     # mask BEFORE writing $GITHUB_ENV
+#       echo "::add-mask::${token}"
+#       echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+#   - uses: op-nx/github-cache/start-cache-server@v0
+#     id: cache-server
+#     background: true
+#     with:
+#       port: '3000'                        # must match the pre-set SERVER url port
+#   - run: npx nx affected -t build test    # reads the pre-set NX_* vars
+#   - cancel: cache-server                  # MANDATORY teardown (Pitfall 3)
+#
+# main points at the COMMITTED, esbuild-bundled index.js (NOT gitignored dist/),
+# because a uses: action resolves main from the git ref -- never from npm and
+# never after a build step (Pitfall 1). The bundle is drift-guarded by
+# `npm run check:action`. It is a JS action, NOT composite: a composite action
+# cannot declare background: internally (Pitfall 5).
+name: 'op-nx github-cache server'
 description: >-
-  Start the self-hosted Nx remote cache server as a background process. Runs as a
-  JavaScript action so it is handed the Actions cache runtime env
-  (ACTIONS_RUNTIME_TOKEN / ACTIONS_RESULTS_URL), which GitHub never injects into
-  `run:` shell steps -- and passes it to the server by process inheritance, so the
-  token never has to be re-exported into $GITHUB_ENV. Only starts on trusted write
-  events; fails loudly if the runtime env is missing (the cache would otherwise
-  silently no-op).
+  Runs the @op-nx/github-cache loopback Nx remote-cache sidecar as a background
+  step. A background step cannot export env to later steps, so set
+  NX_SELF_HOSTED_REMOTE_CACHE_SERVER and NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN
+  (with a matching fixed port) in a prior regular step; this action adopts them.
+  Pair with `background: true` and a `cancel:` teardown.
 inputs:
-  command:
+  port:
     description: >-
-      Command used to launch the cache server. The default resolves the published
-      package's bin from the workspace. This repo overrides it to a direct
-      `node dist/bin/serve.js` because npm only links the bin shim when
-      dist/ already exists at install time.
+      Loopback port for the sidecar. Must match the port in the pre-set
+      NX_SELF_HOSTED_REMOTE_CACHE_SERVER url. Required in practice: the action
+      fails fast when it is absent, because binding an OS-assigned ephemeral port
+      would NOT match the fixed pre-set url and every read would MISS.
     required: false
-    default: 'npx op-nx-github-cache-serve'
 runs:
   using: 'node24'
-  main: 'index.cjs'
+  main: 'index.js'

@@ -1,0 +1,37 @@
+name: found01-spike
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create releases + assets
+  packages: write   # push GHCR + attempt delete
+
+jobs:
+  cross-os:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Cross-OS round-trip + CI latency (GHCR vs Releases)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node ci-roundtrip.mjs
+
+  ghcr-cleanup-token:
+    needs: cross-os
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: GITHUB_TOKEN GHCR delete capability (C11 / RETAIN-03)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node ci-ghcr-cleanup.mjs

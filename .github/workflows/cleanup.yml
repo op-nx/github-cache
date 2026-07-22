@@ -1,0 +1,47 @@
+name: Cleanup mirror
+
+# Age-based prune of the GitHub Releases cache mirror (RETAIN-03/D-09). This is a
+# SEPARATE scheduled workflow, never a job inside ci.yml and never a publish matrix
+# leg: a single scheduled job is a single cleanup writer BY CONSTRUCTION -- no env
+# gate, no OS expression, no concurrent-delete race -- and it honors the retention
+# TTL on a calendar cadence even while the repo is idle.
+on:
+  # Once daily, off the top of the hour: GitHub delays scheduled runs under
+  # top-of-hour load, and cleanup has no deadline, so an off-peak minute is fine.
+  schedule:
+    - cron: '17 3 * * *'
+
+# Least privilege (RETAIN-03/T-04-15): the delete path needs ONLY contents:write on
+# the same repo (Releases assets live under contents). No actions:read -- cleanup
+# lists no Actions caches. No personal token and no package-delete scope. The
+# job-scoped GITHUB_TOKEN is the only credential.
+permissions:
+  contents: write
+
+# Single-writer serialization (T-04-16/D-09): all runs of this workflow share one
+# concurrency group so at most one cleanup runs at a time. cancel-in-progress is
+# FALSE -- a queued run waits for the active one instead of cancelling it, because a
+# cleanup cancelled mid-delete is unsafe. Queue, never cancel.
+concurrency:
+  group: github-cache-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: node packages/github-cache/dist/cleanup/index.js
+        env:
+          # Same-repo contents:write token, passed by process inheritance (no
+          # personal token, RETAIN-03). resolveGitHubToken reads GH_TOKEN || GITHUB_TOKEN.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Overridable retention window (D-07); resolveMaxAgeDays defaults to 30
+          # days and clamps to a 365-day ceiling when this is unset or invalid.
+          CACHE_MIRROR_MAX_AGE_DAYS: ${{ vars.CACHE_MIRROR_MAX_AGE_DAYS }}

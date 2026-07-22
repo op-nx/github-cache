@@ -4,3 +4,20 @@
 /.nx/cache
 /.nx/workspace-data
 .nx/self-healing
+
+# Vendored Nx OpenAPI spec fixture - byte-for-byte verbatim, sha256-pinned by
+# the TEST-07 conformance drift guard; MUST NOT be reformatted (would break the hash)
+packages/github-cache/src/conformance/nx-cache-openapi.v23.1.0.json
+
+# Committed esbuild bundle of the consumer JS action - bytes owned by
+# esbuild.action.mjs and byte-diffed by `npm run check:action`; prettier must not
+# reformat it (would create a false drift-guard trip with no entry.ts change).
+# Rebuild via `npm run build:action`, never by hand or by prettier.
+start-cache-server/index.js
+
+# Agent and planning docs - churny, not workspace source (D-07)
+.planning/
+CLAUDE.md
+AGENTS.md
+.claude/
+.gsd-migration-backup/

@@ -4,7 +4,7 @@
 **Researched:** 2026-07-17
 **Confidence:** HIGH (primary sources: CVE-2025-36852 blog, GitHub 2026-06-26 changelog, GitHub Actions caching docs, Nx self-hosted-cache spec; cross-checked against this repo's ARCHITECTURE.md / CONCERNS.md)
 
-This is a SUBSEQUENT (brownfield) milestone. Several silent-failure bugs were already found and fixed here (cross-OS publish-mirror gap; CRLF hash divergence). Those are called out below as **MUST-NOT-REOPEN**, not as new bugs. The new/critical pitfalls are the ones that threaten the **Active** requirements: adding `pull_request`/`release` write semantics, making CI RW/RO mode a tested capability, LRU retention, test coverage, Octokit migration, and adoption docs.
+This project is a **greenfield rebuild** of a self-hosted Nx remote cache on GitHub primitives (the prior PoC is being deleted; see `.planning/ROADMAP.md`). The pitfalls below are the domain + platform traps that threaten the rebuild. Several were discovered the hard way in the PoC (cross-OS hash divergence; the publish-mirror cross-OS gap); a from-scratch build is MOST likely to re-introduce exactly these, so they are called out as **MUST-NOT-REPEAT**. Phase references map to the 7-phase roadmap (0 Teardown -> 6 Distribution/Docs); the LRU pitfalls (4, 6) concern a manifest that is now OUT OF SCOPE for v0.0.1.
 
 ---
 
@@ -15,7 +15,7 @@ This is a SUBSEQUENT (brownfield) milestone. Several silent-failure bugs were al
 **What goes wrong:**
 CREEP (CVE-2025-36852, severity 9.4) is a "first-to-cache-wins" race: whichever branch/PR first uploads a build artifact for a given source-file state has *its* version reused everywhere that source state appears, including production. Poisoning happens during the artifact-construction phase, *before* hashing/encryption, so checksums always match and no scanner detects it. The attack needs no direct cache access -- only PR privileges and a workflow that can write into a cache scope a trusted workflow (`push`/`schedule` on `main`) later restores (source: https://nx.dev/blog/cve-2025-36852-critical-cache-poisoning-vulnerability-creep).
 
-The Active requirement is to add `pull_request` and `release` to the write-trust set. The trap is treating "add PR/release events" as "trust anything a fork can trigger." The GitHub 2026-06-26 changelog is explicit about which events are safe and which are not (source: https://github.blog/changelog/2026-06-26-read-only-actions-cache-for-untrusted-triggers/):
+Phase 5 widens the write-trust set to add `pull_request` and `release`. The trap is treating "add PR/release events" as "trust anything a fork can trigger." The GitHub 2026-06-26 changelog is explicit about which events are safe and which are not (source: https://github.blog/changelog/2026-06-26-read-only-actions-cache-for-untrusted-triggers/):
 
 - Safe to keep read-write: `push`, `schedule`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build`, and -- crucially -- `pull_request` and `release`, **because they write to a NON-default-branch cache scope**.
 - The actual CREEP vector is the events GitHub now forces read-only: `pull_request_target`, `issue_comment`, and fork-PR `workflow_run` cascades. These run in the *shared default-branch-SHA context*, so their writes land in `main`'s cache scope and get restored by trusted `push`/`schedule` runs.
@@ -28,7 +28,7 @@ The in-code `isWriteTrusted(env)` gate keys off `GITHUB_EVENT_NAME`/`GITHUB_ACTI
 **How to avoid:**
 - Add exactly `pull_request` and `release` to `TRUSTED_EVENTS`. Do NOT add `pull_request_target`, `issue_comment`, or `workflow_run`. Put a comment naming the changelog and the non-default-branch-scope reasoning next to the list.
 - Keep the two-layer model intact: the load-bearing control is GitHub's server-side token; the in-code gate is belt-and-suspenders. Never remove one because the other exists.
-- Add a unit test asserting the exact trusted set and that the dangerous events are refused (this is also the "make RW/RO a tested capability" Active requirement -- fold them together).
+- Add a unit test asserting the exact trusted set and that the dangerous events are refused (this pairs with the Phase 2 RW/RO tested-capability work -- fold them together).
 - Remember `TRUSTED_EVENTS` exists twice (`src/lib/trust.ts` and `start-cache-server/index.cjs`, dependency-free CJS copy). Any change MUST be mirrored, or the action's start-gate diverges from the server's write-gate.
 
 **Warning signs:**
@@ -36,7 +36,7 @@ The in-code `isWriteTrusted(env)` gate keys off `GITHUB_EVENT_NAME`/`GITHUB_ACTI
 - The trusted-set change has no accompanying test.
 - The two `TRUSTED_EVENTS` copies differ.
 
-**Phase to address:** The `pull_request`/`release` trigger-support phase (Active req 1), co-owned with the RW/RO-mode-as-tested-capability phase (Active req 2).
+**Phase to address:** Phase 5 (trust-widening to `pull_request`/`release`), with the RW/RO-mode gate built in Phase 2.
 
 ---
 
@@ -46,7 +46,7 @@ The in-code `isWriteTrusted(env)` gate keys off `GITHUB_EVENT_NAME`/`GITHUB_ACTI
 This is the project-specific re-poisoning path and the sharpest consequence of widening the trust set. Even though a `pull_request` write is isolated from `main`'s Actions-cache restores (Pitfall 1), the **Release-asset mirror is a different, cross-trust-boundary channel**: `publish-mirror` restores Actions-cache entries and re-publishes them as anonymous, world-readable Release assets that every local `serve` then trusts and restores into a developer's build. If `publish-mirror` ever runs on a `pull_request`/`release` event (or on any non-default-branch ref), a fork-influenced cache entry becomes a poisoned artifact served to every local consumer. The Actions-cache scope isolation does NOT protect the mirror -- the mirror is a manual re-publish that erases the scope boundary.
 
 **Why it happens:**
-Widening the *server's* write-trust set (Active req 1) and the *mirror's* publish gate look like the same change, so a developer relaxes both. They are not the same trust boundary: the server writing a PR-scoped cache is safe; the mirror copying that PR-scoped cache to a public asset is a poisoning primitive.
+Widening the *server's* write-trust set (Phase 5) and the *mirror's* publish gate look like the same change, so a developer relaxes both. They are not the same trust boundary: the server writing a PR-scoped cache is safe; the mirror copying that PR-scoped cache to a public asset is a poisoning primitive.
 
 **How to avoid:**
 - Keep `resolveTrustedRepo()` in `publish-mirror.ts` STRICT regardless of the server's trust set: it must continue to require the trust gate AND `GITHUB_REF == default branch`. The mirror publishes only default-branch, push/schedule-produced entries -- never PR/release-scoped ones.
@@ -58,7 +58,7 @@ Widening the *server's* write-trust set (Active req 1) and the *mirror's* publis
 - `publish-mirror` is invoked from a workflow job that runs on `pull_request`.
 - `resolveTrustedRepo` is loosened "to match the server."
 
-**Phase to address:** The `pull_request`/`release` trigger-support phase (Active req 1) -- explicitly scope the change to the server write path and assert the mirror preamble is untouched.
+**Phase to address:** Phase 5 (trust-widening) -- explicitly scope the change to the server write path and assert the sync/publish gate is untouched.
 
 ---
 
@@ -68,7 +68,7 @@ Widening the *server's* write-trust set (Active req 1) and the *mirror's* publis
 The 2026-06-26 server-side read-only-token enforcement "ships to github.com and GitHub with Data Residency" (source: https://github.blog/changelog/2026-06-26-read-only-actions-cache-for-untrusted-triggers/). It does not name a GitHub Enterprise Server (GHES) version. On a GHES release that predates the enforcement, there is NO server-side backstop, so the ONLY thing standing between a fork and a poisoned default-branch cache is the in-code gate -- which is spoofable env by design. Documenting `pull_request`/`release` as "safe because GitHub backstops forks" without a GHES version floor silently ships a critical hole to any consumer on old GHES.
 
 **Why it happens:**
-The whole "these events are now safe" reasoning is built on a github.com-only guarantee. Adoption docs (an Active requirement) that state the guarantee unconditionally will be read by GHES users as applying to them.
+The whole "these events are now safe" reasoning is built on a github.com-only guarantee. Adoption docs (Phase 6) that state the guarantee unconditionally will be read by GHES users as applying to them.
 
 **How to avoid:**
 - In the adoption docs and the README, state the read-only-token dependency explicitly and add a GHES version floor (or a plain "on GHES older than <version>, the server-side backstop is absent; the in-code gate is spoofable, so do not enable `pull_request`/`release` writes there").
@@ -78,7 +78,7 @@ The whole "these events are now safe" reasoning is built on a github.com-only gu
 - Adoption docs describe fork safety with no "github.com only / GHES version >= X" caveat.
 - A consumer reports enabling `pull_request` writes on GHES.
 
-**Phase to address:** The adoption-docs phase (Active req 5) and the `pull_request`/`release` phase (Active req 1) jointly.
+**Phase to address:** Phase 6 (adoption docs) and Phase 5 (trust-widening) jointly.
 
 ---
 
@@ -101,7 +101,7 @@ The existing age-only cleanup is genuinely single-writer (one daily scheduled jo
 - Two workflows both hold `contents: write` and touch the same release asset.
 - Hot, recently-read entries disappear (lost-update symptom) or the mirror grows without bound (stale manifest).
 
-**Phase to address:** The LRU-retention phase (Active req 3).
+**Phase to address:** a later milestone (LRU is out of scope for v0.0.1).
 
 ---
 
@@ -124,7 +124,7 @@ LRU and the month-shard read walk are designed against different clocks. Age-onl
 - A hot hash is retained by cleanup but `serve` still MISSes it (it's in a shard the read walk skips).
 - Any proposal that adds a second age/retention env var.
 
-**Phase to address:** The LRU-retention phase (Active req 3).
+**Phase to address:** a later milestone (LRU is out of scope for v0.0.1).
 
 ---
 
@@ -146,7 +146,7 @@ Today's cleanup deletes any asset older than `CACHE_MIRROR_MAX_AGE_DAYS` on `cre
 - No mechanism records reads, yet the design claims least-*recently-used* eviction.
 - LRU can retain entries with no age ceiling.
 
-**Phase to address:** The LRU-retention phase (Active req 3). Consider a spike to validate the ROI first.
+**Phase to address:** a later milestone (LRU is out of scope for v0.0.1). Consider a spike to validate the ROI first.
 
 ---
 
@@ -171,7 +171,7 @@ All three failure modes are silent (a MISS, not a crash). A well-meaning "simpli
 - A PR that deletes/edits `.gitattributes`, renames the temp path, or reduces the publish-mirror matrix to one OS.
 - A wave of Windows cache MISSes after a runner-image update (zstd added to windows-11-arm invalidates pre-existing gzip entries -- transient, self-heals; know the symptom so it is not misdiagnosed as a regression).
 
-**Phase to address:** Cross-cutting guardrail for EVERY phase that touches CI, hashing, or the temp path. Fold explicit "did not reopen" checks into the test-coverage phase (Active req 4).
+**Phase to address:** Cross-cutting guardrail for EVERY phase that touches CI, hashing, or the temp path. Fold explicit "did-not-repeat" checks into every slice's tests (Phases 1-4).
 
 ---
 
@@ -189,7 +189,7 @@ The architecture already encodes the correct rule ("Only structural/marker-verif
 
 **How to avoid:**
 - Keep the asymmetry explicit: reads may swallow faults into MISS; cleanup and any delete/overwrite decision must FAIL LOUD on non-404 faults and never infer absence from an error.
-- The `gh` -> Octokit migration (Active req 7) directly hardens this: structural `error.status === 404` discrimination replaces stderr text matching, so a reworded `gh` message can no longer turn a real fault into a false "already exists"/"404".
+- Using Octokit (structural `error.status`) from the start (Phase 4) directly hardens this: `error.status === 404` discrimination replaces stderr text matching, so a reworded `gh` message can no longer turn a real fault into a false "already exists"/"404".
 - Test the cleanup path against a mocked partial/failed listing and assert it does NOT delete.
 
 **Warning signs:**
@@ -197,7 +197,7 @@ The architecture already encodes the correct rule ("Only structural/marker-verif
 - Any code path infers "not present" from a caught exception rather than a verified 404.
 - `gh` stderr sentinels (`/already exists/i`, `HTTP 404`) drift because a `gh` version reworded them.
 
-**Phase to address:** The Octokit-migration phase (Active req 7) and the test-coverage phase (Active req 4) -- especially the untested `publish-mirror` gh I/O orchestration.
+**Phase to address:** Phase 4 (publish/cleanup built on Octokit from the start) -- especially the publish/cleanup I/O orchestration.
 
 ---
 
@@ -222,7 +222,7 @@ Optimizations for rate-limit avoidance (process-lifetime shard cache) and simpli
 - A `serve` GET returns bytes whose length/hash does not match the requested hash.
 - Consumers report "wrong build output from cache" (this must be impossible by design -- investigate immediately if seen).
 
-**Phase to address:** Test-coverage phase (Active req 4) -- assert MISS-not-wrong-result under eviction/staleness/rate-limit.
+**Phase to address:** Cross-cutting (Phases 1-4) -- assert MISS-not-wrong-result under eviction/staleness/rate-limit.
 
 ---
 
@@ -230,7 +230,7 @@ Optimizations for rate-limit avoidance (process-lifetime shard cache) and simpli
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| `gh` CLI stderr text-matching (`/already exists/i`, `HTTP 404`) for outcome discrimination | `gh` handles auth/pagination free on runners; no token plumbing | A `gh` version rewording these strings silently flips behavior (failed mirror run, or aborted cleanup) | Until the Octokit migration (Active req 7) lands; Octokit is already a dependency and discriminates `error.status` structurally |
+| `gh` CLI stderr text-matching (`/already exists/i`, `HTTP 404`) for outcome discrimination | `gh` handles auth/pagination free on runners; no token plumbing | A `gh` version rewording these strings silently flips behavior (failed mirror run, or aborted cleanup) | N/A for the rebuild - use Octokit (`error.status`) from the start; no `gh` stderr matching is introduced |
 | Age-only (`created_at`) retention instead of true LRU | Simple, no state; matches the coupled read window | Deletes hot entries -> rebuild/re-upload churn | Acceptable now (30-day window is generous, low-churn audience); revisit only if ROI proven (Pitfall 6) |
 | Fully-buffered request/response bodies (up to 2 GB) | Simple; matches ~2 GiB Release-asset ceiling | Concurrent large entries spike memory on small runners | Fine until real workspaces produce multi-hundred-MB task outputs (they rarely do) |
 | Duplicated `TRUSTED_EVENTS` (lib + dependency-free CJS action) | Action can run before `npm ci` with Node built-ins only | Edit one, forget the other -> action start-gate diverges from server write-gate (safe-direction but confusing) | Never silently -- add a selfcheck assertion comparing the two sets (both files already carry "keep in sync" comments) |
@@ -269,7 +269,7 @@ Optimizations for rate-limit avoidance (process-lifetime shard cache) and simpli
 | Predictable shared temp path on persistent multi-tenant runners | Co-tenant symlink pre-creation -> arbitrary-file overwrite | Documented single-tenant ephemeral deployment; keep the README warning; path can't be randomized (version-hash coupling) |
 | Leaking the runtime token or bearer token to logs/`$GITHUB_ENV` | Secret exposure | `ACTIONS_RUNTIME_TOKEN` passed only by process inheritance, never `$GITHUB_ENV`; bearer token masked (`::add-mask::`) before any output, re-masked on Windows |
 
-## UX Pitfalls (consumer adoption -- Active req 5)
+## UX Pitfalls (consumer adoption -- Phase 6)
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
@@ -301,17 +301,64 @@ Optimizations for rate-limit avoidance (process-lifetime shard cache) and simpli
 
 ## Pitfall-to-Phase Mapping
 
-| Pitfall | Prevention Phase (by Active req) | Verification |
-|---------|----------------------------------|--------------|
-| 1. CREEP via wrong trigger set | `pull_request`/`release` support (req 1) + RW/RO tested (req 2) | Unit test: exact trusted set; dangerous events refused; both `TRUSTED_EVENTS` copies identical |
-| 2. Mirror as cross-trust bridge | `pull_request`/`release` support (req 1) | Test `publish-mirror` preamble still refuses PR/release/non-default refs after server trust widens |
-| 3. GHES version floor | Adoption docs (req 5) + req 1 | Docs state github.com-only backstop + GHES floor; gate widened set on enforcement presence |
-| 4. LRU manifest write race | LRU retention (req 3) | Only cleanup mutates manifest; concurrency test; no per-push/serve writes |
-| 5. Retention vs read-window drift | LRU retention (req 3) | Assert every retained asset resolvable by `shardTagsForWindow`; no second env knob |
-| 6. Hot-entry deletion / fake LRU | LRU retention (req 3) + spike | LRU uses a real access signal; age floor preserved; ROI validated |
-| 7. Cross-OS parity reopened | Test coverage (req 4), cross-cutting | CI asserts both OS legs; `.gitattributes` + `cacheArchivePath` guarded; `test:act` on `@actions/cache` bump |
-| 8. Fault-as-absence | Octokit migration (req 7) + test coverage (req 4) | Mocked partial-listing test asserts no deletion; structural 404 only |
-| 9. Silent MISS -> wrong result | Test coverage (req 4) | Assert MISS-not-wrong-result under eviction/staleness/rate-limit |
+Mapped to the 7-phase greenfield roadmap (`.planning/ROADMAP.md`). Pitfalls 4 and 6 concern LRU-via-manifest, now OUT OF SCOPE for v0.0.1 (see REQUIREMENTS.md) - retained for the later-milestone revisit.
+
+| Pitfall | Phase (new roadmap) | Verification |
+|---------|---------------------|--------------|
+| 1. CREEP via wrong trigger set | Phase 2 (conservative gate) + Phase 5 (widen to `pull_request`/`release`) | Unit test: exact trusted set; dangerous events refused; single-source allowlist (no divergent copies) |
+| 2. Mirror as cross-trust bridge | Phase 4 (publish/sync gate) + Phase 5 | Test the publish gate stays `{push,schedule}` + default-branch after the server trust widens |
+| 3. GHES version floor | Phase 5 (trust) + Phase 6 (docs) | Docs state github.com-only backstop + GHES floor; keep the version-gate knob dormant/OFF |
+| 4. LRU manifest write race | a later milestone (LRU out of scope) | If ever built: a single writer mutates the manifest; concurrency test |
+| 5. Retention vs read-window drift | Phase 4 (retention) | Every retained asset resolvable by the read window; no second retention knob |
+| 6. Hot-entry deletion / fake LRU | a later milestone (LRU out of scope) | If ever built: real access signal; age floor preserved; ROI validated |
+| 7. Cross-OS parity | Cross-cutting - Phase 1 (skeleton), 2 (backend), 3 (cross-OS reader) | CI asserts both OS legs; `.gitattributes eol=lf` + stable archive path guarded; end-to-end restore re-verified on any `@actions/cache` bump |
+| 8. Fault-as-absence | Phase 4 (publish/cleanup, on Octokit from the start) | Mocked partial-listing test asserts NO deletion; structural `error.status` 404 only |
+| 9. Silent MISS -> wrong result | Cross-cutting - Phase 1-4 | Assert MISS-not-wrong-result under eviction/staleness/rate-limit |
+
+## Empirically-Verified Platform Facts (rebuild carry-forward)
+
+Platform/tooling truths verified by the PoC + the FOUND-01 spike - true regardless of implementation, and the most expensive to rediscover. Carry them into the greenfield rebuild; they prime no particular design (the implementation SHAPE that produced them is intentionally left in git history, not carried forward).
+
+- **Nx OS-sensitive hashing recipe.** To make a task's Nx hash differ by OS (so a Linux-produced entry never serves a Windows reader, and a local run on each OS still hits its own entry), add a runtime input `{ "runtime": "node -p process.platform" }` to that task's `inputs` in `nx.json`. Rejected alternatives and WHY: `env:RUNNER_OS` is unset off-CI, so local runs never hit; a plain `env` var fails because MSYS/Git-Bash uppercases the variable name while Nx's env hasher is case-sensitive, so a bash-launched local run misses. `process.platform` is compiled into node -> stable across shell (PowerShell/Git-Bash/cmd) and across x64/arm64/emulation. REQUIRES Nx >= 22.7.0 (nrwl/nx#34971 runtime-input cache fix); older Nx returns a stale runtime value when the daemon is disabled (as it is on CI).
+- **`@actions/cache` `saveCache` returns `-1` for BOTH "entry already exists" AND "write denied by a read-only token"** - indistinguishable via the public API (the distinguishing errors are caught internally). A systematically denied write looks identical to a benign idempotent write at the backend layer; only the write-trust gate keeps that from masking a real outage.
+- **A Windows detached background process must NOT inherit the runner's stdio.** On windows-11-arm a backgrounded server that inherits the step's stdout is killed when the runner closes the step pipe (verified); it must detach (e.g. log to a temp file) and re-register any secret masks out of band. POSIX may inherit safely. Relevant to running `serve` as a background step and the DOCS-06 `cancel` teardown.
+- **`ACTIONS_RUNTIME_TOKEN` / `ACTIONS_RESULTS_URL` (required by the Actions-cache backend) were observed injected only into JS actions, not plain `run:` steps** - and are passed to a child only by process inheritance, never via `$GITHUB_ENV`. **Resolved (git history):** in a plain `run:` step, `@actions/cache` save/restore SILENTLY no-ops (fail-open, no error), and cache content has no public download endpoint - so a **JS action is the only launch path for the Actions-cache backend**. Consequence for the rebuild: the DOCS-06 background-step consumption pattern applies to the **Releases reader** (token-based); the CI-RW **Actions-cache** role must be launched from a JS action (Phase 2).
+
+### Nx hash divergence BEYOND CRLF / `@actions/cache` (three more sources, all silent cross-OS MISSes)
+
+- **Nx folds a built-in ProjectConfiguration node into every task hash**, and inference plugins can make that node OS-dependent even when file contents (LF-normalized) and lockfile deps are byte-identical: e.g. an atomizer creating per-spec CI targets on Linux but not Windows (a path-separator bug), or `@nx/js/typescript` inferring different task `outputs` per OS. Fix is repo-local Nx config (drop the atomizer's `ciTargetName`; pin task `outputs` explicitly) - never the published contract.
+- **An Nx inference plugin that leaves its `externalDependencies` input scope unset** (`@nx/js/typescript` does, upstream) makes affected targets fall back to hashing the ENTIRE external dependency graph - including platform-native packages whose node names embed OS+arch (`@nx/nx-<os>-<arch>`, `@swc/core-*`) - diverging the hash by BOTH OS and CPU arch. Fix: scope each target's `externalDependencies` to its real toolchain closure (portable across OS/arch; a genuine dep bump still busts the hash).
+- **TypeScript's incremental `.tsbuildinfo` records OS-case-normalized paths** (`url.d.ts` vs `Url.d.ts`); hashing it via a cross-OS-shared output glob (Nx `dependentTasksOutputFiles`) diverges the hash. Exclude `tsbuildinfo` from any cross-OS-shared output glob (keep `.d.ts`/`.d.cts`/`.d.mts`).
+
+### Seeding a remote cache from CI
+
+- **Nx writes task outputs to the remote only on a genuine local MISS** - a local cache HIT short-circuits and no remote PUT happens. So seeding the remote from CI requires `nx reset` between a bootstrap build (which populates the local cache) and the seed build, to force a real miss. A server started but never written-through is inert yet looks healthy.
+
+### GitHub Actions job semantics
+
+- **A job-level `permissions:` block REPLACES the workflow-level grant wholesale** (no merge); unlisted scopes drop to none. A job that sets only `contents: write` silently loses `actions: read`, so listing Actions caches (`GET /repos/.../actions/caches`) 404s (reads like a permissions/existence bug; is a dropped scope). Restate every scope a job needs.
+- **A job that mirrors "whatever cache entries exist at run time" must `needs: build` only and run under `if: ${{ !cancelled() }}`** - NOT depend on the test matrix. Depending on the tests lets one failing leg skip the whole mirror (dropping already-written build/typecheck entries); `!cancelled()` also lets slow-OS legs mirror in the same run.
+
+### GitHub Releases API
+
+- **A release object's inline `assets` array is a non-paginated first-page snapshot.** Matching a read against it (instead of paginating the list-release-assets endpoint) silently misses assets past page 1 - and a near-cap month-shard keeps most assets there, so real HITs read as MISSes. Paginate the assets endpoint for reads (writes already must).
+
+### Concurrency / rate-limit
+
+- **A per-key in-process cache must store the in-flight PROMISE, not the resolved value.** Storing the value lets a cold-start burst (exactly what `nx affected` startup produces) all observe an empty cache and each fire a round-trip; caching the promise coalesces concurrent same-key lookups onto one request (this is what keeps an anonymous client under 60 req/hr). Evict the promise on rejection so the next lookup retries; cache a negative (null) result ONLY for a verified 404, never a transient fault.
+
+### Cross-platform Node / ESM
+
+- **The entry-point guard `import.meta.url === 'file://' + process.argv[1]` is permanently false on Windows** (`import.meta.url` is `file:///C:/...`; the concat yields `file://C:\...`), so `main()` never runs on direct invocation. Use `pathToFileURL(process.argv[1]).href`.
+- **A set-but-empty env var defeats `??`.** A shell `${UNSET}` expansion yields `""` (set, not absent), so `env.GH_TOKEN ?? env.GITHUB_TOKEN` keeps the empty string and shadows a valid fallback - silently dropping to the anonymous 60 req/hr limit. Use `||` (not `??`) for env-fed token/credential fallbacks.
+- (minor) **A numeric env-var resolver must reject NaN / negative / out-of-range to a documented default** - `server.listen()` throws `ERR_SOCKET_BAD_PORT` synchronously (crashes the sidecar); `0` is a good default (OS-assigned ephemeral port).
+
+### Windowed-shard retention (the v0.0.1 Releases model)
+
+- **Read and cleanup scan scopes are intentionally asymmetric.** Reads walk only the retention window (bounding anonymous API cost); cleanup must enumerate EVERY shard and prune by age - a shard aged out of the window (after a publish gap or a shortened retention setting) is never revisited by a window-only walk and orphans toward the per-release asset cap. The wider cleanup scan is affordable (trusted CI only).
+- (minor) **Derive the shard-window span from real calendar-month arithmetic, not `maxAgeDays / 30`** (under-scans across short months, stranding assets); and clamp an operator-supplied retention window to a sane ceiling so a fat-fingered value cannot scale a run to thousands of API calls.
+
+Everything else in this doc (Pitfall 7's cross-OS `@actions/cache` version hashing incl. zstd-vs-gzip - and note `enableCrossOsArchive` does NOT rescue a compression-method mismatch (actions/cache#1622), so OS-partition rather than rely on the flag - plus `.gitattributes eol=lf`; the `gh` no-structured-errors + `-f`-flips-to-POST gotchas; no Release last-accessed signal; the 60/5000 rate limits; the 2 GiB / 1000-asset / 10 GB caps; the Nx PUT `202->200` drift; the github.com-only CREEP backstop) is also implementation-independent and carries forward.
 
 ## Sources
 

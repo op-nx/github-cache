@@ -77,6 +77,9 @@ background-step engine, background the server with a shell `&` instead:
     # GITHUB_ENV for the next step match what the server actually listens on.
     export PORT=3000
     export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN="$(openssl rand -hex 32)"
+    # Mask the token BEFORE it is written to GITHUB_ENV below, so it is redacted
+    # from every later log line, not only from inside the sidecar process.
+    echo "::add-mask::${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
     npx @op-nx/github-cache &
     {
       echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:${PORT}"

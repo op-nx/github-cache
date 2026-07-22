@@ -33,7 +33,12 @@ jobs:
       # sidecar below adopts both.
       - run: |
           echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
-          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          # Mask the token BEFORE writing it to $GITHUB_ENV: the runner redacts it
+          # from the moment the ::add-mask:: command is processed, so nothing echoed
+          # between here and the sidecar step can leak it into the log.
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
 
       # Start the Nx remote-cache sidecar as a background step. It adopts the
       # pre-set NX_* vars and binds the matching port on 127.0.0.1.

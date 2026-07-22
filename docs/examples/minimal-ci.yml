@@ -30,7 +30,11 @@ jobs:
       # sidecar below adopts the pre-set token and the matching port.
       - run: |
           echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
-          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          # Mask the token BEFORE writing it to $GITHUB_ENV so it is redacted from
+          # every later log line, not only from inside the action.
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
 
       # Start the loopback cache sidecar as a background step. It adopts the
       # pre-set NX_* vars and binds the matching port on 127.0.0.1.

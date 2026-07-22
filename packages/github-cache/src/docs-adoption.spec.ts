@@ -84,6 +84,35 @@ describe('versioning.md documents every consumer env knob (DOCS-02/DOCS-05)', ()
   });
 });
 
+describe('documented snippets mask the bearer token before writing $GITHUB_ENV (F17)', () => {
+  // The pre-set step generates NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN and appends
+  // it to $GITHUB_ENV. Masking happens later, inside entry.ts via core.setSecret,
+  // which is far too late -- anything echoing the value between the generation step
+  // and the action step lands unredacted in the log. Because this is the documented
+  // copy-paste pattern, every adopter inherits the gap. A doc that writes the token
+  // to $GITHUB_ENV MUST emit an ::add-mask:: for it first.
+  const TOKEN = 'NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN';
+  const DOCS_WITH_ENV_WRITE = [
+    'README.md',
+    'docs/advanced.md',
+    'docs/examples/minimal-ci.yml',
+  ];
+
+  it.each(DOCS_WITH_ENV_WRITE)(
+    '%s masks the token before appending it to $GITHUB_ENV',
+    (path) => {
+      const doc = read(path);
+
+      // Only assert on docs that actually write the token to $GITHUB_ENV.
+      if (!(doc.includes(TOKEN) && doc.includes('GITHUB_ENV'))) {
+        return;
+      }
+
+      expect(doc).toContain('::add-mask::');
+    },
+  );
+});
+
 describe('README + minimal example show the background-step lifecycle (DOCS-06)', () => {
   const readme = read('README.md');
   const example = read('docs/examples/minimal-ci.yml');

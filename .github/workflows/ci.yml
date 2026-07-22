@@ -268,7 +268,13 @@ jobs:
         run: |
           set -euo pipefail
           echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
-          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          # Mask the bearer token BEFORE writing it to $GITHUB_ENV. entry.ts's
+          # core.setSecret runs far too late -- it only redacts once the action
+          # step starts, so anything echoing the value between here and there would
+          # land unredacted. ::add-mask:: redacts from the moment it is processed.
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
       - uses: ./start-cache-server
         id: cache-server
         background: true

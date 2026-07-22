@@ -12,7 +12,9 @@
 #   - uses: actions/checkout@v7
 #   - run: |                                # regular step: $GITHUB_ENV propagates
 #       echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
-#       echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+#       token="$(openssl rand -hex 32)"     # mask BEFORE writing $GITHUB_ENV
+#       echo "::add-mask::${token}"
+#       echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
 #   - uses: op-nx/github-cache/start-cache-server@v0
 #     id: cache-server
 #     background: true

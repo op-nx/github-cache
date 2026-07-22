@@ -18,6 +18,15 @@
  * Default-deny, no denylist: an unrecognised or unset trigger is not trusted.
  * This file imports nothing from the SYNC/publish gate -- widening WRITE must
  * never widen SYNC (ADR C2); the two allowlists stay separate declarations.
+ *
+ * merge_group and workflow_dispatch are DELIBERATELY absent from both allowlists,
+ * not an accidental deletion: Phase 5's plan lists them among events that must be
+ * false on EVERY host (dangerous/unlisted, always refused), and TRUST-02 reinforces
+ * the same rejection for the sync gate. Under default-deny they need no denylist
+ * entry -- an unrecognised trigger is simply untrusted -- and TRUSTED_EVENTS is
+ * content-pinned to push+schedule by the spec. Predecessor parity is explicitly NOT
+ * a reason to re-add them (ADR framing: sunk cost is zero; known hazards are fixed
+ * at the root, not parity-patched). Do not re-add them.
  * ponytail: array .includes is fine at n=2.
  */
 export const TRUSTED_EVENTS = ['push', 'schedule'] as const;

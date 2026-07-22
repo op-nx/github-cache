@@ -4,10 +4,12 @@ import { readFileSync } from 'node:fs';
  * Trusted triggers for the sync/publish gate (TRUST-02 / D-01). This is a
  * SEPARATE source of truth from the write gate's allowlist in lib/trust.ts: a
  * NEW declaration, never an import of it. The two sets coincide today, which
- * makes reuse tempting and wrong -- Phase 5 / TRUST-01 widens the WRITE allowlist to
- * pull_request/release, and a shared predicate would silently widen SYNC at the
- * same time, recreating the exact CREEP precondition ADR control C2 exists to
- * prevent. The content-pin in sync-gate.spec.ts fails the build if this widens.
+ * makes reuse tempting and wrong -- Phase 5 / TRUST-01 HAS widened the WRITE
+ * allowlist to pull_request/release on gated hosts, while SYNC has NOT, and a
+ * shared predicate would silently widen SYNC with it, recreating the exact CREEP
+ * precondition ADR control C2 exists to prevent. That divergence is precisely why
+ * these must remain two separate declarations. The content-pin in
+ * sync-gate.spec.ts fails the build if this widens.
  * ponytail: array .includes is fine at n=2.
  */
 export const SYNC_EVENTS = ['push', 'schedule'] as const;

@@ -50,10 +50,15 @@ export function createWritableMemoryBackend(): CacheBackend {
 /**
  * Read-only form of the Map-backed backend (the D-04 read seam): a ReadableBackend
  * with NO put -- a write is unrepresentable, and the SERVER (not a put() return
- * value) answers a PUT routed here with the Nx contract's 403. get mirrors the
- * writable read path; its store stays empty in Phase 1 (the real cross-context
- * reader is Phase 3), so get always misses here. RW-vs-RO is which factory
- * constructs the server, never a caller-facing mode flag (TRUST-05).
+ * value) answers a PUT routed here with the Nx contract's 403.
+ *
+ * Its live role is selectBackend's trusted-but-tokenless DEGRADE path: on a
+ * write-trusted trigger with a valid identity but no resolvable token, this backend
+ * is served so an unwired workflow token does not break the build. The store is
+ * never populated, so it is a PERMANENT MISS on every read (and a 403 on every
+ * write) -- deliberately. That is one of the four backend-selection outcomes; see
+ * the table in docs/advanced.md ("How the backend is selected"). RW-vs-RO is which
+ * factory constructs the server, never a caller-facing mode flag (TRUST-05).
  */
 export function createReadOnlyMemoryBackend(): ReadableBackend {
   const store = new Map<string, Buffer>();

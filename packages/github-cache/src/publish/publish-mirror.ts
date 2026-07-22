@@ -131,8 +131,13 @@ async function ensureShardRelease(
  * - Restore (D-03): a foreign-OS or evicted entry MISSes its same-OS restore and is
  *   skipped -- never an error. The shard release is ensured LAZILY, only once there is a
  *   restorable entry, so an all-MISS leg never creates an empty release.
- * - ~2 GiB boundary (D-12/ROBUST-02): a pre-upload bytes.byteLength check fails the whole
- *   run loud (core.error + throw) BEFORE any upload -- never truncate or drop.
+ * - ~2 GiB boundary (D-12/ROBUST-02): a pre-upload bytes.byteLength check counts an
+ *   oversized entry as a per-item failure (core.error + `failed++` + continue) BEFORE any
+ *   upload -- never truncate or drop. The loop does not abort, so the accumulated counts
+ *   and the later entries survive; the aggregate `failed > 0` check below then fails the
+ *   run loud, so D-12's "never truncate, never silently drop, fail the run" holds -- only
+ *   the mechanism moved from a throw to the counter three lines away (a mid-loop throw
+ *   discarded every count and bypassed the aggregate check).
  * - 1000-asset cap (D-11/ROBUST-05): a shard at the cap skips-and-warns (core.warning),
  *   never hard-fails.
  * - First-write-wins (D-05/TRUST-07): a name already present is a benign no-op (the shard
@@ -186,19 +191,21 @@ export async function publishMirror(
     const bytes = restored.bytes;
     const name = releaseAssetName(hash);
 
-    // D-12: deterministic pre-upload boundary check -- fail the whole run loud BEFORE any
+    // D-12: deterministic pre-upload boundary check -- count and skip loud BEFORE any
     // upload, so an oversized artifact is never truncated or dropped (ROBUST-02).
+    // core.error is the operator-facing signal; `failed++` + continue keeps the batch
+    // running, and the aggregate `failed > 0` check at the end still calls setFailed, so
+    // the run is loud and red without discarding the counts a mid-loop throw would lose.
     // Uses strict `>` to match the server's body cap (server.ts handlePut, also `>`)
     // so an entry the primary backend ACCEPTS (exactly RELEASE_ASSET_MAX_BYTES) can
-    // never hard-fail the mirror -- the two 2 GiB ceilings are documented to coincide.
+    // never fail the mirror -- the two 2 GiB ceilings are documented to coincide.
     if (bytes.byteLength > RELEASE_ASSET_MAX_BYTES) {
       core.error(
         `github-cache: asset ${name} is ${bytes.byteLength} bytes, over the ~2 GiB Releases ceiling; refusing to upload (never truncate).`,
       );
+      failed++;
 
-      throw new Error(
-        'github-cache: cache asset exceeds the ~2 GiB release-asset ceiling',
-      );
+      continue;
     }
 
     if (shard === undefined) {

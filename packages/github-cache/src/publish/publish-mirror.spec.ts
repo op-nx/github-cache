@@ -332,14 +332,34 @@ describe('publishMirror ~2 GiB boundary fail-loud (ROBUST-02, D-12)', () => {
     expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
   });
 
-  it('refuses to upload above the ~2 GiB ceiling: core.error + throw, NO upload attempted (cap+1)', async () => {
-    getMock.mockResolvedValue(hit(RELEASE_ASSET_MAX_BYTES + 1));
-    const fake = client();
+  it('counts an oversized entry as a failure and continues the batch, never uploading it (F13)', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+      ]),
+    });
+    // First entry oversized, second a normal entry: the loop must NOT abort on the
+    // oversized one -- the later valid entry still mirrors, and the accumulated counts
+    // survive (the old throw discarded them and bypassed the aggregate check).
+    getMock
+      .mockResolvedValueOnce(hit(RELEASE_ASSET_MAX_BYTES + 1))
+      .mockResolvedValueOnce(hit());
 
-    await expect(publishMirror(fake)).rejects.toThrow();
-    // The pre-upload guard is deterministic: the upload client method is never reached.
-    expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
+    const result = await publishMirror(fake);
+
+    expect(result.mirrored).toBe(1);
+    expect(result.failed).toBe(1);
+    // The oversized entry is never uploaded; only the later valid one is.
+    expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
+    expect(fake.uploadReleaseAsset).toHaveBeenCalledWith(
+      SHARD_ID,
+      releaseAssetName('bb22' as Hash),
+      expect.anything(),
+    );
     expect(core.error).toHaveBeenCalledOnce();
+    // Still loud + red: the aggregate failed>0 check fires exactly once at the end.
+    expect(core.setFailed).toHaveBeenCalledOnce();
   });
 });
 

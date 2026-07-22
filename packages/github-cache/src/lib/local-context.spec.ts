@@ -370,6 +370,36 @@ describe('resolveRepoIdentity origin remote and env override (FOUND-02)', () => 
     expect(repo).toBe('op-nx/github-cache');
   });
 
+  it('parses a mixed-case https github.com host (git remotes routinely carry case) (FOUND-02, D-10, F23)', async () => {
+    programSpawn(() =>
+      fakeChild({ stdout: 'https://GitHub.com/op-nx/github-cache\n', code: 0 }),
+    );
+
+    const repo = await resolveRepoIdentity({});
+
+    expect(repo).toBe('op-nx/github-cache');
+  });
+
+  it('parses an uppercase-host scp-like ssh remote (FOUND-02, D-10, F23)', async () => {
+    programSpawn(() =>
+      fakeChild({ stdout: 'git@GITHUB.COM:op-nx/github-cache.git\n', code: 0 }),
+    );
+
+    const repo = await resolveRepoIdentity({});
+
+    expect(repo).toBe('op-nx/github-cache');
+  });
+
+  it('preserves owner/repo case even on a mixed-case host (repo names are case-sensitive) (FOUND-02, D-10, F23)', async () => {
+    programSpawn(() =>
+      fakeChild({ stdout: 'https://GITHUB.COM/Op-NX/GitHub-Cache\n', code: 0 }),
+    );
+
+    const repo = await resolveRepoIdentity({});
+
+    expect(repo).toBe('Op-NX/GitHub-Cache');
+  });
+
   it('resolves undefined for a remote whose host is not GitHub -- never a guess (FOUND-02, D-10)', async () => {
     // Non-vacuous: a non-GitHub host is well-formed as a URL but must not resolve
     // into another host's owner/name; guessing would read into a foreign namespace.

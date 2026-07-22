@@ -68357,7 +68357,7 @@ async function resolveRepoIdentity(env = process.env) {
   if (url2 === void 0) {
     return void 0;
   }
-  const match2 = /^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?$/.exec(
+  const match2 = /^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?$/i.exec(
     url2
   );
   if (match2 === null) {

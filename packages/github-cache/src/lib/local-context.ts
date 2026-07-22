@@ -207,8 +207,15 @@ export async function resolveRepoIdentity(
   // EMBEDS github.com as a path segment on ANOTHER host (a corporate proxy mirror,
   // a crafted .git/config) into that segment's owner/repo, silently reading into a
   // foreign cache namespace. No match -> undefined -> MISS; the code never guesses.
+  //
+  // The `i` flag matches the host case-insensitively (git remotes routinely carry
+  // mixed case, and trust.ts already lowercases the host before comparing). It is
+  // scoped to the HOST only in effect: the owner/repo captures are preserved
+  // verbatim, because GitHub repo names are case-sensitive. The flag does NOT relax
+  // the anchor into a substring match -- the embedded-host rejection above still
+  // holds.
   const match =
-    /^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?$/.exec(
+    /^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?$/i.exec(
       url,
     );
 

@@ -157,6 +157,7 @@ describe('public consumer surface (DOCS-05)', () => {
 
   it('the documented env-knob set is exactly the D-04 group-a contract list', () => {
     expect([...EXPECTED_ENV_KNOBS].sort()).toEqual([
+      'CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION',
       'CACHE_MIRROR_MAX_AGE_DAYS',
       'GH_TOKEN',
       'GITHUB_REPOSITORY',

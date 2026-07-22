@@ -23,6 +23,18 @@ const DEFAULT_MAX_AGE_DAYS = 30;
 /** Clamp ceiling so a fat-fingered knob cannot explode the shard walk or the prune scan (V5, T-04-04). */
 const MAX_AGE_CEILING_DAYS = 365;
 
+/**
+ * Policy floor (F09): a retention window below this is refused loudly unless the
+ * consumer sets `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION`. This is restic's
+ * empty-policy refusal, NOT a ratio circuit breaker -- prior art (restic, borg)
+ * guards the POLICY and the SCOPE, never the outcome volume. A ratio breaker that
+ * aborts a run is itself a way for retention to silently stop running forever
+ * (CONTEXT.md); this floor can ONLY reject a bad CONFIG at resolve time, so a run
+ * with a valid policy is never blocked and steady-state cleanup can never be
+ * stopped by it.
+ */
+const MIN_AGE_DAYS = 7;
+
 /** Milliseconds per day. Exported as the single time-window source shared by the cleanup engine's cutoff (I8: one home). */
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -81,6 +93,18 @@ export function isShardTag(tag: string): boolean {
  * wiping the whole in-window mirror, including the retention-locked set the one
  * non-negotiable rule says must never be deleted. Flooring to 1 keeps at least a
  * one-day window (matching the shard quantum's smallest safe value).
+ *
+ * On top of that hard 1-day clamp sits the 7-day POLICY floor (F09): a finite positive
+ * value below MIN_AGE_DAYS throws unless `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION` is set,
+ * with a self-remediating message naming both. The asymmetry is deliberate and the whole
+ * reason a ratio breaker was rejected: this ONLY rejects a bad CONFIG at resolve time,
+ * never a run with a valid policy, so steady-state cleanup can never be blocked by it.
+ * The override widens what is allowed but does NOT remove the 1-day/365-day clamp.
+ *
+ * ponytail: `releases-backend` resolves through here too on the READ path, and its
+ * degrade-to-MISS discipline swallows this throw into a MISS. That is accepted -- the
+ * actionable loud signal is the RED cleanup job; duplicating it on the read path would
+ * break SRV-05 (a read fault must never break the build).
  */
 export function resolveMaxAgeDays(
   env: NodeJS.ProcessEnv = process.env,
@@ -89,6 +113,12 @@ export function resolveMaxAgeDays(
 
   if (!Number.isFinite(raw) || raw <= 0) {
     return DEFAULT_MAX_AGE_DAYS;
+  }
+
+  if (raw < MIN_AGE_DAYS && !env.CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION) {
+    throw new Error(
+      `github-cache: CACHE_MIRROR_MAX_AGE_DAYS=${env.CACHE_MIRROR_MAX_AGE_DAYS} is below the ${MIN_AGE_DAYS}-day retention floor. A window this short can prune almost the entire mirror on the next scheduled cleanup. Set it to ${MIN_AGE_DAYS} or more, or set CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION to opt in to an aggressive window deliberately.`,
+    );
   }
 
   return Math.max(1, Math.min(Math.floor(raw), MAX_AGE_CEILING_DAYS));

@@ -68391,6 +68391,7 @@ function releaseAssetName(hash, platform2 = process.platform) {
 // packages/github-cache/src/lib/retention.ts
 var DEFAULT_MAX_AGE_DAYS = 30;
 var MAX_AGE_CEILING_DAYS = 365;
+var MIN_AGE_DAYS = 7;
 var MS_PER_DAY = 24 * 60 * 60 * 1e3;
 var SHARD_TAG_PREFIX = "cache-mirror-";
 function shardTag(date = /* @__PURE__ */ new Date()) {
@@ -68403,6 +68404,11 @@ function resolveMaxAgeDays(env = process.env) {
   const raw = Number(env.CACHE_MIRROR_MAX_AGE_DAYS);
   if (!Number.isFinite(raw) || raw <= 0) {
     return DEFAULT_MAX_AGE_DAYS;
+  }
+  if (raw < MIN_AGE_DAYS && !env.CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION) {
+    throw new Error(
+      `github-cache: CACHE_MIRROR_MAX_AGE_DAYS=${env.CACHE_MIRROR_MAX_AGE_DAYS} is below the ${MIN_AGE_DAYS}-day retention floor. A window this short can prune almost the entire mirror on the next scheduled cleanup. Set it to ${MIN_AGE_DAYS} or more, or set CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION to opt in to an aggressive window deliberately.`
+    );
   }
   return Math.max(1, Math.min(Math.floor(raw), MAX_AGE_CEILING_DAYS));
 }

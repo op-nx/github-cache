@@ -20,6 +20,7 @@ consumer contract (see [Versioning](versioning.md)) and are locked by the
 | `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` | you, before the background step (adopted) | Bearer token the Nx client presents and the server checks                           | a fresh per-run CSPRNG token  |
 | `PORT`                                     | you (optional)                            | Loopback port to bind (`resolvePort`)                                               | an OS-assigned ephemeral port |
 | `CACHE_MIRROR_MAX_AGE_DAYS`                | you (optional)                            | The one coupled retention knob (`resolveMaxAgeDays`) for the opt-in Releases mirror | `30` (clamped to `365`)       |
+| `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION`  | you (optional)                            | Opt-in that lets `CACHE_MIRROR_MAX_AGE_DAYS` go below the 7-day floor               | unset (floor enforced)        |
 | `GH_TOKEN`                                 | you / the runner                          | GitHub token, first choice (`resolveGitHubToken`)                                   | none                          |
 | `GITHUB_TOKEN`                             | you / the runner                          | GitHub token, fallback when `GH_TOKEN` is unset                                     | none                          |
 | `GITHUB_REPOSITORY`                        | the runner (CI); you, to override locally | `owner/name` identity (`resolveRepoIdentity`)                                       | the `origin` git remote       |
@@ -62,6 +63,21 @@ much the mirror grows, it does not contain a poisoned entry. Poisoning is
 contained at the write and sync gates (see
 [Trust and security](trust-and-security.md)). This knob only matters if you use
 the opt-in Releases mirror ([Advanced usage](advanced.md)).
+
+A value below a **7-day floor** is refused loudly: `resolveMaxAgeDays` throws
+naming both the floor and the override, so a fat-fingered `CACHE_MIRROR_MAX_AGE_DAYS=1`
+fails the cleanup job rather than silently pruning almost the entire mirror on the
+next scheduled run. The floor guards the _config_, never a valid run -- it can only
+reject at resolve time, so steady-state cleanup with a valid window is never blocked.
+
+### `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION`
+
+Set this (to any non-empty value) to deliberately opt in to a retention window
+below the 7-day floor. With it set, `resolveMaxAgeDays` accepts a sub-floor
+`CACHE_MIRROR_MAX_AGE_DAYS` (still clamped to the 1-day hard minimum and the
+365-day ceiling). Leave it unset unless you have a specific reason to prune
+aggressively -- the floor exists because a very short window can wipe most of the
+mirror on the next cleanup.
 
 ### `GH_TOKEN` / `GITHUB_TOKEN`
 

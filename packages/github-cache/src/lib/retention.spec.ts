@@ -97,23 +97,64 @@ describe('resolveMaxAgeDays one coupled knob (D-07, T-04-04)', () => {
   });
 
   it('accepts a valid in-range value', () => {
+    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '30' })).toBe(30);
+  });
+
+  it('accepts the 7-day floor itself without an override', () => {
     expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '7' })).toBe(7);
   });
 
   it('clamps a value over the 365-day ceiling', () => {
-    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '500' })).toBe(365);
+    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '400' })).toBe(365);
   });
 
-  it('floors a fractional value', () => {
+  it('floors a fractional in-range value', () => {
     expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '10.9' })).toBe(10);
   });
+});
 
-  it('floors a sub-1-day value up to the 1-day floor, never 0', () => {
-    // A value in (0,1) passes the raw<=0 guard but Math.floor is 0. Without the
-    // Math.max(1, ...) floor that 0 makes cleanup's cutoff = now, pruning the entire
-    // in-window (retention-locked) mirror. The floor keeps at least a one-day window.
-    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '0.5' })).toBe(1);
-    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '0.99' })).toBe(1);
+describe('resolveMaxAgeDays 7-day policy floor (F09, restic empty-policy refusal)', () => {
+  // The floor rejects a catastrophic CONFIG, never a valid run -- restic/borg guard
+  // the policy and the scope, never the outcome volume. A ratio breaker was rejected
+  // in CONTEXT.md precisely because an aborting breaker is itself a way for retention
+  // to silently stop running forever; this only ever throws on a bad config.
+  it('throws for a finite positive value below the 7-day floor, naming the floor and the override knob', () => {
+    for (const days of ['1', '2', '3', '6']) {
+      expect(() =>
+        resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: days }),
+      ).toThrow(/7/);
+      expect(() =>
+        resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: days }),
+      ).toThrow(/CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION/);
+    }
+  });
+
+  it('resolves a sub-floor value when the aggressive-retention opt-in is set', () => {
+    expect(
+      resolveMaxAgeDays({
+        CACHE_MIRROR_MAX_AGE_DAYS: '1',
+        CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION: 'true',
+      }),
+    ).toBe(1);
+  });
+
+  it('keeps the 1-day hard floor on the override path (a sub-1-day value still resolves to 1, never 0)', () => {
+    // The override widens what is allowed; it does not remove the clamp. A value in
+    // (0,1) floors to 0, which would make cleanup's cutoff = now and prune the whole
+    // in-window mirror -- so Math.max(1, ...) still applies.
+    expect(
+      resolveMaxAgeDays({
+        CACHE_MIRROR_MAX_AGE_DAYS: '0.5',
+        CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION: 'true',
+      }),
+    ).toBe(1);
+  });
+
+  it('never blocks a valid policy: unset/zero/negative/non-numeric still fall back to 30', () => {
+    expect(resolveMaxAgeDays({})).toBe(30);
+    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '0' })).toBe(30);
+    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: '-5' })).toBe(30);
+    expect(resolveMaxAgeDays({ CACHE_MIRROR_MAX_AGE_DAYS: 'abc' })).toBe(30);
   });
 });
 

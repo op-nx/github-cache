@@ -185,6 +185,16 @@ async function handlePut(
   if (Number.isFinite(declared) && declared > maxBodyBytes) {
     res.statusCode = 413;
     res.end();
+    // ponytail: an early 413 to a client STILL STREAMING a body well over the cap
+    // surfaces to that client as ECONNRESET, not a clean 413 -- destroying a socket
+    // with unread inbound body triggers a TCP RST that discards the buffered
+    // response. This is inherent to an early response on a large in-flight HTTP/1.1
+    // request, not a fixable defect (verified: 60/60 RST on a 100MB raw-socket
+    // repro; a finite body <=16KB over the cap still gets a clean 413, >=256KB
+    // resets). The cap's ACTUAL purpose -- bounding memory before Buffer.concat --
+    // holds regardless. Do NOT "fix" by deferring destroy to res.on('finish')
+    // (still resets, and can hang on an unsettled await) or by draining the body
+    // (defeats early rejection). No upgrade path over single-connection HTTP/1.1.
     req.destroy();
 
     return;
@@ -208,6 +218,11 @@ async function handlePut(
       if (total > maxBodyBytes) {
         res.statusCode = 413;
         res.end();
+        // ponytail: same RST-on-destroy-with-unread-body ceiling as the
+        // Content-Length fast path above -- a client streaming well over the cap
+        // sees ECONNRESET, not a clean 413; the memory bound holds regardless. See
+        // that comment for the full rationale and why destroy-on-finish / draining
+        // are not fixes.
         req.destroy();
 
         return;

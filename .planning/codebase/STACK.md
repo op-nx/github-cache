@@ -1,78 +1,109 @@
 # Technology Stack
 
-**Analysis Date:** 2026-07-18
-
-## Current State Notice
-
-This is a freshly torn-down Nx workspace SHELL (post Phase 0). The only project is the workspace root itself, `@op-nx/source` (`package.json`). `packages/` exists but contains only `packages/.gitkeep` — no libraries, no apps, no `src/` yet. Nothing below describes application code because none exists; a greenfield rebuild starts in Phase 1. This document reflects only the tooling/config actually present at the repo root.
+**Analysis Date:** 2026-07-22
 
 ## Languages
 
 **Primary:**
-- TypeScript `~6.0.3` — configured workspace-wide via `tsconfig.base.json` and `tsconfig.json`; no source files exist yet to compile
+- TypeScript ~6.0.3 (strict mode, ESM, `nodenext` module resolution) - all source under `packages/github-cache/src/**/*.ts`, plus `start-cache-server/entry.ts`
+- JavaScript (ESM/CJS) - `esbuild.action.mjs` (build script), committed bundle `start-cache-server/index.js` (CJS output of esbuild), `packages/github-cache/pack-check.cjs` (CJS guard script)
 
 **Secondary:**
-- None detected (no JS/other language source present)
+- YAML - GitHub Actions workflow/action definitions: `.github/workflows/ci.yml`, `.github/workflows/cleanup.yml`, `packages/github-cache/action.yml`, `start-cache-server/action.yml`, `ppe/action.yml`
+- Bash - inline `run:` steps inside the workflow/action YAML files (credential masking, curl polling, tool installs in `ppe/action.yml`)
 
 ## Runtime
 
 **Environment:**
-- Node.js — pinned via `.node-version` to `lts/krypton` (Node 24 LTS codename); local `node -v` resolves to `v24.13.0`
+- Node.js, pinned via `.node-version` to `lts/krypton` (Node 24 LTS line)
+- `package.json` (package `@op-nx/github-cache`) declares `"engines": { "node": ">=20" }` as the minimum consumer floor, but CI, the esbuild target (`target: 'node24'`), and the action `runs.using: 'node24'` all standardize on Node 24
+- The package is pure ESM (`"type": "module"` in `packages/github-cache/package.json`); the bundled consumer action (`start-cache-server/index.js`) is CJS output because a `uses:` action's `main` must be resolvable without a module-type declaration in that directory
 
 **Package Manager:**
-- npm — `package.json` has no `packageManager` field, but `package-lock.json` is present and committed (231KB) and CI uses `npm ci` (`.github/workflows/ci.yml`)
-- Lockfile: present — `package-lock.json`
-- npm workspaces declared: `"workspaces": ["packages/*"]` in `package.json` (currently resolves to zero packages, since `packages/` is empty except `.gitkeep`)
+- npm (root `package.json` uses npm workspaces: `"workspaces": ["packages/*"]`)
+- Lockfile: present (`package-lock.json`, npm v9+ lockfile format)
+- `.npmrc`/`.pypirc`/similar: not detected
 
 ## Frameworks
 
 **Core:**
-- Nx `23.1.0` — monorepo build/task orchestration, configured in `nx.json`
-  - `@nx/js` `23.1.0` — the `@nx/js/typescript` plugin (registered in `nx.json`'s `plugins` array) infers `typecheck` and `build` targets from `tsconfig.lib.json` per project (none exist yet)
-  - `@nx/vitest` `23.1.0` — the `@nx/vitest` plugin infers `test` targets (`testMode: "watch"` per `nx.json`)
+- None (no web framework) - the cache server is a hand-rolled `node:http` server (`packages/github-cache/src/server/server.ts`); zero-HTTP-dependency by design (only `node:http`, `node:crypto`, native `fetch`)
+- Nx 23.1.0 - monorepo build/task orchestration (`nx.json`, `@nx/js` and `@nx/vitest` plugins)
 
 **Testing:**
-- Vitest `~4.1.0` — test runner, workspace-level config in `vitest.workspace.ts` (currently only excludes `vite.config.*` / `vitest.config.*` glob patterns — no test projects registered yet)
-- `@vitest/coverage-v8` `~4.1.0` — V8-based coverage provider for Vitest
+- Vitest ~4.1.0 (resolved 4.1.10) - unit tests (`packages/github-cache/vitest.config.mts`) and a separate integration-test project (`packages/github-cache/vitest.integration.config.mts`)
+- `@vitest/coverage-v8` ~4.1.0 - coverage provider (`provider: 'v8'`)
+- `vitest.workspace.ts` (root) - workspace glob for vite/vitest config discovery
 
 **Build/Dev:**
-- Vite `^8.0.0` — declared as a devDependency; used transitively by `@nx/vitest` and available for future library builds
-- `@swc/core` `1.15.8` + `@swc-node/register` `1.11.1` + `@swc/helpers` `0.5.18` — SWC-based fast TypeScript compilation/register, used by Nx's TS tooling
-- Prettier `^3.8.1` — formatting, config in `.prettierrc` (`{"singleQuote": true}`), exclusions in `.prettierignore`
-- `tslib` `^2.3.0` — TypeScript helper runtime (referenced via `importHelpers: true` in `tsconfig.base.json`)
+- esbuild 0.28.1 (exact-pinned) - bundles the consumer action entry (`start-cache-server/entry.ts`) into the single committed CJS file `start-cache-server/index.js` (`esbuild.action.mjs`); target `node24`, `format: 'cjs'`, `bundle: true`
+- TypeScript compiler (`tsc`) via `@nx/js/typescript` Nx plugin - library build (`tsconfig.lib.json` -> `dist/`) and typecheck targets, plus a standalone `tsc -p tsconfig.action.json` for the action-entry graph
+- `@swc-node/register` 1.11.1 / `@swc/core` 1.15.8 / `@swc/helpers` 0.5.18 - fast TS transpilation used by the Nx/Vitest toolchain
+- Prettier ^3.8.1 (resolved 3.9.5) - formatting (`.prettierrc`, `.prettierignore`); `nx format:check` / `nx format:write`
+- fallow ~3.6.0 (resolved 3.6.0) - dead-code / unused-export auditing (`.fallowrc.jsonc`; `npm run fallow`, `npm run fallow:ci`)
 
 ## Key Dependencies
 
-**Critical:**
-- `typescript` `~6.0.3` — sole language compiler; `tsconfig.base.json` sets `strict: true`, `module`/`moduleResolution: "nodenext"`, `target: "es2022"`, `composite: true`, `emitDeclarationOnly: true`
-- `nx` `23.1.0` — drives every workspace script (`build`, `typecheck`, `test`, `integration`, `format`) via `nx run-many -t <target>` in `package.json` scripts
+**Critical (package: `packages/github-cache/package.json`, all exact-pinned):**
+- `@actions/cache` 6.2.0 - official GitHub Actions cache toolkit; backs the writable Actions-cache backend (`src/backend/actions-cache-backend.ts`, `cache.restoreCache` / `cache.saveCache`). Exact-pinned because the archive-version hash it derives (OS tmpdir path + compression method) is load-bearing for cross-OS cache-miss behavior; an upgrade is a deliberate, dogfood-canary-gated event (see `.github/workflows/ci.yml` `dogfood-seed`/`dogfood-verify`)
+- `@actions/core` 3.0.1 - Actions toolkit primitives (`core.getInput`, `core.setFailed`, `core.setSecret`, `core.warning`, `core.info`) used throughout the action entry, publish, and cleanup bins; also a root-level dependency (same exact version) for the consumer sidecar entry (`start-cache-server/entry.ts`)
+- `@octokit/rest` 22.0.1 - GitHub REST API client; used by the publish (`src/publish/publish-mirror.ts` via `src/action/index.ts`) and cleanup (`src/cleanup/index.ts`) engines for Releases + Actions-cache-list operations
+- `@octokit/plugin-retry` 8.1.0 and `@octokit/plugin-throttling` 11.0.3 - composed onto the base `Octokit` in `src/lib/resilient-octokit.ts` (`createResilientOctokit`) for 429/5xx retry and primary/secondary rate-limit backoff; the pairing mirrors the upstream-blessed `octokit@5.0.5` combination on `@octokit/core@7` (resolved: 7.0.6)
 
-**Infrastructure:**
-- `@types/node` `^24.0.0` — Node type definitions, matches the pinned `lts/krypton` (Node 24) runtime
+**Infrastructure (devDependencies, root `package.json`):**
+- `nx` 23.1.0, `@nx/js` 23.1.0, `@nx/vitest` 23.1.0 - monorepo task graph, TypeScript build plugin, Vitest test plugin
+- `typescript` ~6.0.3 (resolved 6.0.3), `tslib` ^2.3.0, `@types/node` ^24.0.0
+- `vite` ^8.0.0 (peer of Vitest 4.x), `vitest` ~4.1.0, `@vitest/coverage-v8` ~4.1.0
+- `esbuild` 0.28.1 (exact-pinned - drives the deterministic, git-diffable consumer bundle)
+- `fallow` ~3.6.0, `prettier` ^3.8.1
+
+**Zero-dependency-by-design surfaces:**
+- The `node:http` server (`src/server/server.ts`), the GitHub Releases read client (`src/backend/releases-backend.ts`), and the cross-OS read-back script (`src/roundtrip/read-back.ts`) deliberately use only Node built-ins (`node:crypto`, `node:http`, native global `fetch`, `AbortSignal.timeout`) rather than an HTTP client library - documented in-code as a "zero-dependency-lean" (D-01/D-03) design constraint
 
 ## Configuration
 
-**Environment:**
-- No `.env` or environment-variable files exist in the repo (confirmed by directory listing) — nothing to configure at this stage
-- Node version pinned centrally in `.node-version` (`lts/krypton`), consumed by CI via `actions/setup-node@v6` with `node-version-file: '.node-version'`
+**TypeScript project structure (composite project references):**
+- `tsconfig.base.json` (root) - shared compiler options: `module`/`moduleResolution: nodenext`, `target: es2022`, `lib: ["es2022"]`, `strict: true`, `composite: true`, `isolatedModules: true`, `noUnusedLocals`, `noImplicitReturns`, `noImplicitOverride`, `esModuleInterop: false`, custom condition `@op-nx/source` (lets in-repo consumers resolve `./src/index.ts` directly instead of `./dist`)
+- `tsconfig.json` (root) - solution file referencing `./packages/github-cache`
+- `packages/github-cache/tsconfig.json` - references `tsconfig.lib.json` + `tsconfig.spec.json`
+- `packages/github-cache/tsconfig.lib.json` - library build config (`rootDir: src`, `outDir: dist`, excludes `*.test.*`/`*.spec.*`)
+- `packages/github-cache/tsconfig.spec.json` - test config (`outDir: ./out-tsc/vitest`, includes `vitest/globals`, `vitest/importMeta`, `vite/client` types)
+- `tsconfig.action.json` (root) - standalone, non-composite config (`noEmit: true`, `types: ["node"]`) that typechecks the esbuild-reachable graph starting at `start-cache-server/entry.ts` (which lives outside the package tsconfig and is otherwise unchecked); run via `npm run typecheck:action`
 
-**Build:**
-- `nx.json` — defines `namedInputs` (`default`, `production`, `sharedGlobals`), registers the `@nx/js/typescript` and `@nx/vitest` plugins, and sets `targetDefaults` for `build`, `typecheck`, `test`, and `integration` (the `integration` target default includes a `{ "runtime": "node -p process.platform" }` hash input to keep OS-specific results from colliding in the Nx cache)
-- `tsconfig.base.json` — shared compiler options inherited by all future project `tsconfig.lib.json`/`tsconfig.spec.json` files
-- `tsconfig.json` — root solution-style config (`files: []`, `references: []`), extends `tsconfig.base.json`
-- `vitest.workspace.ts` — workspace-level Vitest project list (currently only glob-excludes config files; no projects registered)
-- `.prettierrc` / `.prettierignore` — formatting config and exclusions (excludes `/dist`, `/coverage`, `.nx/*`, and GSD planning/agent docs: `.planning/`, `CLAUDE.md`, `AGENTS.md`, `.claude/`, `.gsd-migration-backup/`)
-- `.gitattributes` — forces `* text=auto eol=lf` workspace-wide specifically to keep Nx task-hash inputs byte-identical across Windows/Linux checkouts (avoids CRLF-induced cache misses)
+**Nx (`nx.json`):**
+- Plugins: `@nx/js/typescript` (targets: `typecheck`, `build` via `tsconfig.lib.json`), `@nx/vitest` (target: `test`, `testMode: watch`)
+- `packages/github-cache/project.json` adds one extra, non-plugin-inferred target: `integration` (`vitest run --config vitest.integration.config.mts`)
+- Custom `targetDefaults.integration` input includes a `{ "runtime": "node -p process.platform" }` hash discriminator so Linux and Windows integration-test hashes never collide (integration tests touch real sockets/filesystem)
+- `targetDefaults.test` inputs pin in the governance/docs files (`SECURITY.md`, `README.md`, `docs/*.md`, workflow YAML) so a docs-only change still invalidates the tests that assert docs/code are in sync
+- `analytics: false`; `release.version.preVersionCommand: "npx nx run-many -t build"`
+
+**Vitest:**
+- `packages/github-cache/vitest.config.mts` - unit-test project (`@op-nx/github-cache`), `environment: 'node'`, excludes `*.integration.spec.*`, own `cacheDir: '../../node_modules/.vite/packages/github-cache'`
+- `packages/github-cache/vitest.integration.config.mts` - integration-test project (`@op-nx/github-cache:integration`), includes only `*.integration.spec.ts`, a distinct `cacheDir` so the two suites never race on Vite's cache in parallel worktrees
+- `vitest.workspace.ts` (root) - glob pattern registering every `vite.config.*`/`vitest.config.*` for workspace discovery
+
+**Build (esbuild):**
+- `esbuild.action.mjs` - the only build script invoked outside Nx/tsc; bundles `start-cache-server/entry.ts` to `start-cache-server/index.js` (CJS, `target: node24`), with a `define`+`banner` shim for `import.meta.url` (needed because `@azure/storage-common`'s crc64 module, pulled in transitively through `@actions/cache`, calls `createRequire(import.meta.url)` at load time)
+- `npm run check:action` rebuilds the bundle and `git diff --exit-code`s it - a drift guard enforced as its own CI job (`action-bundle-drift` in `ci.yml`)
+
+**Formatting/Linting:**
+- `.prettierrc` - `{ "singleQuote": true }` (implied minimal config)
+- `.prettierignore` - present
+- `.fallowrc.jsonc` - dead-code/reachability audit config (entry points, ignores)
+- No ESLint config detected in the repo root listing
 
 ## Platform Requirements
 
 **Development:**
-- Node.js `lts/krypton` (Node 24), per `.node-version`
-- npm (lockfile-based install: `npm ci` in CI, `npm install` locally)
+- Node 24 (per `.node-version` = `lts/krypton`), npm (workspaces-aware)
+- `gh` CLI and/or `git credential` helper optionally present on a developer machine for local Releases-mirror reads (`src/lib/local-context.ts` tiers: env, `gh auth token`, `git credential fill`)
 
-**Production:**
-- No deployment target defined yet — no app/service code exists. CI (`.github/workflows/ci.yml`) currently runs `format-check`, `build`, `typecheck`, `test` jobs on `ubuntu-24.04-arm`, plus an `integration` job matrixed across `ubuntu-24.04-arm` and `windows-11-arm` (this job is a green no-op today since no `integration` target/project exists yet — the workflow scaffolds the cross-OS matrix ahead of Phase 3)
+**Production / CI:**
+- GitHub Actions runners: `ubuntu-24.04-arm` (primary CI/lint/build jobs) and `windows-11-arm` (cross-OS integration matrix leg) per `.github/workflows/ci.yml`
+- The consumer-facing `start-cache-server` action and the internal `packages/github-cache/action.yml` dogfood action both declare `runs.using: 'node24'`
+- No Docker/container runtime detected anywhere in the repo (no `Dockerfile`, no `docker-compose*.yml`)
+- Deployment target: none (this is a library + two GitHub Actions consumed by other repositories' CI, not a hosted service)
 
 ---
 
-*Stack analysis: 2026-07-18*
+*Stack analysis: 2026-07-22*

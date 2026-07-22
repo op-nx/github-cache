@@ -68819,17 +68819,20 @@ async function run() {
     return;
   }
   const portInput = getInput("port");
-  let port;
-  if (portInput) {
-    const parsed = Number(portInput);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-      setFailed(
-        `github-cache sidecar: invalid port input ${JSON.stringify(portInput)}; expected an integer 1-65535 matching the fixed port the consumer published to NX_SELF_HOSTED_REMOTE_CACHE_SERVER. Refusing to bind an ephemeral port the Nx client could never reach.`
-      );
-      return;
-    }
-    port = portInput;
+  if (!portInput) {
+    setFailed(
+      "github-cache sidecar: the port input is required. Pass the same fixed port the consumer published to NX_SELF_HOSTED_REMOTE_CACHE_SERVER in the prior regular step. Refusing to bind an ephemeral port the Nx client could never reach."
+    );
+    return;
   }
+  const parsed = Number(portInput);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    setFailed(
+      `github-cache sidecar: invalid port input ${JSON.stringify(portInput)}; expected an integer 1-65535 matching the fixed port the consumer published to NX_SELF_HOSTED_REMOTE_CACHE_SERVER. Refusing to bind an ephemeral port the Nx client could never reach.`
+    );
+    return;
+  }
+  const port = portInput;
   const running = await serve({ port });
   setSecret(running.token);
   info(`github-cache sidecar listening on ${running.url}`);

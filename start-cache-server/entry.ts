@@ -41,26 +41,40 @@ async function run(): Promise<void> {
   // for this handshake: the consumer has already published a FIXED port to
   // NX_SELF_HOSTED_REMOTE_CACHE_SERVER in a prior step, so a silent fallback to a
   // random port binds one the Nx client can never reach (silent all-MISS /
-  // connection-refused). Fail loud on an explicitly-supplied-but-unusable port.
+  // connection-refused).
+  //
+  // An ABSENT port is the same failure, not an exemption. The guard used to read
+  // `if (portInput)`, which skipped validation entirely when the input was omitted
+  // -- delivering the exact ephemeral-port outcome the guard exists to prevent. So
+  // an empty or absent input fails the step too: the port is required in practice
+  // even though the action schema marks it optional.
   const portInput = core.getInput('port');
-  let port: string | undefined;
 
-  if (portInput) {
-    const parsed = Number(portInput);
+  if (!portInput) {
+    core.setFailed(
+      'github-cache sidecar: the port input is required. Pass the same fixed port ' +
+        'the consumer published to NX_SELF_HOSTED_REMOTE_CACHE_SERVER in the prior ' +
+        'regular step. Refusing to bind an ephemeral port the Nx client could never ' +
+        'reach.',
+    );
 
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-      core.setFailed(
-        `github-cache sidecar: invalid port input ${JSON.stringify(portInput)}; ` +
-          'expected an integer 1-65535 matching the fixed port the consumer published to ' +
-          'NX_SELF_HOSTED_REMOTE_CACHE_SERVER. Refusing to bind an ephemeral port the Nx ' +
-          'client could never reach.',
-      );
-
-      return;
-    }
-
-    port = portInput;
+    return;
   }
+
+  const parsed = Number(portInput);
+
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    core.setFailed(
+      `github-cache sidecar: invalid port input ${JSON.stringify(portInput)}; ` +
+        'expected an integer 1-65535 matching the fixed port the consumer published to ' +
+        'NX_SELF_HOSTED_REMOTE_CACHE_SERVER. Refusing to bind an ephemeral port the Nx ' +
+        'client could never reach.',
+    );
+
+    return;
+  }
+
+  const port = portInput;
 
   const running = await serve({ port });
 

@@ -37,8 +37,9 @@ inputs:
   port:
     description: >-
       Loopback port for the sidecar. Must match the port in the pre-set
-      NX_SELF_HOSTED_REMOTE_CACHE_SERVER url. Omitted -> an OS-assigned ephemeral
-      port, which will NOT match a fixed pre-set url, so set it explicitly.
+      NX_SELF_HOSTED_REMOTE_CACHE_SERVER url. Required in practice: the action
+      fails fast when it is absent, because binding an OS-assigned ephemeral port
+      would NOT match the fixed pre-set url and every read would MISS.
     required: false
 runs:
   using: 'node24'

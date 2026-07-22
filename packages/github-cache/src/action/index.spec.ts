@@ -30,7 +30,12 @@ vi.mock('@actions/core', () => {
 vi.mock('../serve.js', () => ({ serve: vi.fn() }));
 vi.mock('../lib/sync-gate.js', () => ({ isSyncTrusted: vi.fn() }));
 vi.mock('../publish/publish-mirror.js', () => ({ publishMirror: vi.fn() }));
-vi.mock('@octokit/rest', () => ({ Octokit: vi.fn() }));
+// Mock the resilient-octokit helper, not @octokit/rest: the helper runs
+// Octokit.plugin(retry, throttling) at module load, which a bare Octokit: vi.fn()
+// mock cannot satisfy. runPublish's tests never reach construction anyway.
+vi.mock('../lib/resilient-octokit.js', () => ({
+  createResilientOctokit: vi.fn(),
+}));
 // Keep the real GITHUB_REPOSITORY_PATTERN; only stub the token resolver.
 vi.mock('../lib/github-identity.js', async (orig) => {
   const actual = await orig<typeof import('../lib/github-identity.js')>();

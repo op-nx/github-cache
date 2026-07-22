@@ -1,7 +1,8 @@
 import * as core from '@actions/core';
-import { Octokit } from '@octokit/rest';
+import type { Octokit } from '@octokit/rest';
 import { isEntrypoint } from '../lib/is-entrypoint.js';
 import { isTrustedSyncEvent } from '../lib/sync-gate.js';
+import { createResilientOctokit } from '../lib/resilient-octokit.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
@@ -108,7 +109,7 @@ export async function run(): Promise<void> {
     );
   }
 
-  const octokit = new Octokit({ auth: token });
+  const octokit = createResilientOctokit(token);
   const maxAgeDays = resolveMaxAgeDays(process.env);
 
   await cleanupMirror(createCleanupClient(octokit, owner, repo), maxAgeDays);

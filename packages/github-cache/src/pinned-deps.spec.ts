@@ -41,6 +41,23 @@ describe('pinned toolkit dependencies (ROBUST-03)', () => {
 
     expect(specifier).toMatch(EXACT_SEMVER);
   });
+
+  // The resilience pairing (F04) is a new supply-chain surface: @octokit/plugin-retry
+  // and @octokit/plugin-throttling. Both were verified against the registry (versions,
+  // core 7 peer range, no install scripts) and confirmed as octokit@5.0.5's own
+  // pairing, then pinned exact so a range operator can never silently pull an
+  // un-audited minor/patch. This spec fails the build the moment either widens.
+  it('@octokit/plugin-retry is pinned to an exact version, never a range (F04)', () => {
+    const specifier = manifest.dependencies?.['@octokit/plugin-retry'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('@octokit/plugin-throttling is pinned to an exact version, never a range (F04)', () => {
+    const specifier = manifest.dependencies?.['@octokit/plugin-throttling'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
 });
 
 /**

@@ -1,8 +1,9 @@
 import * as core from '@actions/core';
-import { Octokit } from '@octokit/rest';
+import type { Octokit } from '@octokit/rest';
 import { serve } from '../serve.js';
 import { isEntrypoint } from '../lib/is-entrypoint.js';
 import { isSyncTrusted } from '../lib/sync-gate.js';
+import { createResilientOctokit } from '../lib/resilient-octokit.js';
 import { writeCountSummary } from '../lib/summary.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
@@ -153,7 +154,7 @@ export async function runPublish(): Promise<void> {
   }
 
   const ref = process.env.GITHUB_REF ?? '';
-  const octokit = new Octokit({ auth: token });
+  const octokit = createResilientOctokit(token);
 
   const result = await publishMirror(
     createPublishClient(octokit, owner, repo, ref),

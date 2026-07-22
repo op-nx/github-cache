@@ -1,8 +1,8 @@
 import * as core from '@actions/core';
-import { Octokit } from '@octokit/rest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isTrustedSyncEvent } from '../lib/sync-gate.js';
 import { resolveGitHubToken } from '../lib/github-identity.js';
+import { createResilientOctokit } from '../lib/resilient-octokit.js';
 import { cleanupMirror } from './cleanup.js';
 import { run } from './index.js';
 
@@ -20,7 +20,12 @@ vi.mock('@actions/core', () => ({
 }));
 vi.mock('../lib/sync-gate.js', () => ({ isTrustedSyncEvent: vi.fn() }));
 vi.mock('./cleanup.js', () => ({ cleanupMirror: vi.fn() }));
-vi.mock('@octokit/rest', () => ({ Octokit: vi.fn() }));
+// Mock the resilient-octokit helper, not @octokit/rest: the helper runs
+// Octokit.plugin(retry, throttling) at module load, which a bare Octokit: vi.fn()
+// mock cannot satisfy.
+vi.mock('../lib/resilient-octokit.js', () => ({
+  createResilientOctokit: vi.fn(),
+}));
 // Keep the real GITHUB_REPOSITORY_PATTERN + resolveMaxAgeDays; only stub the token
 // resolver (same seam action/index.spec.ts stubs).
 vi.mock('../lib/github-identity.js', async (orig) => {
@@ -32,7 +37,7 @@ vi.mock('../lib/github-identity.js', async (orig) => {
 const isTrustedSyncEventMock = vi.mocked(isTrustedSyncEvent);
 const resolveGitHubTokenMock = vi.mocked(resolveGitHubToken);
 const cleanupMirrorMock = vi.mocked(cleanupMirror);
-const OctokitMock = vi.mocked(Octokit);
+const createResilientOctokitMock = vi.mocked(createResilientOctokit);
 
 const ORIGINAL_ENV = process.env;
 
@@ -55,9 +60,9 @@ describe('cleanup run() trust gate (CREEP C2 / RETAIN-03)', () => {
     await expect(run()).resolves.toBeUndefined();
 
     expect(isTrustedSyncEventMock).toHaveBeenCalledOnce();
-    // The retention/CREEP control: a gated-out context never constructs Octokit and
+    // The retention/CREEP control: a gated-out context never constructs a client and
     // never reaches the delete engine.
-    expect(OctokitMock).not.toHaveBeenCalled();
+    expect(createResilientOctokitMock).not.toHaveBeenCalled();
     expect(cleanupMirrorMock).not.toHaveBeenCalled();
     // A gated-out cleanup is a WARNING, not info: on a green scheduled job, an
     // info line is invisible, so a permanently-gated-out cleanup would look
@@ -94,7 +99,7 @@ describe('cleanup run() trust gate (CREEP C2 / RETAIN-03)', () => {
 
     await run();
 
-    expect(OctokitMock).toHaveBeenCalledOnce();
+    expect(createResilientOctokitMock).toHaveBeenCalledOnce();
     expect(cleanupMirrorMock).toHaveBeenCalledOnce();
   });
 });

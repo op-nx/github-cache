@@ -113,6 +113,33 @@ describe('documented snippets mask the bearer token before writing $GITHUB_ENV (
   );
 });
 
+describe('advanced.md documents all four selectBackend outcomes (F11)', () => {
+  // selectBackend has FOUR outcomes, two of which were invisible in the old binary
+  // read-write-versus-reader prose: the fail-closed THROW on a malformed identity,
+  // and the empty-memory permanent-MISS degrade on a trusted-but-tokenless context
+  // (the one adopters actually hit). A future selectBackend change not reflected
+  // here is caught by this guard.
+  const advanced = read('docs/advanced.md');
+
+  it('names the untrusted read-only Releases reader outcome', () => {
+    expect(advanced).toMatch(/Releases \*\*reader\*\*|Releases reader/);
+  });
+
+  it('names the fail-closed throw outcome on a malformed identity', () => {
+    expect(advanced).toMatch(/throws?/i);
+    expect(advanced).toContain('GITHUB_REPOSITORY');
+  });
+
+  it('names the empty-memory permanent-MISS degrade outcome', () => {
+    expect(advanced).toMatch(/memory backend/i);
+    expect(advanced).toMatch(/permanent MISS/i);
+  });
+
+  it('names the writable Actions-cache backend outcome', () => {
+    expect(advanced).toMatch(/Actions-cache backend/i);
+  });
+});
+
 describe('README + minimal example show the background-step lifecycle (DOCS-06)', () => {
   const readme = read('README.md');
   const example = read('docs/examples/minimal-ci.yml');

@@ -84,10 +84,14 @@ mirror on the next cleanup.
 `resolveGitHubToken` returns `GH_TOKEN || GITHUB_TOKEN` (falsy-coalescing: a set
 but empty value falls through to the next source). The resolved token is used to:
 
-- select the writable Actions-cache backend on a trusted CI trigger -- with no
-  resolvable token the server falls back to a read-only backend and every write
-  is a cache MISS; and
+- select the writable Actions-cache backend on a trusted CI trigger; and
 - authenticate the opt-in Releases reader (tier 1 of the local-read chain).
+
+On a trusted trigger with **no** resolvable token the server does NOT fail -- it
+degrades to an empty read-only backend that MISSes every read and `403`s every
+write, silently. That is one of the four backend-selection outcomes; see
+[How the backend is selected](advanced.md#how-the-backend-is-selected) for the
+full table rather than a binary framing.
 
 ### `GITHUB_REPOSITORY`
 

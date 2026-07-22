@@ -15,12 +15,23 @@ store is a second, cross-context layer: cache entries mirrored to a monthly
 GitHub Release (`cache-mirror-YYYYMM`) can be read from anywhere with repository
 read access.
 
-**The reader is automatic -- there is nothing to enable in code.** The backend is
-chosen from runtime context: on a trusted CI trigger with a resolvable token the
-server serves the writable Actions-cache backend; in every other context (a
-developer machine, a fresh runner, an untrusted trigger) it serves the read-only
-Releases **reader** instead. The reader is read-only by construction -- a local
-`put()` always returns `403`.
+### How the backend is selected
+
+**The backend is chosen from runtime context -- there is nothing to enable in
+code (D-01/TRUST-05).** `selectBackend` has FOUR outcomes, not a binary
+read-write-versus-reader switch:
+
+| Context                                                               | Backend                                | Observable behavior                                                                                   |
+| --------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Untrusted (a developer machine, a fresh runner, an untrusted trigger) | read-only GitHub Releases **reader**   | reads resolve from the mirror; a `put()` always returns `403`                                         |
+| Trusted, but `GITHUB_REPOSITORY` is malformed                         | none -- it **throws**                  | fail-closed: the server does not start, rather than resolve into another repository's cache namespace |
+| Trusted, valid identity, but no resolvable token                      | an **empty read-only memory backend**  | **every read is a permanent MISS and every write a `403`, silently -- no error**                      |
+| Trusted, valid identity, resolvable token                             | the writable **Actions-cache backend** | full read-write caching                                                                               |
+
+The third row is the one adopters actually hit: a trusted CI trigger with no
+`GH_TOKEN` / `GITHUB_TOKEN` wired does not fail -- it degrades to an empty backend
+that MISSes every read and `403`s every write with no error, so a "cache that
+never hits" on CI usually means a missing token, not a bug.
 
 What it needs from you:
 
@@ -47,7 +58,10 @@ bounded. They are opt-in and run in CI, not on a developer machine.
   `contents: write` (create the release and upload assets) and `actions: read`
   (enumerate the cache). **Publish must not share a job with a running sidecar** --
   both resolve the same deterministic temp archive path per cache entry, and the
-  per-hash lock that protects it is in-process only.
+  per-hash lock that protects it is in-process only. **Nor may two publish legs run
+  concurrently against the same month shard** -- the 1000-asset cap is a soft
+  per-leg check, so concurrent legs can both observe the shard under the cap and
+  push it over; this repository's own CI enforces it with `max-parallel: 1`.
 - **Cleanup.** Prunes mirror assets older than
   [`CACHE_MIRROR_MAX_AGE_DAYS`](configuration.md#cache_mirror_max_age_days) from
   the month-shard Releases. It is **storage hygiene, not poison-containment** --

@@ -53,9 +53,15 @@ describe('configuration.md documents the consumer contract (DOCS-02)', () => {
     expect(config).toContain(knob);
   });
 
-  it('documents MAX_CACHE_BODY_BYTES as a fixed contract limit', () => {
+  it('documents MAX_CACHE_BODY_BYTES as a fixed contract limit, in one sentence', () => {
     expect(config).toContain('MAX_CACHE_BODY_BYTES');
-    expect(config).toMatch(/fixed/i);
+    // Anchored: the constant name and the word "fixed" must sit in the SAME
+    // sentence (no sentence terminator between them, bounded gap), in either
+    // order. The previous whole-document /fixed/i passed on any stray "fixed"
+    // anywhere in the file, decoupled from the claim it guards.
+    expect(config).toMatch(
+      /MAX_CACHE_BODY_BYTES[^.!?]{0,80}fixed|fixed[^.!?]{0,80}MAX_CACHE_BODY_BYTES/i,
+    );
   });
 
   it('documents the Actions-cache 10 GB per-repo limit', () => {
@@ -64,6 +70,17 @@ describe('configuration.md documents the consumer contract (DOCS-02)', () => {
 
   it('documents the no-default-local-read note', () => {
     expect(config).toMatch(/no anonymous default local-read/i);
+  });
+});
+
+describe('versioning.md documents every consumer env knob (DOCS-02/DOCS-05)', () => {
+  // docs-trust.spec.ts never checked versioning.md, so a knob could be present in
+  // the consumer-contract constant and configuration.md yet missing from the
+  // versioning surface -- exactly what happened to GITHUB_REPOSITORY.
+  const versioning = read('docs/versioning.md');
+
+  it.each(EXPECTED_ENV_KNOBS)('lists env knob %s', (knob) => {
+    expect(versioning).toContain(knob);
   });
 });
 

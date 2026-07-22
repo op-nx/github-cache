@@ -17,8 +17,9 @@ The versioned contract is the CONSUMER surface only -- exactly three groups
    `start-cache-server` JS action.
 3. **Consumer env knobs.** The environment variables an adopter sets:
    `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`,
-   `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN`, the server port variable,
-   `CACHE_MIRROR_MAX_AGE_DAYS`, and `GH_TOKEN` / `GITHUB_TOKEN`.
+   `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN`, `PORT`,
+   `CACHE_MIRROR_MAX_AGE_DAYS`, `GH_TOKEN` / `GITHUB_TOKEN`, and
+   `GITHUB_REPOSITORY`.
 
 `MAX_CACHE_BODY_BYTES` is a FIXED 2 GiB contract limit, not a tunable knob.
 

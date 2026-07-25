@@ -203,18 +203,24 @@ jobs:
             # request 401s, best-effort read degradation kicks in, and the job goes
             # GREEN having cached nothing. 404 proves reachability AND auth, and also
             # rejects a squatter process on port 3000 answering with its own status.
+            # 200 is the only other legitimate answer -- it needs a pre-existing
+            # nx-cache-deadbeef entry, which nothing here creates, but it proves
+            # reachability and auth just as well, so accept it rather than hard-fail
+            # a job over it.
             # On connection-refused curl's -w already prints 000 and exits non-zero,
             # so swallow the exit with `|| true` -- NEVER `|| echo 000`, which
             # appends a second 000 and makes the status unparseable.
-            # --max-time bounds a single hung response so the 30s loop bound is real.
+            # --max-time bounds EACH ATTEMPT at 10s (previously a hung response was
+            # unbounded). Note the loop's worst case is therefore 30 x (10 + 1) =
+            # ~5.5 min, NOT 30s -- still well under this job's timeout-minutes.
             code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
-            if [ "${code}" = "404" ]; then
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" != "404" ]; then
-            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
       - run: npm run build
@@ -264,13 +270,13 @@ jobs:
           code=000
           for _ in $(seq 1 30); do
             code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
-            if [ "${code}" = "404" ]; then
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" != "404" ]; then
-            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
       - run: npm run typecheck
@@ -311,13 +317,13 @@ jobs:
           code=000
           for _ in $(seq 1 30); do
             code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
-            if [ "${code}" = "404" ]; then
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" != "404" ]; then
-            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
       - run: npm run test
@@ -386,13 +392,13 @@ jobs:
           code=000
           for _ in $(seq 1 30); do
             code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
-            if [ "${code}" = "404" ]; then
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" != "404" ]; then
-            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
       - run: npm run integration

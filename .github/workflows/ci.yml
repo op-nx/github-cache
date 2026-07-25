@@ -568,13 +568,45 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
-      # This repo runs Nx on the LOCAL cache, so the only nx-cache-* Actions-cache
-      # entries that ever exist are the ones we seed. Seed a known entry keyed on the
-      # run id (all-decimal, satisfies the ^[a-f0-9]{1,512}$ hash validator) so each OS
-      # leg has a DETERMINISTIC entry to mirror -- and so the live cross-OS round-trip
-      # has a producer: publish-verify reads <run_id> back through the real Releases
-      # reader below (the leg deferred from Phase 3). Seed runs as a JS-action operation
-      # for the same reason publish does (the Actions-cache runtime is JS-action-only).
+      # Seed a known entry keyed on the run id (all-decimal, satisfies the
+      # ^[a-f0-9]{1,512}$ hash validator) so each OS leg has a DETERMINISTIC entry to
+      # mirror -- and so the live cross-OS round-trip has a producer: publish-verify
+      # reads <run_id> back through the real Releases reader below (the leg deferred
+      # from Phase 3). Seed runs as a JS-action operation for the same reason publish
+      # does (the Actions-cache runtime is JS-action-only).
+      #
+      # The seeds are NO LONGER the only nx-cache-* entries in play. build, typecheck,
+      # test and integration now route their real Nx tasks through the sidecar, so a
+      # default-branch push writes real `nx-cache-<taskhash>` entries too -- and those
+      # pass isServerProducedKey, so getActionsCacheList enumerates them and this job
+      # MIRRORS REAL TASK ARTIFACTS to the month shard. That is the intended dogfooding
+      # outcome and is deliberately ACCEPTED here (the Releases mirror now holds real
+      # task outputs, which is the whole point of a remote cache), with two consequences:
+      #
+      #   (a) Shard growth. On top of the ~3 run_id-keyed assets a push already added,
+      #       expect ~5 real ones per input-changing push: 4 from the ubuntu leg (build,
+      #       typecheck, test, integration-linux) and 1 from the windows leg
+      #       (integration-win32, which only the Windows leg can restore). So roughly
+      #       125 default-branch pushes inside ONE calendar month before that month's
+      #       shard reaches RELEASE_ASSET_CAP -- and the cap already degrades to
+      #       skip-and-warn (D-11), never a hard failure, while retention prunes shards
+      #       past the window. Not a concern at this repo's push rate.
+      #   (b) Wall clock. Uploads are throttled to ~1/sec, so publish gains a few
+      #       seconds per push.
+      #
+      # ALTERNATIVE, if shard growth ever does become a problem: scope this job to the
+      # run_id seed only (filter the enumeration down to the seeded key) and let the
+      # real task entries live in the Actions cache alone. Not done now -- it would
+      # throw away the real cross-context mirror this change exists to prove.
+      #
+      # Key namespaces stay disjoint, but NOT for the reason one might assume: real Nx
+      # task hashes here are ALL-DECIMAL 18-20 digits (Nx renders a 64-bit hash as a
+      # decimal string; verified over 153 local cache entries, zero containing a-f), so
+      # they are the same character class as a run id, not a contrasting hex. What keeps
+      # them apart is numeric range plus construction: a run id is ~11 digits, and
+      # `cafe<run_id>` is not all-decimal at all so it can never equal a task hash.
+      # A `nx-cache-<run_id>` collision would need a 64-bit task hash whose decimal form
+      # exactly equals THIS run's id -- about 1 in 1.8e19 per task. Negligible.
       - uses: ./packages/github-cache
         with:
           hash: ${{ github.run_id }}

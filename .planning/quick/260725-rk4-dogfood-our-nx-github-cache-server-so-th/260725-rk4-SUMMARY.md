@@ -431,7 +431,42 @@ Isolation is therefore real but rests on an unaudited mix of up to three layers:
 | `@actions/cache` version hash over `tmpdir()` | UNTESTED -- never reached, because keys already differed |
 | Releases mirror `<hash>-<os>` asset name | DESIGNED and explicit |
 
-### Reframed after maintainer review: the MISS is a COST, not a safety property
+### Final framing (after two maintainer corrections): deferred VALUE, not a v0.0.1 defect
+
+TEST-05's acceptance criterion settles the severity: "cross-OS lookup returns a
+correct hit or a MISS -- never a wrong-OS artifact". A MISS is EXPLICITLY compliant,
+so v0.0.1 is met and CORR-01's safety property holds. The cross-OS HIT is desirable
+value that was never an acceptance criterion.
+
+Two earlier framings in this file were wrong and are corrected below: (1) treating the
+MISS as incidental protection -- it is not protective, CORR-01 is carried by the
+designed controls; (2) calling it a defect against documented intent -- the intent
+note describes engineering that achieved parity pre-rebuild, not a shipped guarantee.
+
+Two independent causes, both now measured:
+
+- **Nx hash parity is not re-established in the greenfield tree.** Probe run
+  30173654069: `build` computes different hashes on the SAME commit (ubuntu
+  nx-cache-14522047022641658505 vs windows nx-cache-13655686526929222562). Of the
+  three documented parity fixes, the `typecheck.outputs` pin is absent from BOTH
+  `package.json` `nx.targets` and `nx.json` `targetDefaults` (all four targetDefaults
+  carry outputs:null). `ProjectConfiguration` is one hash node folded into EVERY task
+  hash, so one target's config divergence diverges all of them. Fix home is `nx.json`
+  targetDefaults, since D-02 keeps this project free of `project.json`. Root-cause it
+  first via the method that worked before (node-by-node, native Windows vs a Linux
+  clone): a current Windows box infers all 7 typecheck outputs, so the missing pin may
+  be latent rather than the active cause.
+- **The OS suffix blocks it independently of parity.** `releaseAssetName` is
+  unconditionally `<hash>-<os>` and the reader resolves the RUNNING platform's asset,
+  so a Windows read asks for `<hash>-windows` while ubuntu CI published
+  `<hash>-linux`. The Windows publish leg cannot create it either (the recorded
+  `publish-mirror cross-OS gap`), so cross-OS hits would otherwise require running
+  every target on every consumer OS in CI.
+
+Whether the OS suffix should apply only to OS-SENSITIVE targets is the design half; it
+touches CORR-01's uniform wording and the comment-locked `releaseAssetName`.
+
+### Superseded framing: the MISS as a COST rather than a safety property
 
 The first reading of this probe treated the cross-OS MISS as incidental protection.
 That is backwards. `build` and `typecheck` are `tsc` (portable JS output / a

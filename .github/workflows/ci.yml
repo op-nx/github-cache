@@ -202,8 +202,10 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Sidecar dogfood block -- rationale + the traps it avoids are documented
-      # once above the build job; keep all four copies identical.
+      # Sidecar dogfood block. Rationale, and the traps it avoids, are documented
+      # once above the build job (whose copy also carries the inline trap notes).
+      # The shell here is byte-identical across all four wired jobs -- keep it that
+      # way, so the windows-11-arm integration leg never drifts from the others.
       - name: Pre-set the Nx cache client vars for the sidecar
         shell: bash
         run: |
@@ -297,6 +299,18 @@ jobs:
   # runs the real *.integration.spec.ts suite (vitest.integration.config.mts) -- an
   # end-to-end createCacheServer PUT/GET round-trip over a real loopback socket --
   # so both matrix legs prove the socket/HTTP path cross-OS.
+  #
+  # This job carries the same sidecar dogfood block as build/typecheck/test (see
+  # the build job for the full rationale), and it is the reason that block declares
+  # `shell: bash` everywhere: GitHub's DEFAULT shell on windows-11-arm is pwsh,
+  # which fails on $GITHUB_ENV, $(...), seq and [ ... ]. For the same reason the
+  # loopback token comes from node rather than openssl, which may be absent from
+  # the Windows runner's Git Bash while node is guaranteed after setup-node (curl
+  # and Git Bash themselves are both present on the Windows runner). Cross-OS is
+  # safe as-is: the OS discriminator above means the Linux and Windows legs compute
+  # DIFFERENT Nx task hashes, so neither leg can ever restore the other's entry --
+  # exactly the CORR-01 namespacing the store already relies on. port 3000 on both
+  # legs is fine; each matrix leg is its own isolated runner.
   integration:
     strategy:
       fail-fast: false
@@ -310,7 +324,40 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" != "000" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" = "000" ]; then
+            echo "sidecar never accepted connections on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s" >&2
+            exit 1
+          fi
       - run: npm run integration
+      - cancel: cache-server
 
   # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
   # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the

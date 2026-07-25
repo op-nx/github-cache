@@ -101,6 +101,45 @@ jobs:
         with:
           path: ppe/fixtures/unsafe-workflow.yml
 
+  # DOGFOOD (the real one): build / typecheck / test / integration run this repo's
+  # OWN cacheable Nx tasks through the shipped ./start-cache-server loopback
+  # sidecar, so CI produces real CROSS-RUN remote cache hits for real workloads --
+  # not just the same-run, run_id-keyed proof jobs (dogfood-*, consumer-smoke,
+  # publish, which drive scripted PUT/GETs instead). The block below is the
+  # consumer-smoke pattern verbatim and is repeated IDENTICALLY in all four jobs:
+  # pre-set the two NX_* vars in a REGULAR step, start the sidecar as a background
+  # step, poll it, run the target, cancel:. Load-bearing details, all four jobs:
+  #
+  #   * GITHUB_TOKEN by process inheritance into the sidecar step (never via the
+  #     workflow environment file, D-06). Without a resolvable token selectBackend
+  #     degrades to the empty in-memory backend and the job caches NOTHING. Passed
+  #     on pull_request too: selectBackend returns the WRITABLE Actions-cache
+  #     backend there as well (pull_request is host-gated-trusted on github.com).
+  #     Read-only on PRs is enforced by GitHub's PLATFORM -- cache scope isolation
+  #     (a PR write lands in the PR ref's scope, invisible to the default branch)
+  #     plus the read-only-cache token for untrusted triggers, whose saveCache
+  #     no-ops through the backend's benign 409 path -- NOT by this code.
+  #   * NOT push-gated, unlike the proof jobs: push runs WRITE the entries, PR runs
+  #     READ the default-branch ones. `if: github.event_name == 'push'` here would
+  #     throw away the whole PR read benefit.
+  #   * The NX_* vars stay strictly per-job. Hoisting them to workflow `env:` would
+  #     point every sidecar-less proof job at a dead server, so each of their Nx
+  #     invocations would try (and fail) to reach 127.0.0.1:3000.
+  #   * `cancel: cache-server` is MANDATORY (Pitfall 3): the implicit wait-all
+  #     before post-job cleanup hangs forever on the never-exiting serve().
+  #   * `shell: bash` on both shell steps -- redundant on ubuntu, REQUIRED on the
+  #     integration matrix's windows-11-arm leg (default there is pwsh, which fails
+  #     on $GITHUB_ENV / $(...) / seq / [ ... ]). One block, not two variants.
+  #
+  # port 3000 is reused across all four jobs: Actions jobs get isolated runners, so
+  # it is one sidecar per job and there is no clash. No chicken-and-egg in the
+  # build job either -- a `uses:` action resolves the COMMITTED, drift-guarded
+  # index.js bundle from the git ref, never from a build output.
+  #
+  # Latency note: each target is a single Nx task on this 1-project workspace, so
+  # expect net-neutral-to-slightly-slower wall clock (sidecar start + poll + a
+  # loopback GET/PUT + @actions/cache round-trips). Proving the shipped consumer
+  # surface works on real tasks is the point; speed is not.
   build:
     runs-on: ubuntu-24.04-arm
     steps:
@@ -110,7 +149,49 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          # node, not openssl: openssl may be absent from the Windows runner's Git
+          # Bash, while node is guaranteed present after setup-node. Mask BEFORE
+          # the $GITHUB_ENV write -- entry.ts's core.setSecret only redacts once
+          # the action step starts, far too late for anything echoed before that.
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            # An authed GET on an unknown hash returns 404 (up). On
+            # connection-refused curl's -w already prints 000 and exits non-zero,
+            # so swallow the exit with `|| true` -- NEVER `|| echo 000`, which
+            # appends a second 000 so code becomes "000000" (!= "000") and breaks
+            # the poll on iteration 1, before the server binds.
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" != "000" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" = "000" ]; then
+            echo "sidecar never accepted connections on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s" >&2
+            exit 1
+          fi
       - run: npm run build
+      - cancel: cache-server
 
   typecheck:
     runs-on: ubuntu-24.04-arm
@@ -121,7 +202,42 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Sidecar dogfood block -- rationale + the traps it avoids are documented
+      # once above the build job; keep all four copies identical.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" != "000" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" = "000" ]; then
+            echo "sidecar never accepted connections on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s" >&2
+            exit 1
+          fi
       - run: npm run typecheck
+      - cancel: cache-server
 
   test:
     runs-on: ubuntu-24.04-arm
@@ -132,7 +248,41 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Sidecar dogfood block -- see the build job above.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" != "000" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" = "000" ]; then
+            echo "sidecar never accepted connections on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s" >&2
+            exit 1
+          fi
       - run: npm run test
+      - cancel: cache-server
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
   # so their Nx hash carries a `{ runtime: "node -p process.platform" }`

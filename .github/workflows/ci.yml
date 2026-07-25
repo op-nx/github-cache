@@ -142,6 +142,14 @@ jobs:
   # surface works on real tasks is the point; speed is not.
   build:
     runs-on: ubuntu-24.04-arm
+    # Backstop for the sidecar teardown. `cancel:` below carries `if: always()` so
+    # a FAILING target step still tears the background server down -- but the
+    # background-step engine is not covered by GitHub's published workflow syntax
+    # reference, so do not rely on that alone: an untorn-down `serve()` blocks the
+    # implicit wait-all before post-job cleanup (README.md:84, action.yml:7) and
+    # would burn the 360-minute default job timeout instead of failing in seconds.
+    # This caps the blast radius with syntax that is guaranteed valid either way.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -175,26 +183,39 @@ jobs:
           auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
           code=000
           for _ in $(seq 1 30); do
-            # An authed GET on an unknown hash returns 404 (up). On
-            # connection-refused curl's -w already prints 000 and exits non-zero,
+            # Demand exactly 404: an authed GET on an unknown hash MISSes, and
+            # every backend selectBackend can return answers it that way (Actions
+            # cache, Releases reader, read-only memory alike). Accepting "any status
+            # but 000" would pass a 401 -- i.e. a token-handshake mismatch, the one
+            # failure this poll is best placed to catch -- after which every Nx
+            # request 401s, best-effort read degradation kicks in, and the job goes
+            # GREEN having cached nothing. 404 proves reachability AND auth, and also
+            # rejects a squatter process on port 3000 answering with its own status.
+            # On connection-refused curl's -w already prints 000 and exits non-zero,
             # so swallow the exit with `|| true` -- NEVER `|| echo 000`, which
-            # appends a second 000 so code becomes "000000" (!= "000") and breaks
-            # the poll on iteration 1, before the server binds.
-            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
-            if [ "${code}" != "000" ]; then
+            # appends a second 000 and makes the status unparseable.
+            # --max-time bounds a single hung response so the 30s loop bound is real.
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" = "000" ]; then
-            echo "sidecar never accepted connections on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s" >&2
+          if [ "${code}" != "404" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
             exit 1
           fi
       - run: npm run build
+      # if: always() so a FAILING target step above still tears the sidecar down.
+      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
+      # failure and the untorn-down serve() blocks post-job cleanup.
       - cancel: cache-server
+        if: always()
 
   typecheck:
     runs-on: ubuntu-24.04-arm
+    # Teardown backstop -- see the build job.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -204,8 +225,14 @@ jobs:
       - run: npm ci
       # Sidecar dogfood block. Rationale, and the traps it avoids, are documented
       # once above the build job (whose copy also carries the inline trap notes).
-      # The shell here is byte-identical across all four wired jobs -- keep it that
-      # way, so the windows-11-arm integration leg never drifts from the others.
+      # The EXECUTABLE shell must stay identical across all four wired jobs -- only
+      # the final `npm run <target>` line may differ, and only build's copy carries
+      # extra comments. Keep it that way, so the windows-11-arm integration leg
+      # never drifts from the others. This is an unguarded invariant: nothing fails
+      # if it drifts. cleanup-workflow.spec.ts is the precedent for asserting on a
+      # workflow from a spec if that ever becomes worth enforcing -- note ci.yml is
+      # NOT in nx.json's test inputs (only cleanup.yml is), so such a guard would
+      # need ci.yml added there or it goes stale behind a cache hit.
       - name: Pre-set the Nx cache client vars for the sidecar
         shell: bash
         run: |
@@ -228,21 +255,27 @@ jobs:
           auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
           code=000
           for _ in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
-            if [ "${code}" != "000" ]; then
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" = "000" ]; then
-            echo "sidecar never accepted connections on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s" >&2
+          if [ "${code}" != "404" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
             exit 1
           fi
       - run: npm run typecheck
+      # if: always() so a FAILING target step above still tears the sidecar down.
+      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
+      # failure and the untorn-down serve() blocks post-job cleanup.
       - cancel: cache-server
+        if: always()
 
   test:
     runs-on: ubuntu-24.04-arm
+    # Teardown backstop -- see the build job.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -273,18 +306,22 @@ jobs:
           auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
           code=000
           for _ in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
-            if [ "${code}" != "000" ]; then
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" = "000" ]; then
-            echo "sidecar never accepted connections on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s" >&2
+          if [ "${code}" != "404" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
             exit 1
           fi
       - run: npm run test
+      # if: always() so a FAILING target step above still tears the sidecar down.
+      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
+      # failure and the untorn-down serve() blocks post-job cleanup.
       - cancel: cache-server
+        if: always()
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
   # so their Nx hash carries a `{ runtime: "node -p process.platform" }`
@@ -317,6 +354,8 @@ jobs:
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}
+    # Teardown backstop -- see the build job.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -346,18 +385,22 @@ jobs:
           auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
           code=000
           for _ in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
-            if [ "${code}" != "000" ]; then
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" = "000" ]; then
-            echo "sidecar never accepted connections on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s" >&2
+          if [ "${code}" != "404" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
             exit 1
           fi
       - run: npm run integration
+      # if: always() so a FAILING target step above still tears the sidecar down.
+      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
+      # failure and the untorn-down serve() blocks post-job cleanup.
       - cancel: cache-server
+        if: always()
 
   # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
   # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the
@@ -451,6 +494,9 @@ jobs:
     # smoke test proves the shipped bytes work, not that a rebuild does.
     needs: action-bundle-drift
     runs-on: ubuntu-24.04-arm
+    # Teardown backstop -- see the build job. This job predates the wired four and
+    # carried the same latent hang, so it gets the same treatment.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -518,7 +564,11 @@ jobs:
           curl -fsS -H "${auth}" "${server}/v1/cache/${RUN_HASH}" -o roundtrip.bin
           cmp payload.bin roundtrip.bin
           echo "[OK] consumer sidecar round-trip: PUT 200 + GET byte-match on ${RUN_HASH}"
+      # if: always() so a FAILING target step above still tears the sidecar down.
+      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
+      # failure and the untorn-down serve() blocks post-job cleanup.
       - cancel: cache-server
+        if: always()
 
   # The per-OS publish matrix is this phase's LIVE mirror path (D-03, TRUST-02): on a
   # default-branch push each leg enumerates the default-branch Actions-cache entries via
@@ -593,6 +643,15 @@ jobs:
       #       past the window. Not a concern at this repo's push rate.
       #   (b) Wall clock. Uploads are throttled to ~1/sec, so publish gains a few
       #       seconds per push.
+      #
+      # SECURITY PROPERTY this now depends on: an Nx cache entry contains the task's
+      # captured TERMINAL OUTPUT as well as its outputs, and `::add-mask::` redacts
+      # LOGS ONLY -- never a cache payload. So what keeps this PUBLIC Releases mirror
+      # safe is the invariant "no mirrored task ever prints a secret", NOT masking.
+      # It holds today (build/typecheck/test/integration receive no secret), but it is
+      # now a property of this wiring rather than an accident -- and these four jobs
+      # are the reference implementation adopters copy. Never route a task that prints
+      # a credential through the sidecar on a public repo.
       #
       # ALTERNATIVE, if shard growth ever does become a problem: scope this job to the
       # run_id seed only (filter the enumeration down to the seeded key) and let the

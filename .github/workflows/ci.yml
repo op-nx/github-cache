@@ -125,20 +125,22 @@ jobs:
   #   * The NX_* vars stay strictly per-job. Hoisting them to workflow `env:` would
   #     point every sidecar-less proof job at a dead server, so each of their Nx
   #     invocations would try (and fail) to reach 127.0.0.1:3000.
-  #   * `cancel: cache-server` is MANDATORY (Pitfall 3): OMIT it and the implicit
-  #     wait-all before post-job cleanup hangs forever on the never-exiting serve().
-  #     It does NOT need `if:` or a continue-on-error dance to survive a failing
-  #     target -- a cancel: step is not subject to skip-on-failure. Measured on run
-  #     30172032003: a probe job with a failing step and a bare `cancel:` ran the
-  #     cancel (success), tore the sidecar down, and went red in 8 seconds.
-  #     `if:` is in fact REJECTED on a cancel: step -- the runner refuses to parse
-  #     the workflow ("Unexpected value 'if'", run 30171349564).
-  #     Both facts had to be measured: background:/cancel:/wait:/parallel: ship
-  #     documented ONLY in the 2026-06-25 changelog
+  #   * `cancel: cache-server` is MANDATORY (Pitfall 3). All three facts below were
+  #     MEASURED, not inferred -- background:/cancel:/wait:/parallel: ship documented
+  #     ONLY in the 2026-06-25 changelog
   #     (https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel),
-  #     and the workflow-syntax reference it points to does not mention them at all.
-  #     The "omit it and the job hangs" half above is inherited from README.md:84 and
-  #     is still UNMEASURED -- every job here has always had a cancel:.
+  #     and the workflow-syntax reference it links to does not mention them at all.
+  #     - OMIT it and the job hangs. Run 30172888579, probe with a background
+  #       sidecar, a SUCCEEDING target and no cancel: -- the runner inserted a step
+  #       literally named "Wait for all background steps", which never returned; the
+  #       job died at its timeout-minutes cap (3m02s, conclusion cancelled). The
+  #       implicit wait-all is real, and it is why timeout-minutes is worth keeping.
+  #     - It does NOT need `if:` or a continue-on-error dance to survive a FAILING
+  #       target. Run 30172032003: a probe with a failing step and a bare `cancel:`
+  #       ran the cancel (conclusion success), tore the sidecar down, and went red in
+  #       8 seconds. A cancel: step is not subject to skip-on-failure.
+  #     - `if:` is REJECTED on a cancel: step: the runner refuses to parse the
+  #       workflow ("Unexpected value 'if'", run 30171349564, no jobs scheduled).
   #   * `shell: bash` on both shell steps -- redundant on ubuntu, REQUIRED on the
   #     integration matrix's windows-11-arm leg (default there is pwsh, which fails
   #     on $GITHUB_ENV / $(...) / seq / [ ... ]). One block, not two variants.

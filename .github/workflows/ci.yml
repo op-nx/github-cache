@@ -205,12 +205,21 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
             exit 1
           fi
-      - run: npm run build
-      # if: always() so a FAILING target step above still tears the sidecar down.
-      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
-      # failure and the untorn-down serve() blocks post-job cleanup.
+      # The target runs under continue-on-error so the `cancel:` teardown below can
+      # never be SKIPPED. A cancel: step is ordinarily sequenced, and `if:` is NOT
+      # accepted on it -- the runner rejects the workflow outright with
+      # "Unexpected value 'if'" (verified: run 30171349564 failed to parse). Without
+      # this, a failing target skips teardown and the never-exiting serve() blocks
+      # the implicit wait-all before post-job cleanup. The gate step after teardown
+      # restores the real pass/fail, so a red target is still a red job -- in seconds,
+      # not at the timeout-minutes backstop above.
+      - id: target
+        continue-on-error: true
+        run: npm run build
       - cancel: cache-server
-        if: always()
+      - name: Fail the job if the target failed
+        if: steps.target.outcome == 'failure'
+        run: exit 1
 
   typecheck:
     runs-on: ubuntu-24.04-arm
@@ -265,12 +274,14 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
             exit 1
           fi
-      - run: npm run typecheck
-      # if: always() so a FAILING target step above still tears the sidecar down.
-      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
-      # failure and the untorn-down serve() blocks post-job cleanup.
+      # continue-on-error + post-teardown gate -- see the build job.
+      - id: target
+        continue-on-error: true
+        run: npm run typecheck
       - cancel: cache-server
-        if: always()
+      - name: Fail the job if the target failed
+        if: steps.target.outcome == 'failure'
+        run: exit 1
 
   test:
     runs-on: ubuntu-24.04-arm
@@ -316,12 +327,14 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
             exit 1
           fi
-      - run: npm run test
-      # if: always() so a FAILING target step above still tears the sidecar down.
-      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
-      # failure and the untorn-down serve() blocks post-job cleanup.
+      # continue-on-error + post-teardown gate -- see the build job.
+      - id: target
+        continue-on-error: true
+        run: npm run test
       - cancel: cache-server
-        if: always()
+      - name: Fail the job if the target failed
+        if: steps.target.outcome == 'failure'
+        run: exit 1
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
   # so their Nx hash carries a `{ runtime: "node -p process.platform" }`
@@ -395,12 +408,14 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30s (last status ${code}, wanted 404)" >&2
             exit 1
           fi
-      - run: npm run integration
-      # if: always() so a FAILING target step above still tears the sidecar down.
-      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
-      # failure and the untorn-down serve() blocks post-job cleanup.
+      # continue-on-error + post-teardown gate -- see the build job.
+      - id: target
+        continue-on-error: true
+        run: npm run integration
       - cancel: cache-server
-        if: always()
+      - name: Fail the job if the target failed
+        if: steps.target.outcome == 'failure'
+        run: exit 1
 
   # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
   # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the
@@ -564,11 +579,7 @@ jobs:
           curl -fsS -H "${auth}" "${server}/v1/cache/${RUN_HASH}" -o roundtrip.bin
           cmp payload.bin roundtrip.bin
           echo "[OK] consumer sidecar round-trip: PUT 200 + GET byte-match on ${RUN_HASH}"
-      # if: always() so a FAILING target step above still tears the sidecar down.
-      # A cancel: step is ordinarily sequenced, so without this it is SKIPPED on
-      # failure and the untorn-down serve() blocks post-job cleanup.
       - cancel: cache-server
-        if: always()
 
   # The per-OS publish matrix is this phase's LIVE mirror path (D-03, TRUST-02): on a
   # default-branch push each leg enumerates the default-branch Actions-cache entries via

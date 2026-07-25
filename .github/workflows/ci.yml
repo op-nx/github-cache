@@ -101,8 +101,69 @@ jobs:
         with:
           path: ppe/fixtures/unsafe-workflow.yml
 
+  # DOGFOOD (the real one): build / typecheck / test / integration run this repo's
+  # OWN cacheable Nx tasks through the shipped ./start-cache-server loopback
+  # sidecar, so CI produces real CROSS-RUN remote cache hits for real workloads --
+  # not just the same-run, run_id-keyed proof jobs (dogfood-*, consumer-smoke,
+  # publish, which drive scripted PUT/GETs instead). The block below is the
+  # consumer-smoke pattern verbatim and is repeated IDENTICALLY in all four jobs:
+  # pre-set the two NX_* vars in a REGULAR step, start the sidecar as a background
+  # step, poll it, run the target, cancel:. Load-bearing details, all four jobs:
+  #
+  #   * GITHUB_TOKEN by process inheritance into the sidecar step (never via the
+  #     workflow environment file, D-06). Without a resolvable token selectBackend
+  #     degrades to the empty in-memory backend and the job caches NOTHING. Passed
+  #     on pull_request too: selectBackend returns the WRITABLE Actions-cache
+  #     backend there as well (pull_request is host-gated-trusted on github.com).
+  #     Read-only on PRs is enforced by GitHub's PLATFORM -- cache scope isolation
+  #     (a PR write lands in the PR ref's scope, invisible to the default branch)
+  #     plus the read-only-cache token for untrusted triggers, whose saveCache
+  #     no-ops through the backend's benign 409 path -- NOT by this code.
+  #   * NOT push-gated, unlike the proof jobs: push runs WRITE the entries, PR runs
+  #     READ the default-branch ones. `if: github.event_name == 'push'` here would
+  #     throw away the whole PR read benefit.
+  #   * The NX_* vars stay strictly per-job. Hoisting them to workflow `env:` would
+  #     point every sidecar-less proof job at a dead server, so each of their Nx
+  #     invocations would try (and fail) to reach 127.0.0.1:3000.
+  #   * `cancel: cache-server` is MANDATORY (Pitfall 3). All three facts below were
+  #     MEASURED, not inferred -- background:/cancel:/wait:/parallel: ship documented
+  #     ONLY in the 2026-06-25 changelog
+  #     (https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel),
+  #     and the workflow-syntax reference it links to does not mention them at all.
+  #     - OMIT it and the job hangs. Run 30172888579, probe with a background
+  #       sidecar, a SUCCEEDING target and no cancel: -- the runner inserted a step
+  #       literally named "Wait for all background steps", which never returned; the
+  #       job died at its timeout-minutes cap (3m02s, conclusion cancelled). The
+  #       implicit wait-all is real, and it is why timeout-minutes is worth keeping.
+  #     - It does NOT need `if:` or a continue-on-error dance to survive a FAILING
+  #       target. Run 30172032003: a probe with a failing step and a bare `cancel:`
+  #       ran the cancel (conclusion success), tore the sidecar down, and went red in
+  #       8 seconds. A cancel: step is not subject to skip-on-failure.
+  #     - `if:` is REJECTED on a cancel: step: the runner refuses to parse the
+  #       workflow ("Unexpected value 'if'", run 30171349564, no jobs scheduled).
+  #   * `shell: bash` on both shell steps -- redundant on ubuntu, REQUIRED on the
+  #     integration matrix's windows-11-arm leg (default there is pwsh, which fails
+  #     on $GITHUB_ENV / $(...) / seq / [ ... ]). One block, not two variants.
+  #
+  # port 3000 is reused across all four jobs: Actions jobs get isolated runners, so
+  # it is one sidecar per job and there is no clash. No chicken-and-egg in the
+  # build job either -- a `uses:` action resolves the COMMITTED, drift-guarded
+  # index.js bundle from the git ref, never from a build output.
+  #
+  # Latency note: each target is a single Nx task on this 1-project workspace, so
+  # expect net-neutral-to-slightly-slower wall clock (sidecar start + poll + a
+  # loopback GET/PUT + @actions/cache round-trips). Proving the shipped consumer
+  # surface works on real tasks is the point; speed is not.
   build:
     runs-on: ubuntu-24.04-arm
+    # Generic hang insurance, NOT a teardown workaround. `cancel:` needs no help:
+    # a cancel: step is NOT subject to skip-on-failure -- measured on run
+    # 30172032003, where a probe job with a failing step and a bare `cancel:` ran
+    # the cancel (conclusion success), tore the sidecar down, and went red in 8s.
+    # README.md:84's hang warning is about OMITTING cancel:, which is a different
+    # thing. This bound only caps a genuine hang (a stalled npm ci, a wedged
+    # vitest) at minutes instead of the 360-minute default.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -110,10 +171,67 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          # node, not openssl: openssl may be absent from the Windows runner's Git
+          # Bash, while node is guaranteed present after setup-node. Mask BEFORE
+          # the $GITHUB_ENV write -- entry.ts's core.setSecret only redacts once
+          # the action step starts, far too late for anything echoed before that.
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            # Demand exactly 404: an authed GET on an unknown hash MISSes, and
+            # every backend selectBackend can return answers it that way (Actions
+            # cache, Releases reader, read-only memory alike). Accepting "any status
+            # but 000" would pass a 401 -- i.e. a token-handshake mismatch, the one
+            # failure this poll is best placed to catch -- after which every Nx
+            # request 401s, best-effort read degradation kicks in, and the job goes
+            # GREEN having cached nothing. 404 proves reachability AND auth, and also
+            # rejects a squatter process on port 3000 answering with its own status.
+            # 200 is the only other legitimate answer -- it needs a pre-existing
+            # nx-cache-deadbeef entry, which nothing here creates, but it proves
+            # reachability and auth just as well, so accept it rather than hard-fail
+            # a job over it.
+            # On connection-refused curl's -w already prints 000 and exits non-zero,
+            # so swallow the exit with `|| true` -- NEVER `|| echo 000`, which
+            # appends a second 000 and makes the status unparseable.
+            # --max-time bounds EACH ATTEMPT at 10s (previously a hung response was
+            # unbounded). Note the loop's worst case is therefore 30 x (10 + 1) =
+            # ~5.5 min, NOT 30s -- still well under this job's timeout-minutes.
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
       - run: npm run build
+      - cancel: cache-server
 
   typecheck:
     runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -121,10 +239,55 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Sidecar dogfood block. Rationale, and the traps it avoids, are documented
+      # once above the build job (whose copy also carries the inline trap notes).
+      # The EXECUTABLE shell must stay identical across all four wired jobs -- only
+      # the final `npm run <target>` line may differ, and only build's copy carries
+      # extra comments. Keep it that way, so the windows-11-arm integration leg
+      # never drifts from the others. This is an unguarded invariant: nothing fails
+      # if it drifts. cleanup-workflow.spec.ts is the precedent for asserting on a
+      # workflow from a spec if that ever becomes worth enforcing -- note ci.yml is
+      # NOT in nx.json's test inputs (only cleanup.yml is), so such a guard would
+      # need ci.yml added there or it goes stale behind a cache hit.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
       - run: npm run typecheck
+      - cancel: cache-server
 
   test:
     runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -132,7 +295,41 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Sidecar dogfood block -- see the build job above.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
       - run: npm run test
+      - cancel: cache-server
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
   # so their Nx hash carries a `{ runtime: "node -p process.platform" }`
@@ -147,12 +344,26 @@ jobs:
   # runs the real *.integration.spec.ts suite (vitest.integration.config.mts) -- an
   # end-to-end createCacheServer PUT/GET round-trip over a real loopback socket --
   # so both matrix legs prove the socket/HTTP path cross-OS.
+  #
+  # This job carries the same sidecar dogfood block as build/typecheck/test (see
+  # the build job for the full rationale), and it is the reason that block declares
+  # `shell: bash` everywhere: GitHub's DEFAULT shell on windows-11-arm is pwsh,
+  # which fails on $GITHUB_ENV, $(...), seq and [ ... ]. For the same reason the
+  # loopback token comes from node rather than openssl, which may be absent from
+  # the Windows runner's Git Bash while node is guaranteed after setup-node (curl
+  # and Git Bash themselves are both present on the Windows runner). Cross-OS is
+  # safe as-is: the OS discriminator above means the Linux and Windows legs compute
+  # DIFFERENT Nx task hashes, so neither leg can ever restore the other's entry --
+  # exactly the CORR-01 namespacing the store already relies on. port 3000 on both
+  # legs is fine; each matrix leg is its own isolated runner.
   integration:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -160,7 +371,40 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
       - run: npm run integration
+      - cancel: cache-server
 
   # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
   # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the
@@ -254,6 +498,10 @@ jobs:
     # smoke test proves the shipped bytes work, not that a rebuild does.
     needs: action-bundle-drift
     runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job. Its scripted round-trip steps can
+    # genuinely fail (the 200 status check, the payload cmp), and its bare `cancel:`
+    # handles that correctly; this only bounds a true hang.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -371,13 +619,54 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
-      # This repo runs Nx on the LOCAL cache, so the only nx-cache-* Actions-cache
-      # entries that ever exist are the ones we seed. Seed a known entry keyed on the
-      # run id (all-decimal, satisfies the ^[a-f0-9]{1,512}$ hash validator) so each OS
-      # leg has a DETERMINISTIC entry to mirror -- and so the live cross-OS round-trip
-      # has a producer: publish-verify reads <run_id> back through the real Releases
-      # reader below (the leg deferred from Phase 3). Seed runs as a JS-action operation
-      # for the same reason publish does (the Actions-cache runtime is JS-action-only).
+      # Seed a known entry keyed on the run id (all-decimal, satisfies the
+      # ^[a-f0-9]{1,512}$ hash validator) so each OS leg has a DETERMINISTIC entry to
+      # mirror -- and so the live cross-OS round-trip has a producer: publish-verify
+      # reads <run_id> back through the real Releases reader below (the leg deferred
+      # from Phase 3). Seed runs as a JS-action operation for the same reason publish
+      # does (the Actions-cache runtime is JS-action-only).
+      #
+      # The seeds are NO LONGER the only nx-cache-* entries in play. build, typecheck,
+      # test and integration now route their real Nx tasks through the sidecar, so a
+      # default-branch push writes real `nx-cache-<taskhash>` entries too -- and those
+      # pass isServerProducedKey, so getActionsCacheList enumerates them and this job
+      # MIRRORS REAL TASK ARTIFACTS to the month shard. That is the intended dogfooding
+      # outcome and is deliberately ACCEPTED here (the Releases mirror now holds real
+      # task outputs, which is the whole point of a remote cache), with two consequences:
+      #
+      #   (a) Shard growth. On top of the ~3 run_id-keyed assets a push already added,
+      #       expect ~5 real ones per input-changing push: 4 from the ubuntu leg (build,
+      #       typecheck, test, integration-linux) and 1 from the windows leg
+      #       (integration-win32, which only the Windows leg can restore). So roughly
+      #       125 default-branch pushes inside ONE calendar month before that month's
+      #       shard reaches RELEASE_ASSET_CAP -- and the cap already degrades to
+      #       skip-and-warn (D-11), never a hard failure, while retention prunes shards
+      #       past the window. Not a concern at this repo's push rate.
+      #   (b) Wall clock. Uploads are throttled to ~1/sec, so publish gains a few
+      #       seconds per push.
+      #
+      # SECURITY PROPERTY this now depends on: an Nx cache entry contains the task's
+      # captured TERMINAL OUTPUT as well as its outputs, and `::add-mask::` redacts
+      # LOGS ONLY -- never a cache payload. So what keeps this PUBLIC Releases mirror
+      # safe is the invariant "no mirrored task ever prints a secret", NOT masking.
+      # It holds today (build/typecheck/test/integration receive no secret), but it is
+      # now a property of this wiring rather than an accident -- and these four jobs
+      # are the reference implementation adopters copy. Never route a task that prints
+      # a credential through the sidecar on a public repo.
+      #
+      # ALTERNATIVE, if shard growth ever does become a problem: scope this job to the
+      # run_id seed only (filter the enumeration down to the seeded key) and let the
+      # real task entries live in the Actions cache alone. Not done now -- it would
+      # throw away the real cross-context mirror this change exists to prove.
+      #
+      # Key namespaces stay disjoint, but NOT for the reason one might assume: real Nx
+      # task hashes here are ALL-DECIMAL 18-20 digits (Nx renders a 64-bit hash as a
+      # decimal string; verified over 153 local cache entries, zero containing a-f), so
+      # they are the same character class as a run id, not a contrasting hex. What keeps
+      # them apart is numeric range plus construction: a run id is ~11 digits, and
+      # `cafe<run_id>` is not all-decimal at all so it can never equal a task hash.
+      # A `nx-cache-<run_id>` collision would need a 64-bit task hash whose decimal form
+      # exactly equals THIS run's id -- about 1 in 1.8e19 per task. Negligible.
       - uses: ./packages/github-cache
         with:
           hash: ${{ github.run_id }}

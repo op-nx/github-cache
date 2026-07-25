@@ -35,6 +35,15 @@ npx nx run-many -t build typecheck test integration
 | stdout | `$SCRATCH/w3s/sidecar.out` |
 | stderr (the only fault channel) | `$SCRATCH/w3s/sidecar.err` |
 | Bearer token | minted via `crypto.randomBytes(24).toString('hex')`, loopback-only, disposable. NEVER recorded here, in any log excerpt quoted here, or in any commit. |
+| Built bin currency | `dist/serve.js` matches the current read path. `tsc --build tsconfig.lib.json` ran twice AFTER the last emit (the RESEARCH smoke run and the COLD run) and emitted nothing new, which is tsc's outputs-newer-than-inputs certification. The only source file newer than the newest `dist` output is `packages/github-cache/src/test/octokit-fault.ts`, a spec-only fixture imported solely by `*.spec.ts` and not reachable from `serve()`. |
+| Teardown | background shell `b9xla5nhj` killed at the end of the run; port 41999 then confirmed not listening (`Get-NetTCPConnection -LocalPort 41999` returns nothing). No sidecar leaked. |
+
+Readiness pair, as specified: the correct-bearer half is over-evidenced -- 8 real-hash GETs
+returned HTTP 404 (section 3), each proving the request reached a backend `get` that MISSED. The
+wrong-bearer half against `/v1/cache/deadbeef` was observed as 401 during startup but its status
+line was NOT captured to a file, so it is recorded here as an operator observation rather than as
+a reproducible artifact. Auth is independently evidenced by the 404s: a rejected bearer would
+have returned 401 instead.
 
 ### Client env, per state
 
@@ -355,6 +364,15 @@ Neither hash, in either state, for any of the four targets, exists in the mirror
   cache entries, so Windows-computed hashes never reach the mirror at all. Not exercised here.
 - **Whether Nx itself issued the GET** (as opposed to the read path being driven directly). See
   the residual limit in section 3.
+- **Whether Nx's own bearer was accepted.** A distinct case from the one above -- issued-and-
+  refused, not never-issued. Had `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` not matched the
+  sidecar's token, the server's auth layer would have answered Nx 401, and `sidecar.err` would
+  NOT show it: stderr is the BACKEND fault channel, so an auth-layer rejection never reaches it.
+  Token equality is asserted here by construction (one throwaway token, one shell variable, both
+  sides) and was not measured for Nx's client specifically. This does NOT weaken the absence
+  attribution: the 8 direct read-path probes drive the same shipped read path over the same 8
+  hashes with a bearer proven accepted (404, not 401), so cause (1) stands on evidence that does
+  not depend on Nx's auth at all.
 - **The WARM-GRAPH state's Nx labels as remote evidence.** The remote was never consulted for
   those four tasks; the direct probes answer for them instead.
 - **The publisher writing a real task artifact.** No `nx-cache-<taskhash>` Actions entry from

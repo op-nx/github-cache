@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v0.0.1
 milestone_name: Greenfield MVP Rebuild
 current_phase: 0.1
-status: Awaiting next milestone
-stopped_at: "Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-review findings). 19 bisect-safe atomic commits landed on gsd/v0.0.1-greenfield-rebuild (c0d1ebf..4c64aff), covering F01-F27 except the two deliberately-excluded items (deleted-rationale sweep + v0 tag, both now Deferred Items rows) plus a flake-hardening follow-up. 430 tests (up from the 384 baseline); every commit green on the full battery (format:check, build, typecheck, test, fallow:ci, check:action, pack:check) and typecheck:action from Task 15 on. Task 10 added @octokit/plugin-retry@8.1.0 + @octokit/plugin-throttling@11.0.3 with a linux/arm64-regenerated, additive-only lockfile (no Windows prune)."
+status: Quick 260725-rk4 planned, not executed (0/3 tasks)
+stopped_at: "Quick 260725-rk4 (dogfood the github-cache server in CI) planned + plan-checked + committed, execution NOT started (0/3 tasks); resume via HANDOFF.json / .continue-here.md. Prior: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-review findings). 19 bisect-safe atomic commits landed on gsd/v0.0.1-greenfield-rebuild (c0d1ebf..4c64aff), covering F01-F27 except the two deliberately-excluded items (deleted-rationale sweep + v0 tag, both now Deferred Items rows) plus a flake-hardening follow-up. 430 tests (up from the 384 baseline); every commit green on the full battery (format:check, build, typecheck, test, fallow:ci, check:action, pack:check) and typecheck:action from Task 15 on. Task 10 added @octokit/plugin-retry@8.1.0 + @octokit/plugin-throttling@11.0.3 with a linux/arm64-regenerated, additive-only lockfile (no Windows prune)."
 last_updated: "2026-07-22T01:31:12.273Z"
-last_activity: 2026-07-22
-last_activity_desc: Milestone v0.0.1 completed and archived
+last_activity: 2026-07-25
+last_activity_desc: Quick 260725-rk4 planned (execution handed off, 0/3 tasks)
 progress:
   total_phases: 7
   completed_phases: 7
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 ## Current Position
 
-Phase: Milestone v0.0.1 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-22 — Milestone v0.0.1 completed and archived
+Phase: Milestone v0.0.1 complete (awaiting next milestone); one quick task in flight
+Plan: quick 260725-rk4 — Dogfood the Nx github-cache server in CI (Task 1 of 3, not started)
+Status: Planned, plan-checked, execution not started
+Last activity: 2026-07-25 — Quick 260725-rk4 planning committed, execution handed off
 
 ## Performance Metrics
 
@@ -193,7 +193,12 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-22
+Last session: 2026-07-25 (resumed 2026-07-25)
+Stopped at: Quick 260725-rk4 (dogfood the Nx github-cache server in CI) is PLANNED BUT NOT EXECUTED - discuss (--auto) + research + plan + plan-check (gsd-plan-checker VERIFICATION PASSED, first iteration) all committed to main (1953fb5, dd3fd85); 0/3 tasks executed; working tree clean; HANDOFF.json + .continue-here.md present in .planning/quick/260725-rk4-dogfood-our-nx-github-cache-server-so-th/.
+Next: execute 260725-rk4-PLAN.md (Task 1 ubuntu build/typecheck/test sidecar -> Task 2 cross-OS integration matrix -> Task 3 publish-mirror comment + key-namespace disjointness) ON A FEATURE BRANCH and land via PR (ci.yml must not be committed direct to main), then the non-blocking first-push live-close.
+
+### Prior session (2026-07-22)
+
 Stopped at: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-review findings). 19 bisect-safe atomic commits landed on gsd/v0.0.1-greenfield-rebuild (c0d1ebf..4c64aff), covering F01-F27 except the two deliberately-excluded items (deleted-rationale sweep + v0 tag, both now Deferred Items rows) plus a flake-hardening follow-up. 430 tests (up from the 384 baseline); every commit green on the full battery (format:check, build, typecheck, test, fallow:ci, check:action, pack:check) and typecheck:action from Task 15 on. Task 10 added @octokit/plugin-retry@8.1.0 + @octokit/plugin-throttling@11.0.3 with a linux/arm64-regenerated, additive-only lockfile (no Windows prune).
 Task 3a (413-flush, F14) RESOLVED as a documented HTTP/1.1 limitation (lead-approved option a): a bounded raw-socket investigation proved the ECONNRESET is deterministic for a client streaming a body far over the cap (60/60 on a 100MB repro; <=16KB-over-cap gets a clean 413, >=256KB resets), and the prescribed destroy-on-finish fix does NOT resolve it (and one variant hangs). Landed a ponytail ceiling comment at both destroy sites (cb2832d), no behavior change, no bundle diff, no flaky test. The memory-bounding cap (backend.put never reached, proven by the mid-stream abort test) is intact regardless.
 HELD (deliberately, for the lead): the branch push and the PR-body update. The lead handles the outward-facing push after independently verifying the series. This executor did not push and did not touch the PR body.

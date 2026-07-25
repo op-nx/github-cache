@@ -431,13 +431,42 @@ Isolation is therefore real but rests on an unaudited mix of up to three layers:
 | `@actions/cache` version hash over `tmpdir()` | UNTESTED -- never reached, because keys already differed |
 | Releases mirror `<hash>-<os>` asset name | DESIGNED and explicit |
 
-The asymmetry is the tell: `build` diverges cross-OS on its own while `integration`
-needed a hand-added discriminator. Whatever makes `build` diverge is a side effect
-(project-configuration / inferred-target divergence), not a guarantee -- so a future
-Nx version that normalized it would silently enable cross-OS restores of wrong-OS
-artifacts, which is precisely the CORR-01 violation the Core Value forbids. Deferred
-to a later milestone per maintainer decision; the prior `publish-mirror cross-OS gap`
-is evidence this class of asymmetry already bites.
+### Reframed after maintainer review: the MISS is a COST, not a safety property
+
+The first reading of this probe treated the cross-OS MISS as incidental protection.
+That is backwards. `build` and `typecheck` are `tsc` (portable JS output / a
+pass-fail) and `test` is vitest over the same sources -- a Linux-produced result is
+CORRECT on Windows, so those three SHOULD hit cross-OS. That is the entire value of a
+shared cache across a matrix, and it is what makes a Windows developer's local read of
+the ubuntu-written Releases mirror useful. Only `integration` is genuinely
+OS-sensitive, which is exactly what its explicit discriminator is for -- so CORR-01 is
+carried by DESIGNED controls (the `<hash>-<os>` asset name, the version hash), never by
+this incidental hash divergence.
+
+So the divergence is not protective. It is currently POINTLESS -- the store is per-OS
+anyway, so identical keys would still MISS -- and it is a second obstacle to fix
+rather than the main one.
+
+**A cross-OS hit is impossible at every layer today, and the outermost layer forbids
+it deliberately:**
+
+| Layer | Cross-OS sharing | Mechanism |
+|-------|------------------|-----------|
+| Releases mirror | excluded BY DESIGN | reader resolves the RUNNING platform's `<hash>-<os>`; per-OS publish matrix populates each |
+| Actions cache | excluded | `@actions/cache` version-hashes `join(tmpdir(), ...)` (PROJECT.md constraint; still untested) |
+| Nx task hash | diverges anyway for build/typecheck/test | incidental (measured); `integration` diverges by declaration |
+
+**The real gap is that OS-namespacing is uniform where it should be per-target.**
+CORR-01 is stated uniformly, which is essential for `integration` and over-broad for
+`tsc` output. Cross-OS hits for the platform-independent targets need BOTH halves: Nx
+hash parity for those targets, AND an OS-agnostic store path for them. Each half
+touches a comment-locked single source (`releaseAssetName`, `cacheArchivePath`) plus
+CORR-01's wording in PROJECT.md, so it is a design change rather than a patch --
+deferred to a later milestone per maintainer decision.
+
+Cost of leaving it: a matrix consumer never reuses another OS's compiled output, and a
+Windows developer's local Releases read MISSES `build`/`typecheck`/`test` even though
+the artifact would have been valid.
 
 **CORR-01 is NOT demonstrated by the five-leg sweep, despite appearances.** The two integration
 legs hit DIFFERENT keys (`nx-cache-13758457399293023985` on Windows,

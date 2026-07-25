@@ -400,7 +400,46 @@ remote cache:
 Strictly stronger than the first close, where test/integration missed because
 9f37739 had touched a `default`-input file.
 
-**CORR-01 is NOT demonstrated by this, despite appearances.** The two integration
+## Cross-OS behavior: MISS and HIT both verified, mechanism NOT what was assumed
+
+Probed deliberately (run 30173654069, `probe-cross-os`, since force-pushed out).
+`build` declares no platform discriminator in nx.json -- only `integration` carries
+`{ "runtime": "node -p process.platform" }` -- so the expectation was that a
+windows-11-arm `build` would compute the SAME Nx task hash as the ubuntu `build`,
+request the SAME key, and be kept apart only by `@actions/cache` version-hashing the
+OS-specific `cacheArchivePath()` (`join(tmpdir(), ...)`).
+
+**MISS where expected: VERIFIED.** The Windows build reported `Cache: 0/1 hit (0%)`
+with no `[remote cache]` label -- it did not restore the ubuntu artifact.
+
+**HIT where expected: VERIFIED.** Run 30172484621, all five wired legs
+`[remote cache]` at 100%, each restoring an entry its own OS had written.
+
+**But the assumed mechanism was wrong, and the probe disproved it.** Windows wrote a
+NEW entry under a DIFFERENT key, `nx-cache-13655686526929222562` (73142 B, 20:32:13Z);
+ubuntu's `nx-cache-14522047022641658505` still has exactly ONE entry. So the two OSes
+compute DIFFERENT Nx task hashes for `build` even with no declared discriminator --
+the keys never collided, so the `@actions/cache` version-hash layer was never
+exercised and remains untested.
+
+Isolation is therefore real but rests on an unaudited mix of up to three layers:
+
+| Layer | Status |
+|-------|--------|
+| Nx task-hash divergence for build/typecheck/test | REAL (measured) but INCIDENTAL -- nothing declares it |
+| explicit `node -p process.platform` on `integration` | DESIGNED -- and its existence implies `integration` did NOT diverge naturally, unlike build |
+| `@actions/cache` version hash over `tmpdir()` | UNTESTED -- never reached, because keys already differed |
+| Releases mirror `<hash>-<os>` asset name | DESIGNED and explicit |
+
+The asymmetry is the tell: `build` diverges cross-OS on its own while `integration`
+needed a hand-added discriminator. Whatever makes `build` diverge is a side effect
+(project-configuration / inferred-target divergence), not a guarantee -- so a future
+Nx version that normalized it would silently enable cross-OS restores of wrong-OS
+artifacts, which is precisely the CORR-01 violation the Core Value forbids. Deferred
+to a later milestone per maintainer decision; the prior `publish-mirror cross-OS gap`
+is evidence this class of asymmetry already bites.
+
+**CORR-01 is NOT demonstrated by the five-leg sweep, despite appearances.** The two integration
 legs hit DIFFERENT keys (`nx-cache-13758457399293023985` on Windows,
 `nx-cache-6174109223991820850` on ubuntu) because Nx's task hash already includes the
 `runtime: node -p process.platform` discriminator -- each leg asks for a genuinely

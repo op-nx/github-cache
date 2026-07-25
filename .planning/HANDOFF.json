@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-25T18:11:11.408Z",
+  "context": "quick",
+  "phase": "quick-260725-rk4",
+  "phase_name": "Dogfood the Nx github-cache server in CI",
+  "phase_dir": ".planning/quick/260725-rk4-dogfood-our-nx-github-cache-server-so-th",
+  "plan": 1,
+  "task": 1,
+  "total_tasks": 3,
+  "status": "paused",
+  "summary": "Planning complete (discuss + research + plan + plan-check PASSED). Execution NOT started. Handed off to a fresh session to execute the PLAN.",
+  "completed_tasks": [
+    {"id": 0, "name": "Discuss (auto): CONTEXT.md with locked decisions + corrected trust mechanism", "status": "done", "commit": "committed"},
+    {"id": 0, "name": "Research: RESEARCH.md (authoritative target list, RW/RO mechanism, pitfalls, drop-in YAML)", "status": "done", "commit": "committed"},
+    {"id": 0, "name": "Plan: PLAN.md (3 tasks, quick-full must_haves)", "status": "done", "commit": "committed"},
+    {"id": 0, "name": "Plan-check: gsd-plan-checker VERIFICATION PASSED (first iteration, claims verified against live code)", "status": "done"}
+  ],
+  "remaining_tasks": [
+    {"id": 1, "name": "Wire the three ubuntu jobs (build, typecheck, test) with the consumer-smoke sidecar block", "status": "not_started"},
+    {"id": 2, "name": "Wire the cross-OS integration matrix (ubuntu + windows-11-arm); Windows leg needs shell: bash + node token", "status": "not_started"},
+    {"id": 3, "name": "Resolve + document the publish-mirror interaction (update the stale ci.yml:374-380 comment); confirm key-namespace disjointness", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "First-push live-close: after the change lands, a real default-branch push (then a second push with unchanged inputs) is required to observe a genuine cross-run remote cache HIT in the Nx end-of-run summary. Cannot be closed locally (the sidecar block is inert without a real GitHub Actions runner).", "context": "Same first-push live-close pattern as Phase 4/5/6.", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Sidecar = the shipped ./start-cache-server JS action as a background: step per job (committed bundle, no build-before-sidecar), replicating the proven consumer-smoke pattern.", "rationale": "DOCS-06 pattern, live-proven on run 29884131798.", "phase": "quick-260725-rk4"},
+    {"decision": "CORRECTED trust mechanism: every wired job (push AND pull_request) MUST pass GITHUB_TOKEN to ./start-cache-server and MUST NOT be push-gated. selectBackend returns the writable backend on PR too; read-only is platform-enforced. Without a token it degrades to the empty in-memory backend and reads/writes nothing.", "rationale": "Code-traced in trust.ts/select-backend.ts; verified by the plan-checker.", "phase": "quick-260725-rk4"},
+    {"decision": "Route exactly the cacheable Nx targets: build, typecheck, test, integration (no lint; format:check/fallow excluded).", "rationale": "nx show project github-cache reports cache:true for exactly these four.", "phase": "quick-260725-rk4"},
+    {"decision": "Accept + document that real nx-cache-<taskhash> writes on push get mirrored by the existing publish job to the Releases shard (intended dogfooding outcome); update the stale ci.yml publish comment.", "rationale": "Real task keys pass isServerProducedKey.", "phase": "quick-260725-rk4"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "In a fresh session, run `/gsd:quick resume dogfood-our-nx-github-cache-server-so-th` (or execute .planning/quick/260725-rk4-dogfood-our-nx-github-cache-server-so-th/260725-rk4-PLAN.md directly). NOTE: execution edits .github/workflows/ci.yml — do it on a feature branch and land via PR (this repo lands changes to main via PR, e.g. PR #3), not a direct commit to main. Then trigger the first-push live-close.",
+  "context_notes": "This is the stronger-evidence follow-up to the v0.0.1 milestone: the repo currently only exercises its cache via dedicated proof jobs (dogfood/consumer/publish, same-run run_id-keyed), NOT by routing its own build/test/typecheck/integration Nx tasks through the sidecar. Plan-checker verified all claims against live code. The change is concentrated in one file (ci.yml). Planner offered a ponytail-lite option: one uniform sidecar block (node token + shell: bash) across all four jobs vs keeping build/typecheck/test on the existing openssl form to minimize diff — executor's discretion, noted in the plan."
+}

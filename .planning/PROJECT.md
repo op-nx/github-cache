@@ -81,10 +81,12 @@ Shipped and verified in **v0.0.1 Greenfield MVP Rebuild** (all 7 phases verified
       alternative that the CORR-01 row in `## Key Decisions` below already sanctions
 - [ ] OS-sensitive targets stay separated by their declared Nx input, proven behaviourally (CORR-03)
 - [ ] Nx task-hash parity for `build`/`typecheck`/`test` across Windows and Linux, root-caused
-      before it is fixed (PARITY-01..04)
+      before it is fixed (PARITY-01..05)
 - [ ] The `@actions/cache` archive path becomes a deliberate OS-invariant constant instead of an
-      inherited `os.tmpdir()` value, with `enableCrossOsArchive` hardcoded (VER-01..04)
-- [ ] Live cross-OS proofs for O1-O4 in the mandated order (READ-01/02, CI-01/02, TEST-06/07)
+      inherited `os.tmpdir()` value, with `enableCrossOsArchive` hardcoded (VER-01..06)
+- [ ] ESLint adopted, with the ambient-platform-read ban enforced in unit specs and allowed in
+      integration specs (LINT-01..06, CORR-06)
+- [ ] Live cross-OS proofs for O1-O4 in the mandated order (XOS-01..07, TEST-08..10, OBS-02..05)
 - [ ] Consumer-facing cross-OS adoption recipe, drift-guarded (DOCS-07/08)
 
 Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per the FOUND-01 ledger):

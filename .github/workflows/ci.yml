@@ -126,10 +126,12 @@ jobs:
   #     point every sidecar-less proof job at a dead server, so each of their Nx
   #     invocations would try (and fail) to reach 127.0.0.1:3000.
   #   * `cancel: cache-server` is MANDATORY (Pitfall 3). All three facts below were
-  #     MEASURED, not inferred -- background:/cancel:/wait:/parallel: ship documented
-  #     ONLY in the 2026-06-25 changelog
-  #     (https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel),
-  #     and the workflow-syntax reference it links to does not mention them at all.
+  #     MEASURED here first: when they were established, the keywords shipped
+  #     documented only in the 2026-06-25 changelog
+  #     (https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel).
+  #     The workflow-syntax reference has since documented the whole family
+  #     (background:/wait:/wait-all:/cancel:/parallel:, corroborated 2026-07-26) and
+  #     independently confirms all three, so they are now citable as well as measured.
   #     - OMIT it and the job hangs. Run 30172888579, probe with a background
   #       sidecar, a SUCCEEDING target and no cancel: -- the runner inserted a step
   #       literally named "Wait for all background steps", which never returned; the

@@ -439,3 +439,52 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
     );
   });
 });
+
+describe('publishMirror duplicate-row dedup', () => {
+  it('restores a hash enumerated twice (two archive versions of one key) exactly once', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-aa11' },
+      ]),
+    });
+
+    const result = await publishMirror(fake);
+
+    // One round-trip, not two: the restore outcome is a pure function of the hash, so the
+    // second row could only ever repeat the first result.
+    expect(getMock).toHaveBeenCalledOnce();
+    expect(result.scanned).toBe(1);
+    // The duplicate no longer inflates `skipped` via the already-present branch.
+    expect(result).toEqual({
+      scanned: 1,
+      mirrored: 1,
+      skipped: 0,
+      readMisses: 0,
+      failed: 0,
+    });
+    expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
+  });
+
+  it('still warns on a genuine total regression when the enumeration contains duplicates', async () => {
+    // Guard, not a RED: this passes BEFORE the dedup too, and that is the point. The gate
+    // predicate is multiplicity-invariant (2 === 2 before, 1 === 1 after), so it fires on
+    // a real all-MISS run either way. The test exists so a future reader cannot break that
+    // equivalence silently.
+    getMock.mockResolvedValue(MISS);
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-aa11' },
+      ]),
+    });
+
+    const result = await publishMirror(fake);
+
+    expect(result.readMisses).toBe(result.scanned);
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('restored as a MISS'),
+    );
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+});

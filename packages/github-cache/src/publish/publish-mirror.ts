@@ -70,8 +70,23 @@ export interface PublishClient {
 
 /** Run counts for the OBS-01 summary (D-17); the bin emits the summary from these. */
 export interface PublishResult {
+  /**
+   * DISTINCT server-produced hashes enumerated (listCacheEntries returns one row per
+   * (key, version) and the rows are deduped below, so a key saved under two archive
+   * versions counts once). The denominator the other counts are read against.
+   */
+  readonly scanned: number;
   readonly mirrored: number;
   readonly skipped: number;
+  /**
+   * Restore MISSes: a strict SUBSET of `skipped`, never a sibling of it -- the miss
+   * branch below increments BOTH. Reported separately because it is the one number that
+   * separates "nothing to mirror" from "this leg's Actions-cache read scope regressed",
+   * two states that otherwise look identical on a green run: @actions/cache logs a
+   * restore MISS at core.debug only, so the distinction needed ACTIONS_STEP_DEBUG and a
+   * log dive before this existed.
+   */
+  readonly readMisses: number;
   readonly failed: number;
 }
 
@@ -149,7 +164,8 @@ async function ensureShardRelease(
  *   sustained upload-phase outage) fails the job instead of reporting CI green -- mirroring
  *   cleanupMirror's aggregate check. Only the count is logged, never a token.
  *
- * Returns mirrored/skipped/failed counts; the bin emits the OBS-01 summary from them.
+ * Returns the scanned/mirrored/skipped/readMisses/failed counts; the bin emits the
+ * OBS-01 summary from them.
  */
 export async function publishMirror(
   client: PublishClient,
@@ -159,19 +175,37 @@ export async function publishMirror(
   const actionsCache = createActionsCacheBackend();
 
   const entries = await client.listCacheEntries();
-  const hashes: Hash[] = entries
-    .filter((entry) => isServerProducedKey(entry.key))
-    // isServerProducedKey already validated the suffix against HASH_PATTERN, so
-    // parseHash always succeeds here; the filter satisfies the Hash type and stays
-    // defensive if the two ever drift.
-    .map((entry) => parseHash(entry.key.slice(CACHE_KEY_PREFIX.length)))
-    .filter((hash): hash is Hash => hash !== undefined);
+  // Dedup to DISTINCT hashes. listCacheEntries returns one row per (key, version), so a
+  // key saved under two archive versions enumerates twice and would be restored twice
+  // (12 redundant round-trips per leg in the run that prompted this).
+  //
+  // Safe for the all-restore-MISS gate below, which reads hashes.length: the restore
+  // outcome is a PURE FUNCTION of the hash -- actionsCache.get(hash) derives both the
+  // archive path and the cache key from `hash` alone and never sees the `version` field
+  // (listCacheEntries maps each row to { key } only) -- so every row of a given hash
+  // returns the same kind. readMisses and hashes.length are therefore the same weighted
+  // sum over the same multiplicity vector, and multiplicity cancels out of the equality:
+  // both before and after this dedup the gate means exactly "every DISTINCT hash missed".
+  // It also stops a duplicate inflating `skipped` through the already-present branch.
+  const hashes: Hash[] = [
+    ...new Set(
+      entries
+        .filter((entry) => isServerProducedKey(entry.key))
+        // isServerProducedKey already validated the suffix against HASH_PATTERN, so
+        // parseHash always succeeds here; the filter satisfies the Hash type and stays
+        // defensive if the two ever drift.
+        .map((entry) => parseHash(entry.key.slice(CACHE_KEY_PREFIX.length)))
+        .filter((hash): hash is Hash => hash !== undefined),
+    ),
+  ];
 
   let mirrored = 0;
   let skipped = 0;
   let failed = 0;
   // Restore-MISS subset of `skipped` (skipped also counts already-present + cap +
-  // 422-race). Tracked separately to detect an all-restore-MISS run below.
+  // 422-race). Tracked separately to detect an all-restore-MISS run below, and
+  // RETURNED for the OBS-01 summary so the distinction is visible without a log dive
+  // -- it is no longer gate-only state.
   let readMisses = 0;
 
   // The shard release + its asset set, resolved lazily (as ONE sentinel: the two
@@ -260,7 +294,9 @@ export async function publishMirror(
   // cross-OS case (this OS's publish leg cannot restore entries saved on another OS)
   // OR an Actions-cache read-scope regression that looks identical to "nothing to
   // do" and would otherwise exit green. A hard fail would break legitimate cross-OS
-  // runs, so surface it as a warning rather than swallowing it.
+  // runs, so surface it as a warning rather than swallowing it. The message's
+  // "entr(y|ies)" counts DISTINCT keys, not enumerated rows, since the dedup above --
+  // a strict improvement, but the wording shifted meaning silently, hence this clause.
   if (hashes.length > 0 && readMisses === hashes.length && mirrored === 0) {
     core.warning(
       `github-cache publish: all ${hashes.length} server-produced cache ` +
@@ -280,5 +316,5 @@ export async function publishMirror(
     core.setFailed(`github-cache publish: ${failed} asset mirror(s) failed.`);
   }
 
-  return { mirrored, skipped, failed };
+  return { scanned: hashes.length, mirrored, skipped, readMisses, failed };
 }

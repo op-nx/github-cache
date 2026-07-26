@@ -151,11 +151,19 @@ export async function runPublish(): Promise<void> {
     createPublishClient(octokit, owner, repo, ref),
   );
 
-  // D-17 (OBS-01): the "is the cache working" signal -- the mirrored/skipped/failed
-  // counts as a job-summary table, through the shared single-source renderer.
+  // D-17 (OBS-01): the "is the cache working" signal -- the run counts as a
+  // job-summary table, through the shared single-source renderer. `scanned` is the
+  // denominator (mirrored + skipped + failed), and the restore-MISS row is a
+  // BREAKDOWN of `skipped`, not an addend -- the engine's miss branch increments
+  // both -- so the label says `(of skipped)`. That label is what stops the next
+  // reader summing the column to more than `scanned`. writeCountSummary takes
+  // [metric, number] pairs only, so the label is the only place this can be said;
+  // the shared renderer is NOT widened to carry a note row for one caller.
   await writeCountSummary('github-cache publish', [
+    ['scanned', result.scanned],
     ['mirrored', result.mirrored],
     ['skipped', result.skipped],
+    ['restore-MISS (of skipped)', result.readMisses],
     ['failed', result.failed],
   ]);
 }

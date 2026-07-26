@@ -109,7 +109,13 @@ describe('publishMirror happy-path mirror (TEST-03)', () => {
 
     const result = await publishMirror(fake);
 
-    expect(result).toEqual({ mirrored: 1, skipped: 0, failed: 0 });
+    expect(result).toEqual({
+      scanned: 1,
+      mirrored: 1,
+      skipped: 0,
+      readMisses: 0,
+      failed: 0,
+    });
     expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
     expect(fake.uploadReleaseAsset).toHaveBeenCalledWith(
       SHARD_ID,
@@ -139,7 +145,13 @@ describe('publishMirror restore MISS skip (D-03)', () => {
 
     const result = await publishMirror(fake);
 
-    expect(result).toEqual({ mirrored: 0, skipped: 1, failed: 0 });
+    expect(result).toEqual({
+      scanned: 1,
+      mirrored: 0,
+      skipped: 1,
+      readMisses: 1,
+      failed: 0,
+    });
     expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
     // Lazy shard ensure: an all-MISS leg never creates an empty shard release.
     expect(fake.getReleaseByTag).not.toHaveBeenCalled();
@@ -155,7 +167,13 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
 
     const result = await publishMirror(fake);
 
-    expect(result).toEqual({ mirrored: 0, skipped: 1, failed: 0 });
+    expect(result).toEqual({
+      scanned: 1,
+      mirrored: 0,
+      skipped: 1,
+      readMisses: 0,
+      failed: 0,
+    });
     expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
   });
 
@@ -168,7 +186,13 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
 
     const result = await publishMirror(fake);
 
-    expect(result).toEqual({ mirrored: 0, skipped: 1, failed: 0 });
+    expect(result).toEqual({
+      scanned: 1,
+      mirrored: 0,
+      skipped: 1,
+      readMisses: 0,
+      failed: 0,
+    });
     // A benign already-exists is NOT a fault annotation.
     expect(core.warning).not.toHaveBeenCalled();
   });
@@ -243,7 +267,13 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
     const result = await publishMirror(fake);
 
     // A real per-item fault is SURFACED as a failure (not a skip) and does not abort the batch.
-    expect(result).toEqual({ mirrored: 1, skipped: 0, failed: 1 });
+    expect(result).toEqual({
+      scanned: 2,
+      mirrored: 1,
+      skipped: 0,
+      readMisses: 0,
+      failed: 1,
+    });
     expect(core.warning).toHaveBeenCalledOnce();
   });
 });
@@ -309,11 +339,23 @@ describe('publishMirror 1000-asset cap skip-and-warn (ROBUST-05, D-11)', () => {
       const result = await publishMirror(fake);
 
       if (outcome === 'mirror') {
-        expect(result).toEqual({ mirrored: 1, skipped: 0, failed: 0 });
+        expect(result).toEqual({
+          scanned: 1,
+          mirrored: 1,
+          skipped: 0,
+          readMisses: 0,
+          failed: 0,
+        });
         expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
         expect(core.warning).not.toHaveBeenCalled();
       } else {
-        expect(result).toEqual({ mirrored: 0, skipped: 1, failed: 0 });
+        expect(result).toEqual({
+          scanned: 1,
+          mirrored: 0,
+          skipped: 1,
+          readMisses: 0,
+          failed: 0,
+        });
         expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
         expect(core.warning).toHaveBeenCalledOnce();
       }
@@ -373,7 +415,13 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
 
     const result = await publishMirror(fake);
 
-    expect(result).toEqual({ mirrored: 0, skipped: 1, failed: 0 });
+    expect(result).toEqual({
+      scanned: 1,
+      mirrored: 0,
+      skipped: 1,
+      readMisses: 1,
+      failed: 0,
+    });
     expect(core.warning).toHaveBeenCalledWith(
       expect.stringContaining('restored as a MISS'),
     );
@@ -389,5 +437,54 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
     expect(core.warning).not.toHaveBeenCalledWith(
       expect.stringContaining('restored as a MISS'),
     );
+  });
+});
+
+describe('publishMirror duplicate-row dedup', () => {
+  it('restores a hash enumerated twice (two archive versions of one key) exactly once', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-aa11' },
+      ]),
+    });
+
+    const result = await publishMirror(fake);
+
+    // One round-trip, not two: the restore outcome is a pure function of the hash, so the
+    // second row could only ever repeat the first result.
+    expect(getMock).toHaveBeenCalledOnce();
+    expect(result.scanned).toBe(1);
+    // The duplicate no longer inflates `skipped` via the already-present branch.
+    expect(result).toEqual({
+      scanned: 1,
+      mirrored: 1,
+      skipped: 0,
+      readMisses: 0,
+      failed: 0,
+    });
+    expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
+  });
+
+  it('still warns on a genuine total regression when the enumeration contains duplicates', async () => {
+    // Guard, not a RED: this passes BEFORE the dedup too, and that is the point. The gate
+    // predicate is multiplicity-invariant (2 === 2 before, 1 === 1 after), so it fires on
+    // a real all-MISS run either way. The test exists so a future reader cannot break that
+    // equivalence silently.
+    getMock.mockResolvedValue(MISS);
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-aa11' },
+      ]),
+    });
+
+    const result = await publishMirror(fake);
+
+    expect(result.readMisses).toBe(result.scanned);
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('restored as a MISS'),
+    );
+    expect(core.setFailed).not.toHaveBeenCalled();
   });
 });

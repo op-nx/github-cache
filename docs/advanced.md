@@ -51,17 +51,22 @@ bounded. They are opt-in and run in CI, not on a developer machine.
 
 - **Publish / sync.** Enumerates the repository's `nx-cache-*` Actions-cache
   entries, restores the ones the current OS can restore, and uploads them to the
-  current month's `cache-mirror-YYYYMM` Release. It is gated by a **separate**
-  sync allowlist (`isSyncTrusted`: `push` / `schedule` on the default branch),
-  never by the write gate -- widening write-trust must never widen sync, or a
-  pull-request-influenced entry could reach the shared store. It needs
-  `contents: write` (create the release and upload assets) and `actions: read`
-  (enumerate the cache). **Publish must not share a job with a running sidecar** --
-  both resolve the same deterministic temp archive path per cache entry, and the
-  per-hash lock that protects it is in-process only. **Nor may two publish legs run
-  concurrently against the same month shard** -- the 1000-asset cap is a soft
-  per-leg check, so concurrent legs can both observe the shard under the cap and
-  push it over; this repository's own CI enforces it with `max-parallel: 1`.
+  current month's `cache-mirror-YYYYMM` Release. Restore is same-OS -- an entry
+  saved on one runner OS cannot be restored on another -- so each leg can only
+  mirror the tasks that actually **ran** on that OS. An asymmetry between the
+  legs' mirrored task-hash asset counts is therefore the expected shape, not a
+  bug; the per-leg totals also include seed assets, which do not follow that
+  split. It is gated by a **separate** sync allowlist (`isSyncTrusted`: `push` /
+  `schedule` on the default branch), never by the write gate -- widening
+  write-trust must never widen sync, or a pull-request-influenced entry could
+  reach the shared store. It needs `contents: write` (create the release and
+  upload assets) and `actions: read` (enumerate the cache). **Publish must not
+  share a job with a running sidecar** -- both resolve the same deterministic
+  temp archive path per cache entry, and the per-hash lock that protects it is
+  in-process only. **Nor may two publish legs run concurrently against the same
+  month shard** -- the 1000-asset cap is a soft per-leg check, so concurrent
+  legs can both observe the shard under the cap and push it over; this
+  repository's own CI enforces it with `max-parallel: 1`.
 - **Cleanup.** Prunes mirror assets older than
   [`CACHE_MIRROR_MAX_AGE_DAYS`](configuration.md#cache_mirror_max_age_days) from
   the month-shard Releases. It is **storage hygiene, not poison-containment** --

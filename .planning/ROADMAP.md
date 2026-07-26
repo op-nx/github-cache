@@ -131,7 +131,22 @@ parity bug of exactly the `@nx/vitest` / `@nx/js/typescript` class Phase 8 exist
      (description required), and a disable directive left behind after its violation is removed
      FAILS rather than lingering as a pre-authorised future violation. (LINT-05, LINT-06)
 
-**Plans**: TBD
+> SC3 correction, recorded so the verifier does not read it as a miss: SC3 above says "three
+> CORR-05 violations". REQUIREMENTS.md, 07-CONTEXT.md D-22 and 07-RESEARCH.md all say FOUR, in
+> three files (`release-asset-name.spec.ts` carries two). Use FOUR. There are four error
+> POSITIONS; `cache-archive-path.spec.ts:26` is not one of them.
+
+**Plans**: 4 plans
+
+Plans:
+- [ ] 07-01-PLAN.md -- Adopt the toolchain: five exact-pinned devDeps, the root flat config, the
+      D-12 baseline, the ESLint Node-API guard harness, and the `test.inputs` wiring (wave 1)
+- [ ] 07-02-PLAN.md -- The ban itself: RED before GREEN over the evasion shapes and the four extant
+      sites, the two core rules, the four described disables, and the scope-drift guard (wave 2)
+- [ ] 07-03-PLAN.md -- Wire the target: `@nx/eslint` registration, the declared `lint` inputs, the
+      input probes with their negative control, the root script and the CI job (wave 3)
+- [ ] 07-04-PLAN.md -- Evidence: the LINT-04 differential with both negative controls, mutations
+      M1-M9, and the Phase 8 / Phase 9 hand-off records (wave 4)
 
 ### Phase 8: Nx Task-Hash Parity
 

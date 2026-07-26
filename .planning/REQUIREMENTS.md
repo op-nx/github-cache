@@ -129,6 +129,18 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 - [ ] **LINT-04**: The `lint` target's Nx inputs are declared so it cannot serve a stale-cache
   false PASS. This repo has already hit that class once: `typecheck`'s inputs excluded `*.spec.ts`
   while its command compiled them, so a real error was masked by a cache hit.
+- [ ] **LINT-05**: An intentional violation opts out ONLY via an inline disable annotation
+  carrying a DESCRIPTION that names the reason -- `// eslint-disable-next-line <rule> -- <reason>`.
+  A bare disable is itself a lint error, enforced by a require-description rule
+  (`@eslint-community/eslint-plugin-eslint-comments`'s `eslint-comments/require-description` or
+  equivalent), so an opt-out can never be silent. The same discipline applies to TypeScript
+  suppressions: `@typescript-eslint/ban-ts-comment` is configured `allow-with-description`, so a
+  bare `@ts-expect-error`/`@ts-ignore` is also an error.
+- [ ] **LINT-06**: `linterOptions.reportUnusedDisableDirectives` is `error`. A disable left behind
+  after its violation is removed must FAIL, not linger -- a stale annotation silently pre-authorises
+  a future violation on that line, which is the same silent-widening failure class as a dead
+  allowlist entry. For a unit spec specifically, the reason text must say why the assertion cannot
+  move to `integration`, since the recorded strategy is that OS-specific assertions belong there.
 
 ### Nx task-hash parity (PARITY)
 

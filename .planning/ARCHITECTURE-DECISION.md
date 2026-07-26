@@ -1,49 +1,54 @@
-# Architecture Decision Record: Storage Model & CREEP-Safety Posture
+# Architecture Decision Record: CREEP-Safety Control Ledger
 
-**Status:** Accepted — FOUND-01 resolved to **GitHub Releases** and FOUND-03 (Docker container form) deferred to a later milestone, on the completed FOUND-01 spike (`.planning/spikes/001-005`); everything else was already decided.
-**Date:** 2026-07-17 (rev. after the D1-D4 security review + a 6-member advisor panel + triage; FOUND-01/03 locked after the reader-adapter spike)
-**Scope:** Supersedes the rewound v0.0.1 roadmap. Grounds the re-derivation of REQUIREMENTS.md and ROADMAP.md.
+**Status:** Accepted. This file holds the project-level CREEP-safety control register (C1-C18)
+and the handful of notes that have no canonical home anywhere else. Nothing else.
+**Date:** Controls recorded 2026-07-17; slimmed to the ledger 2026-07-26.
+**Scope:** Project-wide. These controls apply across every phase and every milestone, not to one
+phase's threat model.
 
-## Framing: the current implementation is a spike / proof-of-concept
+## Where the rest of this record went
 
-The shipped architecture, implementation, and delivery mechanism are a **spike/PoC** — a reference to learn from, **not** an asset to preserve. **Sunk cost is zero.** No decision here is justified by "it is already built/tested," and any component may be rebuilt. Consequently the reader-adapter choice is made on **forward merits only**, and known PoC hazards (e.g. the duplicated `TRUSTED_EVENTS` copies, the `gh`-CLI stderr coupling) are to be fixed at the **root** in the rebuild, not parity-patched.
+This file used to restate decisions that other artifacts own. It no longer does. Each of those
+artifacts is the single source of truth for its own half:
 
-## Nx contract (fixed constraint)
+- `.planning/PROJECT.md` `## Key Decisions` - every locked architecture and trust decision, with
+  its rationale and its current status, supersessions included. That status is exactly what a
+  second copy here kept getting wrong.
+- `.planning/PROJECT.md` `## Constraints` - the Nx self-hosted-cache HTTP contract and the hard
+  Nx version floor.
+- `.planning/research/STACK.md` section 1 - the same contract in detail: the endpoint and status
+  table, the PUT `202` to `200` drift between Nx 20 and Nx 21, and why watching `info.version`
+  cannot detect it.
+- `.planning/spikes/001-005` - the FOUND-01 reader-adapter evidence and its verdict.
+- `.planning/research/*` - the source corpus behind all of the above.
 
-The current self-hosted path is the **"Nx custom remote cache specification"** expressed in **OpenAPI 3.0.0** (embedded as JSON in the Nx docs source; no standalone artifact). Local HTTP server: `PUT /v1/cache/{hash}` → success / 401 / 403 / **409 (cannot override existing record)**, required `Content-Length`; `GET` → 200 / 403 / 404; single bearer token (server decides RO vs RW). The deprecated custom task-runner API and `@nx/*-cache` Powerpack plugins are out of scope.
+## Review cadence
 
-**Contract-drift caveat (verified):** the PUT success code changed **202 → 200 between Nx 20 and Nx 21 while `info.version` stayed `1.0.0`** — so watching `info.version` does **not** detect drift. The conformance fixture must **hash the full vendored spec** and **pin a named Nx version**. The server returns `200` (Nx 21 behavior); the declared floor is **Nx 21+** — **verified against the Nx client (`HttpRemoteCache`)**: PUT success is matched **strictly** as `200` (`409`/`403` are graceful client no-ops; any other status errors the store), so a `202`-returning server breaks the current client and the Nx 21+ floor is *hard*, not "any 2xx." (The Nx client also hardens tarball extraction against `..`/absolute/symlink/hardlink escape — a malicious server cannot zip-slip the client; inherited protection worth a docs note.)
+Audited every milestone. The `## Key Decisions` row in `.planning/PROJECT.md` that points here is
+covered by the hardcoded Key Decisions audit that `/gsd:complete-milestone` runs, so this ledger
+gets re-read and reconciled on the same schedule as the decisions it backs. The coupling is
+deliberate: the previous arrangement scheduled no review at all, and this file drifted out of
+agreement with PROJECT.md without anything noticing.
 
-## Decision 1 — One backend per process, selected by context (not a composition framework)
+## Why the ledger has no canonical GSD home
 
-`selectBackend(env)` returns **exactly one** `CacheBackend` per process, chosen by runtime context; there is **no** runtime composite/registry. The `CacheBackend` port is **`get`/`put`** (keyed by Nx hash); `put` returns `PutResult` and the `'conflict'`/409 path enforces no-overwrite at PUT (no `exists` verb). Write-sync to any second store is the **separate, out-of-band publish step** (today's `publish-mirror`), not a composition primitive.
+GSD models security strictly per phase - a `<threat_model>` block in each PLAN.md and a per-phase
+SECURITY.md - and provides no project-level control register. Fragmenting these controls into
+per-phase threat models would orphan the cross-cutting ones: C1 applies to every future phase, so
+it cannot live in any single phase's SECURITY.md. `PROJECT.md ## Constraints` is the wrong shape,
+because constraints are limits and controls are mitigations.
 
-- **Default:** Actions-cache CI-RW only — no sync, no second store, no cleanup job.
-- **Opt-in (deploy-time configuration, not a per-call mode):** enabling a reader/cross-context store, and untrusted-CI/local reads from it. **RW-vs-RO stays fully context-derived** — no caller-facing flag a consumer can get wrong (a load-bearing CREEP property). "Enable store X" is config; "this request is RW" is never config.
-- **Deferred (YAGNI until a real consumer needs them):** multiple simultaneous stores, synchronous write fan-out, a local read-write store.
+GSD's own artifact taxonomy sanctions the alternative: a project-scoped Standing Reference
+Artifact at the `.planning/` root, the same category as GSD's own METHODOLOGY.md. That is the
+category this file belongs to.
 
-**Publisher/retention seam (explicit):** only the serve-time **read** path is behind the `CacheBackend` port. The **publish + retention/cleanup subsystem is reader-specific and behind no port** — every reader choice requires building its own publish/cleanup; there is no symmetric publisher port unless a second reader is ever shipped. Do not assume the publisher is pluggable.
+One consequence, recorded so it is not re-litigated: this file trips `gsd health` W019
+("unrecognized `.planning/` file"). It tripped W019 before the slimming, it still trips it after,
+and GSD's own METHODOLOGY.md trips it too. W019's remediation text - move it to an archive
+directory or delete it if stale - does not apply here, and renaming the file would not clear the
+warning either. Do not act on W019.
 
-## Decision 2 — Write-trust = allowlist-only; sync gate is separate and minimal
-
-- **Write-trust = an allowlist** (configured replaces default; else the default implicit allowlist); default-deny; **no denylist**. The dangerous shared-default-scope events (`pull_request_target`, `issue_comment`, fork-`workflow_run`, `discussion_comment`, `fork`, `watch`, …) are refused by construction.
-- **`pull_request`/`release` are safe to write-trust because GitHub scope-isolates them (non-default-branch scope) — but that safety leans on GitHub's server-side guard that issues a read-only cache token to untrusted triggers resolving to the *default-branch* scope (2026-06-26).** That guard ships to **github.com + Data Residency only; no GA GHES has it** (GHES 3.21 GA'd 2026-06-11, before the change; earliest possible is an unannounced 3.22+). It is **not directly queryable**, so it's inferred from the host: **`GITHUB_SERVER_URL` host == `github.com` or `*.ghe.com` → widened write-trust ON; every GHES host → OFF (fail-closed)** — a pure function of a runner-injected env var, **no caller/mode flag**. Optional cross-check: absence of `/meta` `installed_version` + the `X-GitHub-Enterprise-Version` header (catches a spoofed `GITHUB_SERVER_URL`); a dormant version-gate knob stays OFF until a GHES floor is published. The in-code allowlist stays fork-spoofable defense-in-depth; the guard + scope-isolation are load-bearing. (Nuance: PR scope is activity-type-dependent — `[closed]` runs base-scope RO; a blocked PR write is a benign 409/no-op. `.ghe.com` Data-Residency suffix is assumed — verify before trusting it.)
-- **Sync gate = a separate, narrower predicate = literally `{push, schedule}`** on the default branch. It is **not** the write allowlist. Test-lock it to **reject** `pull_request`, `release`, `repository_dispatch`, `workflow_dispatch`, `merge_group`, `delete`, `registry_package`, `page_build`, and non-default refs — because `repository_dispatch`/`workflow_dispatch` carry attacker-influenced inputs into trusted default-branch code whose output would then be laundered into a shared store.
-
-## Decision 3 — Storage primitives (reader LOCKED = GitHub Releases; forward-merits)
-
-- **CI read-write adapter: GitHub Actions cache** — native LRU + GitHub ref-scope isolation + server-side read-only-token backstop; structurally CI-only. (Unchanged; the default composition.)
-- **Reader / cross-context adapter: LOCKED = GitHub Releases (v0.0.1)**, decided on **forward merits only** (the "Releases is already built" argument is void per the Framing) against the completed FOUND-01 spike's symmetric ledger (`.planning/spikes/001-005`). Both stores round-tripped authenticated private keyed lookups (byte-identity + digest verified); no GHCR-killer survived, so the tiebreak is on the axes a poisoning-class tool weights highest:
-  - **Decisive reason — fewer incident-response/operational hazards + a real public poison-*remediation* gap on GHCR.** GHCR carries the larger safety-critical surface: mutable-tag→pull-by-digest (C6), untagged child-manifest cleanup (C13), the delete-credential nuance (C11), the visibility fail-closed assert (C18), and the **>5000-download-undeletable wall (C10)** — a popular *public* poisoned entry cannot be deleted via API (GitHub Support only), so the max-blast-radius incident has **no self-service remediation**. Releases has none of these; cleanup uses the same `contents:write` token that publishes. This reason is store-existence-independent (it holds if neither were built), so it is **not** sunk-cost.
-  - **CREEP-orthogonality (scope check):** FOUND-01 does **not** move the primary threat — CREEP is defended at the write/sync gates (C1/C2/C5) regardless of reader. This is a *remediation/operational* win, not a CREEP-prevention one; it also lowers the stakes of the choice (reinforcing reversibility below).
-  - **Weighting caveat (recorded honestly):** total control surface is ~a wash — Releases carries its own (the **1000-asset/release cap → month-sharding + window-walk**, and the **~2 GiB/asset ceiling colliding with the 2 GB body cap**). Releases wins under a **remediation/safety-weighted** lens (its surface is scaling-correctness; GHCR's is incident-hazard), a defensible judgment for this tool, not a raw-count fact.
-  - **GHCR's edges do not cash out in v0.0.1:** native content-addressing/digest-pin is a minor, self-inflicted edge (see below); size headroom only matters at the ~2 GiB boundary (spike 003); registry/Docker synergy is deferred with FOUND-03. GHCR is also slower per authenticated read and needs a per-reader token exchange (spike 001/005).
-  - **Read-time integrity note:** GHCR digest-pin verifies transport integrity of the stored bytes, not correctness-for-the-key. The Releases equivalent is **store-and-verify a published content-sha256** (asset metadata at publish, verify on read) — **not** `sha256(blob) == {hash}` (the Nx key hashes task *inputs*, not the stored bytes). Low-priority defense-in-depth for either store; defends nothing against CREEP (C5). Optional, not required for v0.0.1.
-  - **Reversibility:** only the reader **read path** is behind the `CacheBackend` port; publish/cleanup is reader-specific. Adopting GHCR later is **additive** (multi-store + synced writes), not a switch — v0.0.1 Releases keeps serving. A wrong pick costs a later-milestone publish/cleanup build + re-populate, with no consumer-contract or migration impact.
-- **GHCR → later-milestone revisit trigger (re-run the ledger, not a committed switch):** re-evaluate GHCR as an *additional* synced store when **FOUND-03 (Docker container form) + PROV-01 (cosign attestation) graduate together** — then GHCR's cost drops (already operating the registry) and its benefit rises (native cosign provenance for image + cache). Until then GHCR loses the standalone ledger.
-- **Out:** git-native (clone bloat, no clean eviction) and Actions build artifacts (not content-keyed).
-
-## Decision 4 — CREEP-safety control ledger
+## Control ledger
 
 CVE-2025-36852 (CVSS 9.4, CWE-829, GHSA-rrr2-jcr8-7q3x, no patched version): poison at **construction, before hashing**; **first-to-cache-wins**; any PR-privileged contributor. Fix = write-scope isolation aligned to VCS trust; **signing/integrity is ineffective** against it. Controls scale with composition — the default (Actions-cache CI-RW only) carries only C1 + C4 + docs.
 
@@ -68,24 +73,45 @@ CVE-2025-36852 (CVSS 9.4, CWE-829, GHSA-rrr2-jcr8-7q3x, no patched version): poi
 | C17 | Observability: a whole-run sync/publish failure **fails loud** (annotation + non-zero exit); ship a "how do I know the cache is working" signal |
 | C18 | (GHCR) Publish-time **package-visibility fail-closed assert**: the publish pipeline verifies package visibility matches the repo (private repo → private package) and **fails the run** on mismatch — not a docs-only step |
 
-## Decision 5 — Retention / LRU
+## Residual notes
 
-Age-based cleanup (`CACHE_MIRROR_MAX_AGE_DAYS`, one coupled setting) is the mandatory floor. LRU is native on the Actions-cache CI tier; the RO tier is age-only. A **stateful LRU manifest is out of scope** (security-negative + no GHCR last-accessed signal). On GHCR the age-floor has a documented exception for >5000-download entries (C10). The month-shard model + the "no second knob" invariant are Releases-shaped and, with **FOUND-01 = Releases locked, now bind** (they were reader-conditional pre-lock).
+Kept here because the criterion for this file is "keep only what has no canonical home", and
+these do not have one. Each was probed at claim level against the live tree before the rest of
+the record was deleted.
 
-## Decision 6 — Cross-OS correctness (Core Value)
-
-The cache keys on the opaque Nx **input** hash; Nx does not include the runner OS by default. Serving a Linux-produced entry to a Windows reader is a **wrong result, not a MISS** — a Core-Value violation the CREEP controls do not cover. **Default to OS-namespacing the store** (or require the consumer to OS-discriminate non-portable outputs, documented). The reader-adapter spike must **round-trip both an OS-invariant and an OS-sensitive hash from each CI OS** through the chosen store.
-
-## Consequences & spike scope
-
-- **Spike (COMPLETE — `.planning/spikes/001-005`, symmetric ledger):** 001 both stores validate authenticated private keyed lookup (byte-identity + digest); 002 cold-read fan-out is a WASH (both amortize, both under rate limits when authed); 003 GHCR mild size-headroom edge, throughput a wash, ROBUST-02 = the 2 GB body cap binds both; 004 GHCR carries a real multi-part cleanup burden (delete needs `delete:packages`; mutable tags; orphans; >5000 wall); 005 CORR-01 is store-agnostic (OS-namespacing fixes both — not a differentiator) and the in-repo `GITHUB_TOKEN` deletes a same-owner GHCR package (softens C11 to org/cross-owner). **Verdict: GitHub Releases (Decision 3).** (Resolved on paper, off the spike: GHCR atomic create-if-absent unavailable/low-severity; Nx PUT floor hard `200`/Nx-21+; write-trust backstop host-detected fail-closed.)
-- **Distribution (FOUND-03 = defer Docker to a later milestone):** v0.0.1 ships **npm package + JS Action** (the JS Action is mandatory for the Actions-cache CI-RW role). The **Docker container form is deferred to a later milestone** — its primary motivation (a CI `services:` sidecar) is better served by running `npx ... serve` as a GitHub Actions **background step** (GA, stably named: `background`/`wait`/`wait-all`/`cancel`/`parallel`), which runs in *step context* (so the default Actions-cache backend works) and **cross-OS** (unlike `services:`, which is Linux-hosted-only), with a plain `&` background process as the portable fallback for GHES / older runners. Docker's residual niche is genuinely hermetic / non-Node CI — a later-milestone / on-demand item. Two requirements fall out: (a) **`serve` must handle `SIGTERM` gracefully** — `cancel` sends `SIGTERM` then `SIGKILL` after a short grace, so the write path must flush in-flight writes / finalize async backfill on shutdown (else a RW job loses its last writes at teardown); (b) **docs must show the background-step pattern with an explicit `cancel` teardown** — the runner runs an implicit `wait-all` before post-job cleanup, and a never-exiting `serve` would hang the job without it. **Action-form note:** a *composite* action cannot declare `background:` internally, so the consumption Action stays a **JS action** (or the consumer applies `background: true` to the step that `uses:` it).
-- **Governance (project hygiene, required for a poisoning-class OSS tool):** SECURITY.md (vulnerability-disclosure policy), LICENSE, and a versioned consumer-contract / semver statement.
-- **Residual:** CREEP containment is single-layer at the write/sync gates + the (heuristic) PPE gate; the only true second layer is reader-side provenance attestation (C7, deferred). Gate correctness is therefore load-bearing with no backstop.
+- **Deferred by YAGNI, not designed out.** The one-backend-per-process port defers
+  `multiple simultaneous stores` and `synchronous write fan-out` until a real consumer needs
+  them. Neither is rejected; both are simply unbuilt.
+- **GHES anti-spoofing cross-check (recorded, unbuilt).** The host-based write-trust gate can be
+  cross-checked against the absence of an `installed_version` field on `/meta`, plus the
+  `X-GitHub-Enterprise-Version` response header, which together catch a spoofed
+  `GITHUB_SERVER_URL`. The matching version-gate knob stays dormant and OFF until GitHub
+  publishes a GHES floor that carries the read-only-cache guard.
+- **Read-time integrity for the reader (optional, unbuilt).** The defense-in-depth equivalent of
+  a registry digest pin is to publish a `content-sha256` in the asset metadata and verify it on
+  read. It is explicitly NOT `sha256(blob) == {hash}`: the Nx key hashes task INPUTS, not the
+  stored bytes, so that comparison could never hold. It defends nothing against CREEP (C5).
+- **Why two storage primitives were rejected outright.** git-native storage (a cache branch or
+  LFS) is out for clone bloat and the absence of clean eviction; Actions build artifacts are out
+  because they are not `content-keyed` - they are run-scoped. (Both rejections are also recorded,
+  with the same reasons, in `.planning/research/STACK.md` section 2's primitive-comparison table,
+  which is the fuller treatment.)
+- **Scope check on the reader choice.** Choosing Releases over GHCR is `orthogonal` to CREEP: the
+  primary threat is defended at the write and sync gates (C1/C2/C5) whichever reader is in use.
+  The win is in incident remediation, not in poison prevention - which is also why the choice is
+  low-stakes and reversible.
+- **Inherited protection in the Nx client.** The Nx client hardens tarball extraction against
+  `..`, absolute-path, symlink and `hardlink` escape, so a malicious cache server cannot
+  `zip-slip` the client. This project inherits that protection rather than implementing it. It is
+  worth a note in the consumer trust docs; that note has not been written.
+- **Residual risk: containment is `single-layer`.** CREEP containment rests on the write and sync
+  gates plus the advisory PPE gate. The only genuine second layer would be reader-side provenance
+  attestation (C7), which is deferred. Gate correctness is therefore load-bearing with
+  `no backstop`.
 
 ## References
 
 CVE-2025-36852 / GHSA-rrr2-jcr8-7q3x / NVD (CVSS 9.4, CWE-829); Nx blog + HeroDevs `nx.app/files/cve-2025-06`; Nx self-hosted caching + the 2026-06-26 read-only-cache changelog; GitHub dependency-caching (scope isolation); CodeQL cache-poisoning; Adnan Khan "Cacheract"; Wiz PPE; OCI distribution spec (tag mutability); GHCR has no immutable tags; sccache/bazel-remote/Turborepo; `nixcite/nixcache-oci`. Full corpus: `.planning/research/*`.
 
 ---
-*Recorded: 2026-07-17. Rev after an independent Sonnet `/lz-security-review`: C1 fail-closed detection; C4 PPE gate advisory; C11 in-repo-GHCR preference; C16 sequenced before private mirror; C18 visibility assert. Rev after targeted research: C1 detection is host-based (`GITHUB_SERVER_URL` github.com/`*.ghe.com` → ON, all GHES → OFF; GHES floor unpublished) and the backstop is a default-branch-poisoning guard (not a PR/release read-only); C3 GHCR no-overwrite is best-effort (atomic create-if-absent confirmed unavailable) — low-severity, C2-covered; Nx PUT floor is a hard `200`/Nx-21+ (client requires exactly 200). **Rev after the FOUND-01 spike (`.planning/spikes/001-005`): reader adapter LOCKED = GitHub Releases (Decision 3); FOUND-03 Docker deferred to a later milestone (CI sidecar covered by the GA background-step pattern); GHCR-conditional controls (C6/C10/C11/C13/C18) move to the later-milestone GHCR revisit trigger; new requirements — `serve` graceful `SIGTERM` shutdown + documented background-step `cancel` teardown.**
+*Controls recorded 2026-07-17. Rev after an independent Sonnet `/lz-security-review`: C1 fail-closed detection; C4 PPE gate advisory; C11 in-repo-GHCR preference; C16 sequenced before the private mirror; C18 visibility assert. Rev after targeted research: C1 detection is host-based (`GITHUB_SERVER_URL` github.com / `*.ghe.com` -> ON, all GHES -> OFF; GHES floor unpublished) and the backstop is a default-branch-poisoning guard, not a PR/release read-only; C3 GHCR no-overwrite is best-effort (atomic create-if-absent confirmed unavailable) - low-severity, C2-covered. Rev after the FOUND-01 spike (`.planning/spikes/001-005`): the GHCR-conditional controls C6/C10/C11/C13/C18 move to the later-milestone GHCR revisit trigger. Slimmed 2026-07-26 to the ledger plus the notes that have no canonical home; where the extracted material went is listed at the top of this file.*

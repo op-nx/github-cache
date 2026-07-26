@@ -107,8 +107,15 @@ background-step engine, background the server with a shell `&` instead:
       echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:${PORT}"
       echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
     } >> "$GITHUB_ENV"
+# Poll until an authed GET on an unknown hash returns 404 or 200 before the Nx
+# step -- see the readiness poll in the quickstart.
 - run: npx nx affected -t build test
 ```
+
+The `&` form has the same startup race as the native background step: the next
+step's Nx run can begin before the backgrounded server has bound the port, so
+copy the readiness poll from [the quickstart](../README.md#quickstart-5-minutes)
+in between. Bound the job with `timeout-minutes` there too.
 
 **The `&` fallback serves the read-only Releases reader path ONLY. It is NOT a
 substitute for the read-write Actions-cache backend.** A plain `run:` step -- and

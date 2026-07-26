@@ -23,6 +23,8 @@
 #     background: true
 #     with:
 #       port: '3000'                        # must match the pre-set SERVER url port
+#   - run: ...                              # poll until an authed GET on an unknown
+#                                           # hash returns 404 or 200 (see README.md)
 #   - run: npx nx affected -t build test    # reads the pre-set NX_* vars
 #   - cancel: cache-server                  # MANDATORY teardown (Pitfall 3)
 #

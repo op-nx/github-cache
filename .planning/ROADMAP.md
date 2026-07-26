@@ -139,38 +139,59 @@ of a measurement taken once.
 **Depends on**: Phase 7 (LINT-01 must land before PARITY-01, or the inferred `lint` target
 changes `hash_project_config` and invalidates the root-cause record).
 
-**Requirements**: PARITY-01, PARITY-02, PARITY-03, PARITY-04, PARITY-05, CORR-03, CORR-04.
+**Requirements**: PARITY-01, PARITY-02, PARITY-03, PARITY-04, PARITY-05, PARITY-06, PARITY-07,
+CORR-03, CORR-04.
 
 **Success Criteria** (what must be TRUE):
 
-  1. A recorded root-cause document names, node by node, every hash input that differed between
-     native Windows and Linux for `build`/`typecheck`/`test`, names the capture command used,
-     and is dated BEFORE the first fix commit. It controls for `.nx/workspace-data` freshness on
-     both sides -- quick 260725-w3s showed both previously-cited hash values are reproducible on
-     ONE Windows machine by varying only that. (PARITY-01)
+  1. A recorded root-cause document names, node by node, every hash input that differed, is dated
+     BEFORE the first fix commit, and separates the TWO axes the 2026-07-26 pre-flight probe
+     established (`research/v0.0.2/PROBE-RESULTS.md`): a real OS axis (cold-ubuntu differs from
+     cold-windows for every target) and a FRESHNESS axis that perfectly masquerades as it (warm
+     local Windows `build`/`test` equal cold ubuntu CI to the digit; cold local Windows equals cold
+     windows CI to the digit). No difference may be attributed to the OS until freshness is pinned.
+     The record states that every prior cross-OS measurement in this repo, including the pair in
+     `STATE.md`, read a confounded variable. Leading hypothesis to test first: a Windows-only
+     inference difference visible ONLY on a cold graph. (PARITY-01)
 
-  2. For one commit, `build`, `typecheck` and `test` each yield a byte-identical hash at all
-     THREE observation points -- native Windows workstation, windows-11-arm runner,
-     ubuntu-24.04-arm runner. Three recorded values per target, not two. (PARITY-02)
+  2. The capture instrument emits the per-NODE hash `details` map. `nx show target inputs` is
+     recorded as INSUFFICIENT and a "no difference" result from it is not accepted as evidence: it
+     SKIPS `ProjectConfiguration` and reports file PATHS rather than content hashes, so both of
+     v0.0.1's named suspects are invisible to it. (PARITY-02)
 
-  3. `integration` yields a byte-identical hash between the native Windows workstation and
+  3. For one commit, `build`, `typecheck` and `test` each yield a byte-identical hash at all THREE
+     observation points -- native Windows workstation, windows-11-arm runner, ubuntu-24.04-arm
+     runner -- with the workstation measured in BOTH graph states. FOUR recorded values per target,
+     not two. (PARITY-03)
+
+  4. "Does a warm local box compute the hash cold CI published" is answered as a SEPARATE named
+     question, and each proof records which of the two questions it answers. If the answer is no,
+     O1 is unreachable regardless of OS parity, and that is recorded as a finding rather than
+     absorbed by a `nx reset` in the proof recipe. (PARITY-04)
+
+  5. `integration` yields a byte-identical hash between the native Windows workstation and
      windows-11-arm, and `integration` is the ONLY target declaring a platform discriminator in
-     its Nx inputs. (PARITY-03, CORR-04)
+     its Nx inputs. (PARITY-05, CORR-04)
 
-  4. A build-gating CI job over BOTH matrix legs at one commit FAILS when fewer than two
+  6. A build-gating CI job over BOTH matrix legs at one commit FAILS when fewer than two
      platform records exist, when the `integration` hashes match, or when any of
      `build`/`typecheck`/`test` differ -- recording the discriminator command's raw stdout AND
      stderr per leg. A textual assertion that `nx.json` contains the input does not satisfy
-     this. (CORR-03)
+     this. It treats `lint` as a FOURTH target, since `@nx/eslint`'s inference is the newest and
+     least-tested in the workspace. (CORR-03)
 
-  5. Every recorded measurement carries the Nx version, the Node version and the install mode
-     (`npm ci` vs `npm install`), and the public-surface guard passes unchanged -- no new env
-     knob, no new action input, no new package export. (PARITY-04, PARITY-05)
+  7. Every recorded measurement carries the Nx version, the Node version, the install mode
+     (`npm ci` vs `npm install`) AND the graph state (cold / warm `.nx/workspace-data`), and the
+     public-surface guard passes unchanged -- no new env knob, no new action input, no new package
+     export. `typecheck`'s third variance source (four distinct values across the four probe
+     measurements) is either root-caused or explicitly recorded as open. (PARITY-06, PARITY-07)
 
 **Plans**: TBD
 
-**Live-CI close**: PARITY-02's windows-11-arm and ubuntu-24.04-arm observation points and
-CORR-03's two-leg job exist only on real runners.
+**Live-CI close**: PARITY-03's windows-11-arm and ubuntu-24.04-arm observation points and
+CORR-03's two-leg job exist only on real runners. Note the probe already supplied one cold
+cross-OS reading at `fe25a3f` (`research/v0.0.2/PROBE-RESULTS.md` Q3); Phase 8 must re-take it at
+its own commit rather than cite it as current.
 
 ### Phase 9: OS-Invariant Actions-Cache Version
 
@@ -183,15 +204,38 @@ Windows runner reading back an entry a Linux runner wrote.
 **Depends on**: Phase 8 (the hash-parity work and its measurement job settle before the cache
 version is rotated, so a rotation MISS is never confused with a parity MISS).
 
-**Requirements**: VER-01, VER-02, VER-03, VER-04, VER-05, VER-06, OBS-04, DOCS-08.
+**Requirements**: PARITY-08, VER-01, VER-02, VER-03, VER-04, VER-05, VER-06, VER-07, ROBUST-04,
+OBS-04, DOCS-08.
 
 **Success Criteria** (what must be TRUE):
 
   1. The path string handed to `@actions/cache` is a hardcoded, workspace-relative,
      forward-slash literal under `.nx/cache/`, byte-identical on `win32` and `linux`. It is not
      built with `node:path` (`join`/`resolve`/`sep`/`normalize`), not absolutized, and derives
-     from neither `os.tmpdir()`, `RUNNER_TEMP` nor `~`; the process asserts its cwd IS the Nx
-     workspace root and fails loud otherwise. (VER-01, VER-02, VER-04)
+     from neither `os.tmpdir()`, `RUNNER_TEMP` nor `~`. The process asserts, ONCE at
+     `createActionsCacheBackend()` construction, the CONJUNCTION that cwd is the Nx workspace root
+     AND `GITHUB_WORKSPACE` is unset or resolves case-normalised to the same path -- "the Nx
+     workspace root" alone is the wrong variable, because `@actions/cache` reads
+     `GITHUB_WORKSPACE`, and a per-request check would be swallowed by `handleGet` into another
+     silent MISS. MEASURED 2026-07-26: the identity holds on both runners today, so this is a drift
+     guard, not a live fix. (VER-01, VER-02, VER-04)
+
+  1b. The archive directory is created before the first `writeFile` (`put()` otherwise ENOENTs into
+     a 500 on a fresh runner or after `nx reset`), and the literal's comment lock states it was
+     chosen because the path is GITIGNORED -- `.gitignore` covers `.nx/cache`, not `.nx/`
+     wholesale, so a later tidy elsewhere under `.nx/` would put a transient multi-megabyte file
+     into Nx's own file map. (VER-07)
+
+  1c. `{workspaceRoot}/.github/workflows/ci.yml` is a `test` input and `nx.json`'s explicit input
+     list is comment-locked, recording that `targetDefaults` inputs REPLACE rather than merge and
+     that `@nx/vitest`'s inferred `test` target carries `{ env: 'CI' }` -- which would make O1
+     structurally impossible for `test`. This lands BEFORE any spec asserts on `ci.yml`.
+     (PARITY-08)
+
+  1d. `npm run build:action` runs in the SAME COMMIT as every `serve()`-reachable source edit in
+     this phase. The committed bundle inlines both comment-locked helpers, and the four sidecar
+     jobs run that bundle from the git ref -- drift means the sidecar writes at one cache version
+     while publish restores at another, and the mirror silently stops receiving. (ROBUST-04)
 
   2. A spec asserts the argument LIST and the call COUNT of all three `@actions/cache` call
      sites -- `restoreCache`, `saveCache`, and the `lookupOnly` existence probe -- so a fourth
@@ -199,21 +243,31 @@ version is rotated, so a rotation MISS is never confused with a parity MISS).
      upstream's JSDoc documents the wrong order, so position is asserted, not assumed. (VER-03)
 
   3. A `dogfood-verify` leg on windows-11-arm READS BACK the entry `dogfood-seed` wrote on
-     ubuntu-24.04-arm, and a MISS fails the job. This, not a unit spec, is the load-bearing
-     control -- a spec runs in one process on one OS and cannot observe a two-OS property.
-     (VER-06)
+     ubuntu-24.04-arm, and a MISS fails the job. It asserts PROVENANCE, not presence: the seed key
+     is `nx-cache-<GITHUB_RUN_ID>`, one key per RUN and not per OS, so the moment a Windows seed leg
+     exists a presence-only check would pass even if cross-OS restore were completely broken.
+     `dogfoodBody` encodes the producing OS and the Windows leg asserts it read a LINUX-produced
+     body; the vacuity condition is written into the job comment. (VER-06)
 
   4. The publish summary reports the resolved `@actions/cache` compression method, surfaced and
-     never gated: it is a third version component sensed at runtime by probing for `zstd`, so a
-     runner image that loses zstd silently re-partitions the version. (VER-05)
+     never gated. The value is NOT readable from the library (`getCompressionMethod` is behind the
+     exports map), so it is an independent re-implementation that mirrors upstream exactly --
+     stdout AND stderr captured, a throw swallowed to `''`, and the branch on `=== ''` rather than
+     on the parsed semver -- comment-locked to the pinned version. MEASURED 2026-07-26: zstd v1.5.7
+     and GNU tar 1.35 are present on windows-11-arm, so O4 is NOT blocked; but zstd lives at
+     `C:\tools\zstd` and is NOT bundled by Git for Windows as previously recorded, making its
+     presence a runner-image choice rather than a guarantee. (VER-05)
 
   5. The all-restore-MISS warning drops the now-false "different OS" explanation and names
      cache-version rotation as a candidate cause; the expected signal of the first post-change
-     push (all-miss on both publish legs, `mirrored == 0`) is written down IN ADVANCE, and a
-     SECOND consecutive all-miss push is a FAILURE, not warm-up. `docs/advanced.md:54-57` and
-     `ci.yml:577-583`, which assert same-OS restore as a load-bearing invariant, are corrected;
-     `README.md`'s unconditional "never a wrong result" gains its precondition. (OBS-04,
-     DOCS-08)
+     push (all-miss on both publish legs, `mirrored == 0`) is written down IN ADVANCE, and the
+     tripwire fires on two consecutive all-miss pushes WITH NO VERSION-AFFECTING CHANGE IN BETWEEN
+     -- there are three legitimate rotation windows in this milestone, and a tripwire that fires on
+     correct work gets disabled. FOUR locations asserting same-OS restore are corrected:
+     `docs/advanced.md:54-57`, `docs/advanced.md:45`, `ci.yml:577-583` and `ci.yml:356-360`.
+     `README.md:125` and `docs/trust-and-security.md:155` get an ADDITIVE precondition, not a
+     correction -- both frame "never a wrong result" as a consequence of fault degradation, which
+     stays true. (OBS-04, DOCS-08)
 
 **Plans**: TBD
 
@@ -233,8 +287,8 @@ delta TRUST-12 records -- a single-OS publish leg restoring and mirroring every 
 is real and verifiable in code at audit time, not hypothetical). Also Phase 7, whose lint rule
 must be proven to CATCH the three CORR-05 violations before this phase removes the last two.
 
-**Requirements**: CORR-02, CORR-05, RETAIN-04, OBS-03, OBS-05, XOS-06, XOS-07, TRUST-10,
-TRUST-11, TRUST-12, TRUST-13.
+**Requirements**: CORR-02, CORR-05, RETAIN-04, RETAIN-05, OBS-03, OBS-05, XOS-06, XOS-07,
+TRUST-10, TRUST-11, TRUST-12, TRUST-13.
 
 **Success Criteria** (what must be TRUE):
 
@@ -246,9 +300,24 @@ TRUST-11, TRUST-12, TRUST-13.
      shard. `CACHE_OS_VALUES` survives, annotated as intentionally-kept legacy support so
      `fallow` does not prune it. (CORR-02, RETAIN-04)
 
-  2. No target shared cross-OS has a spec that derives an expectation from the RUNNING machine:
-     all three CORR-05 violations are gone, removed as a side effect of VER-02 and CORR-02
-     rather than relaxed, and Phase 7's lint rule is what stops them coming back. (CORR-05)
+  1b. The two accept branches are asserted MUTUALLY EXCLUSIVE directly rather than relying on the
+     last-`-` split; the ~50 PoC-era `<hash>.tar.gz` assets that match NO filter -- permanent
+     occupants of the 1000-asset cap -- get an explicit recorded disposition; and
+     `CACHE_KEY_PREFIX` is pinned by spec and comment-locked as now governing FOUR things (the
+     Actions-cache key, `isServerProducedKey`, the asset name, and the cleanup filter), since
+     changing it would orphan the entire mirror and RETAIN-04's legacy branch would not cover the
+     orphans. (RETAIN-05)
+
+  2. No target shared cross-OS has a spec that derives an expectation from the RUNNING machine.
+     There are FOUR violation sites, not three -- `cache-archive-path.spec.ts:1` and `:26` (gone in
+     Phase 9 with VER-02), `releases-backend.spec.ts:38` and `release-asset-name.spec.ts:39` (gone
+     here with CORR-02), and `release-asset-name.spec.ts:60`, which NOTHING in this milestone
+     removes because OBS-03 keeps `cachePlatform` alive. This phase makes an explicit call on site
+     4; recommended is moving it to `public-server.integration.spec.ts`, where LINT-02 allows it.
+     `releases-backend.spec.ts:103-118` is the DOCUMENTED non-vacuity proof for CORR-01 and CORR-02
+     destroys it on purpose, so a named replacement lands with it: assert the reader requested
+     EXACTLY ONE asset name, equal to the imported `releaseAssetName(hash)`, carrying no platform
+     token. (CORR-05)
 
   3. Each `publish` matrix leg seeds a leg-DISTINGUISHABLE hash and each `publish-verify` leg
      reads back its OWN leg's asset -- so a Windows publish path that is entirely dead FAILS
@@ -256,9 +325,14 @@ TRUST-11, TRUST-12, TRUST-13.
      mirrored entry (`build`, `typecheck`, `test`, `integration`), not on `build` alone. (OBS-05,
      XOS-07)
 
-  4. Every mirrored asset records its producing OS in Release asset metadata that is NOT part of
-     the lookup name (the free-form `label`), so collapsing the namespace does not also destroy
-     incident-response attribution. (OBS-03)
+  4. Every mirrored asset records `mirrored-by: <os>` in Release asset metadata that is NOT part
+     of the lookup name (the free-form `label`), so collapsing the namespace does not also destroy
+     incident-response attribution. It is `mirrored-by`, NOT "producing OS": the label can only
+     derive from the PUBLISHING leg's platform, `listCacheEntries` returns `{ key }` only, and
+     Phase 9 is precisely what breaks the publisher-equals-producer identity -- so a
+     "producing OS" claim would be wrong in exactly the cross-OS case the label exists to serve.
+     Requires widening `uploadReleaseAsset` with a `label` parameter through `action/index.ts` and
+     every fake in `publish-mirror.spec.ts`. (OBS-03)
 
   5. `max-parallel: 1` is RETAINED with a comment recording that it is NOT a correctness control
      and that no requirement depends on which leg wins the first-write-wins race; C1/C2 and
@@ -266,7 +340,20 @@ TRUST-11, TRUST-12, TRUST-13.
      pinned by spec and comment-locked as the now-sole control keeping non-default-branch
      trusted writes out of the world-readable mirror; and SECURITY.md carries
      gsd-security-auditor's classification of TRUST-11 and TRUST-12 -- authored by the auditor,
-     never self-certified. (XOS-06, TRUST-10, TRUST-11, TRUST-12, TRUST-13)
+     never self-certified. TRUST-11 is handed to that auditor with its arbitration point CORRECTED:
+     the differing-payload race is at `saveCache`, not at the Release upload, because two publish
+     legs restore the SAME single Actions-cache entry and upload it verbatim without re-executing;
+     the race only appears once Phase 12 adds a second producer, which moves TRUST-11's residual
+     risk into the XOS-05 write decision. `publish-mirror.ts:159`'s "byte-identical under CORR-01"
+     comment is rewritten in this same commit -- byte-identity survives, its REASON changes.
+     (XOS-06, TRUST-10, TRUST-11, TRUST-12, TRUST-13)
+
+  6. Recorded, not gated: after this phase the Windows publish leg mirrors ZERO real assets
+     (ubuntu runs first under `max-parallel: 1` and wins every name), which is the strongest
+     argument for the deferred single-leg collapse -- write it down so v0.0.3 does not re-derive
+     it. Also record that the Phase 9-to-10 window doubles shard growth, since every hash is
+     mirrored under both `-linux` and `-windows` until the rename lands: bounded, NOT a correctness
+     bug, and the existing "~5 assets per push" estimate in `ci.yml` reads about double during it.
 
 **Plans**: TBD
 
@@ -310,14 +397,29 @@ discriminator).
      graph, not assumed from the job list. Each proof records the workflow run URL or captured
      terminal output, the Nx hash observed, and the literal `[remote cache]` label. (TEST-08)
 
-  4. One Windows CI run MISSES the Linux `integration` hash AND HITs at least one entry through
-     the same code path in that same run; both hashes are recorded and shown to differ. A run
-     that MISSes everything is not a valid proof. (XOS-03, TEST-09)
+  4. O3 is proven as an Nx-HASH property, NOT as a storage probe: (a) Phase 8's CORR-03(b) record
+     showing `H_linux != H_win` for `integration` is cited, not re-derived; (b) the Windows
+     `integration` task is shown to have EXECUTED, carrying no `[remote cache]` label, in a run
+     where `nx-cache-<H_linux>` demonstrably existed in the Actions cache; (c) a POSITIVE CONTROL
+     in the same job -- a scripted authed GET on a known-present key returns 200 through the same
+     sidecar and backend. A storage-level probe for the Linux hash would now HIT and is explicitly
+     NOT the proof. A run that MISSes everything is not a valid proof. (XOS-03, TEST-09)
+
+  5. A soundness probe precedes the measurement and is timestamped as such (a 401-vs-404 pair on a
+     known-absent hash, plus a differential against a dead port); `ACTIONS_STEP_DEBUG` is on for
+     the proving run; every "the job was green" claim is paired with a COUNT that would differ
+     under the failure hypothesis, named in the plan rather than after the run; and each recorded
+     `Cache: n/m hit` line is explicitly marked NON-DISCRIMINATING in both directions. (TEST-08,
+     TEST-10, OBS-02)
 
 **Plans**: TBD
 
 **Live-CI close**: the whole phase. Nothing here closes locally except the `nx reset`
 precondition; O1/O2 need a warm mirror and a real workstation, O3 needs a real Windows runner.
+
+**Scoping correction (2026-07-26 research)**: this phase is NOT proof-only. MVP slicing still does
+not apply, but "no code" does not either -- SC 4(b)/(c) needs new `ci.yml` probe steps, and
+TEST-08's mechanical task-graph assertion is new tooling. Allocate plan capacity for both.
 
 ### Phase 12: Windows CI Reuse (O4) + Consumer Recipe
 
@@ -331,13 +433,17 @@ producer of the `build`/`typecheck`/`test` hashes and permanently destroys O1's 
 Phase 8 (DOCS-07's portability checklist is derived from PARITY-01's root-cause findings, not
 prejudged).
 
-**Requirements**: XOS-04, XOS-05, DOCS-07.
+**Requirements**: XOS-04, XOS-05, XOS-08, DOCS-07.
 
 **Success Criteria** (what must be TRUE):
 
   1. `ci.yml` runs `build`, `typecheck` and `test` on a windows-11-arm leg in addition to the
-     ubuntu leg, wired through the same sidecar block as the `integration` matrix. Without this
-     there is no Windows job that could exhibit O4's HIT. (XOS-04)
+     ubuntu leg, and those legs declare `needs:` on the corresponding ubuntu jobs. The
+     `integration` matrix is NOT the wiring precedent: its two legs compute DIFFERENT hashes, so
+     parallelism is harmless, whereas the new legs compute the SAME hash and in parallel would both
+     MISS, both execute, and race `saveCache`. The cross-push alternative is foreclosed too --
+     once PARITY-08 lands, the very commit that adds these legs invalidates the `test` hash.
+     (XOS-04, XOS-08)
 
   2. Those Windows legs log `[remote cache]` for all three targets against entries the ubuntu leg
      saved; whether they also WRITE is an explicit RECORDED decision, and if they write, the

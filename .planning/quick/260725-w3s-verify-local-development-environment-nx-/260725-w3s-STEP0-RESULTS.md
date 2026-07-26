@@ -128,6 +128,11 @@ The pre-merge all-MISS was attributed to cause (1), nothing published in the rea
 scheme. That attribution is now confirmed by its own repair: once real task-hash assets exist,
 the same read path on the same machine HITs.
 
-Whether that makes 260725-w3s a PASS or a FAIL remains the maintainer's decision. It is recorded
-here that the evidence which was missing at deferral time now exists, and that the target
-v0.0.1 intended to hit does hit. This file does not choose the label.
+**RESOLVED 2026-07-26: PASS** (maintainer decision, reading (a), taken on this evidence). The
+target v0.0.1 intended to hit does hit; the target v0.0.1 intended to MISS does miss; and the
+pre-merge all-MISS is explained by a cause that has now been confirmed by its own repair.
+
+Recorded in `260725-w3s-CONTEXT.md`'s resolution block, `260725-w3s-SUMMARY.md`
+(`outcome_label: PASS`), and `.planning/STATE.md`. `260725-w3s-RESULTS.md` is deliberately NOT
+edited: presenting both readings and choosing neither is a verified must_have of that report, so
+the measurement record stands as measured and the decision lives beside it rather than inside it.

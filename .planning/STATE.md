@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: OS-invariant cross-OS sharing
 status: planning
-last_updated: "2026-07-26T13:43:31.953Z"
+last_updated: "2026-07-26T18:30:00.000Z"
 last_activity: 2026-07-26
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 6 — Distribution + Docs + Governance
+**Current focus:** Phase 7 - Lint Toolchain and the Ambient-Platform-Read Ban (v0.0.2, not started)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-26 — Milestone v0.0.2 started
+Phase: 7 - Lint Toolchain and the Ambient-Platform-Read Ban (not started)
+Plan: none yet
+Status: Roadmap created, awaiting `/gsd:plan-phase 7`
+Progress: 0/6 phases complete [------] 0%
+Last activity: 2026-07-26 - v0.0.2 roadmap created (Phases 7-12, 43/43 requirements mapped)
 
 ## Performance Metrics
 
@@ -196,6 +197,22 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
+### v0.0.2 roadmap created (2026-07-26)
+
+**Phases 7-12 defined; 43/43 v0.0.2 requirements mapped to exactly one phase each.** Numbering continues from v0.0.1 (Phases 0-6, archived). Granularity standard (6 phases). `**Mode:** mvp` is marked on 9, 10 and 12 only -- 7 is toolchain adoption, 8 is measurement/configuration, 11 is proof-only.
+
+The shape is driven by two hard orderings, both expressed as PHASE BOUNDARIES rather than notes. **Phase 7 before Phase 8** because `@nx/eslint` is an Nx INFERENCE plugin: an inferred `lint` target changes `hash_project_config`, which is folded into EVERY task hash, so adopting the linter after the parity root-cause work would invalidate that work. **Phase 11 before Phase 12** because enabling O4 makes Windows CI a second producer of the `build`/`typecheck`/`test` hashes and permanently destroys the attribution O1 depends on -- TEST-08 captures that evidence at O1-proof time for exactly this reason.
+
+One deliberate ordering choice worth knowing: **Actions cache (Phase 9) before Releases mirror (Phase 10)**, though the constraint table allows either. Actions-first puts all four TRUST requirements in ONE phase with verifiable code behind them -- TRUST-13 demands a SINGLE SECURITY.md classifying both TRUST-11 (created by CORR-02) and TRUST-12 (created by VER-01/VER-03 plus CORR-02), so reversing the order would have the auditor classifying a VER-caused threat before VER exists.
+
+Two requirements straddle phases and are flagged in the roadmap, not hidden. **CORR-05** is owned by Phase 10 because that is where it becomes TRUE -- one of its three violating specs goes with VER-02 in Phase 9, the other two with CORR-02 in Phase 10; Phase 9 must not close it early. **XOS-02** needs an O2 baseline measured BEFORE the CORR-02 rename, and that baseline is unrecoverable afterwards -- Phase 10 carries it as an explicit pre-condition, and the 2026-07-26 Step 0 record already contains a qualifying pre-rename baseline (local Windows `[remote cache]` HIT on `integration` from a Windows-CI asset).
+
+Phases 9-12 each carry a `Live-CI close` line naming what cannot be closed locally, per the v0.0.1 retrospective's top lesson (three distribution bugs passed every local gate AND the verifier; five live pushes to close them). Phase 11 is live-only end to end.
+
+Next: `/gsd:plan-phase 7`.
+
+### Prior session (2026-07-26, quick 260726-gok)
+
 Last session: 2026-07-26 (quick 260726-gok)
 Stopped at: Quick 260726-gok EXECUTED (4/4 tasks + 1 verification-driven follow-up) and VERIFIED `passed` (0 blocking, 4 advisory). Five atomic commits on `gsd/quick-260726-gok-typecheck-inputs-consumer-docs` (forked off `origin/main` at `e56e5d2`): `37f7d63` (nx.json inputs + wiring + guard), `e6430bf` (openssl -> node, 5 sites), `3385cb7` (readiness poll + timeout-minutes), `5f54049` (citation annotation + doc-lag comment), `58c6e82` (the `shell: bash` fix the verification surfaced). 433 -> 438 tests; full 8-command battery green at EVERY commit. **This closes the LAST two open Deferred Items rows** -- that table now has none.
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
@@ -270,4 +287,5 @@ Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan the first v0.0.2 phase with `/gsd:plan-phase 7` (lint toolchain; it must precede the parity work because `@nx/eslint` inference changes `hash_project_config`)
+- Before Phase 10 executes, capture or cite the pre-rename O2 baseline -- it is unrecoverable once CORR-02 lands

@@ -336,13 +336,58 @@ Consumed by the roadmapper as phase dependencies.
 
 ## Traceability
 
-Populated during roadmap creation.
+Populated during roadmap creation (2026-07-26). Every v0.0.2 requirement maps to exactly one
+phase; 43/43 mapped, no orphans, no duplicates. Phase detail and the sequencing-constraint
+honour table: `.planning/ROADMAP.md`.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap) | | |
+| LINT-01 | Phase 7 | Pending |
+| LINT-02 | Phase 7 | Pending |
+| LINT-03 | Phase 7 | Pending |
+| LINT-04 | Phase 7 | Pending |
+| LINT-05 | Phase 7 | Pending |
+| LINT-06 | Phase 7 | Pending |
+| CORR-06 | Phase 7 | Pending |
+| PARITY-01 | Phase 8 | Pending |
+| PARITY-02 | Phase 8 | Pending |
+| PARITY-03 | Phase 8 | Pending |
+| PARITY-04 | Phase 8 | Pending |
+| PARITY-05 | Phase 8 | Pending |
+| CORR-03 | Phase 8 | Pending |
+| CORR-04 | Phase 8 | Pending |
+| VER-01 | Phase 9 | Pending |
+| VER-02 | Phase 9 | Pending |
+| VER-03 | Phase 9 | Pending |
+| VER-04 | Phase 9 | Pending |
+| VER-05 | Phase 9 | Pending |
+| VER-06 | Phase 9 | Pending |
+| OBS-04 | Phase 9 | Pending |
+| DOCS-08 | Phase 9 | Pending |
+| CORR-02 | Phase 10 | Pending |
+| RETAIN-04 | Phase 10 | Pending (same commit as CORR-02) |
+| CORR-05 | Phase 10 | Pending (1st of 3 violations removed in Phase 9 with VER-02) |
+| OBS-03 | Phase 10 | Pending |
+| OBS-05 | Phase 10 | Pending (must land before CORR-02) |
+| XOS-06 | Phase 10 | Pending |
+| XOS-07 | Phase 10 | Pending |
+| TRUST-10 | Phase 10 | Pending |
+| TRUST-11 | Phase 10 | Pending |
+| TRUST-12 | Phase 10 | Pending |
+| TRUST-13 | Phase 10 | Pending |
+| XOS-01 | Phase 11 | Pending (live-CI/live-workstation only) |
+| XOS-02 | Phase 11 | Pending (baseline captured in Phase 10, before CORR-02) |
+| XOS-03 | Phase 11 | Pending (live-CI only) |
+| TEST-08 | Phase 11 | Pending (O4 evidence row appended in Phase 12) |
+| TEST-09 | Phase 11 | Pending (live-CI only) |
+| TEST-10 | Phase 11 | Pending |
+| OBS-02 | Phase 11 | Pending |
+| XOS-04 | Phase 12 | Pending |
+| XOS-05 | Phase 12 | Pending (live-CI only) |
+| DOCS-07 | Phase 12 | Pending |
 
 ---
 *Requirements defined: 2026-07-26*
 *Revised 2026-07-26 after adversarial review by five independent critics (52 findings triaged:
 15 independently verified, 4 inter-critic conflicts resolved, 5 rejected).*
+*Traceability populated 2026-07-26 at roadmap creation (Phases 7-12).*

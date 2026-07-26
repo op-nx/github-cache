@@ -9,7 +9,7 @@ commits:
   - ba6010142e4135bfec3cc0c41b179cb92cfd1045  # Task 3: RESULTS.md + STATE.md evidence framing
 tasks_executed: 3
 tasks_total: 3
-outcome_label: DELIBERATELY-OPEN  # CONTEXT.md UNRESOLVED -- maintainer's call, not this executor's
+outcome_label: PASS  # maintainer decision 2026-07-26, post-Step-0; was DELIBERATELY-OPEN at execution time
 ---
 
 # Quick Task 260725-w3s: SUMMARY
@@ -229,6 +229,13 @@ should likewise not convert the all-MISS into a `passed` or a `gaps_found` on it
 
 **Maintainer decision, 2026-07-25: DEFERRED** until after the Step 0 post-merge re-measurement.
 The label stays open; it is not a PASS and not a FAIL yet.
+
+**RESOLVED 2026-07-26: PASS** (maintainer decision, reading (a), taken with the Step 0 evidence
+in hand -- see `260725-w3s-STEP0-RESULTS.md` and the resolution block in CONTEXT.md). The
+verification correctly established current behavior, and Step 0 confirmed its central attribution
+by repair: once real `<taskhash>-<os>` assets existed, the same read path on the same machine HIT.
+`260725-w3s-RESULTS.md` is deliberately NOT edited -- its neutrality is a verified must_have and
+the measurement record stands as measured.
 
 ---
 

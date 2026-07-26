@@ -123,6 +123,27 @@ Per the trap-quadrant rule this is not auto-locked. The executor MUST report the
 measured facts and present both readings WITHOUT choosing, and the verifier must not
 convert an all-MISS into a `passed` or a `gaps_found` on its own initiative.
 
+### RESOLVED 2026-07-26: PASS (maintainer decision)
+
+Reading **(a) PASS**, decided by the maintainer after the Step 0 post-merge
+re-measurement (`260725-w3s-STEP0-RESULTS.md`). The process held as designed: the
+item was raised rather than auto-locked, the executor reported both readings without
+choosing, the verifier's `passed` was scoped to goal-achievement on the measurement
+and explicitly not to this label, and the maintainer decided it with the deferred
+evidence in hand rather than at plan time.
+
+What the deferral bought, concretely: at plan time the all-MISS was attributed to
+cause (1), nothing published in the reader's naming scheme, with causes (2) and (3)
+named as unobservable behind it. Step 0 confirmed that attribution *by its own
+repair* -- once real `<taskhash>-<os>` assets existed, the same read path on the same
+machine HIT. Deciding at plan time would have labelled a measurement whose central
+attribution was still unconfirmed.
+
+This resolves the item. It does NOT retroactively edit `260725-w3s-RESULTS.md`:
+that report's neutrality (both readings, no verdict word in any heading or closing
+line) is a verified must_have, and the measurement record stays as measured. The
+decision lives here, in the SUMMARY, and in STATE.md.
+
 </unresolved>
 
 <specifics>

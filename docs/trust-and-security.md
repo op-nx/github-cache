@@ -12,7 +12,7 @@ is brought back in sync with the allowlists.
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Write-trust allowlist (which events may WRITE) | `packages/github-cache/src/lib/trust.ts` (`TRUSTED_EVENTS`, `HOST_GATED_EVENTS`, `isWriteTrusted`) |
 | Sync/publish gate (which events may PUBLISH)   | `packages/github-cache/src/lib/sync-gate.ts` (`SYNC_EVENTS`, `isSyncTrusted`)                      |
-| CREEP control ledger (C1-C18)                  | `.planning/ARCHITECTURE-DECISION.md`                                                               |
+| CREEP control ledger (C1-C18)                  | `.planning/THREAT-MODEL.md`                                                                        |
 | The audited, settled model                     | `.planning/phases/05-trust-widening-ppe-gate/05-SECURITY.md` and `05-VERIFICATION.md`              |
 
 The threat this model defends is CVE-2025-36852 (CREEP): cache poisoning at
@@ -131,7 +131,36 @@ may write. This is not a mode flag a caller can get wrong -- read-write versus
 read-only is derived from runtime context (`selectBackend`), never from a
 caller-facing option.
 
-## 9. Mirrored keys are anonymously public on public repos
+## 9. Extraction escape is handled by the Nx client, not by this server
+
+A cache server hands the Nx client a tarball, so a malicious or compromised
+server could in principle try to write outside the cache directory -- a
+`..` traversal, an absolute path, or a symlink pointing out of the tree
+("zip-slip"). **The Nx client defends against this itself, and this project
+inherits that protection rather than implementing it.**
+
+Verified against Nx 23.1.0, the version this package targets:
+`packages/nx/src/native/cache/http_remote_cache.rs` extracts through the `tar`
+crate's `unpack_in`, which confines every entry to the output directory, and
+entries that `unpack_in` skips (`..` traversal) or refuses (symlink escape) are
+explicitly REJECTED rather than silently dropped. The behaviour carries its own
+test (`extract_rejects_parent_dir_traversal`).
+
+Two things follow for adopters:
+
+- You do not need to add extraction sandboxing around this server. It would be
+  redundant with a protection the client already applies.
+- The protection is the CLIENT's, so it travels with your Nx version, not with
+  this package. If you pin an Nx older than the version above, re-check it
+  yourself -- we verify this claim only against the Nx version we target, and
+  our conformance fixture pins that version deliberately (see
+  `docs/versioning.md`).
+
+This is defence against a hostile SERVER. It is unrelated to CREEP, which is a
+poisoning attack carried out by a trusted PRODUCER before hashing, and is
+defended at the write and sync gates instead.
+
+## 10. Mirrored keys are anonymously public on public repos
 
 Mirrored Release assets inherit the repository's visibility. On a PUBLIC repo,
 every mirrored cache key is **anonymously public** (world-readable) -- treat
@@ -140,7 +169,7 @@ that embed secrets or private build outputs on a public repository. The mirror
 filter admits only server-produced keys (`nx-cache-` plus a valid hash), never
 arbitrary hex, so unrelated CI artifacts are not swept in (ADR C16).
 
-## 10. Freshness and staleness caveats
+## 11. Freshness and staleness caveats
 
 Local and read-only reads are best-effort and point-in-time -- they are bounded
 by a freshness window and are subject to mid-session staleness:

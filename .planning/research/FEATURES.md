@@ -7,7 +7,7 @@
 > Greenfield note: this maps the *feature landscape* of Nx remote caches so the v0.0.1 capability set
 > can be categorized as the system is built from scratch on the LOCKED foundation (reader = GitHub
 > Releases; `.planning/PROJECT.md` `## Key Decisions`, with the CREEP controls in
-> `.planning/ARCHITECTURE-DECISION.md`). It is not a plan - phase structure lives in
+> `.planning/THREAT-MODEL.md`). It is not a plan - phase structure lives in
 > `.planning/ROADMAP.md`. The v0.0.1 capabilities are mapped to requirement IDs in the last section.
 
 ## Feature Landscape
@@ -207,7 +207,7 @@ Category: **table stakes for adoption** (the value prop is wasted if external pr
 - `nx-remotecache-azure` / `nx-remotecache-custom` (independent `read`/`write` flags, Azure lifecycle retention): https://github.com/NiklasPor/nx-remotecache-azure - HIGH
 - "Exploring Nx self-hosted cache" community write-up (ecosystem history, deprecation, CVE framing): https://emilyxiong.medium.com/exploring-of-nx-self-hosted-cache-5bc39bd2ed7f - MEDIUM
 - CVE-2025-36852 (CREEP) background: https://nx.dev/blog/cve-2025-36852-critical-cache-poisoning-vulnerability-creep - HIGH
-- Locked foundation: `.planning/ARCHITECTURE-DECISION.md` (CREEP control ledger C1-C18), `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, FOUND-01 reader spike `.planning/spikes/001-005`
+- Locked foundation: `.planning/THREAT-MODEL.md` (CREEP control ledger C1-C18), `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, FOUND-01 reader spike `.planning/spikes/001-005`
 - `npmx.dev/package/@nx/azure-cache` - config surface covered via the 21.nx.dev overview instead (page did not render through the fetch chain; not load-bearing).
 
 ---

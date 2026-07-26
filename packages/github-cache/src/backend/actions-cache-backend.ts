@@ -85,7 +85,7 @@ export function createActionsCacheBackend(): CacheBackend {
           // write did not land and the response must not be a silent 200.
           //
           // That absent branch answers 'conflict' (409), not a throw.
-          // ARCHITECTURE-DECISION.md control C1 states a blocked PR write is a
+          // THREAT-MODEL.md control C1 states a blocked PR write is a
           // benign 409/no-op, and the Nx client treats 409 as a graceful no-op -- so
           // 409 satisfies SRV-05/D-06's actual requirement (no silent 200) without
           // the build-breaking 500 the throw produced via server.ts's put-fault

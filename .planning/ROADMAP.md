@@ -12,7 +12,7 @@ write-trust = host-detected fail-closed allowlist; sync gate = `{push, schedule}
 signing; Nx PUT floor = hard `200`/Nx-21+; distribution = npm package + JS Action, Docker
 deferred (FOUND-03). Those locked decisions live in the `## Key Decisions` table in
 `.planning/PROJECT.md`; the CREEP control ledger C1-C18 that backs them is
-`.planning/ARCHITECTURE-DECISION.md`.
+`.planning/THREAT-MODEL.md`.
 
 **v0.0.2 supersedes one locked decision.** CORR-01 was an either/or -- "OS-namespace the store
 by default OR document consumer OS-discrimination". v0.0.1 took the first branch. v0.0.2 takes
@@ -54,9 +54,12 @@ every local gate AND the verifier and took five live pushes to close. Phases 9-1
 is a hard precondition of the Phase 11 proofs (the mirror must be warm under the new scheme).
 
 **Granularity:** standard (6 phases). **Mode:** `mvp` is marked on the three phases that build
-shippable capability (9, 10, 12); Phase 7 is toolchain adoption, Phase 8 is measurement and
-configuration, Phase 11 is proof-only, so MVP slicing does not apply to them. TDD stays globally
-on (`workflow.tdd_mode: true`).
+shippable capability (9, 10, 12); Phase 7 is toolchain adoption and Phase 8 is measurement and
+configuration, so MVP slicing does not apply to them. Phase 11 is proof-LED but NOT proof-only --
+the 2026-07-26 research found it carries real implementation (new `ci.yml` probe steps for the
+re-specified O3 proof, and new task-graph assertion tooling for TEST-08), so MVP slicing still
+does not apply but plan capacity must be allocated. TDD stays globally on
+(`workflow.tdd_mode: true`).
 
 ## Phases
 

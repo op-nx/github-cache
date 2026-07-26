@@ -10,7 +10,7 @@ paper unknowns (GHCR atomic create-if-absent unavailable/low-severity; write-tru
 host-detected fail-closed; Nx PUT floor a hard 200) are resolved and must NOT be reopened.
 This spike produces a **symmetric** operational + security failure ledger for both readers.
 
-Canonical scope: `.planning/ARCHITECTURE-DECISION.md` (the CREEP control ledger C1-C18),
+Canonical scope: `.planning/THREAT-MODEL.md` (the CREEP control ledger C1-C18),
 `.planning/PROJECT.md` `## Key Decisions` (the locked reader / cross-context adapter row)
 and `.planning/REQUIREMENTS.md` (FOUND-01 rubric).
 

@@ -6,7 +6,7 @@
 
 > This research informs building the cache from scratch on the LOCKED foundation
 > (`.planning/PROJECT.md` `## Key Decisions`, with the CREEP controls in
-> `.planning/ARCHITECTURE-DECISION.md`): one `CacheBackend` read port, a context-derived
+> `.planning/THREAT-MODEL.md`): one `CacheBackend` read port, a context-derived
 > `selectBackend`, a conservative write-trust gate, a separate `{push, schedule}` sync gate,
 > and reader = GitHub Releases (FOUND-01). It does NOT re-derive them. It answers how the
 > domain capabilities are built against that architecture, validated against GitHub's 2026-06-26
@@ -237,7 +237,7 @@ PPE gate, distribution + docs + governance). This research feeds those phases; i
 - Nx enterprise security ("writes only from trusted CI branches", CREEP framing, PR artifacts isolated): <https://nx.dev/enterprise/security> - HIGH (corroborates the scope-isolation design; note it is Nx-Cloud marketing framing).
 - Nx `@nx/azure-cache` plugin overview (comparable adapter shape: single storage backend behind the Nx contract, `localMode`/`ciMode`, OIDC): <https://21.nx.dev/docs/reference/remote-cache-plugins/azure-cache/overview> - HIGH.
 - CVE-2025-36852 CREEP background: <https://nx.dev/blog/cve-2025-36852-critical-cache-poisoning-vulnerability-creep> - referenced (already in project context).
-- Locked foundation (grounding, not re-derived): `.planning/ARCHITECTURE-DECISION.md` (control ledger C1-C18), `.planning/REQUIREMENTS.md`, FOUND-01 reader spike `.planning/spikes/001-005`.
+- Locked foundation (grounding, not re-derived): `.planning/THREAT-MODEL.md` (control ledger C1-C18), `.planning/REQUIREMENTS.md`, FOUND-01 reader spike `.planning/spikes/001-005`.
 
 ---
 *Architecture research for: self-hosted Nx remote cache on GitHub-native primitives*

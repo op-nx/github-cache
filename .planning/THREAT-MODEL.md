@@ -1,8 +1,10 @@
-# Architecture Decision Record: CREEP-Safety Control Ledger
+# Threat Model: CREEP-Safety Control Ledger
 
 **Status:** Accepted. This file holds the project-level CREEP-safety control register (C1-C18)
 and the handful of notes that have no canonical home anywhere else. Nothing else.
-**Date:** Controls recorded 2026-07-17; slimmed to the ledger 2026-07-26.
+**Date:** Controls recorded 2026-07-17; slimmed to the ledger 2026-07-26; renamed from
+`ARCHITECTURE-DECISION.md` 2026-07-26, once it no longer held decisions and the old name had
+become a misnomer.
 **Scope:** Project-wide. These controls apply across every phase and every milestone, not to one
 phase's threat model.
 
@@ -21,6 +23,12 @@ artifacts is the single source of truth for its own half:
   cannot detect it.
 - `.planning/spikes/001-005` - the FOUND-01 reader-adapter evidence and its verdict.
 - `.planning/research/*` - the source corpus behind all of the above.
+
+**Former name.** This file was `.planning/ARCHITECTURE-DECISION.md` until 2026-07-26. Every LIVE
+reference was re-pointed at the rename; the ~41 references under `.planning/milestones/` and
+`.planning/quick/` were deliberately NOT rewritten, because those are sealed historical records
+and editing them to match a later state would falsify them. A link to the old name in an archived
+artifact is expected and resolves here.
 
 ## Review cadence
 
@@ -91,23 +99,33 @@ the record was deleted.
   a registry digest pin is to publish a `content-sha256` in the asset metadata and verify it on
   read. It is explicitly NOT `sha256(blob) == {hash}`: the Nx key hashes task INPUTS, not the
   stored bytes, so that comparison could never hold. It defends nothing against CREEP (C5).
-- **Why two storage primitives were rejected outright.** git-native storage (a cache branch or
-  LFS) is out for clone bloat and the absence of clean eviction; Actions build artifacts are out
-  because they are not `content-keyed` - they are run-scoped. (Both rejections are also recorded,
-  with the same reasons, in `.planning/research/STACK.md` section 2's primitive-comparison table,
-  which is the fuller treatment.)
 - **Scope check on the reader choice.** Choosing Releases over GHCR is `orthogonal` to CREEP: the
   primary threat is defended at the write and sync gates (C1/C2/C5) whichever reader is in use.
   The win is in incident remediation, not in poison prevention - which is also why the choice is
   low-stakes and reversible.
-- **Inherited protection in the Nx client.** The Nx client hardens tarball extraction against
-  `..`, absolute-path, symlink and `hardlink` escape, so a malicious cache server cannot
-  `zip-slip` the client. This project inherits that protection rather than implementing it. It is
-  worth a note in the consumer trust docs; that note has not been written.
+- **Inherited protection in the Nx client.** The Nx client hardens tarball extraction so a
+  malicious cache server cannot `zip-slip` it. Verified at the pinned Nx 23.1.0:
+  `packages/nx/src/native/cache/http_remote_cache.rs` extracts via the `tar` crate's `unpack_in`
+  (`:257`), and entries that `unpack_in` skips (`..` traversal) or refuses (symlink escape) are
+  explicitly REJECTED rather than silently dropped (`:256-260`); the behaviour carries its own test
+  (`extract_rejects_parent_dir_traversal`, `:331`). This project inherits that protection rather
+  than implementing it. Written up for consumers at `docs/trust-and-security.md`.
 - **Residual risk: containment is `single-layer`.** CREEP containment rests on the write and sync
   gates plus the advisory PPE gate. The only genuine second layer would be reader-side provenance
   attestation (C7), which is deferred. Gate correctness is therefore load-bearing with
   `no backstop`.
+
+### Accepted as spent (2026-07-26)
+
+Four reasoning sentences were deleted during the slimming without a coverage row, and re-probing
+found no home for them. Recorded here as a deliberate acceptance rather than an unnoticed loss:
+Decision 3's caveat that the control-surface comparison was "a defensible judgment for this tool,
+not a raw-count fact", the reversibility-cost detail, the GHES 3.21/3.22 version specifics, and
+GHCR's "self-inflicted edge" remark. None is a control, an invariant, or an operative constraint;
+the decision they hedge is recorded in three independent places plus the full spike records; and
+the first is arguably SUPERSEDED rather than lost, since `spikes/004-ghcr-hazards/README.md:84-88`
+makes a harder empirical claim in the same direction. Carrying four hedging sentences into
+canonical artifacts would re-create precisely the duplication this slimming removed.
 
 ## References
 

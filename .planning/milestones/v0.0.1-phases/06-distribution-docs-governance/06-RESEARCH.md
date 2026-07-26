@@ -506,6 +506,18 @@ Load-bearing directives the planner must honor (treated with locked-decision aut
 
 ### Primary (HIGH confidence)
 - **docs.github.com** — Workflow syntax for GitHub Actions (`jobs.<job_id>.steps[*].background` / `.wait` / `.wait-all` / `.cancel` / `.parallel`), fetched 2026-07-20 via markdown.new. VERIFIED: `background` on `run`+`uses` steps; `id` required for `wait`/`cancel`; implicit `wait-all` before post-job cleanup; `cancel` = SIGTERM->SIGKILL; composite cannot declare `background`; max 10 concurrent background steps.
+  - ANNOTATION 2026-07-26 (quick 260726-gok): the two claims on this line that the 260725-rk4
+    review flagged as unreproducible -- the composite-action `background:` restriction and the
+    10-concurrent-background-step limit -- are both CORROBORATED. Each is documented verbatim under
+    `#jobsjob_idstepsbackground` at
+    https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax, confirmed a
+    second time against the versioned github/docs source
+    (content/actions/reference/workflows-and-actions/workflow-syntax.md:918-919). The composite note
+    landed via docs PR #61978 on 2026-06-30, three weeks BEFORE this line's 2026-07-20 fetch, so the
+    citation was legitimate when written; the "unreproducible" flag is best explained as a FETCH
+    failure (docs.github.com blocks the agent user agent), not a factual finding. The 10-step limit
+    is deliberately NOT propagated into any consumer doc -- none asserts it, and an adopter runs one
+    background step.
 - **Codebase** (Read, this session): `src/index.ts`, `serve.ts`, `server/server.ts`, `lib/retention.ts`, `lib/github-identity.ts`, `lib/select-backend.ts`, `lib/trust.ts`, `lib/sync-gate.ts`, `lib/cache-key.ts`, `lib/local-context.ts`, `lib/release-asset-name.ts`, `backend/{types,actions-cache-backend,releases-backend}.ts`, `action/index.ts`, `action/trust.generated.cjs`, `cleanup/index.ts`, `roundtrip/read-back.ts`, `selfcheck.cjs`, `pinned-deps.spec.ts`, `package.json`, `action.yml`, `ppe/action.yml`, `.github/workflows/ci.yml`, `.gitignore`, `tsconfig.lib.json`.
 - **Planning docs:** ARCHITECTURE-DECISION.md (C1-C18), REQUIREMENTS.md, ROADMAP.md, PROJECT.md, 06-CONTEXT.md, 05-SECURITY.md, 05-VERIFICATION.md, config.json, STATE.md.
 - **npm registry** (`npm view`, this session): esbuild 0.28.1, @vercel/ncc 0.44.1, @actions/cache 6.2.0, @actions/core 3.0.1, @octokit/rest 22.0.1. Legitimacy gate (`gsd-tools query package-legitimacy check`): esbuild OK, ncc SUS(too-new).

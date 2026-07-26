@@ -24,6 +24,14 @@ sidecar with a matching `port`; the sidecar adopts the values you set:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Generic hang insurance, NOT a teardown workaround and NOT the containment
+    # control for a failing step. `cancel:` needs no help: a cancel: step is not
+    # subject to skip-on-failure, so it still tears the sidecar down when an
+    # earlier step fails. The hang warned about below is the one caused by
+    # OMITTING cancel: -- a different thing. This bound only caps a genuine hang
+    # (a stalled npm ci, a wedged test run) at minutes instead of the
+    # 360-minute default.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -36,7 +44,9 @@ jobs:
           # Mask the token BEFORE writing it to $GITHUB_ENV: the runner redacts it
           # from the moment the ::add-mask:: command is processed, so nothing echoed
           # between here and the sidecar step can leak it into the log.
-          token="$(openssl rand -hex 32)"
+          # node, not openssl: openssl may be absent from a Windows runner's Git
+          # Bash, while node is guaranteed present wherever the sidecar runs.
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
           echo "::add-mask::${token}"
           echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
 
@@ -53,6 +63,35 @@ jobs:
           # read-only backend and every task is a cache MISS on write.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Wait for the sidecar before the first Nx task, and demand exactly 404 or
+      # 200. An authed GET on an unknown hash MISSes with 404 on every backend the
+      # sidecar can select, and 200 needs a pre-existing entry -- either one proves
+      # reachability AND that the bearer token matches. Accepting "any status but
+      # 000" would pass a 401, i.e. a token mismatch, after which every Nx request
+      # 401s, read faults degrade to a cache MISS, and the job goes GREEN having
+      # cached nothing. 404 also rejects a squatter process on the port answering
+      # with its own status.
+      - run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            # curl already prints 000 and exits non-zero on connection-refused, so
+            # swallow the exit with `|| true` -- NEVER `|| echo 000`, which appends
+            # a second 000 and makes the status unparseable. --max-time bounds EACH
+            # attempt, so the loop's worst case is 30 x (10 + 1), about 5.5 minutes
+            # -- not 30 seconds.
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
+
       # Nx reads the pre-set NX_* vars and talks to the loopback sidecar.
       - run: npx nx affected -t build test
 
@@ -65,6 +104,9 @@ jobs:
 That is the whole default setup. There is no server to deploy and no cache
 storage to provision -- the writes land in your repository's GitHub Actions
 cache.
+
+On a Windows runner, add `shell: bash` to every `run:` step above -- the default
+there is `pwsh`, which does not understand `$GITHUB_ENV` or `$(...)`.
 
 ## How it works
 
@@ -84,6 +126,11 @@ cache.
 - **`cancel:` is mandatory.** The server runs until torn down, so the `cancel:`
   step is required -- without it the job hangs at the implicit `wait-all` before
   post-job cleanup.
+- **Wait for the sidecar, and bound the job.** The first Nx task can reach the
+  loopback port before the server binds it, so poll until an authed GET returns
+  404 or 200 (see the quickstart). `timeout-minutes` on the job is separate:
+  generic hang insurance, not the containment control for a failing step -- a
+  `cancel:` step is not subject to skip-on-failure.
 
 The `op-nx/github-cache/start-cache-server` action above is the public consumer
 surface. The internal `packages/github-cache/action.yml` is this repository's own

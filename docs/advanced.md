@@ -88,14 +88,21 @@ with a `cancel:` teardown). On a runner or GHES release that predates the
 background-step engine, background the server with a shell `&` instead:
 
 ```yaml
-- run: |
+# shell: bash is REQUIRED, not stylistic. This step uses export, $(...), & and
+# >> "$GITHUB_ENV" -- on a Windows runner the default shell is pwsh, which fails
+# on every one of them. Redundant on ubuntu; harmless there, load-bearing here.
+- shell: bash
+  run: |
     # Pin the port and bearer token BEFORE backgrounding: with PORT unset the
     # server binds a random ephemeral port, and with the token unset it mints a
     # fresh CSPRNG one -- either mismatch makes the Nx client MISS every read.
     # Exporting both here means serve() adopts them, so the values written to
     # GITHUB_ENV for the next step match what the server actually listens on.
     export PORT=3000
-    export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN="$(openssl rand -hex 32)"
+    # node, not openssl to mint the token: openssl may be absent from a Windows
+    # runner's Git Bash, while node is guaranteed present wherever the sidecar
+    # runs -- and `npx @op-nx/github-cache` below already requires it.
+    export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
     # Mask the token BEFORE it is written to GITHUB_ENV below, so it is redacted
     # from every later log line, not only from inside the sidecar process.
     echo "::add-mask::${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
@@ -104,8 +111,15 @@ background-step engine, background the server with a shell `&` instead:
       echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:${PORT}"
       echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
     } >> "$GITHUB_ENV"
+# Poll until an authed GET on an unknown hash returns 404 or 200 before the Nx
+# step -- see the readiness poll in the quickstart.
 - run: npx nx affected -t build test
 ```
+
+The `&` form has the same startup race as the native background step: the next
+step's Nx run can begin before the backgrounded server has bound the port, so
+copy the readiness poll from [the quickstart](../README.md#quickstart-5-minutes)
+in between. Bound the job with `timeout-minutes` there too.
 
 **The `&` fallback serves the read-only Releases reader path ONLY. It is NOT a
 substitute for the read-write Actions-cache backend.** A plain `run:` step -- and

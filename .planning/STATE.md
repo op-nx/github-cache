@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: OS-invariant cross-OS sharing
 status: planning
-last_updated: "2026-07-26T18:30:00.000Z"
+last_updated: "2026-07-26T21:58:22.000Z"
 last_activity: 2026-07-26
 progress:
   total_phases: 6
@@ -198,6 +198,63 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
+### Session resumed; v0.0.2 planning pushed to a milestone branch (2026-07-26)
+
+Resumed from `HANDOFF.json` + `.planning/.continue-here.md`. Both were one-shot artifacts and are
+now consumed: the `wip: v0.0.2 paused` commit that carried them (`542f212`) was dropped via
+`git reset --soft 83ac4fd` and the two files deleted, so they never reach the remote. Proven
+lossless the same way as the pre-PR-#4 tidy -- `git diff --stat refs/backups/v0.0.2-pre-branch HEAD`
+shows EXACTLY the two artifact deletions (206 lines, matching the wip commit's 206 insertions) and
+nothing else. Backup ref `refs/backups/v0.0.2-pre-branch` (`542f212`) retained and unspent.
+
+**The 15 v0.0.2 planning commits are PUSHED, on a branch, not on `main`.** Branch
+`gsd/v0.0.2-os-invariant-cross-os-sharing`, named from this project's own
+`milestone_branch_template` (`gsd/{milestone}-{slug}`) and matching the
+`gsd/v0.0.1-greenfield-rebuild` precedent. Local `main` was reset back to `origin/main` (`fe25a3f`)
+so all v0.0.2 work lives on the branch and `main` tracks the remote cleanly -- the branch-then-PR
+shape used for PRs #3/#4/#6/#7. **No PR opened yet** (not requested).
+
+Pre-push hygiene ran allowlist-inversion over three surfaces, never encoding the forbidden value:
+author AND committer identity on all 16 commits (every one the approved public gmail), email-shaped
+tokens in every ADDED content line (zero), and the commit messages (zero) -- plus no AI-attribution
+trailer. The batch's ONE source change is comment-only: `actions-cache-backend.ts:88` re-points a
+`ARCHITECTURE-DECISION.md` reference at `THREAT-MODEL.md`. No behavior, no bundle impact.
+
+**Three blocking constraints carried out of the deleted checkpoint** (they lived only there; the
+third is the load-bearing one for Phase 8):
+
+1. `rg` over `~/.claude/gsd-core` returns a FALSE ZERO without `-L` -- it is a symlink and `rg` does
+   not traverse it by default. A first pass returned zero hits for EVERY term, indistinguishable
+   from a clean confirmation. Use `-L` or the resolved path, and run a positive control before
+   recording any negative result.
+2. A coverage gate with one probe term per section produces a FALSE GREEN, and it fired twice in
+   one plan-check in OPPOSITE directions -- once because a single term stood in for a twelve-item
+   list and three terms matched checklist TICKS rather than restatements, once because the negative
+   probes searched the source document's OWN wording, so a claim with six live homes measured as
+   homeless. Probe at CLAIM level, one assertion per distinctive claim, never the source's phrasing.
+3. `.nx/workspace-data` staleness changes every task hash and never self-heals. Measured at HEAD:
+   warm local Windows `build`/`test` equal cold ubuntu CI to the digit, and cold local Windows
+   equals cold windows CI to the digit. Every prior cross-OS measurement in this repo, including the
+   pair that was in this file, read a CONFOUNDED variable. Phase 8 must pin graph freshness before
+   attributing any difference to the OS. Full record: `.planning/research/v0.0.2/PROBE-RESULTS.md`.
+
+Required reading before Phase 7/8 work, in order: `research/v0.0.2/PROBE-RESULTS.md` (FIRST -- it
+reframes Phase 8), `research/v0.0.2/SUMMARY.md`, `REQUIREMENTS.md`, `ROADMAP.md`,
+`THREAT-MODEL.md`, `research/v0.0.2/PITFALLS.md` (weight SILENT-3 above everything else).
+
+Local graph is COLD (probing ran `nx reset`). Cold hashes at `83ac4fd`: `build
+9351058897283095552`, `typecheck 4008983504000491231`, `test 7684434396554539514`. Local clones
+worth reusing: `D:\projects\github\actions\cache`, `D:\projects\github\actions\toolkit` (cache
+package at exactly our pinned 6.2.0), `D:\projects\github\nrwl\nx` -- NOTE its working tree is at
+tag `23.0.2`, not our `23.1.0`, so read via `git show 23.1.0:<path>`.
+
+One thing to settle EARLY in Phase 7 planning, flagged by research and still undecided: the
+explicit-`lint`-target alternative to `@nx/eslint` would dissolve the LINT-01 -> PARITY-01 ordering
+constraint entirely. Recommendation is to keep `@nx/eslint` and have CORR-03 treat `lint` as a
+fourth target -- but the alternative deserves one line in the plan before it is dismissed.
+
+Next: `/gsd:discuss-phase 7` (or `/gsd:plan-phase 7` to skip discussion).
+
 ### v0.0.2 roadmap created (2026-07-26)
 
 **Phases 7-12 defined; 43/43 v0.0.2 requirements mapped to exactly one phase each.** Numbering continues from v0.0.1 (Phases 0-6, archived). Granularity standard (6 phases). `**Mode:** mvp` is marked on 9, 10 and 12 only -- 7 is toolchain adoption, 8 is measurement/configuration, 11 is proof-only.
@@ -290,3 +347,5 @@ Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates
 
 - Plan the first v0.0.2 phase with `/gsd:plan-phase 7` (lint toolchain; it must precede the parity work because `@nx/eslint` inference changes `hash_project_config`)
 - Before Phase 10 executes, capture or cite the pre-rename O2 baseline -- it is unrecoverable once CORR-02 lands
+- Decide whether to open a PR for `gsd/v0.0.2-os-invariant-cross-os-sharing` (pushed 2026-07-26, no PR yet). Planning-only content, so there is no CI gate riding on it; note the 5 push-gated jobs stay `skipped` on a feature branch because `on.push` is `branches: [main]`
+- Regenerate `.planning/codebase/*` via `/gsd:map-codebase` -- it was mapped 2026-07-22 against v0.0.1 and PROJECT.md already flags it as stale. v0.0.2 invalidates it materially: renamed asset scheme, new archive path, a new inferred `lint` target, ESLint in the toolchain (carried over from the consumed `HANDOFF.json`)

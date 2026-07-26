@@ -77,8 +77,8 @@ Shipped and verified in **v0.0.1 Greenfield MVP Rebuild** (all 7 phases verified
 `.planning/REQUIREMENTS.md`. Summary of the scope:
 
 - [ ] Releases mirror asset names carry no OS discriminator (CORR-02), superseding CORR-01's
-      "OS-namespaced by default" branch in favour of ADR Decision 6's documented-consumer-
-      discrimination alternative
+      "OS-namespaced by default" branch in favour of the documented-consumer-discrimination
+      alternative that the CORR-01 row in `## Key Decisions` below already sanctions
 - [ ] OS-sensitive targets stay separated by their declared Nx input, proven behaviourally (CORR-03)
 - [ ] Nx task-hash parity for `build`/`typecheck`/`test` across Windows and Linux, root-caused
       before it is fixed (PARITY-01..04)
@@ -151,7 +151,7 @@ Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per
 | **OS-namespace the store by default** (or documented consumer OS-discrimination) | Cross-OS cache hit must never serve a wrong-OS artifact (Core Value: never a wrong result) | [WARN] SUPERSEDED in v0.0.2 - switched to the second branch (see below) |
 | Runtime-context backend selection instead of a mode flag | No caller can misconfigure read-write vs read-only | [OK] Good |
 | Publish/cleanup I/O uses Octokit (`error.status`) from the start, never `gh` stderr text-matching | `gh` gives no structured errors for already-exists/404 and is version-fragile; Octokit discriminates structurally | [OK] Decided (greenfield - no gh-CLI to migrate from) |
-| **v0.0.2: take CORR-01's SECOND branch** - the store is OS-INVARIANT and OS discrimination lives only in the consumer's declared Nx input | ADR Decision 6 sanctions both branches; the first cost a Windows dev every cross-OS hit. Ecosystem norm is trust-the-hash (`nx-remotecache-custom` keys on `hash + ".tar.gz"`, no OS component) | [OK] Decided (v0.0.2) |
+| **v0.0.2: take CORR-01's SECOND branch** - the store is OS-INVARIANT and OS discrimination lives only in the consumer's declared Nx input | The CORR-01 row above sanctions both branches ("or documented consumer OS-discrimination"); the first cost a Windows dev every cross-OS hit. Ecosystem norm is trust-the-hash (`nx-remotecache-custom` keys on `hash + ".tar.gz"`, no OS component) | [OK] Decided (v0.0.2) |
 | **v0.0.2: the `@actions/cache` archive path becomes a deliberate OS-invariant constant**, not an inherited `os.tmpdir()` value | `tmpdir()` in the version-hashed path was ACCIDENTAL correctness - it also silently over-partitions on any runner with a different `TMPDIR`, username, or container, costing hits invisibly. Upstream docs forbid absolute paths cross-OS | [OK] Decided (v0.0.2) |
 | **v0.0.2: no OS-separation knob** | YAGNI - this repo is the only consumer, and the knob is additive if that changes. NOTE: TRUST-05 does NOT forbid it; TRUST-05 is scoped to RW-vs-RO only, and an earlier draft mis-cited it | [OK] Decided (v0.0.2) |
 | **v0.0.2: Releases asset name is `nx-cache-<hash>`** (prefix, single-sourced from `CACHE_KEY_PREFIX`) | Satisfies C16's "distinguishing namespace/prefix" literally; a suffix accept-list on a DELETE filter would grow per scheme revision | [OK] Decided (v0.0.2) |

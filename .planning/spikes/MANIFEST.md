@@ -10,7 +10,8 @@ paper unknowns (GHCR atomic create-if-absent unavailable/low-severity; write-tru
 host-detected fail-closed; Nx PUT floor a hard 200) are resolved and must NOT be reopened.
 This spike produces a **symmetric** operational + security failure ledger for both readers.
 
-Canonical scope: `.planning/ARCHITECTURE-DECISION.md` (Decision 3 + control ledger C1-C18)
+Canonical scope: `.planning/ARCHITECTURE-DECISION.md` (the CREEP control ledger C1-C18),
+`.planning/PROJECT.md` `## Key Decisions` (the locked reader / cross-context adapter row)
 and `.planning/REQUIREMENTS.md` (FOUND-01 rubric).
 
 ## Requirements
@@ -27,7 +28,7 @@ Symmetric forward-merits rubric (from FOUND-01):
 - Per-primitive size ceiling (ROBUST-02) vs the 2 GB body cap
 - Poison-remediation capability
 - Docker-distribution synergy
-- Cross-OS round-trip: a cross-OS hit must never serve a wrong-OS artifact (CORR-01 / Decision 6)
+- Cross-OS round-trip: a cross-OS hit must never serve a wrong-OS artifact (CORR-01)
 
 GHCR-side burdens: >5000-download-undeletable wall; untagged child-manifest cleanup;
 mutable tags -> pull-by-digest; cleanup credential (classic PAT for org-owned/unlinked).

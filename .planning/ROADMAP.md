@@ -10,7 +10,8 @@ Foundations are LOCKED (grounding, not phase work): reader = GitHub Releases (FO
 default composition = Actions-cache CI-RW only, one backend per process via `selectBackend`;
 write-trust = host-detected fail-closed allowlist; sync gate = `{push, schedule}`; no content
 signing; Nx PUT floor = hard `200`/Nx-21+; distribution = npm package + JS Action, Docker
-deferred (FOUND-03). Decision record + CREEP control ledger C1-C18:
+deferred (FOUND-03). Those locked decisions live in the `## Key Decisions` table in
+`.planning/PROJECT.md`; the CREEP control ledger C1-C18 that backs them is
 `.planning/ARCHITECTURE-DECISION.md`.
 
 **v0.0.2 supersedes one locked decision.** CORR-01 was an either/or -- "OS-namespace the store
@@ -537,7 +538,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 
 ---
 *v0.0.2 roadmap created 2026-07-26 from `.planning/REQUIREMENTS.md` (43 requirements, revised
-after adversarial review by five independent critics), `.planning/PROJECT.md` (O1-O4 and the
-mandatory ordering), and `.planning/ARCHITECTURE-DECISION.md` (Decision 6's documented
-alternative branch, which D2-01 now takes). Granularity: standard (6 phases). Phase numbering
+after adversarial review by five independent critics) and `.planning/PROJECT.md` (O1-O4 and the
+mandatory ordering, plus the CORR-01 `## Key Decisions` row whose documented-consumer-
+discrimination branch D2-01 now takes). Granularity: standard (6 phases). Phase numbering
 continues from v0.0.1's archived Phases 0-6. Git branching: none (sequential).*

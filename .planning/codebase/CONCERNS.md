@@ -386,9 +386,11 @@ here.
 
 ## Deferred Later-Milestone Triggers
 
-These are LOCKED architectural decisions (not accidental gaps), recorded in
-`.planning/ARCHITECTURE-DECISION.md` and `.planning/milestones/v0.0.1-REQUIREMENTS.md`,
-re-evaluated together when their shared trigger condition is met.
+These are LOCKED architectural decisions (not accidental gaps), recorded as rows in
+`.planning/PROJECT.md` `## Key Decisions` and in
+`.planning/milestones/v0.0.1-REQUIREMENTS.md`, re-evaluated together when their shared trigger
+condition is met. What `.planning/ARCHITECTURE-DECISION.md` still records for them is the
+control surface each trigger carries (C6/C10/C11/C13/C18, cited in the bullets below).
 
 **GHCR-01 -- GHCR/OCI as an additional synced store:**
 - Status: Deliberately deferred, not built. v0.0.1 locked GitHub Releases as

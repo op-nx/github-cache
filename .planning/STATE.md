@@ -92,7 +92,7 @@ Last activity: 2026-07-26 - v0.0.2 roadmap created (Phases 7-12, 43/43 requireme
 
 ### Decisions
 
-Full log in PROJECT.md Key Decisions + .planning/ARCHITECTURE-DECISION.md. Recent decisions affecting current work:
+Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 backing those decisions is .planning/ARCHITECTURE-DECISION.md. Recent decisions affecting current work:
 
 - FOUND-01: reader / cross-context store = GitHub Releases (forward merits, spike 001-005); GHCR = later-milestone revisit trigger (with PROV-01 + Docker).
 - FOUND-03: distribution = npm + JS Action; Docker container form deferred to a later milestone (CI sidecar covered by the GA background-step pattern).

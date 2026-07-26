@@ -56,7 +56,7 @@ cache, and the public-repo exposure surface, are not deferred.
 
 | ID | Decision | Basis |
 |----|----------|-------|
-| D2-01 | The store is OS-INVARIANT; OS discrimination lives exclusively in the declared Nx input | ADR Decision 6's documented alternative branch |
+| D2-01 | The store is OS-INVARIANT; OS discrimination lives exclusively in the declared Nx input | The CORR-01 row in `.planning/PROJECT.md` `## Key Decisions` - its "or documented consumer OS-discrimination" branch |
 | D2-02 | No new env knob and no new action input | Zero adopters, so no exit is needed yet (YAGNI); additive later. NOT justified by TRUST-05, which is scoped to RW-vs-RO only |
 | D2-03 | The Releases asset name is `nx-cache-<hash>`, single-sourced from the existing `CACHE_KEY_PREFIX` | C16's "distinguishing namespace/prefix" read literally; a suffix accept-list on a DELETE filter grows per scheme revision |
 | D2-04 | The archive path is a workspace-relative forward-slash literal under `.nx/cache/` | `@actions/cache` docs forbid absolute paths cross-OS; `.nx/cache` is gitignored by `nx init` and excluded from Nx's file map. NOT `node_modules/.cache/`, which our own AGENTS.md junctions across worktrees |

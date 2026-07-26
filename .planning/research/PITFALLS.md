@@ -156,8 +156,8 @@ Today's cleanup deletes any asset older than `CACHE_MIRROR_MAX_AGE_DAYS` on `cre
 Three already-fixed silent bugs. Reopening any is a wave of cross-OS cache MISSes with no error:
 
 1. **CRLF hash divergence (RESOLVED).** `.gitattributes` forces `* text=auto eol=lf` so Nx content hashes match across OS checkouts. Deleting/weakening that file silently breaks every cross-OS hit.
-2. **`@actions/cache` literal-path version hashing (load-bearing).** `@actions/cache` matches entries by a version hash computed over the *literal* temp-path strings. `cacheArchivePath(hash)` is the single source of truth; save and restore MUST pass byte-identical paths. Any path change (even cosmetic) silently changes the version and every restore MISSes. Per-OS compression is also folded in: windows-11-arm lacks zstd and falls back to gzip, so a Windows entry cannot be restored by a zstd host.
-3. **Cross-OS publish-mirror gap (RESOLVED 2026-07-17).** Because the version hash folds in OS temp path + a windows-only salt + the compression method, an ubuntu job can never restore a Windows-saved entry. Fix: `publish-mirror` is a **per-OS matrix** (`ubuntu-24.04-arm` + `windows-11-arm`); each leg mirrors only its own OS's entries. `uploadHash` treats an unrestorable entry as "evicted; skip" with NO error -- so collapsing the matrix back to one OS silently drops the other OS's entries.
+2. **`@actions/cache` literal-path version hashing (load-bearing).** `@actions/cache` matches entries by a version hash computed over the *literal* temp-path strings. `cacheArchivePath(hash)` is the single source of truth; save and restore MUST pass byte-identical paths. Any path change (even cosmetic) silently changes the version and every restore MISSes. Per-OS compression is also folded in. Both `ubuntu-24.04-arm` and `windows-11-arm` now provide zstd, so compression is no longer what distinguishes the two legs' version hashes -- but the version is still OS-distinct through the OS temp path inside the literal archive path and the windows-only salt, so a cross-OS restore still MISSes. A future runner-image change to either leg's compression method would silently invalidate that leg's existing entries again.
+3. **Cross-OS publish-mirror gap (RESOLVED 2026-07-17).** Because the version hash folds in OS temp path + a windows-only salt + the compression method, an ubuntu job can never restore a Windows-saved entry. Fix: `publish-mirror` is a **per-OS matrix** (`ubuntu-24.04-arm` + `windows-11-arm`); each leg mirrors only its own OS's entries. the engine's `restored.kind === 'miss'` skip branch in `publish/publish-mirror.ts` treats an unrestorable entry as "evicted; skip" with NO error -- so collapsing the matrix back to one OS silently drops the other OS's entries.
 
 **Why it happens:**
 All three failure modes are silent (a MISS, not a crash). A well-meaning "simplify the CI matrix" or "clean up .gitattributes" or "tidy the temp path" refactor looks harmless and passes CI (which may not cross-check OS restore).
@@ -169,7 +169,7 @@ All three failure modes are silent (a MISS, not a crash). A well-meaning "simpli
 
 **Warning signs:**
 - A PR that deletes/edits `.gitattributes`, renames the temp path, or reduces the publish-mirror matrix to one OS.
-- A wave of Windows cache MISSes after a runner-image update (zstd added to windows-11-arm invalidates pre-existing gzip entries -- transient, self-heals; know the symptom so it is not misdiagnosed as a regression).
+- A wave of cache MISSes on ONE OS leg after a runner-image update: any change to that leg's compression method invalidates its pre-existing entries (the zstd addition to windows-11-arm was one such instance, already past -- transient, self-heals; know the symptom so it is not misdiagnosed as a regression).
 
 **Phase to address:** Cross-cutting guardrail for EVERY phase that touches CI, hashing, or the temp path. Fold explicit "did-not-repeat" checks into every slice's tests (Phases 1-4).
 
@@ -205,7 +205,7 @@ The architecture already encodes the correct rule ("Only structural/marker-verif
 
 **What goes wrong:**
 Two accepted best-effort gaps can degrade into correctness bugs if mishandled:
-- **Eviction between save and publish.** The Actions cache is last-access LRU at the 10 GB repo cap and evicts after 7-day disuse. An entry saved but evicted before the next main-push `publish-mirror` run is never mirrored (`uploadHash`'s no-hit `return` silently skips it). Accepted -- mirror is best-effort.
+- **Eviction between save and publish.** The Actions cache is last-access LRU at the 10 GB repo cap and evicts after 7-day disuse. An entry saved but evicted before the next main-push `publish-mirror` run is never mirrored (the engine's `restored.kind === 'miss'` skip branch in `publish/publish-mirror.ts` silently skips it). Accepted -- mirror is best-effort.
 - **Mid-session mirror staleness.** `serve` caches each shard's asset list for the process lifetime (to stay under the anonymous 60 req/hr limit); a hash published after startup is invisible until restart.
 
 Both are fine *as extra MISSes*. The danger is any change that turns a stale/partial view into a served *wrong* artifact (e.g. serving a truncated download, or caching a negative result and then serving a different hash's bytes).

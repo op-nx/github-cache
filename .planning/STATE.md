@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.0.1
-milestone_name: Greenfield MVP Rebuild
-current_phase: 0.1
-status: PR #6 MERGED (e56e5d2). Quick 260726-gok EXECUTED + VERIFIED (passed, 0 blocking); closes BOTH remaining Deferred Items rows (typecheck stale-cache false-pass + the consumer-doc defects). 5 atomic commits, unpushed at time of writing
-stopped_at: "Quick 260725-rk4 (dogfood the github-cache server in CI) EXECUTED (3/3 tasks) and code-reviewed; PR #4 open on gsd/quick-260725-rk4-dogfood-ci. 6 commits: 488bd4f/ab8dc9b/bbf303f (tasks) + 4053e53/9f37739/f0f31c8 (all 6 review findings). Live-close CLOSED -- run 30171443826 build job logged '[remote cache]' + 'Cache: 1/1 hit (100%)', corroborated by the cache entry's last_accessed_at advancing while created_at/size held. Verification status human_needed, narrowed to the merge decision only: the push half of 'green on both events' is structurally unclosable on a feature branch (on.push is branches:[main]), and all 5 push-gated jobs are skipped on PR runs so Task 3's publish-mirror subject is unverified live. Prior: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-review findings). 19 bisect-safe atomic commits landed on gsd/v0.0.1-greenfield-rebuild (c0d1ebf..4c64aff), covering F01-F27 except the two deliberately-excluded items (deleted-rationale sweep + v0 tag, both now Deferred Items rows) plus a flake-hardening follow-up. 430 tests (up from the 384 baseline); every commit green on the full battery (format:check, build, typecheck, test, fallow:ci, check:action, pack:check) and typecheck:action from Task 15 on. Task 10 added @octokit/plugin-retry@8.1.0 + @octokit/plugin-throttling@11.0.3 with a linux/arm64-regenerated, additive-only lockfile (no Windows prune)."
-last_updated: "2026-07-22T01:31:12.273Z"
+milestone: v0.0.2
+milestone_name: OS-invariant cross-OS sharing
+status: planning
+last_updated: "2026-07-26T13:43:31.953Z"
 last_activity: 2026-07-26
-last_activity_desc: Quick 260726-gok closed the typecheck stale-cache false-pass (one-token nx.json fix, mutation-tested guard) and the consumer-doc defects; 438 tests, verifier passed
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 33
-  completed_plans: 33
-  percent: 100
-current_phase_name: Distribution + Docs + Governance
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 ## Current Position
 
-Phase: Milestone v0.0.1 complete (awaiting next milestone); Deferred Items has NO open follow-up rows left
-Plan: quick 260726-gok — Resolve the typecheck stale-cache false-pass + the consumer-doc defects (4 of 4 tasks, plus a 5th commit from the verification)
-Status: Executed + verified (passed, 0 blocking); 5 atomic commits, PR to open
-Last activity: 2026-07-26 — Quick 260726-4cc executed and verified
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-26 — Milestone v0.0.2 started
 
 ## Performance Metrics
 

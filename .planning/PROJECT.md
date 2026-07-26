@@ -27,6 +27,30 @@ never let an untrusted trigger write - correctness and CREEP-safety come before 
 feature. If everything else fails, reads must stay best-effort (a fault degrades to a MISS,
 never a broken build) and writes must stay gated.
 
+## Current Milestone: v0.0.2 OS-invariant cross-OS sharing
+
+**Goal:** A Windows developer reuses Linux CI's portable task artifacts, and Windows CI reuses
+them too, with the OS-sensitive target still provably separated. Proven by dogfooding this repo,
+then documented as a recipe consumers can copy.
+
+**Target outcomes** (the acceptance frame; every requirement serves one):
+
+- **O1** - local Windows dev gets cache HITs for `build`/`typecheck`/`test` produced by Linux CI
+- **O2** - local Windows dev gets cache HITs for `integration` produced by Windows CI
+- **O3** - Windows CI gets cache MISSes for `integration` produced by Linux CI
+- **O4** - Windows CI gets cache HITs for `build`/`typecheck`/`test` produced by Linux CI
+
+**Mandatory ordering:** O1 must be PROVEN before O4 is enabled. Windows CI today runs only
+`integration`, so any local Windows HIT on the other three targets is unambiguously Linux-produced.
+Enabling O4 makes Windows CI a second producer of those hashes and permanently destroys that clean
+attribution.
+
+**Key context:** the work splits across two independent layers - the Releases mirror (O1, O2) and
+the Actions cache (O3, O4) - which is what makes the ordering achievable. O1's dominant blocker is
+Nx task-hash parity, not the asset name: `build` currently hashes differently on ubuntu CI and
+Windows CI for the same commit. O3 already holds today via the declared platform discriminator on
+`integration`.
+
 ## Requirements
 
 ### Validated
@@ -49,8 +73,19 @@ Shipped and verified in **v0.0.1 Greenfield MVP Rebuild** (all 7 phases verified
 
 ### Active
 
-_None — v0.0.1 shipped the full MVP requirement set. Run `/gsd:new-milestone` to define the
-next version (fresh REQUIREMENTS.md)._
+**v0.0.2 OS-invariant cross-OS sharing.** Full requirement set with REQ-IDs:
+`.planning/REQUIREMENTS.md`. Summary of the scope:
+
+- [ ] Releases mirror asset names carry no OS discriminator (CORR-02), superseding CORR-01's
+      "OS-namespaced by default" branch in favour of ADR Decision 6's documented-consumer-
+      discrimination alternative
+- [ ] OS-sensitive targets stay separated by their declared Nx input, proven behaviourally (CORR-03)
+- [ ] Nx task-hash parity for `build`/`typecheck`/`test` across Windows and Linux, root-caused
+      before it is fixed (PARITY-01..04)
+- [ ] The `@actions/cache` archive path becomes a deliberate OS-invariant constant instead of an
+      inherited `os.tmpdir()` value, with `enableCrossOsArchive` hardcoded (VER-01..04)
+- [ ] Live cross-OS proofs for O1-O4 in the mandated order (READ-01/02, CI-01/02, TEST-06/07)
+- [ ] Consumer-facing cross-OS adoption recipe, drift-guarded (DOCS-07/08)
 
 Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per the FOUND-01 ledger):
 
@@ -134,4 +169,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-22 after v0.0.1 milestone (Greenfield MVP Rebuild) complete. Shipped 7 phases / 33 plans: the Nx self-hosted-cache HTTP server (SRV-01..05), Actions-cache CI-RW backend + context-derived `selectBackend` (TRUST-05, ROBUST-04), authenticated GitHub Releases reader with OS-namespacing (FOUND-01/02, CORR-01), `{push,schedule}`-gated publish/cleanup + coupled retention + fail-loud observability (TRUST-02, RETAIN-01/03, ROBUST-01/02/05, OBS-01), host-detected trust-widening + server-produced-key filter + advisory PPE gate (TRUST-01/06/08), and npm package + `start-cache-server` JS action + docs/governance (DOCS-01..06, GOV-01..03). Merged via PR #3, tagged v0.0.1. Milestone audit passed (6/6 E2E flows wired, all threats closed). Later-milestone triggers: GHCR-01, PROV-01, FOUND-03 (Docker). See milestones/v0.0.1-* and ARCHITECTURE-DECISION.md.*
+*Last updated: 2026-07-26 at v0.0.2 milestone start (OS-invariant cross-OS sharing) - see the Current Milestone section and REQUIREMENTS.md. Prior update: 2026-07-22 after v0.0.1 milestone (Greenfield MVP Rebuild) complete. Shipped 7 phases / 33 plans: the Nx self-hosted-cache HTTP server (SRV-01..05), Actions-cache CI-RW backend + context-derived `selectBackend` (TRUST-05, ROBUST-04), authenticated GitHub Releases reader with OS-namespacing (FOUND-01/02, CORR-01), `{push,schedule}`-gated publish/cleanup + coupled retention + fail-loud observability (TRUST-02, RETAIN-01/03, ROBUST-01/02/05, OBS-01), host-detected trust-widening + server-produced-key filter + advisory PPE gate (TRUST-01/06/08), and npm package + `start-cache-server` JS action + docs/governance (DOCS-01..06, GOV-01..03). Merged via PR #3, tagged v0.0.1. Milestone audit passed (6/6 E2E flows wired, all threats closed). Later-milestone triggers: GHCR-01, PROV-01, FOUND-03 (Docker). See milestones/v0.0.1-* and ARCHITECTURE-DECISION.md.*

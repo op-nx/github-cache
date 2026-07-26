@@ -136,15 +136,19 @@ parity bug of exactly the `@nx/vitest` / `@nx/js/typescript` class Phase 8 exist
 > three files (`release-asset-name.spec.ts` carries two). Use FOUR. There are four error
 > POSITIONS; `cache-archive-path.spec.ts:26` is not one of them.
 
-**Plans**: 4 plans
+**Plans**: 0/4 plans executed
 
 Plans:
+
 - [ ] 07-01-PLAN.md -- Adopt the toolchain: five exact-pinned devDeps, the root flat config, the
       D-12 baseline, the ESLint Node-API guard harness, and the `test.inputs` wiring (wave 1)
+
 - [ ] 07-02-PLAN.md -- The ban itself: RED before GREEN over the evasion shapes and the four extant
       sites, the two core rules, the four described disables, and the scope-drift guard (wave 2)
+
 - [ ] 07-03-PLAN.md -- Wire the target: `@nx/eslint` registration, the declared `lint` inputs, the
       input probes with their negative control, the root script and the CI job (wave 3)
+
 - [ ] 07-04-PLAN.md -- Evidence: the LINT-04 differential with both negative controls, mutations
       M1-M9, and the Phase 8 / Phase 9 hand-off records (wave 4)
 
@@ -618,12 +622,15 @@ violate the requirement (RETAIN-04) or produce a non-shippable half-slice.
 
 - **Phase 7's lint rule constrains Phases 9 and 10.** LINT-03 requires the three CORR-05
   violations to be confirmed CAUGHT while they still exist; they are then removed downstream.
+
 - **Phase 8's CORR-03 job guards Phases 9-12 continuously.** PARITY-02 is enforced by CORR-03(c)
   on every subsequent commit, not measured once -- so a Phase 9 or 10 change that re-diverges
   the hashes fails the build immediately.
+
 - **Phase 9's VER-01 rotates the Actions-cache version**, so the Phase 10 mirror republish may
   land in the same all-miss window OBS-04 pre-records. Sequence Phase 10's warming push after
   the rotation push has been observed.
+
 - **Phase 12's XOS-05 write decision feeds back into Phase 10's TRUST-11/12 record.** If the
   Windows legs write, the attribution loss is appended to the recorded threat model.
 
@@ -634,6 +641,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 - Executor portability classification (not knowable a priori; residual risk in TRUST-11).
 - An empirical divergence-detection subsystem (disproportionate; the "green O4 CI is the
   evidence" argument is circular -- a restored task does not execute).
+
 - A per-job or per-target OS-invariance flag (D2-02: no adopters, so no exit is needed yet).
 - Read-fallback across old and new asset names (our own mirror repopulates on the next push).
 - Adopter-migration signalling: changelog, `v0` tag policy, version-bump signal, rotation notice.
@@ -653,7 +661,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 4. Publish + Retention + Observability | v0.0.1 | 6/6 | Complete | 2026-07-20 |
 | 5. Trust-Widening + PPE Gate | v0.0.1 | 4/4 | Complete | 2026-07-20 |
 | 6. Distribution + Docs + Governance | v0.0.1 | 5/5 | Complete | 2026-07-21 |
-| 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 0/? | Not started | - |
+| 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 0/4 | Planned    |  |
 | 8. Nx Task-Hash Parity | v0.0.2 | 0/? | Not started | - |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 0/? | Not started | - |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 0/? | Not started | - |

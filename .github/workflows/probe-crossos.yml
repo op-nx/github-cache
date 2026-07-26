@@ -1,0 +1,91 @@
+# THROWAWAY pre-flight probe for the v0.0.2 milestone. Delete once its three
+# questions are answered and recorded in .planning/research/v0.0.2/.
+#
+# Q1 (gates O4/XOS-05): does windows-11-arm ship zstd and GNU tar? Two external
+#     sources contradict -- actions/cache#1622's last comment says yes, the
+#     partner-runner-images manifest still lists zstd under "Omitted software".
+#     It matters because @actions/cache folds compressionMethod into the cache
+#     version UNCONDITIONALLY, before and independent of the enableCrossOsArchive
+#     branch, so the flag cannot rescue a mismatch.
+# Q2 (VER-04): is cwd === GITHUB_WORKSPACE on both runners? A relative archive
+#     path is only coherent when they agree.
+# Q3 (PARITY-02): with graph freshness CONTROLLED (nx reset on both legs, so both
+#     are cold), do build/typecheck/test hashes actually match cross-OS at HEAD?
+#     Local measurement proved cold is deterministic and reproducible, so this is
+#     the first clean read of the OS axis on its own.
+#
+# Deliberately does NOT start the cache sidecar -- this measures the environment
+# and the hashes, nothing else.
+name: probe-crossos
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Q1 -- zstd and GNU tar availability
+        shell: bash
+        run: |
+          echo "--- platform ---"
+          node -p "[process.platform, process.arch].join('-')"
+          echo "--- zstd ---"
+          if command -v zstd >/dev/null 2>&1; then
+            echo "PRESENT at: $(command -v zstd)"
+            zstd --version || true
+          else
+            echo "ABSENT from PATH"
+          fi
+          echo "--- tar ---"
+          command -v tar && tar --version | head -1 || echo "tar ABSENT"
+          echo "--- Git-for-Windows bundled tar (the usual zstd/GNU tar source) ---"
+          ls -la "/c/Program Files/Git/usr/bin/tar.exe" 2>/dev/null || echo "n/a (not Windows, or absent)"
+          ls -la "/c/Program Files/Git/usr/bin/zstd.exe" 2>/dev/null || echo "n/a (not Windows, or absent)"
+
+      - name: Q2 -- cwd vs GITHUB_WORKSPACE
+        shell: bash
+        run: |
+          echo "cwd              = $(node -p 'process.cwd()')"
+          echo "GITHUB_WORKSPACE = ${GITHUB_WORKSPACE}"
+          node -e "
+            const path = require('node:path');
+            const cwd = process.cwd();
+            const ws  = process.env.GITHUB_WORKSPACE;
+            const same = ws ? path.resolve(ws).toLowerCase() === path.resolve(cwd).toLowerCase() : true;
+            console.log('resolved+case-normalised identity:', same ? 'HOLDS' : 'BROKEN');
+          "
+
+      - run: npm ci
+        shell: bash
+
+      - name: Q3 -- cold task hashes (freshness controlled)
+        shell: bash
+        run: |
+          npx nx reset
+          # Never fail the probe on a task failure -- the hashes are the payload.
+          npx nx run-many -t build typecheck test integration || true
+          echo "--- run.json ---"
+          node -e "
+            const j = require('./.nx/cache/run.json');
+            for (const t of j.tasks.sort((a, b) => a.target.localeCompare(b.target))) {
+              console.log([t.target.padEnd(12), t.hash.padEnd(22), t.cacheStatus].join(' '));
+            }
+          "

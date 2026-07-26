@@ -88,7 +88,11 @@ with a `cancel:` teardown). On a runner or GHES release that predates the
 background-step engine, background the server with a shell `&` instead:
 
 ```yaml
-- run: |
+# shell: bash is REQUIRED, not stylistic. This step uses export, $(...), & and
+# >> "$GITHUB_ENV" -- on a Windows runner the default shell is pwsh, which fails
+# on every one of them. Redundant on ubuntu; harmless there, load-bearing here.
+- shell: bash
+  run: |
     # Pin the port and bearer token BEFORE backgrounding: with PORT unset the
     # server binds a random ephemeral port, and with the token unset it mints a
     # fresh CSPRNG one -- either mismatch makes the Nx client MISS every read.

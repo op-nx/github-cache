@@ -1,10 +1,12 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.0.2
-milestone_name: OS-invariant cross-OS sharing
+milestone_name: framing
+current_phase: 7
 status: planning
-last_updated: "2026-07-26T21:58:22.000Z"
+last_updated: "2026-07-26T22:20:18.746Z"
 last_activity: 2026-07-26
+last_activity_desc: "Completed quick task 260726-pjz: extracted and deduplicated THREAT-MODEL.md into canonical GSD artifacts (content -43% by bytes; C1-C18 ledger byte-identical and retained; verifier human_needed, 0 blockers)"
 progress:
   total_phases: 6
   completed_phases: 0
@@ -227,11 +229,13 @@ third is the load-bearing one for Phase 8):
    not traverse it by default. A first pass returned zero hits for EVERY term, indistinguishable
    from a clean confirmation. Use `-L` or the resolved path, and run a positive control before
    recording any negative result.
+
 2. A coverage gate with one probe term per section produces a FALSE GREEN, and it fired twice in
    one plan-check in OPPOSITE directions -- once because a single term stood in for a twelve-item
    list and three terms matched checklist TICKS rather than restatements, once because the negative
    probes searched the source document's OWN wording, so a claim with six live homes measured as
    homeless. Probe at CLAIM level, one assertion per distinctive claim, never the source's phrasing.
+
 3. `.nx/workspace-data` staleness changes every task hash and never self-heals. Measured at HEAD:
    warm local Windows `build`/`test` equal cold ubuntu CI to the digit, and cold local Windows
    equals cold windows CI to the digit. Every prior cross-OS measurement in this repo, including the
@@ -271,8 +275,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-26 (quick 260726-gok)
-Stopped at: Quick 260726-gok EXECUTED (4/4 tasks + 1 verification-driven follow-up) and VERIFIED `passed` (0 blocking, 4 advisory). Five atomic commits on `gsd/quick-260726-gok-typecheck-inputs-consumer-docs` (forked off `origin/main` at `e56e5d2`): `37f7d63` (nx.json inputs + wiring + guard), `e6430bf` (openssl -> node, 5 sites), `3385cb7` (readiness poll + timeout-minutes), `5f54049` (citation annotation + doc-lag comment), `58c6e82` (the `shell: bash` fix the verification surfaced). 433 -> 438 tests; full 8-command battery green at EVERY commit. **This closes the LAST two open Deferred Items rows** -- that table now has none.
+Last session: 2026-07-26T22:20:18.733Z
+Stopped at: Phase 7 context gathered
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.
@@ -340,7 +344,7 @@ Stopped at: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-r
 Task 3a (413-flush, F14) RESOLVED as a documented HTTP/1.1 limitation (lead-approved option a): a bounded raw-socket investigation proved the ECONNRESET is deterministic for a client streaming a body far over the cap (60/60 on a 100MB repro; <=16KB-over-cap gets a clean 413, >=256KB resets), and the prescribed destroy-on-finish fix does NOT resolve it (and one variant hangs). Landed a ponytail ceiling comment at both destroy sites (cb2832d), no behavior change, no bundle diff, no flaky test. The memory-bounding cap (backend.put never reached, proven by the mid-stream abort test) is intact regardless.
 HELD (deliberately, for the lead): the branch push and the PR-body update. The lead handles the outward-facing push after independently verifying the series. This executor did not push and did not touch the PR body.
 Final local battery at HEAD cb2832d: fmt / build / typecheck / typecheck:action / test (430) / fallow:ci / check:action / pack:check all exit 0.
-Resume file: none. Full task->SHA mapping + deviations + battery table in ./quick/260722-0od-address-pr-3-review-findings/260722-0od-SUMMARY.md.
+Resume file: .planning/phases/07-lint-toolchain-and-the-ambient-platform-read-ban/07-CONTEXT.md
 Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates the PR #3 body. Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.
 
 ## Operator Next Steps

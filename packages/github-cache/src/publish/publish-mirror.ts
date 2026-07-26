@@ -70,8 +70,22 @@ export interface PublishClient {
 
 /** Run counts for the OBS-01 summary (D-17); the bin emits the summary from these. */
 export interface PublishResult {
+  /**
+   * Server-produced hashes enumerated -- one per (key, version) row returned by
+   * listCacheEntries. The denominator the other counts are read against.
+   */
+  readonly scanned: number;
   readonly mirrored: number;
   readonly skipped: number;
+  /**
+   * Restore MISSes: a strict SUBSET of `skipped`, never a sibling of it -- the miss
+   * branch below increments BOTH. Reported separately because it is the one number that
+   * separates "nothing to mirror" from "this leg's Actions-cache read scope regressed",
+   * two states that otherwise look identical on a green run: @actions/cache logs a
+   * restore MISS at core.debug only, so the distinction needed ACTIONS_STEP_DEBUG and a
+   * log dive before this existed.
+   */
+  readonly readMisses: number;
   readonly failed: number;
 }
 
@@ -149,7 +163,8 @@ async function ensureShardRelease(
  *   sustained upload-phase outage) fails the job instead of reporting CI green -- mirroring
  *   cleanupMirror's aggregate check. Only the count is logged, never a token.
  *
- * Returns mirrored/skipped/failed counts; the bin emits the OBS-01 summary from them.
+ * Returns the scanned/mirrored/skipped/readMisses/failed counts; the bin emits the
+ * OBS-01 summary from them.
  */
 export async function publishMirror(
   client: PublishClient,
@@ -171,7 +186,9 @@ export async function publishMirror(
   let skipped = 0;
   let failed = 0;
   // Restore-MISS subset of `skipped` (skipped also counts already-present + cap +
-  // 422-race). Tracked separately to detect an all-restore-MISS run below.
+  // 422-race). Tracked separately to detect an all-restore-MISS run below, and
+  // RETURNED for the OBS-01 summary so the distinction is visible without a log dive
+  // -- it is no longer gate-only state.
   let readMisses = 0;
 
   // The shard release + its asset set, resolved lazily (as ONE sentinel: the two
@@ -280,5 +297,5 @@ export async function publishMirror(
     core.setFailed(`github-cache publish: ${failed} asset mirror(s) failed.`);
   }
 
-  return { mirrored, skipped, failed };
+  return { scanned: hashes.length, mirrored, skipped, readMisses, failed };
 }

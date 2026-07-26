@@ -93,6 +93,37 @@ describe('runPublish sync gate + fail-closed identity (TRUST-02, CREEP C2)', () 
   });
 });
 
+describe('runPublish OBS-01 summary rows (D-17)', () => {
+  it('reports scanned and restore-MISS alongside mirrored/skipped/failed, labelling the miss row as a subset of skipped', async () => {
+    isSyncTrustedMock.mockReturnValue({ trusted: true });
+    process.env.GITHUB_REPOSITORY = 'op-nx/github-cache';
+    resolveGitHubTokenMock.mockReturnValue('token');
+    // Shape echoes the investigated windows leg: 25 distinct hashes, 12 restore MISSes,
+    // 2 mirrored. Self-consistent -- mirrored + skipped + failed === scanned, and the
+    // MISSes are INSIDE skipped, never added to it.
+    publishMirrorMock.mockResolvedValue({
+      scanned: 25,
+      mirrored: 2,
+      skipped: 23,
+      readMisses: 12,
+      failed: 0,
+    });
+
+    await runPublish();
+
+    expect(core.summary.addTable).toHaveBeenCalledOnce();
+    const rows = vi.mocked(core.summary.addTable).mock.calls[0][0];
+
+    // Non-vacuous: the COUNT must reach the table, not just the label -- this fails if a
+    // row is wired to the wrong field. The miss row's label carries the subset relation,
+    // because readMisses is a strict subset of skipped and sibling rows would make every
+    // reader double-count (2 + 23 + 12 != 25).
+    expect(rows).toContainEqual(['scanned', '25']);
+    expect(rows).toContainEqual(['restore-MISS (of skipped)', '12']);
+    expect(core.summary.write).toHaveBeenCalledOnce();
+  });
+});
+
 describe('createPublishClient.listCacheEntries keyless-row filter', () => {
   it('drops rows without a string key so the engine only ever sees concrete keys', async () => {
     const octokit = {

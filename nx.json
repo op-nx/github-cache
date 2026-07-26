@@ -47,6 +47,7 @@
         "{workspaceRoot}/SECURITY.md",
         "{workspaceRoot}/LICENSE",
         "{workspaceRoot}/package.json",
+        "{workspaceRoot}/nx.json",
         "{workspaceRoot}/start-cache-server/action.yml",
         "{workspaceRoot}/start-cache-server/entry.ts",
         "{workspaceRoot}/README.md",
@@ -115,7 +116,7 @@
     },
     "typecheck": {
       "inputs": [
-        "production",
+        "default",
         {
           "dependentTasksOutputFiles": "**/*.{d.ts,d.cts,d.mts}",
           "transitive": true

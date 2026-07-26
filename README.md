@@ -36,7 +36,9 @@ jobs:
           # Mask the token BEFORE writing it to $GITHUB_ENV: the runner redacts it
           # from the moment the ::add-mask:: command is processed, so nothing echoed
           # between here and the sidecar step can leak it into the log.
-          token="$(openssl rand -hex 32)"
+          # node, not openssl: openssl may be absent from a Windows runner's Git
+          # Bash, while node is guaranteed present wherever the sidecar runs.
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
           echo "::add-mask::${token}"
           echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
 

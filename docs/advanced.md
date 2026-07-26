@@ -95,7 +95,10 @@ background-step engine, background the server with a shell `&` instead:
     # Exporting both here means serve() adopts them, so the values written to
     # GITHUB_ENV for the next step match what the server actually listens on.
     export PORT=3000
-    export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN="$(openssl rand -hex 32)"
+    # node, not openssl to mint the token: openssl may be absent from a Windows
+    # runner's Git Bash, while node is guaranteed present wherever the sidecar
+    # runs -- and `npx @op-nx/github-cache` below already requires it.
+    export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
     # Mask the token BEFORE it is written to GITHUB_ENV below, so it is redacted
     # from every later log line, not only from inside the sidecar process.
     echo "::add-mask::${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"

@@ -12,7 +12,10 @@
 #   - uses: actions/checkout@v7
 #   - run: |                                # regular step: $GITHUB_ENV propagates
 #       echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
-#       token="$(openssl rand -hex 32)"     # mask BEFORE writing $GITHUB_ENV
+#       # node, not openssl: openssl may be absent from a Windows runner's Git
+#       # Bash, while node is guaranteed present wherever the sidecar runs.
+#       # Mask BEFORE writing $GITHUB_ENV.
+#       token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
 #       echo "::add-mask::${token}"
 #       echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
 #   - uses: op-nx/github-cache/start-cache-server@v0

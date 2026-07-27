@@ -378,6 +378,40 @@ export default [
             "MemberExpression[computed=false][object.property.name='process'][property.name=/^(platform|arch)$/]",
           message: BAN_MESSAGE,
         },
+        {
+          // P8. The DOTTED environment reads that are OS discriminators. P2 bans
+          // computed indexing of `process` wholesale and its message blesses the
+          // dotted form -- correct for `process.env.CI`, wrong for this handful:
+          // `OS` is `Windows_NT` on Windows, and `OSTYPE`,
+          // `PROCESSOR_ARCHITECTURE`, `RUNNER_OS` and `ComSpec` are all
+          // derivations of an expectation from the RUNNING machine, which is the
+          // exact thing CORR-06 bans. Named rather than left to P2 because this
+          // repo's own notes reach for `env:RUNNER_OS` as an OS discriminator (it
+          // was evaluated and rejected for the `integration` input in favour of
+          // `node -p process.platform`), so it is a shape a contributor on this
+          // milestone is actively primed to write. Measured zero findings on this
+          // tree when added.
+          //
+          // An ALLOWLIST would be the wrong shape here: `process.env` is mostly
+          // legitimate in a spec, so a denylist of the machine-dependent keys is
+          // the narrow instrument and `process.env.CI` stays untouched.
+          //
+          // ponytail: constrained to a literal `process.env` base. Ceiling =
+          // `globalThis.process.env.OS` is out of reach, because `object.object`
+          // is then a MemberExpression with no `.name`. Upgrade path is dropping
+          // the base constraint to `[object.property.name='env']`, NOT taken:
+          // that matches any `<anything>.env.OS`, and unlike P7's implausible
+          // `<anything>.process.platform` surface, a local object named `env` is
+          // an ordinary thing to write.
+          selector:
+            "MemberExpression[computed=false][object.object.name='process'][object.property.name='env'][property.name=/^(OS|OSTYPE|RUNNER_OS|PROCESSOR_ARCHITECTURE|ComSpec)$/]",
+          message:
+            BAN_MESSAGE +
+            ' This applies to the handful of process.env keys that describe the' +
+            ' RUNNING machine (OS, OSTYPE, RUNNER_OS, PROCESSOR_ARCHITECTURE,' +
+            ' ComSpec). Every other process.env read, process.env.CI included,' +
+            ' is untouched.',
+        },
       ],
     },
   },

@@ -402,6 +402,21 @@ const EVASION_SHAPES = [
     expected: ['no-restricted-syntax'],
   },
   {
+    // P2 bans COMPUTED indexing of process and its message blesses the dotted
+    // form, which is right for `process.env.CI` and wrong for the keys that
+    // describe the machine. `process.env.OS` is `Windows_NT` on Windows. This
+    // repo's own notes reach for `env:RUNNER_OS` as an OS discriminator, so it
+    // is a shape a contributor here is primed to write.
+    shape: 'a dotted environment read of an OS discriminator (P8)',
+    source: 'export const value = process.env.OS;\n',
+    expected: ['no-restricted-syntax'],
+  },
+  {
+    shape: 'a dotted environment read of RUNNER_OS (P8)',
+    source: 'export const value = process.env.RUNNER_OS;\n',
+    expected: ['no-restricted-syntax'],
+  },
+  {
     // RESEARCH C1, BLOCKING: `no-restricted-imports` at 9.39.5 has visitors for
     // static import and export declarations ONLY -- it has no ImportExpression
     // visitor and cannot see either of these. P6 is the only thing that closes

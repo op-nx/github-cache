@@ -4,15 +4,15 @@ milestone: v0.0.2
 milestone_name: framing
 current_phase: 7
 current_phase_name: Lint Toolchain and the Ambient-Platform-Read Ban
-status: executing
-last_updated: "2026-07-27T05:34:37.899Z"
+status: verifying
+last_updated: "2026-07-27T06:00:44.371Z"
 last_activity: 2026-07-27
-last_activity_desc: Phase 7 execution started
+last_activity_desc: Phase 7 executed (4/4 plans) -- ready for verification
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 7 (Lint Toolchain and the Ambient-Platform-Read Ban) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-27 — Phase 7 execution started
+Last activity: 2026-07-27 — Phase 7 executed (4/4 plans) — ready for verification
 
 ## Performance Metrics
 
@@ -93,6 +93,7 @@ Last activity: 2026-07-27 — Phase 7 execution started
 | Phase 07 P01 | 40 | 3 tasks | 10 files |
 | Phase 07 P02 | ~25 min | 2 tasks | 6 files |
 | Phase 07 P03 | ~20 min | 2 tasks tasks | 5 files files |
+| Phase 07 P04 | ~55 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -162,6 +163,8 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 07]: 07-02: four described disables at FOUR error positions, and there is no fifth. cache-archive-path.spec.ts:26 is a SITE (it leaves with the import under VER-02 in Phase 9) but NOT an error position -- in strict ESM that binding cannot exist without the import, and the import is the chokepoint -- so a directive there would be UNUSED and reportUnusedDisableDirectives:'error' would fail the build through the phase's own opt-out discipline. ROADMAP SC3's "three CORR-05 violations" is a miscount; REQUIREMENTS, CONTEXT and RESEARCH all say FOUR. Both corrections are comment-locked on CORR_05_SITES, which keys on FILE + EXPRESSION TEXT because inserting the disables shifts every later line in the same commit.
 - [Phase 07]: 07-03: the lint target is INFERRED, not declared, and its existence was PROVEN via nx show project rather than assumed -- @nx/eslint's createNodes short-circuits and returns nothing SILENTLY when no eslint.config.* is found, so an absent target and a broken plugin look identical from outside. targetDefaults.lint REPLACES the inferred input list: it restates default, ^default, the workspace-root config and the custom-rule directory, widens the inferred single-entry { externalDependencies: ['eslint'] } to all four ESLint packages (that single entry IS the LINT-04 hole -- a typescript-eslint bump would not have invalidated the cache), and pins outputs to [] instead of ['{options.outputFile}']. The real inferred list was read from the INSTALLED PLUGIN, not from STACK.md's quote, which is one entry short (C7): the missing tsconfig-chain entry resolves to tsconfig.base.json, already folded into default via sharedGlobals, so the replacement needed no addition -- a checked conclusion, not an inherited one.
 - [Phase 07]: 07-03: build is UNUSABLE as lint's negative control, because lint's inputs start from default so hashing a spec is exactly what lint is SUPPOSED to do -- a build-shaped negative would assert something false about the target. The honest discriminator is a probe path OUTSIDE {projectRoot}. A vacuity mutation (lint.inputs reduced so the self pattern list resolves EMPTY) proved the choice load-bearing: filterUsingGlobPatterns returns the whole probe list on an empty pattern list, so BOTH positive assertions still passed and the negative control was the only glob-resolution assertion that caught it. Separately, this commit rotates EVERY task hash and rotates test twice over ({workspaceRoot}/nx.json is already an explicit test input), so Phase 7's first default-branch push is a LEGITIMATE all-MISS push -- Phase 9's OBS-04 tripwire must be authored as 'two consecutive all-miss pushes with NO version-affecting change in between' (D-36). D-35's hashed-node baseline for Phase 8 CORR-03 is recorded in 07-EVIDENCE.md; options.cwd is the row most likely to diverge across OSes and it IS hashed.
+- [Phase 07]: 07-04: LINT-04 is closed BY DIFFERENTIAL, not by reading the config. Editing a RULE and editing a linted SOURCE each make lint EXECUTE (Cache 0/1) where the unperturbed tree replays (1/1), and the same rule edit makes test EXECUTE too -- the D-25 second-order hole, measured BEFORE any mutation result was trusted. The load-bearing one is negative control 1: A and B BOTH pass on a lint target with no declared input block at all, because @nx/eslint's inferred inputs already contain default and the workspace-root config, so A and B alone prove nothing about D-24. Deleting that one entry and watching a real rule change serve Cache 1/1 hit (100%) is the proof. A methodological trap worth carrying: a differential's perturbed side must be run exactly ONCE -- running it twice caches the perturbed hash, so a later repeat of the same edit reads as a HIT indistinguishable from the defect.
+- [Phase 07]: 07-04: all nine mutations M1-M9 applied, OBSERVED and reverted first-hand; every one matched, and nothing was committed mutated. M1 and M2 produce DISJOINT red sets, which is the measured form of D-15 (neither ban rule is sufficient alone). M3 -- the one flagged most likely to be silently vacuous -- went RED, so P6 and the dynamic-import shape are genuinely covered; but VALIDATION.md's predicted count is off by one, because the shipped spec folds BOTH dynamic shapes into ONE it() row, so the observed result is 1 failing assertion covering two shapes rather than 2. M8 produces the require-description error and M9 produces BOTH the unsuppressed ban error and a severity-2 unused-directive report, which is what makes LINT-05 and LINT-06 LIVE rather than merely configured -- and is why plans 07-01 and 07-02 correctly left those two requirement boxes unticked until now. requirements.mark-complete was skipped and REQUIREMENTS.md hand-edited, since that tool corrupted the same file in both prior waves.
 
 ### Pending Todos
 
@@ -288,8 +291,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-27T05:34:37.882Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-07-27T05:59:04.323Z
+Stopped at: Completed 07-04-PLAN.md -- Phase 7 fully executed (4/4 plans), ready for verification. LINT-04 closed by differential with both negative controls; M1-M9 all applied, observed and reverted; the D-35 Phase 8 baseline and the D-36 Phase 9 all-MISS pre-record are in `07-EVIDENCE.md`; LINT-05 and LINT-06 ticked.
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

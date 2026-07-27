@@ -83,7 +83,7 @@ Full phase detail, success criteria, traceability, and coverage validation archi
 
 ### v0.0.2 OS-invariant cross-OS sharing
 
-- [ ] **Phase 7: Lint Toolchain and the Ambient-Platform-Read Ban** - Adopt ESLint 9 flat config and a `lint` target, then make "unit specs must not read the running machine" a build failure instead of a convention.
+- [x] **Phase 7: Lint Toolchain and the Ambient-Platform-Read Ban** - Adopt ESLint 9 flat config and a `lint` target, then make "unit specs must not read the running machine" a build failure instead of a convention. (completed 2026-07-27)
 - [ ] **Phase 8: Nx Task-Hash Parity** - Root-cause the cross-OS hash divergence node by node, fix it, and keep `integration` the only target that diverges -- enforced by a build-gating CI measurement.
 - [ ] **Phase 9: OS-Invariant Actions-Cache Version** - Make the `@actions/cache` version stop depending on the OS: one hardcoded forward-slash path plus `enableCrossOsArchive` at every call site, closed behaviourally by a Windows runner reading back a Linux-written entry.
 - [ ] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed.
@@ -136,7 +136,7 @@ parity bug of exactly the `@nx/vitest` / `@nx/js/typescript` class Phase 8 exist
 > three files (`release-asset-name.spec.ts` carries two). Use FOUR. There are four error
 > POSITIONS; `cache-archive-path.spec.ts:26` is not one of them.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 
@@ -149,7 +149,7 @@ Plans:
 - [x] 07-03-PLAN.md -- Wire the target: `@nx/eslint` registration, the declared `lint` inputs, the
       input probes with their negative control, the root script and the CI job (wave 3)
 
-- [ ] 07-04-PLAN.md -- Evidence: the LINT-04 differential with both negative controls, mutations
+- [x] 07-04-PLAN.md -- Evidence: the LINT-04 differential with both negative controls, mutations
       M1-M9, and the Phase 8 / Phase 9 hand-off records (wave 4)
 
 ### Phase 8: Nx Task-Hash Parity
@@ -661,7 +661,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 4. Publish + Retention + Observability | v0.0.1 | 6/6 | Complete | 2026-07-20 |
 | 5. Trust-Widening + PPE Gate | v0.0.1 | 4/4 | Complete | 2026-07-20 |
 | 6. Distribution + Docs + Governance | v0.0.1 | 5/5 | Complete | 2026-07-21 |
-| 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 3/4 | In Progress|  |
+| 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 4/4 | Complete   | 2026-07-27 |
 | 8. Nx Task-Hash Parity | v0.0.2 | 0/? | Not started | - |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 0/? | Not started | - |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 0/? | Not started | - |

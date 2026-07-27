@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
 current_phase: 7
+current_phase_name: Lint Toolchain and the Ambient-Platform-Read Ban
 status: executing
-last_updated: "2026-07-26T23:34:31.257Z"
-last_activity: 2026-07-26
-last_activity_desc: "Completed quick task 260726-pjz: extracted and deduplicated THREAT-MODEL.md into canonical GSD artifacts (content -43% by bytes; C1-C18 ledger byte-identical and retained; verifier human_needed, 0 blockers)"
+last_updated: "2026-07-27T04:36:41.685Z"
+last_activity: 2026-07-27
+last_activity_desc: Phase 7 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 5
+  completed_plans: 1
   percent: 0
-current_phase_name: planned
 ---
 
 # Project State
@@ -23,15 +23,15 @@ current_phase_name: planned
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 7 - Lint Toolchain and the Ambient-Platform-Read Ban (v0.0.2, not started)
+**Current focus:** Phase 7 — Lint Toolchain and the Ambient-Platform-Read Ban
 
 ## Current Position
 
-Phase: 7 - Lint Toolchain and the Ambient-Platform-Read Ban
-Plan: none started - 4 plans ready (07-01..07-04)
-Status: Ready to execute - 4 plans (07-01..07-04), plan-check PASSED, 0 blockers
+Phase: 7 (Lint Toolchain and the Ambient-Platform-Read Ban) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-26 - Completed quick task 260726-pjz: extracted and deduplicated THREAT-MODEL.md into canonical GSD artifacts (content -43% by bytes; C1-C18 ledger byte-identical and retained; verifier human_needed, 0 blockers)
+Last activity: 2026-07-27 — Phase 7 execution started
 
 ## Performance Metrics
 
@@ -90,6 +90,7 @@ Last activity: 2026-07-26 - Completed quick task 260726-pjz: extracted and dedup
 | Phase 06 P05 | 11min | 2 tasks | 3 files |
 | Phase 06 P02 | 10min | 2 tasks tasks | 2 files files |
 | Phase 06 P04 | 16 | 3 tasks | 7 files |
+| Phase 07 P01 | 40 | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -150,6 +151,10 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase ?]: [Phase 06]: 06-04 (DOCS-01): README rewritten as the 5-min default CI-RW quickstart (start-cache-server background step + mandatory cancel: teardown); GITHUB_TOKEN passed to the step so selectBackend hands back the writable backend, else every CI write silently MISSes. docs/ nav + pre-1.0 versioning note added.
 - [Phase ?]: [Phase 06]: 06-04 (DOCS-01/DOCS-06): advanced.md documents opt-in Releases reader / publish-sync / cleanup by capability + trust/runtime requirements only, never presenting the internal dogfood action as the consumer surface; the & fallback is scoped to the token-based Releases reader path ONLY (CI-RW requires the JS action because a plain run:/& step lacks ACTIONS_RUNTIME_TOKEN).
 - [Phase ?]: [Phase 06]: 06-04 (DOCS-02/DOCS-04): configuration.md documents all 7 consumer env knobs (matching DOCS-05 EXPECTED_ENV_KNOBS) + the 10 GB LRU and no-anonymous-default-local-read notes + MAX_CACHE_BODY_BYTES as a fixed 2 GiB limit; minimal-ci.yml distinct from the dogfood ci.yml. docs-adoption.spec.ts guard wired repo-root docs into nx.json test inputs (explicit paths); 06-05 docs-trust wiring gap logged to deferred-items.md.
+- [Phase 07]: 07-01 D-12 call: the ESLint recommended sets produce 10 findings on this tree (reproducing RESEARCH G4 file-for-file, with the low-confidence regex class at zero), closed to ZERO residual by TWO configuration blocks -- ZERO rules turned off repo-wide and ZERO code edits. The one scoped rule-off is @typescript-eslint/no-require-imports limited to **/*.cjs for pack-check.cjs (D-13), recorded rather than claimed away; no-undef kept LIVE there via a four-name inline globals map rather than the shorter no-undef:off, so the only file in the repo where that rule applies keeps its typo check.
+- [Phase 07]: 07-01 the global ignores block in eslint.config.mjs is REQUIRED, not hygiene: eslint . walks the filesystem and never consults git, so the gitignored dist/ and out-tsc/ trees WOULD be linted while Nx never hashes them -- lint's result would depend on whether build ran, at an unchanged hash. Measured 64 files linted with the block vs 155 without (mutation M7); invariance across rm -rf dist out-tsc is G5 negative control 2. The .cjs override must sit AFTER the typescript-eslint spread, because typescript-eslint/base has no files key and sets sourceType:module for every file -- an override placed before it is itself overridden and silently does nothing.
+- [Phase 07]: 07-01 the TDD RED caught a vacuity bug in the guard's OWN non-vacuity control (the gok lesson recurring): filtering on severity===1 && ruleId===null also matches a LINT-06 unused-directive report at v9's default warn severity, so the control misread a correctly-linted file as never-linted. It passed in GREEN only because 'error' moves those reports to severity 2 -- its correctness depended on the very setting it was meant to be independent of. Fixed with a position check (an ignore/unconfigured result describes the whole file and carries no line; every rule and directive report carries one), plus a self-test asserting the control still detects a genuinely ignored path.
+- [Phase 07]: 07-01 Q10's contingency FIRED -- the D-05 linux/arm64 node:24 container lockfile regen re-resolved undici 6.27.0 to 6.28.0 through @actions/*'s ranged transitive deps, drifting start-cache-server/index.js by 88 lines; rebuilt and staged in the SAME commit per SC9, never as a follow-up. Q2 resolved favourably: fallow auto-credits eslint.config.mjs and its three imports, so the contingency entry line was NOT needed and the only .fallowrc.jsonc change is the @nx/eslint ignoreDependencies line. Container invocation needs MSYS_NO_PATHCONV=1 on this host or Git Bash rewrites -w /app into a Windows path.
 
 ### Pending Todos
 
@@ -276,7 +281,7 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-26T22:20:18.733Z
+Last session: 2026-07-27T04:35:24.671Z
 Stopped at: Phase 7 context gathered
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.

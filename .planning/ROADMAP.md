@@ -136,11 +136,11 @@ parity bug of exactly the `@nx/vitest` / `@nx/js/typescript` class Phase 8 exist
 > three files (`release-asset-name.spec.ts` carries two). Use FOUR. There are four error
 > POSITIONS; `cache-archive-path.spec.ts:26` is not one of them.
 
-**Plans**: 0/4 plans executed
+**Plans**: 1/4 plans executed
 
 Plans:
 
-- [ ] 07-01-PLAN.md -- Adopt the toolchain: five exact-pinned devDeps, the root flat config, the
+- [x] 07-01-PLAN.md -- Adopt the toolchain: five exact-pinned devDeps, the root flat config, the
       D-12 baseline, the ESLint Node-API guard harness, and the `test.inputs` wiring (wave 1)
 
 - [ ] 07-02-PLAN.md -- The ban itself: RED before GREEN over the evasion shapes and the four extant
@@ -661,7 +661,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 4. Publish + Retention + Observability | v0.0.1 | 6/6 | Complete | 2026-07-20 |
 | 5. Trust-Widening + PPE Gate | v0.0.1 | 4/4 | Complete | 2026-07-20 |
 | 6. Distribution + Docs + Governance | v0.0.1 | 5/5 | Complete | 2026-07-21 |
-| 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 0/4 | Planned    |  |
+| 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 1/4 | In Progress|  |
 | 8. Nx Task-Hash Parity | v0.0.2 | 0/? | Not started | - |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 0/? | Not started | - |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 0/? | Not started | - |

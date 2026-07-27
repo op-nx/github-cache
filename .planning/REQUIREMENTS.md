@@ -182,7 +182,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   than building a new mechanism; note its own caveat that reading `nx.json` from a spec is safe only
   because `{workspaceRoot}/nx.json` is a `test` input, and only `test` declares it.
 
-- [ ] **LINT-05**: An intentional violation opts out ONLY via an inline disable annotation
+- [x] **LINT-05**: An intentional violation opts out ONLY via an inline disable annotation
   carrying a DESCRIPTION that names the reason -- `// eslint-disable-next-line <rule> -- <reason>`.
   A bare disable is itself a lint error, enforced by a require-description rule
   (`@eslint-community/eslint-plugin-eslint-comments`'s `eslint-comments/require-description` or
@@ -190,7 +190,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   suppressions: `@typescript-eslint/ban-ts-comment` is configured `allow-with-description`, so a
   bare `@ts-expect-error`/`@ts-ignore` is also an error.
 
-- [ ] **LINT-06**: `linterOptions.reportUnusedDisableDirectives` is `error`. A disable left behind
+- [x] **LINT-06**: `linterOptions.reportUnusedDisableDirectives` is `error`. A disable left behind
   after its violation is removed must FAIL, not linger -- a stale annotation silently pre-authorises
   a future violation on that line, which is the same silent-widening failure class as a dead
   allowlist entry. For a unit spec specifically, the reason text must say why the assertion cannot
@@ -613,8 +613,8 @@ honour table: `.planning/ROADMAP.md`.
 | LINT-02 | Phase 7 | Complete |
 | LINT-03 | Phase 7 | Complete |
 | LINT-04 | Phase 7 | Complete |
-| LINT-05 | Phase 7 | Pending |
-| LINT-06 | Phase 7 | Pending |
+| LINT-05 | Phase 7 | Complete |
+| LINT-06 | Phase 7 | Complete |
 | CORR-06 | Phase 7 | Complete |
 | PARITY-01 | Phase 8 | Pending (must control BOTH the OS and freshness axes) |
 | PARITY-02 | Phase 8 | Pending (per-node `details` instrument) |

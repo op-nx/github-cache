@@ -363,6 +363,29 @@ const EVASION_SHAPES = [
     expected: ['no-restricted-imports', 'no-restricted-syntax'],
   },
   {
+    // ONE TOKEN from the row above, and before `'default'` was added to the
+    // accessor lists it reported NOTHING -- neither rule saw it. The imports
+    // rule maps a default specifier to the synthetic name `'default'`, which
+    // was not in either list, and P4/P5 only reach bindings literally named
+    // os/nodeOs/path/nodePath. Caught by the IMPORTS rule alone, deliberately:
+    // the point of listing `'default'` is that the ban no longer depends on
+    // guessing what the contributor called the binding.
+    shape:
+      'a DEFAULT import of the os module under a non-conventional binding name',
+    source: "import osx from 'node:os';\nexport const dir = osx.tmpdir();\n",
+    expected: ['no-restricted-imports'],
+  },
+  {
+    // The path half of the same hole, and the BARE specifier half of it too --
+    // `paths` is an exact string lookup, so `os`/`path` are independent keys
+    // from `node:os`/`node:path` and a fix applied to only one pair would leave
+    // the other open.
+    shape:
+      'a DEFAULT import of the bare path module under a non-conventional binding name',
+    source: "import p from 'path';\nexport const s = p.sep;\n",
+    expected: ['no-restricted-imports'],
+  },
+  {
     shape: 'computed access to the process object through a runtime key (P2)',
     source: "const key = 'platform';\nexport const value = process[key];\n",
     expected: ['no-restricted-syntax'],
@@ -429,6 +452,16 @@ const FALSE_POSITIVE_CONTROLS = [
     shape: 'a dynamic import of a LOCAL module, which P6 must not reach',
     source:
       "export async function load() {\n  return await import('./local.js');\n}\n",
+  },
+  {
+    // The other side of `'default'`'s blast radius. `paths` is keyed on the
+    // module SOURCE, so listing `'default'` bans the default export of node:os
+    // and node:path and nothing else -- it is not a blanket "no default
+    // imports" rule. This row is what would go red if someone widened it into
+    // one, which would flag most of the ecosystem.
+    shape:
+      'a default import of a LOCAL module, which the os/path ban must not reach',
+    source: "import local from './local.js';\nexport const value = local;\n",
   },
 ] as const;
 

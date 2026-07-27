@@ -60,7 +60,18 @@ const BAN_MESSAGE =
 
 // The accessor lists are declared once and shared by the prefixed and bare
 // specifier entries, so the two halves of each pair cannot drift apart.
+//
+// `'default'` is FIRST and is not an accessor at all -- it is the synthetic name
+// `no-restricted-imports` gives an `ImportDefaultSpecifier`, the same way it gives
+// an `ImportNamespaceSpecifier` the synthetic `'*'`. Without it `import osx from
+// 'node:os'; osx.tmpdir()` reported NOTHING (measured): the imports rule saw only
+// `default`, which was not in either list, and P4/P5 below only reach the four
+// hardcoded binding names. Both modules have working CJS default exports under
+// `nodenext` + `esModuleInterop`, so that is an idiomatic reachable shape one token
+// away from `import * as os`, which the ban DID catch. Listing it here bans the
+// whole machine-dependent surface at the import, regardless of the local name.
 const BANNED_OS_ACCESSORS = [
+  'default',
   'tmpdir',
   'EOL',
   'platform',
@@ -69,7 +80,7 @@ const BANNED_OS_ACCESSORS = [
   'type',
   'release',
 ];
-const BANNED_PATH_ACCESSORS = ['sep', 'delimiter', 'win32', 'posix'];
+const BANNED_PATH_ACCESSORS = ['default', 'sep', 'delimiter', 'win32', 'posix'];
 
 export default [
   // GLOBAL ignores. A standalone `ignores` with no other key removes these paths
@@ -277,15 +288,27 @@ export default [
       // selector family below is proven individually load-bearing by plan 07-04's
       // M1/M2/M3 mutations.
       //
-      // ponytail: P4/P5 hardcode the conventional namespace binding names
-      // (os/nodeOs, path/nodePath). Ceiling = a namespace bound to any other name
-      // is invisible to THESE selectors -- and is still an error, because
-      // no-restricted-imports reports the namespace import itself regardless of the
-      // local name, and the dynamic form is closed by P6. Upgrade path if that ever
-      // stops holding: drop the object.name constraint and add an allowlist of
-      // legitimate objects instead. Do NOT drop it without one -- measured, the
-      // unconstrained form false-positives on the canonical allowed shape and on a
-      // plain `config.platform` read.
+      // ponytail: P4/P5 hardcode the conventional binding names (os/nodeOs,
+      // path/nodePath). Ceiling = a module object bound to any OTHER name is
+      // invisible to THESE selectors. It is still an error, but read the reason
+      // carefully, because the obvious phrasing of it is wrong: local-name
+      // independence is a property of `no-restricted-imports`'s SPECIFIER
+      // handling, not of the module. It maps an `ImportNamespaceSpecifier` to the
+      // synthetic name `'*'` and an `ImportDefaultSpecifier` to `'default'`, and
+      // reports either whenever that synthetic name is in the entry's
+      // `importNames`. `'*'` is covered because a namespace necessarily carries
+      // the restricted names in with it; `'default'` is covered only because it
+      // is listed explicitly at the top of both accessor lists above. This
+      // comment previously claimed the imports rule reports "regardless of the
+      // local name" full stop -- true for `import * as X`, FALSE for `import X`,
+      // which measured as reporting nothing at all before `'default'` was added.
+      // The dynamic form is closed by P6.
+      //
+      // Upgrade path if the name constraint ever stops holding: drop the
+      // object.name constraint and add an allowlist of legitimate objects
+      // instead. Do NOT drop it without one -- measured, the unconstrained form
+      // false-positives on the canonical allowed shape and on a plain
+      // `config.platform` read.
       //
       // ponytail: every selector here is syntactic. Ceiling = a platform read
       // hidden behind a helper in ANOTHER module is out of reach, for these and for

@@ -89,7 +89,7 @@ assertion cannot move to integration and naming its removal owner.
 |---|---|---|
 | 1 | `1454404` | the two rules, the RED proof, the four disables |
 | 2 | `5adde9b` | the D-19 drift guard and the D-08 lock |
-| post-merge fix | `b9997d1` | hoist the toolchain boot out of the per-test budget |
+| post-merge fix | `e683c92` | hoist the toolchain boot out of the per-test budget |
 
 Task 1 is necessarily one commit. D-31 requires the disables alongside the rules, and
 independently any commit where the rules are enforced and the disables are absent is RED --
@@ -154,7 +154,7 @@ disables are USED -- an unused one is an error under `reportUnusedDisableDirecti
 
 The post-merge gate caught `lint-scope-drift.spec.ts` intermittently failing under
 `nx run-many -t typecheck,test --skip-nx-cache` (exit 0, 1, 0 across three runs; Nx's own
-flaky-task detector fired on one hash with two outcomes). Fixed in `b9997d1`.
+flaky-task detector fired on one hash with two outcomes). Fixed in `e683c92`.
 
 **Root cause, measured rather than reasoned.** The module-level `import()` of
 `eslint.config.mjs` pulls in the whole ESLint toolchain -- `@eslint/js`, typescript-eslint's

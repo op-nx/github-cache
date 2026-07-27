@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
@@ -272,11 +272,24 @@ describe('the workspace root has no src/ or lib/ directory (D-08)', () => {
   // changing `hash_project_config` and rotating every task hash in the middle of
   // the Phase 8 cross-OS parity investigation. A comment in a file nobody opens
   // while creating a root directory is not a lock; this is.
+  // `statSync(..., { throwIfNoEntry: false })?.isDirectory()`, not `existsSync`.
+  // `getProjectUsingESLintConfig` flips on a `src`/`lib` DIRECTORY, and
+  // `existsSync` is also true for a plain FILE named `src` or `lib` at the root
+  // -- which would fail this lock for a reason the lock does not care about, and
+  // send whoever hits it looking for a hash rotation that is not happening. The
+  // `?.` is what handles the absent case: `throwIfNoEntry: false` returns
+  // undefined rather than throwing, so `undefined?.isDirectory()` is undefined
+  // and the explicit `=== true` narrows all three states to the one boolean this
+  // assertion is about.
   it.each(['src', 'lib'])(
     'has no %s/ directory at the workspace root',
     (directory) => {
+      const entry = statSync(new URL(directory, WORKSPACE_ROOT_URL), {
+        throwIfNoEntry: false,
+      });
+
       expect(
-        existsSync(new URL(directory, WORKSPACE_ROOT_URL)),
+        entry?.isDirectory() === true,
         `a root ${directory}/ directory would add a second inferred lint target and rotate every Nx task hash (D-08)`,
       ).toBe(false);
     },

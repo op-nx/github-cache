@@ -48,6 +48,7 @@
         "{workspaceRoot}/LICENSE",
         "{workspaceRoot}/package.json",
         "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/eslint.config.mjs",
         "{workspaceRoot}/start-cache-server/action.yml",
         "{workspaceRoot}/start-cache-server/entry.ts",
         "{workspaceRoot}/README.md",
@@ -65,7 +66,15 @@
           "json": "{workspaceRoot}/tsconfig.json",
           "fields": ["compilerOptions"]
         },
-        { "externalDependencies": ["vitest"] },
+        {
+          "externalDependencies": [
+            "vitest",
+            "eslint",
+            "@eslint/js",
+            "typescript-eslint",
+            "@eslint-community/eslint-plugin-eslint-comments"
+          ]
+        },
         { "dependentTasksOutputFiles": "**/*.js", "transitive": true }
       ]
     },

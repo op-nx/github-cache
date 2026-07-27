@@ -60,6 +60,7 @@
   // string match (not glob); exempts each from BOTH unused-dependency and
   // unlisted-dependency detection. Removing any of these breaks the build.
   "ignoreDependencies": [
+    "@nx/eslint", // Nx plugin that INFERS the `lint` target via nx.json (D-01)
     "@nx/vitest", // Nx plugin that INFERS the `test` target via nx.json
     "@swc-node/register", // SWC transpile hook for the test runner
     "@swc/helpers", // SWC runtime helpers

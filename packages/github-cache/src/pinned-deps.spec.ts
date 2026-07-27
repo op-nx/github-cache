@@ -84,4 +84,51 @@ describe('pinned build tooling (ROBUST-03)', () => {
 
     expect(specifier).toMatch(EXACT_SEMVER);
   });
+
+  // The five ESLint packages (D-02) join the ROBUST-03 class, and the precedent is
+  // genuinely ambiguous enough that the REASONING has to be recorded, not just the
+  // outcome. `lint` is a build GATE: a silent minor bump can change which findings a
+  // recommended set produces, so a range operator could turn the ambient-platform ban
+  // (LINT-02/CORR-06) from enforced into merely configured with no diff to review --
+  // the same argument that put esbuild in this list. prettier is deliberately OUT of
+  // the class: it is formatting-only, `nx format:check` asserts an outcome rather than
+  // a rule set, and a bump there cannot silence a gate. All five were verdict OK in the
+  // 07-RESEARCH Package Legitimacy Audit (official eslint / typescript-eslint /
+  // eslint-community / nrwl orgs) and re-confirmed at install time to carry no install
+  // script. Each name is listed EXPLICITLY rather than looped over
+  // Object.keys(devDependencies): this guard is a hard-coded NAME list, because the
+  // workspace deliberately carries ranges for typescript, vitest, prettier and
+  // @types/node (D-04). This spec fails the build the moment any of the five widens.
+  it('eslint is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier = workspaceManifest.devDependencies?.['eslint'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('@eslint/js is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier = workspaceManifest.devDependencies?.['@eslint/js'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('typescript-eslint is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier = workspaceManifest.devDependencies?.['typescript-eslint'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('@eslint-community/eslint-plugin-eslint-comments is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier =
+      workspaceManifest.devDependencies?.[
+        '@eslint-community/eslint-plugin-eslint-comments'
+      ];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('@nx/eslint is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier = workspaceManifest.devDependencies?.['@nx/eslint'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
 });

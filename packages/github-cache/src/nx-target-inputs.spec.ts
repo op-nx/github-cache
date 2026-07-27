@@ -122,4 +122,21 @@ describe('the guard cannot replay a stale pass', () => {
       '{workspaceRoot}/nx.json',
     );
   });
+
+  // This one DOES pin a literal too, and for the same reason: the wiring IS the
+  // invariant and there is no resolver to delegate to for a `{workspaceRoot}`
+  // entry. The second-order hole it closes (D-25) is the one most likely to be
+  // missed. `lint-rules.spec.ts` instantiates ESLint against the real root config
+  // and asserts what the opt-out rules DO, so it is a `test`-target spec whose
+  // result depends on a file outside its own project. Without this input, editing
+  // a rule replays a cached `test` PASS -- and since editing rules is exactly the
+  // activity the LINT-03 proof consists of, the false PASS would surface DURING
+  // that proof and read as "the rule does not fire". This repo has shipped that
+  // defect twice already (governance-email.spec.ts, and `typecheck`'s
+  // spec-excluding inputs); this assertion is what stops a third.
+  it('eslint.config.mjs is a test input, so editing a rule re-runs the lint guard', () => {
+    expect(nxJson.targetDefaults.test.inputs).toContain(
+      '{workspaceRoot}/eslint.config.mjs',
+    );
+  });
 });

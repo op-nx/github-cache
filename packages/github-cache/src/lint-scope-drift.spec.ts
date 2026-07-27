@@ -186,23 +186,38 @@ describe('the ESLint ban scope cannot drift from the vitest partition (LINT-02, 
   it('covers every extension the integration vitest config includes', () => {
     const banConfig = banConfigObject();
     const banned = extensionsOf(banConfig.files?.[0] ?? '', 'ESLint files');
-    const includeMatch = /include:\s*\[\s*'([^']+)'/.exec(
-      integrationConfigCode,
+    // The WHOLE array, never just its first element. `include` IS an array, and
+    // the previous `\[\s*'([^']+)'` capture read element zero and stopped. A
+    // second entry -- `include: ['{src,tests}/**/*.integration.spec.{ts,mts,cts}',
+    // 'e2e/**/*.integration.spec.tsx']` -- would have been invisible here, so
+    // "no integration spec can ever be linted as a unit spec" would have been
+    // asserted against a SUBSET of the integration suite while reading as fully
+    // checked. That is the same class of partial read this file's own header
+    // warns about, one level down.
+    const arrayMatch = /include:\s*\[([^\]]*)\]/.exec(integrationConfigCode);
+    const globs = [...(arrayMatch?.[1] ?? '').matchAll(/'([^']+)'/g)].map(
+      (match) => match[1],
     );
 
     expect(
-      includeMatch,
-      'could not read the include glob out of vitest.integration.config.mts',
-    ).not.toBeNull();
+      globs.length,
+      'could not read the include globs out of vitest.integration.config.mts',
+    ).toBeGreaterThan(0);
 
-    const integration = extensionsOf(
-      includeMatch?.[1] ?? '',
-      'vitest integration include',
-    );
+    // Union across every glob. `extensionsOf` still asserts that EACH one ends
+    // in a brace group, so a second entry written in some other shape fails
+    // loudly here rather than contributing an empty set to the union.
+    const integration = [
+      ...new Set(
+        globs.flatMap((glob) =>
+          extensionsOf(glob, 'vitest integration include'),
+        ),
+      ),
+    ];
 
     expect(
       integration.length,
-      'the integration include glob yielded no extensions',
+      'the integration include globs yielded no extensions',
     ).toBeGreaterThan(0);
 
     // SUPERSET, never equality. The per-item message is what makes a failure

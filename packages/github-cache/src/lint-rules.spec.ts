@@ -26,10 +26,18 @@ import { beforeAll, describe, expect, it } from 'vitest';
  *
  * The guard's honest limitation: `lintText` proves the rule fires for a SYNTHETIC
  * path, not that the `lint` TARGET is wired to run over the real tree. Nothing
- * here would notice if `nx.json` never registered the plugin. That half is closed
- * separately -- by plan 07-03's target wiring and by the battery command itself --
- * and the split is deliberate, because this file must stay green in a commit where
- * no `lint` target exists yet.
+ * here would notice if `nx.json` never registered the plugin, and the split is
+ * deliberate -- this file must stay green in a commit where no `lint` target
+ * exists yet.
+ *
+ * That other half is NOT closed by "the battery command itself", which is what
+ * this comment used to claim. `npm run lint` is `nx run-many -t lint`, and
+ * run-many with no matching target ANYWHERE prints "NX No tasks were run" and
+ * EXITS 0 -- the battery command is precisely the thing that cannot see a
+ * missing target. It is closed instead by the two assertions that can:
+ * `nx-target-inputs.spec.ts` pins the `@nx/eslint/plugin` registration the
+ * target is inferred from, and ci.yml's lint job requires the run to PRINT
+ * "Successfully ran target lint" rather than merely exiting 0.
  *
  * LINT-02 (the ambient-platform ban) and LINT-03 (its RED-before-GREEN proof over
  * the evasion shapes and the four extant CORR-05 sites) are the second half,

@@ -43,7 +43,33 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      - run: npm run lint
+      # Exit 0 is NOT sufficient here, and that is the whole reason this is a
+      # scripted step rather than `- run: npm run lint`. `npm run lint` is
+      # `nx run-many -t lint`, and run-many with no matching target ANYWHERE
+      # prints "NX No tasks were run" and exits 0 (measured). The `lint` target
+      # is INFERRED by @nx/eslint/plugin (D-01) rather than declared, and D-35
+      # leaves "does @nx/eslint infer lint identically on both OSes?" UNVERIFIED
+      # BY DESIGN -- so "the target exists on this runner" is a live accepted
+      # risk, and a bare exit-code check converts it into a GREEN leg instead of
+      # a red one. Demanding the success LINE is RESEARCH's named discriminator
+      # for LINT-01: it prints only when a task actually ran.
+      #
+      # NO_COLOR is load-bearing, not tidiness. With colour on, Nx bolds the
+      # target name mid-phrase -- "ran target <esc>[1mlint<esc>[22m for project"
+      # -- so the plain-text match never fires and the check fails on every run
+      # including the good ones. A gate that always fails gets deleted just as
+      # fast as one that never fires.
+      #
+      # The other half of CR-01 (nx.json silently losing the plugins[] entry) is
+      # guarded locally by nx-target-inputs.spec.ts; this leg is what catches the
+      # target failing to materialise on a RUNNER rather than in the config.
+      - name: Lint, and prove the lint target actually ran
+        env:
+          NO_COLOR: '1'
+        run: |
+          set -euo pipefail
+          npm run lint 2>&1 | tee lint.log
+          grep -q 'Successfully ran target lint' lint.log
 
   # `fallow dead-code --fail-on-issues` gates the whole repo against dead code
   # (unused files/exports/deps + reachability). It is config-declared-clean via

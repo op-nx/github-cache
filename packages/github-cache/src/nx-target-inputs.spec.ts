@@ -44,12 +44,28 @@ import { describe, expect, it } from 'vitest';
  */
 type TargetInputs = NonNullable<NxJsonConfiguration['namedInputs']>[string];
 
+/** An object-form entry of nx.json's `plugins` array. The array also admits a
+ * bare string (a plugin with no options), which is why the lookup below has to
+ * narrow before reading `.plugin`. */
+interface NxPluginRegistration {
+  readonly plugin: string;
+  readonly options?: { readonly targetName?: string };
+}
+
 const nxJson = JSON.parse(
   readFileSync(new URL('../../../nx.json', import.meta.url), 'utf8'),
 ) as {
   namedInputs: Record<string, TargetInputs>;
+  plugins: readonly (string | NxPluginRegistration)[];
   targetDefaults: Record<string, { inputs: TargetInputs; outputs?: string[] }>;
 };
+
+function registrationFor(pluginName: string): NxPluginRegistration | undefined {
+  return nxJson.plugins.find(
+    (entry): entry is NxPluginRegistration =>
+      typeof entry === 'object' && entry.plugin === pluginName,
+  );
+}
 
 const PROJECT_ROOT = 'packages/github-cache';
 
@@ -114,6 +130,46 @@ describe('typecheck hashes everything its command compiles', () => {
   it('does NOT hash the spec sources for build, proving the filter filters', () => {
     expect(hashedFilesFor('build')).not.toContain(
       `${PROJECT_ROOT}/src/index.spec.ts`,
+    );
+  });
+});
+
+describe('the lint target EXISTS, not merely has defaults (LINT-01)', () => {
+  // Everything else in this file asserts what `lint` does ONCE THERE IS ONE.
+  // `targetDefaults.lint` is a default APPLIED to a target if one exists; it is
+  // not evidence that one does. Nothing else in the repo closes that gap
+  // either: `lint-scope-drift.spec.ts` imports `eslint.config.mjs`, so deleting
+  // the FILE is caught, but deleting the four-line `plugins[]` entry is not --
+  // the config still imports and that spec stays green.
+  //
+  // And the gate cannot see it. `npm run lint` is `nx run-many -t lint`, which
+  // with no matching target ANYWHERE prints "NX No tasks were run" and EXITS 0
+  // (measured). So a one-line deletion silently converts the whole lint leg
+  // into a no-op that reports success -- for a phase whose thesis is "convert a
+  // convention into a build failure that cannot be silenced without writing
+  // down why", the exact defect class it exists to close.
+  //
+  // The target is INFERRED (D-01), so this registration is the only thing in
+  // the tree that creates it, and pinning it is what makes the deletion RED.
+  // The complementary half -- the plugin is registered, the config is present,
+  // and the plugin STILL infers nothing on this runner, which is D-35's
+  // deliberately UNVERIFIED cross-OS risk -- cannot be settled by reading
+  // nx.json. That half is closed in ci.yml, whose lint job requires the run to
+  // PRINT "Successfully ran target lint" instead of merely exiting 0.
+  it('registers @nx/eslint/plugin, which is what infers the target', () => {
+    expect(
+      registrationFor('@nx/eslint/plugin'),
+      'nx.json no longer registers @nx/eslint/plugin, so NO lint target is inferred -- and `nx run-many -t lint` exits 0 with "No tasks were run", so every other guard here and the CI leg would stay GREEN having linted nothing',
+    ).toBeDefined();
+  });
+
+  // The target NAME is load-bearing separately from the registration: every
+  // caller -- the root `lint` script, the CI job, `targetDefaults.lint` -- is
+  // keyed on the literal string `lint`. Renaming it via `options.targetName`
+  // leaves the plugin registered and still empties `run-many -t lint`.
+  it('names the inferred target `lint`, which is what every caller is keyed on', () => {
+    expect(registrationFor('@nx/eslint/plugin')?.options?.targetName).toBe(
+      'lint',
     );
   });
 });

@@ -7,6 +7,7 @@
     "typecheck": "nx run-many -t typecheck",
     "test": "nx run-many -t test",
     "integration": "nx run-many -t integration",
+    "lint": "nx run-many -t lint",
     "format": "nx format:write",
     "format:check": "nx format:check",
     "fallow": "fallow dead-code",

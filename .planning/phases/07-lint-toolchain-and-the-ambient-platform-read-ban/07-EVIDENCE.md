@@ -600,3 +600,52 @@ M6's second half -- the stale-cache HIT differential -- is plan 07-04's, and is 
 here.
 
 `nx.json` restored byte-identical after each mutation, re-verified at 14 passed of 14.
+
+### The battery is NINE commands from this plan's second commit
+
+`npm run lint` was added as `nx run-many -t lint` and joins the battery between `test` and
+`fallow:ci`. First run, cold by construction (the plugin registration rotated every hash):
+
+```
+Successfully ran target lint for project @op-nx/github-cache
+Run duration: 1.7s
+Cache: 0/1 hit (0%)
+```
+
+1.7 s is the number behind D-33's "lint runs in seconds, a fifth cache producer buys nothing".
+
+| Commit | Battery | Result |
+|---|---|---|
+| `b3fdf6d` (plugin + inputs + probes) | EIGHT: `format:check`, `build`, `typecheck`, `typecheck:action`, `test`, `fallow:ci`, `check:action`, `pack:check` | all exit 0 |
+| this plan's second commit (script + CI job) | **NINE** -- the above plus `lint` | all exit 0 |
+
+Unit suite at both commits: **494 tests across 33 files**. The delta is +8, all of them this
+plan's, and all in `nx-target-inputs.spec.ts` (6 assertions -> 14).
+
+### The CI job, verified structurally rather than by eye
+
+`.github/workflows/ci.yml` parsed with the `yaml` package after the edit:
+
+```
+jobs: format-check, lint, fallow, action-bundle-drift, pack-check, ppe, build, typecheck,
+      test, integration, dogfood-seed, dogfood-verify, consumer-smoke, publish, publish-verify
+
+lint steps: [{"uses":"actions/checkout@v7"},
+             {"uses":"actions/setup-node@v6","with":{"node-version-file":".node-version","cache":"npm"}},
+             {"run":"npm ci"},
+             {"run":"npm run lint"}]
+```
+
+Exactly the four steps of the `fallow` boilerplate: no background sidecar, no `cancel:`, no
+build step. `git grep 'needs:' -- .github/workflows/ci.yml` returns no job depending on `lint`,
+and no spec asserts on `ci.yml` -- it is not an Nx input yet, and PARITY-06 registers it in
+Phase 9.
+
+### Verification items from the plan, all checked at the final commit
+
+| Check | Result |
+|---|---|
+| `nx show project` lists exactly ONE new target, `lint` | yes |
+| `packages/github-cache/project.json` untouched (D-01/D-02) | `git diff --exit-code` clean |
+| `packages/github-cache/package.json` untouched (D-06) | `git diff --exit-code` clean |
+| `integration` is still the only target with a platform input (CORR-04) | asserted in the guard, passing |

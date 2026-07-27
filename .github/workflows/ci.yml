@@ -23,6 +23,28 @@ jobs:
       # default git-diff base, so diff-based format:check always fails here.
       - run: npx nx format:check --all
 
+  # `nx run-many -t lint` gates every project against the root flat ESLint
+  # config -- the two recommended sets plus the ambient-platform-read ban that
+  # keeps unit specs from branching on process.platform, which is what makes a
+  # unit spec's result the same on both runners (LINT-01, LINT-02, CORR-06).
+  # Kept a distinct named job like format-check and fallow so a lint regression
+  # surfaces as a red `lint` leg instead of inside the build/test battery, and
+  # so it still runs when an earlier gate fails. No background sidecar block: it
+  # runs in seconds, and a fifth cache producer would add a fifth mirrored hash
+  # family to the cross-OS investigation this milestone exists for (D-33). No
+  # build step either -- lint has no dependsOn, and the config's global ignores
+  # block exists precisely so lint output does not depend on whether build ran.
+  lint:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+
   # `fallow dead-code --fail-on-issues` gates the whole repo against dead code
   # (unused files/exports/deps + reachability). It is config-declared-clean via
   # .fallowrc.jsonc and base-independent, so it works identically on push and on

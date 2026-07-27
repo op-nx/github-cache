@@ -240,10 +240,19 @@ describe('lint declares its full input set (LINT-04)', () => {
   // to protect silently stops working.
   it('integration is still the only target with a platform runtime input', () => {
     const targetsWithRuntimeInput = Object.entries(nxJson.targetDefaults)
-      .filter(([, target]) =>
-        target.inputs.some(
-          (input) => typeof input === 'object' && 'runtime' in input,
-        ),
+      .filter(
+        ([, target]) =>
+          // `?.` even though the type declares `inputs` required. nx.json is
+          // parsed from disk with a CAST, so that type is an ASSERTION about
+          // the file, not a check of it. A future targetDefaults entry carrying
+          // only `cache: true` would otherwise turn this guard into
+          // `TypeError: Cannot read properties of undefined (reading 'some')`
+          // -- a crash where a comprehensible assertion failure belongs, and in
+          // the one guard whose job is to notice a new target quietly acquiring
+          // a platform discriminator (CORR-04).
+          target.inputs?.some(
+            (input) => typeof input === 'object' && 'runtime' in input,
+          ) ?? false,
       )
       .map(([name]) => name);
 

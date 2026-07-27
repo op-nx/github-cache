@@ -21,11 +21,18 @@ import { beforeAll, describe, expect, it } from 'vitest';
  * same reason the originals do. So this reads the REAL config values -- the
  * ESLint side by importing the config module, the vitest side off disk.
  *
- * The disk-read side strips comment lines FIRST, and the reason is not cosmetic:
- * `vitest.integration.config.mts`'s own prose quotes the include pattern while
- * explaining it, so a naive substring match would pass even if the REAL
- * `include` value had drifted. Same discipline, same reason, as
- * `cleanup-workflow.spec.ts:16-20` and `ppe-action.spec.ts:20-25`.
+ * The disk-read side strips comment lines FIRST. That is inherited defensive
+ * practice from `cleanup-workflow.spec.ts:16-20` and `ppe-action.spec.ts:20-25`,
+ * where the trap is live: a config whose own prose quotes the value being
+ * asserted makes a naive match pass even after the REAL value has drifted.
+ *
+ * It is NOT live in `vitest.integration.config.mts` today, which is what an
+ * earlier version of this comment claimed. That file's prose says "It includes
+ * ONLY *.integration.spec.ts" and never writes an `include: ['...']` form, so
+ * there is currently nothing for the stripper to catch. Kept anyway -- the cost
+ * is one line and the next comment someone writes there could reintroduce the
+ * trap -- but stated as prophylaxis rather than as a defence against a hazard
+ * that is not there, so a reader does not go looking for it.
  *
  * "Agree" is deliberately NOT set equality (D-19). `vitest.config.mts`'s unit
  * include is wider on purpose (`{js,mjs,cjs,ts,mts,cts,jsx,tsx}`), so an equality

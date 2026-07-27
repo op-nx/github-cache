@@ -208,7 +208,34 @@ CORR-03, CORR-04.
      export. `typecheck`'s third variance source (four distinct values across the four probe
      measurements) is either root-caused or explicitly recorded as open. (PARITY-06, PARITY-07)
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+
+- [ ] 08-01-PLAN.md -- The instrument: a root-level dev-only ESM capture script proven byte-identical
+      to Nx's own arithmetic, and the root-cause record opened with its method sections (wave 1)
+
+- [ ] 08-02-PLAN.md -- The comparator: a pure typed verdict over two platform records with an
+      observed RED per clause, its CI loader, and the tarball exclusion with its assertion (wave 2)
+
+- [ ] 08-03-PLAN.md -- Measure: the two-leg capture job, the anchor commit, and all FOUR observation
+      points at that one commit plus the `typecheck` outputs enumeration (wave 3)
+
+- [ ] 08-04-PLAN.md -- Record: the root cause named node by node and the fix route written down
+      BEFORE it is taken, in commits that provably predate every `nx.json` edit (wave 4)
+
+- [ ] 08-05-PLAN.md -- Fix: the `nx.json` `targetDefaults` change with its rationale pinned in the
+      drift guard, a three-state local plus two-leg CI re-measurement, and U-01 closed by the
+      maintainer (wave 5)
+
+- [ ] 08-06-PLAN.md -- Gate: the build-gating compare job, and the proof it can fail on a REAL leg
+      rather than only on a fixture (wave 6)
+
+> Correction carried into the plans, recorded so the verifier does not read it as drift: SC1 above
+> and PARITY-01 both call the second axis a FRESHNESS axis. RESEARCH measured that cold and warm
+> agree when `.nx/workspace-data` is FRESH -- only the long-lived directory differs -- so the axis
+> is staleness-of-persisted-inference, and `nx reset` is its cure rather than a control. Plan 08-01
+> records the correction with the quoted original.
 
 **Live-CI close**: PARITY-03's windows-11-arm and ubuntu-24.04-arm observation points and
 CORR-03's two-leg job exist only on real runners. Note the probe already supplied one cold

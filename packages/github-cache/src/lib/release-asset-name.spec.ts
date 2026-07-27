@@ -58,7 +58,7 @@ describe('cachePlatform (CORR-01)', () => {
   });
 
   it('resolves the running platform when called with no argument (CORR-01)', () => {
-    // eslint-disable-next-line no-restricted-syntax -- same default-argument contract as above, for cachePlatform: the running platform is what the no-argument call is specified to resolve to. NOTHING in this milestone removes this one -- the recommendation on record is moving the assertion to src/server/public-server.integration.spec.ts, where LINT-02 allows the read.
+    // eslint-disable-next-line no-restricted-syntax -- same default-argument contract as above, for cachePlatform: the no-argument call is SPECIFIED to resolve to the running platform, so the read is the subject of the assertion and an integration spec would relocate it, not remove it. Why it cannot move NOW: Phase 10 owns this site. CORR-02 deletes the other three and makes the explicit call on this one, and OBS-03 deliberately keeps cachePlatform, so the contract stays live and this assertion stays meaningful. Moving it early would pre-empt that decision and destroy evidence LINT-03 exists to preserve. Removed by NOTHING in this milestone; the candidate destination is recorded in lint-rules.spec.ts's CORR_05_SITES table, which is where a recommendation belongs.
     expect(cachePlatform()).toBe(cachePlatform(process.platform));
   });
 });

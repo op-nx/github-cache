@@ -620,7 +620,24 @@ describe('every extant CORR-05 violation is caught while it still exists (LINT-0
         const reason = directive.split('--').slice(1).join('--').trim();
 
         expect(reason.length).toBeGreaterThan(0);
-        expect(reason).toContain('integration');
+
+        // Strip any *.integration.spec.* FILENAME before looking for the word.
+        // That strip IS this assertion, not a nicety around it. The one semantic
+        // clause LINT-06 adds over LINT-05 is "say WHY the assertion cannot move
+        // to integration" -- and a bare toContain('integration') is satisfied by
+        // the substring sitting inside a path like
+        // `public-server.integration.spec.ts`. Site 4's reason did exactly that
+        // while ARGUING THE OPPOSITE: it recommended the move, i.e. conceded the
+        // disable was unnecessary, and the guard passed it on a filename token.
+        // A described disable whose description concedes it is unnecessary is
+        // precisely the failure this control exists to prevent, so requiring the
+        // word in the SURVIVING PROSE is what makes the clause mean anything.
+        const prose = reason.replace(/\S+\.integration\.spec\.[cm]?ts/g, '');
+
+        expect(
+          prose,
+          `${file}: this disable's reason mentions "integration" only inside a FILENAME. LINT-06 wants prose saying why the assertion cannot move to an integration spec -- not a path that happens to contain the word.`,
+        ).toContain('integration');
       });
     });
   }

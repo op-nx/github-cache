@@ -233,14 +233,34 @@ export default [
   // non-ban rule still errors at an *.integration.spec.ts path" control is what
   // tells the two apart.
   //
-  // The FULL `{ts,mts,cts}` set in BOTH globs (D-16). The `.ts`-only form INVERTS
-  // the rule rather than merely narrowing it: `vitest.integration.config.mts`
-  // includes all three extensions, so an `*.integration.spec.mts` would be linted as
-  // a unit spec and its LEGITIMATE platform read would fail, while an `*.spec.mts`
-  // unit spec would slip the ban entirely. `lint-scope-drift.spec.ts` asserts the
-  // two sets are identical and that they cover the integration include set.
+  // THE TWO GLOBS ARE ASYMMETRIC ON PURPOSE (D-16, as amended 2026-07-27 for
+  // review finding ME-01). Each one mirrors a DIFFERENT vitest key, and the
+  // invariant they serve is "a file runs as a unit test IF AND ONLY IF the ban
+  // applies to it":
+  //
+  //   files   mirrors vitest.config.mts `include`  -- what the unit runner RUNS
+  //   ignores mirrors vitest.config.mts `exclude`  -- what it hands to the
+  //                                                   `integration` target
+  //
+  // D-16 originally required the same `{ts,mts,cts}` set in BOTH globs. That was
+  // right about the E5 inversion it was aimed at (a `.ts`-only `ignores` against
+  // a `{ts,mts,cts}` `files` makes an `*.integration.spec.mts`'s LEGITIMATE
+  // platform read fail lint) and wrong about the frame: symmetry between the two
+  // ESLint globs says nothing about the RUNNER, so both could sit narrower than
+  // it in lockstep and read as correct. They did -- the unit runner collects
+  // `{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}`, so `*.test.ts`, `*.spec.tsx`
+  // and `*.spec.cjs` ran as unit tests with this ban silently OFF.
+  //
+  // Do NOT "tidy" `ignores` to match `files`. Widening it to the same eight
+  // extensions opens the hole in the other direction: the integration runner
+  // collects only `{ts,mts,cts}`, so `foo.integration.spec.tsx` is not an
+  // integration spec at all -- the unit runner's exclude misses it too, so it
+  // runs as a UNIT test, and a widened `ignores` would exempt it from the ban.
+  // `lint-scope-drift.spec.ts` asserts both mirrors against the REAL vitest
+  // configs, plus the third leg (the unit exclude IS the integration include)
+  // that makes the pair mean what it says.
   {
-    files: ['**/*.spec.{ts,mts,cts}'],
+    files: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     ignores: ['**/*.integration.spec.{ts,mts,cts}'],
     rules: {
       // The only rule of the two that can see a DESTRUCTURED NAMED IMPORT -- and

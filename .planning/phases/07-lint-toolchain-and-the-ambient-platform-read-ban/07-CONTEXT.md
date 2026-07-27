@@ -136,6 +136,23 @@ hygiene rule sweep.
   `vitest.config.mts` and `vitest.integration.config.mts` use `__dirname` and fall in the same
   treatment class.
 
+  > **NOTE ADDED 2026-07-27 (D-16 amendment, finding ME-01).** Widening the ban's `files` to
+  > `{js,mjs,cjs,ts,mts,cts,jsx,tsx}` means a hypothetical `foo.spec.cjs` now matches BOTH the
+  > `**/*.cjs` override here AND the ban block. **Measured: the ban still fires** -- P1
+  > (`process.platform`) is reported at `x.spec.cjs`. No config-object reordering was needed,
+  > and C5's original ordering reason is intact: the `**/*.cjs` override still sits AFTER the
+  > `tseslint.configs.recommended` spread (so it still wins on `languageOptions`), and the ban
+  > block sits after BOTH and only sets `rules`, so the two compose rather than collide.
+  > Confirmed live by `x.spec.cjs` reporting no `no-undef` on `process` -- i.e. the override's
+  > inline globals map is still active -- while the ban error is present.
+  >
+  > Secondary, recorded not fixed: a hypothetical `*.spec.{js,mjs,jsx}` WOULD additionally
+  > trip `no-undef` on `process`, because `typescript-eslint/eslint-recommended` scopes
+  > `no-undef: 'off'` to `{ts,tsx,mts,cts}` only and the override above covers `.cjs` only.
+  > That is noise on a file that does not exist, not a hole -- the ban fires regardless. Adding
+  > a globals map for those three extensions would be speculative config for files nobody has
+  > written; do it if and when the first one appears.
+
 - **D-14:** No `eslint-config-prettier` and no `eslint-plugin-prettier`. `nx format:check`
   (Prettier directly, `.prettierrc` = `{ "singleQuote": true }`) already owns formatting, and
   neither enabled recommended set turns on stylistic rules -- there is no conflict to bridge.
@@ -154,12 +171,45 @@ hygiene rule sweep.
   Both are core ESLint rules -- no new dependency. `STACK.md` 1.5 carries a selector sketch; treat
   it as a starting point and validate it against the real expressions, not as final text.
 
-- **D-16:** Scope block is `files: ['**/*.spec.{ts,mts,cts}']` with
+- **D-16:** ~~Scope block is `files: ['**/*.spec.{ts,mts,cts}']` with
   `ignores: ['**/*.integration.spec.{ts,mts,cts}']` -- **the full `{ts,mts,cts}` set in BOTH
-  globs.** The `.ts`-only form INVERTS the rule: `vitest.integration.config.mts` includes
+  globs.**~~ The `.ts`-only form INVERTS the rule: `vitest.integration.config.mts` includes
   `{src,tests}/**/*.integration.spec.{ts,mts,cts}`, so an `*.integration.spec.mts` would be linted
   as a unit spec and its LEGITIMATE platform read would fail lint, while a `*.spec.mts` unit spec
   would slip the ban entirely.
+
+  > **AMENDED 2026-07-27 -- origin: code-review finding ME-01 (`07-REVIEW.md`).**
+  > The struck text above is superseded. The scope block is now:
+  >
+  > ```js
+  > files:   ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+  > ignores: ['**/*.integration.spec.{ts,mts,cts}'],
+  > ```
+  >
+  > **What was wrong.** "The full `{ts,mts,cts}` set in BOTH globs" was right about the E5
+  > inversion it was aimed at, and wrong about the FRAME. Symmetry between the two ESLint
+  > globs says nothing about what the RUNNER collects, so both could sit narrower than it in
+  > lockstep and still read as correct. They did: the unit runner collects
+  > `{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}`, so `*.test.ts`,
+  > `*.spec.tsx` and `*.spec.cjs` ran as unit tests with the ambient-platform ban silently
+  > OFF. Zero such files existed, which is exactly why nothing would have noticed the first
+  > one.
+  >
+  > **The two globs are now ASYMMETRIC ON PURPOSE.** Each mirrors a DIFFERENT vitest key:
+  > `files` mirrors the unit `include`, `ignores` mirrors the unit `exclude`. Naively widening
+  > `ignores` to match `files` opens a new hole in the other direction -- the integration
+  > runner collects only `{ts,mts,cts}`, so `foo.integration.spec.tsx` is not an integration
+  > spec, the unit runner's exclude misses it too, and it runs as a UNIT test that a widened
+  > `ignores` would exempt. Measured: under that widening `x.integration.spec.tsx` goes from
+  > BANNED to clean.
+  >
+  > **Blast radius checked before amending:** repo-only. The npm tarball carries 53 files and
+  > zero eslint/lint/spec/vitest artifacts; none of the three files touched here ship.
+  > `packages/github-cache/package.json` and `public-surface.spec.ts` remain byte-identical.
+  >
+  > **Verified after amending:** the ban fires at all eight extensions plus the `{test,spec}`
+  > name family at a unit path, stays exempt at `*.integration.spec.{ts,mts,cts}`, and fires
+  > at the `.tsx` corner. See the `.cjs` note in D-13.
 
 - **D-17:** `ignores` sits **alongside `files` in the same config object**, never as a bare
   `ignores`-only object. An `ignores` beside `files` removes those paths from THIS object only, so
@@ -178,13 +228,39 @@ hygiene rule sweep.
 
 - **D-19:** A drift spec asserts the ESLint globs and the two vitest configs agree, in the repo's
   existing drift-guard style (`docs-trust.spec.ts`, `trust.generated.spec.ts`): read/import the
-  REAL configs, never restate the globs in the assertion. **"Agree" is NOT set equality** --
+  REAL configs, never restate the globs in the assertion. ~~**"Agree" is NOT set equality** --
   `vitest.config.mts`'s include is deliberately wider (`{js,mjs,cjs,ts,mts,cts,jsx,tsx}`), so an
-  equality assertion would be permanently red. The two load-bearing invariants to assert are:
-  1. the ESLint `files` and `ignores` extension sets are **identical to each other**, so the
-     exemption can never be narrower than the ban (that asymmetry IS the E5 inversion); and
-  2. that shared set is a **superset of `vitest.integration.config.mts`'s include extension set**,
-     so no integration spec can ever be linted as a unit spec.
+  equality assertion would be permanently red. The two load-bearing invariants to assert are:~~
+  1. ~~the ESLint `files` and `ignores` extension sets are **identical to each other**, so the
+     exemption can never be narrower than the ban (that asymmetry IS the E5 inversion); and~~
+  2. ~~that shared set is a **superset of `vitest.integration.config.mts`'s include extension
+     set**, so no integration spec can ever be linted as a unit spec.~~
+
+  > **AMENDED 2026-07-27 -- origin: code-review finding ME-01 (`07-REVIEW.md`).**
+  > The two struck invariants are superseded. Read-the-real-configs and never-restate-the-globs
+  > are UNCHANGED and still the point.
+  >
+  > **The invariant is: a file runs as a unit test IF AND ONLY IF the ban applies to it.**
+  > Asserted as three legs, all against the real vitest configs:
+  >
+  > 1. ESLint `files` **==** `vitest.config.mts` `include`
+  > 2. ESLint `ignores` **==** `vitest.config.mts` `exclude` (its quoted spec-name entry)
+  > 3. `vitest.config.mts` `exclude` **==** `vitest.integration.config.mts` `include`
+  >
+  > **Why (a) had to go.** It compared the two ESLint globs only to EACH OTHER, so it had no
+  > term for the runner and could not express "the ban is narrower than what runs". Legs 1+2
+  > subsume the E5 inversion (a) existed to catch, and additionally reach the `.tsx` corner
+  > (a) cannot express. Measured contrast: against a naive symmetric widening of `ignores`,
+  > (a) PASSES while leg 2 fails. Leg 3 is old (b) stated exactly -- equality rather than
+  > superset, because a superset in that direction means a file runs twice or not at all.
+  >
+  > **"NOT set equality" was the part that misdiagnosed the problem.** The unit include IS
+  > wider, but that is not a reason to avoid equality -- it is a reason to compare the ban
+  > against the CORRECT key. What must not be compared literally is the PATH ANCHOR: ESLint
+  > matches relative to the config file's directory (`**/`), vitest relative to the package
+  > root (`{src,tests}/**/`). The guard therefore compares the BASENAME pattern -- name family
+  > and extension set, both as sorted sets -- which is neither vacuous nor permanently red.
+  > That limitation is recorded in the spec header.
 
 ### RED before GREEN (LINT-03)
 

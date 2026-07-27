@@ -1,3 +1,9 @@
+// LINT-02 opt-out. ROBUST-03's subject IS that the archive lands in the OS temp
+// directory, so the expectation is the running machine's tmpdir by construction --
+// there is no platform to pass in, because the value under test is not a platform.
+// Moving it to an integration spec would read the same tmpdir through the same
+// accessor and prove nothing extra, only slower.
+// eslint-disable-next-line no-restricted-imports -- ROBUST-03 asserts the archive directory IS the running machine's temp dir, so the read is the subject and not an incidental dependency; an integration spec would make the same read. Removed by VER-02, Phase 9.
 import { tmpdir } from 'node:os';
 import type { Hash } from './cache-key.js';
 import { basename, dirname, isAbsolute } from 'node:path';

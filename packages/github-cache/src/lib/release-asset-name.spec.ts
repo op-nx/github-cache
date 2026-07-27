@@ -36,6 +36,7 @@ describe('releaseAssetName (CORR-01)', () => {
 
   it('resolves the running platform when called with no platform argument (CORR-01)', () => {
     expect(releaseAssetName('abc123' as Hash)).toBe(
+      // eslint-disable-next-line no-restricted-syntax -- CORR-01's default-argument contract IS "the no-argument call equals the running-platform call", so the running platform is the subject of the assertion; moving it to an integration spec would carry the identical read across unchanged. Removed by CORR-02, Phase 10.
       releaseAssetName('abc123' as Hash, process.platform),
     );
   });
@@ -57,6 +58,7 @@ describe('cachePlatform (CORR-01)', () => {
   });
 
   it('resolves the running platform when called with no argument (CORR-01)', () => {
+    // eslint-disable-next-line no-restricted-syntax -- same default-argument contract as above, for cachePlatform: the running platform is what the no-argument call is specified to resolve to. NOTHING in this milestone removes this one -- the recommendation on record is moving the assertion to src/server/public-server.integration.spec.ts, where LINT-02 allows the read.
     expect(cachePlatform()).toBe(cachePlatform(process.platform));
   });
 });

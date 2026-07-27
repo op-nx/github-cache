@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ESLint, type Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
@@ -31,9 +32,9 @@ import { describe, expect, it } from 'vitest';
  * no `lint` target exists yet.
  *
  * LINT-02 (the ambient-platform ban) and LINT-03 (its RED-before-GREEN proof over
- * the evasion shapes and the four extant CORR-05 sites) arrive in plan 07-02 and
- * extend this file. What is here today is the opt-out half plus the CORR-06
- * scoping control those assertions will depend on.
+ * the evasion shapes and the four extant CORR-05 sites) are the second half,
+ * added by plan 07-02 below the opt-out assertions. Both halves share the
+ * constructor and the non-vacuity control declared here.
  */
 
 // From `src/*.spec.ts` the workspace root is THREE levels up: `src/` ->
@@ -42,7 +43,8 @@ import { describe, expect, it } from 'vitest';
 // convention at five existing sites, and doubly load-bearing in this file, because
 // an ambient `process.cwd()` read inside a unit spec is precisely the shape
 // LINT-02 exists to ban.
-const WORKSPACE_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
+const WORKSPACE_ROOT = fileURLToPath(WORKSPACE_ROOT_URL);
 
 const eslint = new ESLint({
   // Pinned explicitly rather than inherited. `cwd` participates in
@@ -256,4 +258,306 @@ describe('integration specs are linted, not exempted wholesale (CORR-06)', () =>
 
     expect(ruleIdsOf(messages)).toEqual(['@typescript-eslint/no-explicit-any']);
   });
+});
+
+// ===========================================================================
+// LINT-02 / LINT-03 / CORR-06 -- the ambient-platform-read ban (plan 07-02)
+// ===========================================================================
+
+/**
+ * The two core rules the ban is built from (D-15). Every verdict below is
+ * filtered down to THESE ids rather than read off the whole message list: a
+ * fixture may legitimately trip an unrelated rule -- an unused binding, an
+ * explicit `any` -- and folding those into the verdict would make an assertion
+ * fail for a reason that has nothing to do with the ban, which is the opposite
+ * of an attributable failure.
+ */
+const BAN_RULE_IDS: readonly string[] = [
+  'no-restricted-imports',
+  'no-restricted-syntax',
+];
+
+function banErrorsOf(messages: Linter.LintMessage[]): Linter.LintMessage[] {
+  return messages.filter((message) =>
+    BAN_RULE_IDS.includes(message.ruleId ?? ''),
+  );
+}
+
+function banRuleIdsOf(messages: Linter.LintMessage[]): (string | null)[] {
+  return ruleIdsOf(banErrorsOf(messages));
+}
+
+/**
+ * D-21: the ban is proven against the EVASION shapes, not only against the four
+ * shapes that happen to exist in the tree today. A rule proven only against the
+ * cases that already exist is proven against the easy half.
+ *
+ * Explicit-assertion-list style (the `public-surface.spec.ts:18-23` house rule):
+ * each row carries its expected verdict as literal rule ids in report order --
+ * ESLint sorts messages by position, so an import-shape id precedes a
+ * syntax-shape id when the import is on the earlier line. An intentional change
+ * to the rule set edits a row here, and that edit IS the reviewable diff.
+ */
+const EVASION_SHAPES = [
+  {
+    shape: 'process.platform, the primary member-expression form (P1)',
+    source: 'export const value = process.platform;\n',
+    expected: ['no-restricted-syntax'],
+  },
+  {
+    shape: 'destructuring the platform binding out of the process object (P3)',
+    source: 'export const { platform } = process;\n',
+    expected: ['no-restricted-syntax'],
+  },
+  {
+    // P3 reports at the DECLARATOR rather than at the read, which is the better
+    // location anyway: the alias is where the ambient dependency enters.
+    shape:
+      'aliasing the process object and reading the member off the alias (P3)',
+    source: 'const alias = process;\nexport const value = alias.platform;\n',
+    expected: ['no-restricted-syntax'],
+  },
+  {
+    shape: 'a named import of a banned accessor from the os module',
+    source: "import { tmpdir } from 'node:os';\nexport const dir = tmpdir();\n",
+    expected: ['no-restricted-imports'],
+  },
+  {
+    // CAUGHT TWICE, and the first half is the load-bearing one: the imports rule
+    // reports a namespace specifier regardless of the LOCAL binding name, which
+    // is why P4's hardcoded name list is defence in depth rather than the only
+    // thing standing between a namespace import and the cache.
+    shape: 'a namespace import of the os module, caught by BOTH rules',
+    source: "import * as os from 'node:os';\nexport const dir = os.tmpdir();\n",
+    expected: ['no-restricted-imports', 'no-restricted-syntax'],
+  },
+  {
+    shape: 'computed access to the process object through a runtime key (P2)',
+    source: "const key = 'platform';\nexport const value = process[key];\n",
+    expected: ['no-restricted-syntax'],
+  },
+  {
+    // RESEARCH C1, BLOCKING: `no-restricted-imports` at 9.39.5 has visitors for
+    // static import and export declarations ONLY -- it has no ImportExpression
+    // visitor and cannot see either of these. P6 is the only thing that closes
+    // the dynamic form, and this row is the assertion that proves it.
+    shape: 'a dynamic import of the os module and of the path module (P6 only)',
+    source:
+      "export async function loadOs() {\n  return await import('node:os');\n}\n" +
+      "export async function loadPath() {\n  return await import('node:path');\n}\n",
+    expected: ['no-restricted-syntax', 'no-restricted-syntax'],
+  },
+] as const;
+
+/**
+ * The other half of D-21, and the half a ban is most likely to get wrong. A rule
+ * set that errors on everything is as useless as one that errors on nothing, and
+ * three of these rows guard a specific narrowing that would be tempting to drop:
+ * P1's non-computed constraint, P4/P5's property-name lists, and P6's source
+ * constraint. All measured clean in RESEARCH G2.
+ */
+const FALSE_POSITIVE_CONTROLS = [
+  {
+    shape: "the canonical ALLOWED shape, cachePlatform('win32') (D-18)",
+    source:
+      "import { cachePlatform } from './lib/release-asset-name.js';\n" +
+      "export const value = cachePlatform('win32');\n",
+  },
+  {
+    shape:
+      'a plain object literal carrying a platform-named property, read back',
+    source:
+      "const config = { platform: 'win32' };\n" +
+      'export const value = config.platform;\n',
+  },
+  {
+    // P2 bans computed indexing of `process` WHOLESALE, including
+    // `process['env']`. This row pins the other side of that deliberate blast
+    // radius: the dotted form stays legitimate.
+    shape: 'an environment variable read through the dotted form on process',
+    source: 'export const value = process.env.CI;\n',
+  },
+  {
+    // Deliberately a LOCAL object rather than a namespace import of node:path:
+    // `import * as path from 'node:path'` is itself an error (the imports rule
+    // reports a namespace specifier whenever the entry lists importNames), which
+    // is asserted as an evasion shape above. Isolating P5's property-name list is
+    // what this row is for.
+    shape: 'a join call on a path-named object, which P5 must not reach',
+    source:
+      "const path = { join: (...parts: string[]) => parts.join('/') };\n" +
+      "export const value = path.join('a', 'b');\n",
+  },
+  {
+    shape: 'a named import of two NON-banned path accessors',
+    source:
+      "import { basename, dirname } from 'node:path';\n" +
+      "export const value = basename(dirname('/a/b'));\n",
+  },
+  {
+    shape: 'a dynamic import of a LOCAL module, which P6 must not reach',
+    source:
+      "export async function load() {\n  return await import('./local.js');\n}\n",
+  },
+] as const;
+
+describe('the ambient-platform-read ban fires at a unit spec path (LINT-02, LINT-03, D-21)', () => {
+  for (const { shape, source, expected } of EVASION_SHAPES) {
+    it(`catches ${shape}`, async () => {
+      const messages = await lintFixture(source, UNIT_PATH);
+
+      expect(banRuleIdsOf(messages)).toEqual([...expected]);
+    });
+  }
+});
+
+describe('the ban leaves legitimate adjacent shapes alone (LINT-02 false-positive controls)', () => {
+  for (const { shape, source } of FALSE_POSITIVE_CONTROLS) {
+    it(`does not fire on ${shape}`, async () => {
+      const messages = await lintFixture(source, UNIT_PATH);
+
+      expect(banRuleIdsOf(messages)).toEqual([]);
+    });
+  }
+});
+
+describe('the identical source at an *.integration.spec.ts path is exempt from the ban ONLY (CORR-06)', () => {
+  // The direction pair. On its own each row here is the weakest kind of
+  // assertion -- "zero errors" is also what an un-linted path returns -- so it is
+  // admissible only with its two controls attached: `lintFixture` rejects the
+  // ignored/unconfigured state, and the "a non-ban rule still errors at an
+  // *.integration.spec.ts path" assertion above proves the file is fully linted
+  // and merely exempt from ONE config object. That is D-17's ignores-beside-files
+  // semantics, and it is exactly CORR-06's "the same APIs stay ALLOWED in
+  // integration" rather than "integration is not linted".
+  for (const { shape, source } of EVASION_SHAPES) {
+    it(`allows ${shape}`, async () => {
+      const messages = await lintFixture(source, INTEGRATION_PATH);
+
+      expect(banRuleIdsOf(messages)).toEqual([]);
+    });
+  }
+});
+
+/**
+ * D-22: each of the FOUR extant CORR-05 violations is proven CAUGHT while it
+ * still exists. Phases 9 and 10 remove the violations themselves; Phase 7 must
+ * NOT, or LINT-03 has nothing to catch and the evidence is destroyed early.
+ *
+ * Keyed on FILE + EXPRESSION TEXT, never on a line number. That is not style:
+ * inserting the four described disables shifts every later line in the very
+ * commit that creates this table, so a line-number key would rot before it was
+ * ever read. The position is located by searching the file content instead, and
+ * a stripped disable is BLANKED rather than deleted so the numbering the
+ * position assertion depends on survives the strip.
+ *
+ * REMOVAL SCHEDULE -- comment-locked so a Phase 9 or Phase 10 executor deletes
+ * the ROW together with the SITE. A row whose site is gone fails loudly at
+ * `lineIndexOf` below; a site whose disable is gone fails through
+ * `reportUnusedDisableDirectives`. Neither can rot silently.
+ *
+ * There are FOUR sites and FOUR error positions. There is NO fifth.
+ * `cache-archive-path.spec.ts`'s bare `tmpdir()` CALL is not an error position
+ * and must never carry a disable: in strict ESM that binding cannot exist
+ * without the import, the import is already the error, and an unused directive
+ * over the call would fail the build through the phase's own opt-out discipline.
+ * CONTEXT.md D-22 and REQUIREMENTS.md CORR-05 both list that call alongside the
+ * import -- correct as a SITE (both lines leave together in Phase 9), wrong as
+ * an error position. ROADMAP SC3's "three CORR-05 violations" is likewise a
+ * miscount; REQUIREMENTS, CONTEXT and RESEARCH all say FOUR.
+ */
+const CORR_05_SITES = [
+  {
+    /** Removed by VER-02, Phase 9. */
+    file: 'packages/github-cache/src/lib/cache-archive-path.spec.ts',
+    expression: "import { tmpdir } from 'node:os';",
+    rule: 'no-restricted-imports',
+  },
+  {
+    /** Removed by CORR-02, Phase 10. */
+    file: 'packages/github-cache/src/backend/releases-backend.spec.ts',
+    expression:
+      "cachePlatform(process.platform) === 'windows' ? 'linux' : 'win32';",
+    rule: 'no-restricted-syntax',
+  },
+  {
+    /** Removed by CORR-02, Phase 10. */
+    file: 'packages/github-cache/src/lib/release-asset-name.spec.ts',
+    expression: "releaseAssetName('abc123' as Hash, process.platform),",
+    rule: 'no-restricted-syntax',
+  },
+  {
+    /**
+     * Removed by NOTHING in this milestone. Phase 10 makes an explicit call; the
+     * recommendation on record is moving this assertion to
+     * `src/server/public-server.integration.spec.ts`, where LINT-02 allows it.
+     */
+    file: 'packages/github-cache/src/lib/release-asset-name.spec.ts',
+    expression:
+      'expect(cachePlatform()).toBe(cachePlatform(process.platform));',
+    rule: 'no-restricted-syntax',
+  },
+] as const;
+
+function readSiteLines(file: string): string[] {
+  return readFileSync(new URL(file, WORKSPACE_ROOT_URL), 'utf8').split('\n');
+}
+
+function lineIndexOf(
+  lines: string[],
+  expression: string,
+  file: string,
+): number {
+  const index = lines.findIndex((line) => line.trim() === expression);
+
+  expect(
+    index,
+    `${file} no longer contains the exact expression \`${expression}\`. This table is keyed on FILE + EXPRESSION TEXT on purpose; if the site was legitimately removed by its scheduled requirement, delete its ROW here in the same commit.`,
+  ).not.toBe(-1);
+
+  return index;
+}
+
+describe('every extant CORR-05 violation is caught while it still exists (LINT-03, D-22)', () => {
+  for (const { file, expression, rule } of CORR_05_SITES) {
+    describe(`${file} -- ${expression}`, () => {
+      it('is CAUGHT by the ban once its described disable is stripped', async () => {
+        const lines = readSiteLines(file);
+        const index = lineIndexOf(lines, expression, file);
+        const stripped = [...lines];
+
+        // BLANK, never splice. Deleting the directive line would shift every
+        // later line by one and the position assertion below would then be
+        // asserting the wrong number for three of the four sites.
+        if (stripped[index - 1]?.includes('eslint-disable-next-line')) {
+          stripped[index - 1] = '';
+        }
+
+        const messages = await lintFixture(stripped.join('\n'), file);
+
+        // Exactly one, and AT the expression. The other sites in the same file
+        // keep their own disables, so a second error here would mean the ban is
+        // firing somewhere this table does not account for.
+        expect(banRuleIdsOf(messages)).toEqual([rule]);
+        expect(banErrorsOf(messages)[0]?.line).toBe(index + 1);
+      });
+
+      it('carries a described disable stating why the assertion cannot move to integration', () => {
+        const lines = readSiteLines(file);
+        const index = lineIndexOf(lines, expression, file);
+        const directive = lines[index - 1] ?? '';
+
+        expect(directive).toContain(`eslint-disable-next-line ${rule}`);
+
+        // `--` may legitimately appear inside the prose, so everything after the
+        // FIRST separator is the reason. A directive with `--` and nothing after
+        // it still parses and still satisfies `require-description`, which is why
+        // emptiness is asserted here rather than delegated to the rule.
+        const reason = directive.split('--').slice(1).join('--').trim();
+
+        expect(reason.length).toBeGreaterThan(0);
+        expect(reason).toContain('integration');
+      });
+    });
+  }
 });

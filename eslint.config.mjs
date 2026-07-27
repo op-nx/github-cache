@@ -41,6 +41,36 @@ import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
+// Single source for the ban's explanation (LINT-02 / CORR-06), referenced by every
+// `paths[].message` and every `no-restricted-syntax` message below, so the two
+// rules can never give contradictory advice about the same violation.
+//
+// The canonical ALLOWED shape named here is `cachePlatform('win32')` and it is a
+// DECISION, not an example picked for readability (D-18). The two-argument form of
+// the asset-name helper must never appear in this string: CORR-02 deletes that
+// parameter in Phase 10, three phases after this rule is written, and `fallow`
+// would then flag the example. ROADMAP SC2 uses exactly that forbidden form -- do
+// not copy it from there. OBS-03 deliberately keeps `cachePlatform`, which is what
+// makes it the stable substitute.
+const BAN_MESSAGE =
+  'CORR-06: a unit spec must not derive an expectation from the RUNNING machine. ' +
+  "Pass the platform in instead -- cachePlatform('win32') -- or move the assertion " +
+  'to an *.integration.spec.ts, where these APIs are allowed. Opting out needs a ' +
+  'described disable saying why the assertion cannot move (LINT-05/LINT-06).';
+
+// The accessor lists are declared once and shared by the prefixed and bare
+// specifier entries, so the two halves of each pair cannot drift apart.
+const BANNED_OS_ACCESSORS = [
+  'tmpdir',
+  'EOL',
+  'platform',
+  'arch',
+  'homedir',
+  'type',
+  'release',
+];
+const BANNED_PATH_ACCESSORS = ['sep', 'delimiter', 'win32', 'posix'];
+
 export default [
   // GLOBAL ignores. A standalone `ignores` with no other key removes these paths
   // from linting ENTIRELY -- deliberately NOT the D-17 shape, which only narrows a
@@ -172,6 +202,158 @@ export default [
           argsIgnorePattern: '^_',
           varsIgnorePattern: '^_',
           caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+
+  // LINT-02 / CORR-06 -- the ambient-platform-read ban, and the reason this phase
+  // exists. A unit spec that derives an expectation from the RUNNING machine makes
+  // its own verdict machine-dependent, which is how a cross-OS-shared cache entry
+  // becomes wrong on one leg of the matrix and right on another.
+  //
+  // `ignores` is a SIBLING of `files` in THIS object and must stay one (D-17). In
+  // that position it removes integration specs from this object ALONE, so they keep
+  // every other rule in this file and lose only the ban -- which is precisely
+  // CORR-06's "the same APIs stay ALLOWED in integration". Hoisted into a standalone
+  // `ignores`-only object (the shape at the top of this file) it would globally
+  // UN-LINT every integration spec, and the difference is invisible from the config
+  // alone: both forms make the ban assertions pass. `lint-rules.spec.ts`'s "a
+  // non-ban rule still errors at an *.integration.spec.ts path" control is what
+  // tells the two apart.
+  //
+  // The FULL `{ts,mts,cts}` set in BOTH globs (D-16). The `.ts`-only form INVERTS
+  // the rule rather than merely narrowing it: `vitest.integration.config.mts`
+  // includes all three extensions, so an `*.integration.spec.mts` would be linted as
+  // a unit spec and its LEGITIMATE platform read would fail, while an `*.spec.mts`
+  // unit spec would slip the ban entirely. `lint-scope-drift.spec.ts` asserts the
+  // two sets are identical and that they cover the integration include set.
+  {
+    files: ['**/*.spec.{ts,mts,cts}'],
+    ignores: ['**/*.integration.spec.{ts,mts,cts}'],
+    rules: {
+      // The only rule of the two that can see a DESTRUCTURED NAMED IMPORT -- and
+      // `cache-archive-path.spec.ts:1` is exactly that shape.
+      //
+      // FOUR entries, not two: the source match is an exact string lookup, so the
+      // prefixed and bare specifiers are independent keys. The repo writes
+      // `node:`-prefixed specifiers everywhere today; the bare forms cost one line
+      // each and close the shape a future contributor will reach for.
+      //
+      // Per-name, not whole-module: `import { basename, dirname } from 'node:path'`
+      // stays legitimate and is asserted so. A NAMESPACE import is reported anyway,
+      // regardless of the local binding name, because it necessarily carries the
+      // restricted names in with it.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'node:os',
+              importNames: BANNED_OS_ACCESSORS,
+              message: BAN_MESSAGE,
+            },
+            {
+              name: 'os',
+              importNames: BANNED_OS_ACCESSORS,
+              message: BAN_MESSAGE,
+            },
+            {
+              name: 'node:path',
+              importNames: BANNED_PATH_ACCESSORS,
+              message: BAN_MESSAGE,
+            },
+            {
+              name: 'path',
+              importNames: BANNED_PATH_ACCESSORS,
+              message: BAN_MESSAGE,
+            },
+          ],
+        },
+      ],
+
+      // The only rule of the two that can ban a MEMBER of a namespace import or
+      // reach a DYNAMIC import. Neither rule is sufficient alone (D-15); each
+      // selector family below is proven individually load-bearing by plan 07-04's
+      // M1/M2/M3 mutations.
+      //
+      // ponytail: P4/P5 hardcode the conventional namespace binding names
+      // (os/nodeOs, path/nodePath). Ceiling = a namespace bound to any other name
+      // is invisible to THESE selectors -- and is still an error, because
+      // no-restricted-imports reports the namespace import itself regardless of the
+      // local name, and the dynamic form is closed by P6. Upgrade path if that ever
+      // stops holding: drop the object.name constraint and add an allowlist of
+      // legitimate objects instead. Do NOT drop it without one -- measured, the
+      // unconstrained form false-positives on the canonical allowed shape and on a
+      // plain `config.platform` read.
+      //
+      // ponytail: every selector here is syntactic. Ceiling = a platform read
+      // hidden behind a helper in ANOTHER module is out of reach, for these and for
+      // any non-type-aware rule. Upgrade path is type-aware linting, which D-11
+      // excludes for a stated reason (it widens the `lint` input set to the whole
+      // TypeScript program and with it the stale-cache blast radius), so this one is
+      // accepted rather than scheduled.
+      'no-restricted-syntax': [
+        'error',
+        {
+          // P1. The primary shape, and three of the four extant violations. The
+          // non-computed constraint is what lets P2 be a separate, deliberately
+          // broad ban rather than an accidental overlap.
+          selector:
+            "MemberExpression[computed=false][object.name='process'][property.name=/^(platform|arch)$/]",
+          message: BAN_MESSAGE,
+        },
+        {
+          // P2. Deliberately BROAD: a runtime key is the only shape a targeted
+          // selector cannot see, so every computed index of `process` is banned.
+          selector: "MemberExpression[computed=true][object.name='process']",
+          message:
+            BAN_MESSAGE +
+            ' Computed indexing of process is banned WHOLESALE inside a unit spec,' +
+            " including process['env'], because a runtime key is the only shape a" +
+            ' targeted selector cannot see and computed indexing of process has no' +
+            ' legitimate use here. The dotted process.env.CI form is unaffected.',
+        },
+        {
+          // P3. Covers aliasing AND destructuring in one selector, and reports at
+          // the declarator -- where the ambient dependency enters -- rather than at
+          // the later read.
+          selector: "VariableDeclarator[init.name='process']",
+          message: BAN_MESSAGE,
+        },
+        {
+          // P4. Backstop for an os namespace object; see the ceiling note above.
+          selector:
+            'MemberExpression[computed=false][object.name=/^(os|nodeOs)$/][property.name=/^(tmpdir|EOL|platform|arch|homedir|type|release)$/]',
+          message: BAN_MESSAGE,
+        },
+        {
+          // P5. Same, for a path namespace object. Constrained to the four
+          // machine-dependent accessors, so `path.join` stays legitimate.
+          selector:
+            'MemberExpression[computed=false][object.name=/^(path|nodePath)$/][property.name=/^(sep|delimiter|win32|posix)$/]',
+          message: BAN_MESSAGE,
+        },
+        {
+          // P6, MANDATORY. `no-restricted-imports` at 9.39.5 has visitors for
+          // static import and export declarations ONLY -- it has no
+          // ImportExpression visitor, so it closes the STATIC import family and not
+          // "the import family". Without this selector `await import('node:os')` is
+          // a silent hole, and an executor looking for the miss would look in the
+          // wrong rule. Constrained to the two module specifiers, so a dynamic
+          // import of a local module is untouched.
+          selector: 'ImportExpression[source.value=/^(node:)?(os|path)$/]',
+          message: BAN_MESSAGE,
+        },
+        {
+          // P7. Additive: matches the globalThis-qualified form and, measured, does
+          // NOT double-report the plain one. Its false-positive surface is
+          // `<anything>.process.platform`, which would be a bizarre thing to write
+          // in a unit spec and does not exist in this repo. Included rather than
+          // declined, so `globalThis.process.platform` needs no ceiling comment.
+          selector:
+            "MemberExpression[computed=false][object.property.name='process'][property.name=/^(platform|arch)$/]",
+          message: BAN_MESSAGE,
         },
       ],
     },

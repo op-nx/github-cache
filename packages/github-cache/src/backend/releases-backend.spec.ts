@@ -35,6 +35,7 @@ const SENSITIVE_HASH = 'beefcafe' as Hash;
 // macOS). cachePlatform(OTHER_PLATFORM) is always different from the running one,
 // so releaseAssetName(hash) (running platform) never collides with the seed.
 const OTHER_PLATFORM: NodeJS.Platform =
+  // eslint-disable-next-line no-restricted-syntax -- OTHER_PLATFORM is DEFINED as the OS this process is not on, so the running platform is the input to the definition rather than an expectation derived from it; an integration spec would still have to read the runner to know which OS to be foreign to. Removed by CORR-02, Phase 10.
   cachePlatform(process.platform) === 'windows' ? 'linux' : 'win32';
 
 interface RecordingClient extends ReleaseReadClient {

@@ -302,3 +302,113 @@ assertions and 1 `nx-target-inputs.spec.ts` input assertion.
 D-06 prohibitions, both verified clean at the commit:
 `git diff --exit-code -- packages/github-cache/package.json` and
 `git diff --exit-code -- packages/github-cache/src/public-surface.spec.ts`.
+
+---
+
+## Plan 07-02
+
+Recorded: 2026-07-27. Host: Windows 11 arm64, node v24.13.0, npm 11.6.2.
+
+### The RED observation (LINT-03), assertion by assertion
+
+The assertions were written and RUN before either ban rule existed, per D-20. This is the
+measured split, not a predicted one -- `npx vitest run src/lint-rules.spec.ts` at the moment
+`eslint.config.mjs` still carried only plan 07-01's rules:
+
+**15 failed, 22 passed of 37.**
+
+| Group | Count | RED verdict | Why |
+|---|---|---|---|
+| plan 07-01's opt-out + CORR-06 assertions | 9 | PASSED | untouched by this plan |
+| D-21 evasion shapes at a unit path | 7 | **FAILED** | the rules did not exist; `banRuleIdsOf` returned `[]` against every expected id |
+| false-positive controls at a unit path | 6 | PASSED | vacuously, by design -- they assert ZERO ban errors and there were no ban rules |
+| CORR-06 direction pair at the integration path | 7 | PASSED | **the critical control** |
+| D-22 four sites, "is CAUGHT once the disable is stripped" | 4 | **FAILED** | no rules, so zero ban errors at each real expression |
+| D-22 four sites, "carries a described disable" | 4 | **FAILED** | the disables did not exist yet |
+
+Representative failure text, site 2:
+
+```
+AssertionError: expected 'const OTHER_PLATFORM: NodeJS.Platform...' to contain
+  'eslint-disable-next-line no-restricte...'
+Expected: "eslint-disable-next-line no-restricted-syntax"
+Received: "const OTHER_PLATFORM: NodeJS.Platform ="
+```
+
+and, for an evasion shape, `expected [] to deeply equal [ 'no-restricted-syntax' ]`.
+
+**The direction controls passing on BOTH sides is what makes this RED interpretable.** Had the
+seven integration-path assertions failed too, the meaning would have been "the config is not
+being loaded at all" (the ignored/unconfigured trap) rather than "the rules are missing" --
+and that trap is the single most likely way this phase could have shipped a vacuous guard.
+The false-positive controls passing vacuously in RED is expected and is not evidence; their
+value is entirely in GREEN, where they discriminate against an over-broad selector.
+
+Intermediate measurement after STEP 2 (rules added, disables not yet): **6 failed, 31 passed**
+-- all seven evasion shapes flipped to CAUGHT, and the six residual failures were the four
+"carries a described disable" assertions plus the two `release-asset-name.spec.ts` position
+assertions, which report TWO ban errors until each site's sibling disable exists to suppress
+the other. After STEP 3: **37 passed of 37.**
+
+### P7 was INCLUDED, not declined
+
+RESEARCH G2 recommends P7
+(`MemberExpression[computed=false][object.property.name='process'][property.name=/^(platform|arch)$/]`)
+and leaves it to the planner. It is IN the shipped selector set. Consequence for D-21:
+`globalThis.process.platform` needs no `// ponytail:` ceiling comment, because it is caught
+rather than accepted.
+
+Two ceilings ARE recorded in `eslint.config.mjs`, both in the three-part form
+(`with-hash-lock.ts:1-3`): P4/P5's hardcoded namespace binding names, whose upgrade path is
+dropping the `object.name` constraint IN FAVOUR OF an allowlist and never without one; and
+the residual T-07-12 ceiling -- a platform read hidden behind a helper in another module --
+whose only upgrade path is type-aware linting, which D-11 excludes for a stated reason and
+which is therefore accepted rather than scheduled.
+
+### Selector-set behaviour, measured against REAL ESLint (Q5 closed)
+
+RESEARCH G2's verdict table was produced with `@babel/parser` + `esquery`, and Q5 asked
+whether babel-estree and `@typescript-eslint/parser` agree on every node shape those
+selectors depend on. Every shape in the table reproduced exactly under real ESLint with the
+real parser, including the two-rule double report on a namespace import. **Q5 is closed
+affirmatively; no selector that measured MATCH under esquery came back clean under ESLint.**
+
+One measured fact worth recording because it shaped a false-positive control:
+`import * as path from 'node:path'` IS an error, because `no-restricted-imports` reports a
+namespace specifier whenever the entry lists `importNames`. The "path.join is legitimate"
+control therefore uses a LOCAL object rather than a namespace import -- the namespace form is
+asserted as an evasion shape instead, which is where it belongs.
+
+### The four disables, and the fifth position that does not exist
+
+Four `eslint-disable-next-line` directives across three files
+(`cache-archive-path.spec.ts` 1, `releases-backend.spec.ts` 1, `release-asset-name.spec.ts`
+2). `npx eslint .` from `packages/github-cache` exits 0 with ZERO findings, which is the
+measurement that proves all four are USED -- an unused one would be an error under
+`reportUnusedDisableDirectives: 'error'`.
+
+RESEARCH C2 confirmed against the live rule set: `cache-archive-path.spec.ts`'s bare
+`tmpdir()` call produces NO ban error, so it correctly carries no disable. A fifth directive
+there would have failed the build through the phase's own opt-out discipline.
+
+### Corrections recorded for the verifier
+
+- **ROADMAP SC3 says "three CORR-05 violations".** REQUIREMENTS, CONTEXT and RESEARCH all say
+  FOUR, and FOUR is what the shipped `CORR_05_SITES` table and the four directives implement.
+  Do not read the extra site as scope creep.
+- **CONTEXT D-22 and REQUIREMENTS CORR-05 both list `cache-archive-path.spec.ts:26` alongside
+  `:1`.** Correct as a SITE (both lines leave together under VER-02 in Phase 9), wrong as an
+  error POSITION. The site table keys on the import only.
+
+### Battery at the commit
+
+Eight commands, all exit 0: `format:check`, `build`, `typecheck`, `typecheck:action`, `test`,
+`fallow:ci`, `check:action`, `pack:check`. Plus `npx eslint .` at exit 0, run directly because
+no `lint` target exists until plan 07-03.
+
+Unit suite: **481 tests across 32 files**, up from 453. The +28 are 7 evasion shapes, 6
+false-positive controls, 7 integration-path direction assertions and 8 site assertions.
+
+D-06 prohibitions verified clean again at this commit:
+`git diff --exit-code -- packages/github-cache/package.json` and
+`git diff --exit-code -- packages/github-cache/src/public-surface.spec.ts`.

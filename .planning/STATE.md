@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 7
 current_phase_name: Lint Toolchain and the Ambient-Platform-Read Ban
 status: executing
-last_updated: "2026-07-27T04:36:41.685Z"
+last_updated: "2026-07-27T04:59:38.742Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 7 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 7 (Lint Toolchain and the Ambient-Platform-Read Ban) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
 Last activity: 2026-07-27 — Phase 7 execution started
@@ -91,6 +91,7 @@ Last activity: 2026-07-27 — Phase 7 execution started
 | Phase 06 P02 | 10min | 2 tasks tasks | 2 files files |
 | Phase 06 P04 | 16 | 3 tasks | 7 files |
 | Phase 07 P01 | 40 | 3 tasks | 10 files |
+| Phase 07 P02 | ~25 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -155,6 +156,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 07]: 07-01 the global ignores block in eslint.config.mjs is REQUIRED, not hygiene: eslint . walks the filesystem and never consults git, so the gitignored dist/ and out-tsc/ trees WOULD be linted while Nx never hashes them -- lint's result would depend on whether build ran, at an unchanged hash. Measured 64 files linted with the block vs 155 without (mutation M7); invariance across rm -rf dist out-tsc is G5 negative control 2. The .cjs override must sit AFTER the typescript-eslint spread, because typescript-eslint/base has no files key and sets sourceType:module for every file -- an override placed before it is itself overridden and silently does nothing.
 - [Phase 07]: 07-01 the TDD RED caught a vacuity bug in the guard's OWN non-vacuity control (the gok lesson recurring): filtering on severity===1 && ruleId===null also matches a LINT-06 unused-directive report at v9's default warn severity, so the control misread a correctly-linted file as never-linted. It passed in GREEN only because 'error' moves those reports to severity 2 -- its correctness depended on the very setting it was meant to be independent of. Fixed with a position check (an ignore/unconfigured result describes the whole file and carries no line; every rule and directive report carries one), plus a self-test asserting the control still detects a genuinely ignored path.
 - [Phase 07]: 07-01 Q10's contingency FIRED -- the D-05 linux/arm64 node:24 container lockfile regen re-resolved undici 6.27.0 to 6.28.0 through @actions/*'s ranged transitive deps, drifting start-cache-server/index.js by 88 lines; rebuilt and staged in the SAME commit per SC9, never as a follow-up. Q2 resolved favourably: fallow auto-credits eslint.config.mjs and its three imports, so the contingency entry line was NOT needed and the only .fallowrc.jsonc change is the @nx/eslint ignoreDependencies line. Container invocation needs MSYS_NO_PATHCONV=1 on this host or Git Bash rewrites -w /app into a Windows path.
+- [Phase 07]: 07-02: the ambient-platform ban is TWO core rules behind ONE shared BAN_MESSAGE, scoped by files ['**/*.spec.{ts,mts,cts}'] with ignores ['**/*.integration.spec.{ts,mts,cts}'] as a SIBLING key so integration specs keep every other rule and lose only the ban (D-17). P6, the ImportExpression selector, is MANDATORY and proven so: no-restricted-imports at 9.39.5 has no import-expression visitor, so it closes the STATIC import family only and a dynamic import of node:os would otherwise be a silent hole. P7 was INCLUDED rather than declined, so globalThis.process.platform is caught rather than recorded as a ceiling; the two ceilings that ARE recorded are P4/P5's hardcoded namespace binding names and T-07-12's helper-in-another-module read.
+- [Phase 07]: 07-02: Q5 and Q6 closed affirmatively -- every esquery-measured selector verdict reproduced under real ESLint with @typescript-eslint/parser (including the two-rule double report on a namespace import), and the non-literal dynamic import of eslint.config.mjs works under both vitest and typecheck, so the D-19 drift guard reads the REAL evaluated config array instead of matching source text. One consequence worth carrying: import * as path from 'node:path' IS an error, because no-restricted-imports reports a namespace specifier whenever the entry lists importNames -- so the path.join false-positive control uses a LOCAL object and the namespace form is asserted as an evasion shape instead.
+- [Phase 07]: 07-02: four described disables at FOUR error positions, and there is no fifth. cache-archive-path.spec.ts:26 is a SITE (it leaves with the import under VER-02 in Phase 9) but NOT an error position -- in strict ESM that binding cannot exist without the import, and the import is the chokepoint -- so a directive there would be UNUSED and reportUnusedDisableDirectives:'error' would fail the build through the phase's own opt-out discipline. ROADMAP SC3's "three CORR-05 violations" is a miscount; REQUIREMENTS, CONTEXT and RESEARCH all say FOUR. Both corrections are comment-locked on CORR_05_SITES, which keys on FILE + EXPRESSION TEXT because inserting the disables shifts every later line in the same commit.
 
 ### Pending Todos
 
@@ -281,8 +285,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-27T04:35:24.671Z
-Stopped at: Phase 7 context gathered
+Last session: 2026-07-27T04:59:38.729Z
+Stopped at: Completed 07-02-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.
@@ -350,7 +354,7 @@ Stopped at: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-r
 Task 3a (413-flush, F14) RESOLVED as a documented HTTP/1.1 limitation (lead-approved option a): a bounded raw-socket investigation proved the ECONNRESET is deterministic for a client streaming a body far over the cap (60/60 on a 100MB repro; <=16KB-over-cap gets a clean 413, >=256KB resets), and the prescribed destroy-on-finish fix does NOT resolve it (and one variant hangs). Landed a ponytail ceiling comment at both destroy sites (cb2832d), no behavior change, no bundle diff, no flaky test. The memory-bounding cap (backend.put never reached, proven by the mid-stream abort test) is intact regardless.
 HELD (deliberately, for the lead): the branch push and the PR-body update. The lead handles the outward-facing push after independently verifying the series. This executor did not push and did not touch the PR body.
 Final local battery at HEAD cb2832d: fmt / build / typecheck / typecheck:action / test (430) / fallow:ci / check:action / pack:check all exit 0.
-Resume file: .planning/phases/07-lint-toolchain-and-the-ambient-platform-read-ban/07-CONTEXT.md
+Resume file: None
 Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates the PR #3 body. Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.
 
 ## Operator Next Steps

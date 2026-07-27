@@ -112,7 +112,7 @@ cache, and the public-repo exposure surface, are not deferred.
   non-vacuity proof for CORR-01, and CORR-02 destroys it on purpose. Phase 10 must name the
   replacement -- assert the reader requested EXACTLY ONE asset name, equal to the imported
   `releaseAssetName(hash)`, containing no platform token -- or coverage drops silently.
-- [ ] **CORR-06**: The strategy is MECHANICALLY enforced, not documented: a guard fails the `test`
+- [x] **CORR-06**: The strategy is MECHANICALLY enforced, not documented: a guard fails the `test`
   target when a non-integration spec reads AMBIENT platform state -- `process.platform`,
   `process.arch`, any `node:os` accessor (`tmpdir`, `EOL`, `platform`, `arch`, `homedir`, `type`,
   `release`), or `path.sep`/`path.delimiter`/`path.win32`/`path.posix`. Scoped by the partition
@@ -139,7 +139,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   the names leaves them unguarded, and a later `npm install eslint@latest` passes every check. The
   ROBUST-03-class decision is recorded in the spec's comment, since the precedent is genuinely
   ambiguous: `esbuild` IS in the list, `prettier` is NOT.
-- [ ] **LINT-02**: The rules ban AMBIENT platform reads in unit specs and ALLOW them in integration
+- [x] **LINT-02**: The rules ban AMBIENT platform reads in unit specs and ALLOW them in integration
   specs. **TWO rules are required, not one** -- `no-restricted-syntax` is an AST-selector matcher
   and cannot see a destructured named import, and one of the four CORR-05 sites is exactly that
   shape (`import { tmpdir } from 'node:os'`); conversely `no-restricted-imports` cannot ban a member
@@ -155,7 +155,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   `arch`, `homedir`, `type`, `release`), and `path.sep`/`path.delimiter`/`path.win32`/`path.posix`.
   NOT banned: injected or explicit platform values -- `cachePlatform('win32')` is the canonical
   allowed shape. Only deriving an expectation from the RUNNING machine is prohibited.
-- [ ] **LINT-03**: The rule set is proven RED before GREEN. The fixture covers the EVASION shapes,
+- [x] **LINT-03**: The rule set is proven RED before GREEN. The fixture covers the EVASION shapes,
   not only the four extant CORR-05 sites -- `const { platform } = process`, `const p = process;
   p.platform`, `import { platform } from 'node:os'`, `import * as os from 'node:os'`, `const
   k = 'platform'; process[k]`, and `await import('node:os')`. Each of the four CORR-05 sites is
@@ -570,12 +570,12 @@ honour table: `.planning/ROADMAP.md`.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | LINT-01 | Phase 7 | Pending |
-| LINT-02 | Phase 7 | Pending |
-| LINT-03 | Phase 7 | Pending |
+| LINT-02 | Phase 7 | Complete |
+| LINT-03 | Phase 7 | Complete |
 | LINT-04 | Phase 7 | Pending |
 | LINT-05 | Phase 7 | Pending |
 | LINT-06 | Phase 7 | Pending |
-| CORR-06 | Phase 7 | Pending |
+| CORR-06 | Phase 7 | Complete |
 | PARITY-01 | Phase 8 | Pending (must control BOTH the OS and freshness axes) |
 | PARITY-02 | Phase 8 | Pending (per-node `details` instrument) |
 | PARITY-03 | Phase 8 | Pending (four values per target, not two) |

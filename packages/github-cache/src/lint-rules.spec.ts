@@ -89,14 +89,25 @@ const ANY_VIOLATION = 'export const value: any = 1;\n';
 //
 // `new ESLint()` above is cheap -- it defers everything. The FIRST `lintText` call
 // is what loads the flat config and instantiates the TypeScript parser, and it was
-// measured at 590-910ms on an idle workstation against vitest's DEFAULT 5000ms
-// per-test budget. Left unpaid, that cost lands on whichever test happens to run
-// first, so CPU contention (`nx run-many -t typecheck,test`, or a CI runner with a
-// dogfooded background sidecar alongside the target) can time that one test out --
-// surfacing as a FLAKY failure at an arbitrary location rather than as a slow
-// import. `lint-scope-drift.spec.ts` hit exactly this and carries the same hook;
-// this file is the same exposure against the same budget and gets the same fix
-// pre-emptively, since its measured first-call cost is the same order.
+// measured at 590-910ms on an idle workstation. Left unpaid, that cost lands on
+// whichever test happens to run first, so CPU contention (`nx run-many -t
+// typecheck,test`, or a CI runner with a dogfooded background sidecar alongside
+// the target) can time that one test out -- surfacing as a FLAKY failure at an
+// arbitrary location rather than as a slow import. `lint-scope-drift.spec.ts` hit
+// exactly this and carries the same hook; this file is the same exposure and gets
+// the same fix pre-emptively, its measured first-call cost being the same order.
+//
+// NO explicit timeout argument, and that is the considered value rather than an
+// omission. A `beforeAll` hook is budgeted by `hookTimeout`, which defaults to
+// 10_000ms -- `resolved.hookTimeout ??= resolved.browser.enabled ? 3e4 : 1e4`,
+// vitest 4.1.10. It is NOT the 5_000ms an earlier version of this comment cited:
+// 5_000 is `testTimeout`, the per-TEST budget, which is the budget that applied
+// BEFORE the boot was hoisted out of the tests. Citing it here described the bug
+// the hoist fixed rather than the budget the fixed code runs under. Against a
+// 590-910ms boot the untouched default is already ~10x headroom, the normal margin
+// for a contention flake, so the explicit 30_000 this hook used to carry bought no
+// margin that matters and tripled the time a genuinely wedged config import takes
+// to fail.
 //
 // Deliberately NOT fixed by raising `testTimeout` in `vitest.config.mts`: that
 // would mask this class for every test in the repo, which is the opposite of what
@@ -106,7 +117,7 @@ const ANY_VIOLATION = 'export const value: any = 1;\n';
 // nothing, it only pays the boot. A throw here still fails the suite loudly.
 beforeAll(async () => {
   await eslint.lintText('export const value = 1;\n', { filePath: UNIT_PATH });
-}, 30_000);
+});
 
 /**
  * The ignore-warning shape: ESLint reports a path it considers `ignored` or

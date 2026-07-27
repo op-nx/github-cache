@@ -72,21 +72,31 @@ let flatConfig: readonly FlatConfigObject[] = [];
 //
 // Resolving that import pulls in the whole ESLint toolchain -- @eslint/js,
 // typescript-eslint's parser and plugin, the comments plugin. Measured at ~1000ms
-// on an idle workstation here, against vitest's DEFAULT 5000ms per-test budget.
-// Awaited inside a test, that one-time cost lands on whichever test happens to run
-// FIRST, so a 5x slowdown under CPU contention -- `nx run-many -t typecheck,test`,
-// or a CI runner with a dogfooded background sidecar -- times that test out. The
-// symptom is a FLAKY failure at an arbitrary location rather than an honest "the
-// import is slow", which is the worst possible shape for a guard whose entire job
-// is mechanical enforcement: the first red run teaches everyone to re-run instead
-// of read. Paid here with a generous timeout, every assertion below is synchronous
-// and measures the config, not the toolchain boot.
+// on an idle workstation here. Awaited inside a test, that one-time cost lands on
+// whichever test happens to run FIRST, so a slowdown under CPU contention --
+// `nx run-many -t typecheck,test`, or a CI runner with a dogfooded background
+// sidecar -- times that test out. The symptom is a FLAKY failure at an arbitrary
+// location rather than an honest "the import is slow", which is the worst possible
+// shape for a guard whose entire job is mechanical enforcement: the first red run
+// teaches everyone to re-run instead of read. Paid here, every assertion below is
+// synchronous and measures the config, not the toolchain boot.
+//
+// NO explicit timeout argument, and that is the considered value rather than an
+// omission. A `beforeAll` hook is budgeted by `hookTimeout`, which defaults to
+// 10_000ms -- `resolved.hookTimeout ??= resolved.browser.enabled ? 3e4 : 1e4`,
+// vitest 4.1.10. It is NOT the 5_000ms an earlier version of this comment cited:
+// 5_000 is `testTimeout`, the per-TEST budget, i.e. the budget that applied BEFORE
+// this hoist existed -- it describes the bug the hoist fixed, not the budget the
+// fixed code runs under. Against a ~1000ms boot the untouched default is already
+// 10x headroom, the normal margin for a contention flake, so the explicit 30_000
+// this hook used to carry bought no margin that matters and tripled the time a
+// genuinely wedged config import takes to fail.
 //
 // Deliberately NOT fixed by raising `testTimeout` in `vitest.config.mts`: that
-// would mask this whole class for all 486 tests in the repo.
+// would mask this whole class for every test in the repo.
 beforeAll(async () => {
   ({ default: flatConfig } = await eslintConfigModule);
-}, 30_000);
+});
 
 function banConfigObject(): FlatConfigObject {
   // Non-vacuity: if the hook above never ran, `flatConfig` is still the empty

@@ -649,3 +649,124 @@ Phase 9.
 | `packages/github-cache/project.json` untouched (D-01/D-02) | `git diff --exit-code` clean |
 | `packages/github-cache/package.json` untouched (D-06) | `git diff --exit-code` clean |
 | `integration` is still the only target with a platform input (CORR-04) | asserted in the guard, passing |
+
+---
+
+## Plan 07-04
+
+Recorded: 2026-07-27. Host: Windows 11 arm64, node v24.13.0, npm 11.6.2.
+Base commit for every measurement below: **`81048ca`** (the plan 07-03 tree). Every command was
+run from the REPO ROOT in Git Bash unless a `cd` is shown.
+
+### G5 -- the LINT-04 differential, closed BY MEASUREMENT (D-27, ROADMAP SC4)
+
+SC4 requires LINT-04 be "proven by differential rather than by reading the config", so
+`nx-target-inputs.spec.ts`'s declaration probes are necessary and explicitly NOT sufficient.
+These are the behavioural measurements. **A single cache reading carries no information** --
+PITFALLS D1 -- so every row below is one side of a recorded PAIR.
+
+**Q8 closed affirmatively.** `nx run-many -t lint` prints the cache summary line in exactly the
+same form `test` and `typecheck` do (`Cache: n/m hit (p%)`). The `nx run <project>:lint --verbose`
+fallback RESEARCH held in reserve was NOT needed, and no substitution was made.
+
+#### Measurement A -- editing a RULE re-runs `lint`
+
+Perturbation: the **P7 selector object deleted** from `no-restricted-syntax` -- a real rule-set
+change, not a comment edit. A comment-only edit moves the file hash and so proves the file is an
+input, but it says nothing about whether the command reads the rule SET.
+
+| Step | Command | `Cache:` line | Verdict |
+|---|---|---|---|
+| A0 warm 1 | `npm run lint` | `Cache: 1/1 hit (100%)` | already warm from plan 07-03 |
+| A0 warm 2 (baseline) | `npm run lint` | `Cache: 1/1 hit (100%)` | replay, as expected |
+| **A1 P7 deleted** | `npm run lint` | **`Cache: 0/1 hit (0%)`** | **EXECUTED** -- 1.7 s critical path |
+| A2 restored | `git checkout -- eslint.config.mjs; npm run lint` | `Cache: 1/1 hit (100%)` | pre-edit hash still cached |
+
+A `1/1 hit` at A1 would have been the LINT-04 defect. It was `0/1`.
+
+#### Measurement B -- editing a linted SOURCE file re-runs `lint`
+
+Perturbation: one trailing comment appended to `packages/github-cache/src/index.ts` -- a linted,
+tracked, NON-spec file, so the ban rules stay out of the measurement.
+
+| Step | `Cache:` line | Verdict |
+|---|---|---|
+| B0 baseline | `Cache: 1/1 hit (100%)` | replay |
+| **B1 source edited** | **`Cache: 0/1 hit (0%)`** | **EXECUTED** |
+| B2 restored | `Cache: 1/1 hit (100%)` | pre-edit hash still cached |
+
+**A methodological trap hit and recorded, because it produces a false LINT-04 defect reading.**
+The first attempt at B was CONFOUNDED and discarded. The perturbed side was run TWICE with the
+same edit text; the second run legitimately replayed the *perturbed* hash, so re-applying that
+identical edit later read `Cache: 1/1 hit (100%)` -- indistinguishable, at a glance, from the
+stale-cache bug the measurement exists to exclude. The rule this yields: **a differential's
+perturbed side must be run exactly ONCE, and any repeat needs perturbation text that has never
+been hashed before.** The table above uses a novel string for that reason. This is the same class
+as PITFALLS D1 -- a `Cache:` reading is a statement about a HASH, not about correctness.
+
+#### Measurement C -- the D-25 second-order hole: `test` re-runs after a rule edit
+
+The guard specs run under `test` and load `eslint.config.mjs` through the ESLint Node API, so a
+`test` target that replayed across a rule edit would make every LINT-03 verdict untrustworthy.
+Same P7 perturbation.
+
+| Step | `Cache:` line | Verdict |
+|---|---|---|
+| C0 warm 1 | `Cache: 1/1 hit (100%)` | |
+| C0 warm 2 (baseline) | `Cache: 1/1 hit (100%)` | replay |
+| **C1 P7 deleted** | **`Cache: 0/1 hit (0%)`** | **EXECUTED**, and still `Successfully ran target test` |
+
+`{workspaceRoot}/eslint.config.mjs` is doing its job in `targetDefaults.test.inputs`. **This was
+measured BEFORE any mutation in task 2 was trusted**, which is the ordering D-25 requires: every
+M1-M9 result below is read off a `test` target proven to re-run when the rule set moves.
+
+C1 also settles what Measurement A alone cannot. A cache miss proves the FILE is an input; C1's
+executed `test` run additionally exercises the rule set through `lintText`, and task 2's M1/M2/M3
+show that same suite going red when individual selectors are deleted. Together those are the
+proof that the rule set -- not merely the file's bytes -- is what the toolchain reads.
+
+#### Negative control 1 -- the declared input block is LOAD-BEARING
+
+**A and B pass even on a `lint` target with no declared input block at all**, because
+`@nx/eslint`'s INFERRED inputs already contain `default` and `{workspaceRoot}/<eslint config>`
+(F17). Stated plainly: **measurements A and B alone would NOT have proven that D-24's block did
+anything.** This control is what does.
+
+`{workspaceRoot}/eslint.config.mjs` was temporarily deleted from `targetDefaults.lint.inputs`,
+leaving the rest of the block in place -- `targetDefaults` REPLACES the inferred list, so removing
+that one entry genuinely removes it rather than falling back to the inferred one.
+
+| Step | `Cache:` line | Verdict |
+|---|---|---|
+| C1 re-warm 1 (after the `nx.json` edit) | `Cache: 0/1 hit (0%)` | expected: the `targetDefaults` change rotates `hash_project_config` |
+| C1 re-warm 2 (baseline) | `Cache: 1/1 hit (100%)` | replay |
+| **C2 same P7 deletion applied** | **`Cache: 1/1 hit (100%)`** | **THE BUG, REPRODUCED** |
+
+A real rule change served a cached PASS. That is the stale-cache false PASS LINT-04 exists to
+prevent, made visible on this repo rather than argued. A MISS at C2 would have meant something
+ELSE was invalidating the hash and the measurement was confounded -- the plan's explicit stop
+condition. It did not fire.
+
+Both files restored with `git checkout -- nx.json eslint.config.mjs`; `git diff --exit-code`
+clean on both.
+
+This is also the behavioural half of mutation **M6**; the assertion half (M6a) was measured in
+plan 07-03 and is cross-referenced rather than re-run.
+
+#### Negative control 2 -- `lint`'s scope must not depend on gitignored build output (G3)
+
+Re-run now that the `lint` target exists. Command, from `packages/github-cache`:
+`npx eslint . --format json | node -e "...console.log('linted:', JSON.parse(s).length)"`.
+
+| State | `dist/` files | `out-tsc/` files | Linted |
+|---|---|---|---|
+| with build output | 88 | 71 | **66** |
+| after `rm -rf dist out-tsc` | 0 | 0 | **66** |
+
+**IDENTICAL.** `lint`'s result does not depend on whether `build` ran, so it cannot diverge from
+its Nx hash. Two different numbers would have been a stale-cache false PASS by construction.
+
+The absolute count moved 64 -> 66 since plan 07-01: `lint-scope-drift.spec.ts` (plan 07-02) and
+`nx-target-inputs.spec.ts`'s growth are tracked files ESLint now walks. The count that matters is
+that the PAIR agrees, not its absolute value. Build output restored afterwards with
+`npm run build` and `npm run typecheck` (both replayed from cache: 88 and 71 files back).

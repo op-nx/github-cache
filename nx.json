@@ -55,6 +55,7 @@
         "{workspaceRoot}/package.json",
         "{workspaceRoot}/nx.json",
         "{workspaceRoot}/eslint.config.mjs",
+        "{workspaceRoot}/tools/eslint-rules/**/*",
         "{workspaceRoot}/start-cache-server/action.yml",
         "{workspaceRoot}/start-cache-server/entry.ts",
         "{workspaceRoot}/README.md",

@@ -300,4 +300,19 @@ describe('the guard cannot replay a stale pass', () => {
       '{workspaceRoot}/tools/eslint-rules/**/*',
     );
   });
+
+  // The identical argument, one target over, and it was one entry short. D-10
+  // permits `eslint.config.mjs` to import a helper from exactly this directory,
+  // and `lint-rules.spec.ts` loads the REAL config -- so a `test`-target spec's
+  // verdict can depend on a file in here. Declared for `lint` but not for
+  // `test`, editing such a helper would re-run `lint` and REPLAY a cached
+  // `test` PASS. That is D-25's class, one entry short, and this repo has
+  // already shipped it twice (governance-email.spec.ts, and `typecheck`'s
+  // spec-excluding inputs). Declared now rather than on the day the directory
+  // first appears, for the same reason as the `lint` entry above.
+  it('the custom rule directory is a test input too, for the same reason', () => {
+    expect(nxJson.targetDefaults.test.inputs).toContain(
+      '{workspaceRoot}/tools/eslint-rules/**/*',
+    );
+  });
 });

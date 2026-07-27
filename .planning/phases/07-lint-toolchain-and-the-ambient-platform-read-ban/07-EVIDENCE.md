@@ -474,3 +474,129 @@ a speculative one.
 Final state: `npm exec -- nx run-many -t typecheck,test --skip-nx-cache` run 8 times, exit 0
 every time, zero `Test timed out` in any log. M4b re-run against the refactored guard still
 fails on exactly the right assertion.
+
+---
+
+## Plan 07-03
+
+Recorded: 2026-07-27. Host: Windows 11 arm64, node v24.13.0, npm 11.6.2.
+
+### C8 satisfied, and PROVEN rather than assumed
+
+`@nx/eslint@23.1.0`'s `createNodes` short-circuits with
+`if (eslintConfigFiles.length === 0) { return []; }` and produces NO target, silently. So the
+registration was verified by asking the graph, not by reading the config back:
+
+```
+npm exec -- nx show project @op-nx/github-cache --json
+targets: typecheck, build, build-deps, watch-deps, test, lint, integration, nx-release-publish
+```
+
+`lint` is present, so the config-existence gate was satisfied by plan 07-01's
+`eslint.config.mjs`. Exactly ONE new target appeared.
+
+### D-35 -- the inferred `lint` target's HASHED node values (the Phase 8 CORR-03 baseline)
+
+Read from `nx show project @op-nx/github-cache --json` on Windows, AFTER `targetDefaults.lint`
+was applied, so this is the effective node Nx folds into `hash_project_config`. `metadata` is
+NOT hashed and is therefore omitted -- the `${pmc.exec}` it contains (`npx eslint --help` on
+this host) is a non-issue for the hash.
+
+| Hashed field | Value on Windows |
+|---|---|
+| `targetName` | `lint` |
+| `executor` | `nx:run-commands` |
+| `outputs` | `[]` |
+| `options.cwd` | `packages/github-cache` |
+| `options.command` | `eslint .` |
+| `configurations` | `{}` |
+| `parallelism` | `true` |
+
+`cache` is `true`, inferred; it is deliberately NOT restated in `targetDefaults` (D-24).
+
+**This is a BASELINE, not a closure.** Whether `@nx/eslint` infers the same node on Linux is
+UNVERIFIED BY DESIGN (D-35, T-07-17): the existence gate runs
+`eslint.isPathIgnored(join(workspaceRoot, file))` with a POSIX `join` over an absolute Windows
+root, and F18 confirms that gate genuinely runs for this project layout. Phase 8's CORR-03
+two-leg measurement treats `lint` as a FOURTH target and settles it empirically. The
+`options.cwd` row is the one most likely to diverge, and it is hashed.
+
+### C7 -- the real inferred input list, checked against the replacement rather than assumed
+
+D-24's premise is "the block must restate everything it keeps", so the inferred list was read
+from the installed plugin (`node_modules/@nx/eslint/dist/src/plugins/plugin.js:288-302`,
+`buildEslintTargets`) rather than from `STACK.md`'s quote, which is one entry short.
+
+| # | Inferred entry | Resolves to, here | Restated? |
+|---|---|---|---|
+| 1 | `default` | -- | yes |
+| 2 | `^default` | -- | yes |
+| 3 | `{workspaceRoot}/<each eslint config>` | `{workspaceRoot}/eslint.config.mjs` | yes |
+| 4 | `<projectRoot>/.eslintignore`, only `existsSync` | ABSENT -- no such file | n/a, not emitted |
+| 5 | `...tsconfigChainOutsideProjectRoot` | `{workspaceRoot}/tsconfig.base.json` | **no, deliberately** |
+| 6 | `{workspaceRoot}/tools/eslint-rules/**/*` | -- | yes |
+| 7 | `{ externalDependencies: ['eslint'] }` | -- | **widened to four** |
+
+Entry 5 is the one STACK.md omits. All three of `tsconfig.json`, `tsconfig.lib.json` and
+`tsconfig.spec.json` extend `../../tsconfig.base.json` and nothing else, so the chain resolves
+to exactly that one file -- which `sharedGlobals` already folds into `default`, entry 1. The
+replacement list therefore needs no extra entry, and that is a checked conclusion rather than
+an inherited one.
+
+Entry 7 is the LINT-04 hole. `outputs` also changed, from the inferred `['{options.outputFile}']`
+to `[]`, which removes that token from `hash_project_config` entirely (D-24).
+
+### TDD: the RED, assertion by assertion
+
+Probes written and run BEFORE `targetDefaults.lint` existed. The helper indexes
+`nxJson.targetDefaults['lint']`, so every new assertion throws
+`TypeError: Cannot read properties of undefined (reading 'inputs')` -- loud and unambiguous.
+
+**7 failed, 7 passed of 14.**
+
+| Assertion | RED | Why |
+|---|---|---|
+| the four pre-existing `typecheck` / `build` probes | PASS | untouched; confirms the fourth `PROBE_FILES` entry broke nothing |
+| `lint` hashes the lib sources | **FAIL** | no `lint` target default |
+| `lint` hashes the spec sources | **FAIL** | same |
+| `lint` does NOT hash a path outside the project root | **FAIL** | same |
+| `lint` lists all four ESLint external dependencies | **FAIL** | same |
+| `lint` declares no outputs | **FAIL** | same |
+| CORR-04: `integration` is the only runtime input | PASS | **a direction control -- passes on BOTH sides by design** |
+| the two pre-existing `test.inputs` literal pins | PASS | untouched |
+| `eslint.config.mjs` is a `lint` input | **FAIL** | no `lint` target default |
+| the custom rule directory is a `lint` input | **FAIL** | same |
+
+**GREEN after step 2: 14 passed of 14.** The CORR-04 control passing on both sides is the same
+device plan 07-02 used for its integration-path pair: had it failed in RED, the failure would
+have meant the spec could not read `nx.json` at all rather than that `lint` was missing.
+
+### The negative control, and the mutation proving it is the ONLY one that catches vacuity
+
+`build` is the discriminator the `typecheck` probes use, and it is UNUSABLE for `lint`:
+`lint`'s inputs start from `default` (`{projectRoot}/**/*`), so hashing a spec is exactly what
+`lint` is supposed to do. The chosen negative is a probe path OUTSIDE `{projectRoot}` --
+`start-cache-server/entry.ts`, a real file, genuinely not linted, and already present in
+`test.inputs` as a `{workspaceRoot}` string so both frames are visible side by side. It is a
+fourth entry in `PROBE_FILES`; every pre-existing assertion is a `toContain` / `not.toContain`
+on a named path and none is a whole-array comparison, which the RED run confirmed empirically
+(all four pre-existing probes still passed).
+
+Two mutations, each applied, observed and REVERTED before the commit.
+
+| # | Mutation to `nx.json` | Result |
+|---|---|---|
+| M6a | remove `{workspaceRoot}/eslint.config.mjs` from `targetDefaults.lint.inputs` | **1 failed / 13 passed** -- exactly the expected assertion, zero collateral |
+| MV | reduce `lint.inputs` to `^default` + the `externalDependencies` object, so the SELF pattern list resolves EMPTY | **3 failed / 11 passed** |
+
+MV is the one that matters. With an empty pattern list `filterUsingGlobPatterns` returns the
+WHOLE probe list untouched, so **both positive `toContain` assertions still PASSED** -- a
+resolver that resolved nothing looked exactly like a working one. The out-of-project negative
+was the only glob-resolution assertion that caught it. (The two literal-pinning assertions also
+fired, but they pin strings the same mutation deleted; they are not evidence about the filter.)
+That is the vacuity trap this control exists for, reproduced rather than argued.
+
+M6's second half -- the stale-cache HIT differential -- is plan 07-04's, and is not claimed
+here.
+
+`nx.json` restored byte-identical after each mutation, re-verified at 14 passed of 14.

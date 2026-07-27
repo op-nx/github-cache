@@ -48,7 +48,7 @@ const nxJson = JSON.parse(
   readFileSync(new URL('../../../nx.json', import.meta.url), 'utf8'),
 ) as {
   namedInputs: Record<string, TargetInputs>;
-  targetDefaults: Record<string, { inputs: TargetInputs }>;
+  targetDefaults: Record<string, { inputs: TargetInputs; outputs?: string[] }>;
 };
 
 const PROJECT_ROOT = 'packages/github-cache';
@@ -62,6 +62,13 @@ const PROBE_FILES = [
   `${PROJECT_ROOT}/src/index.ts`,
   `${PROJECT_ROOT}/src/index.spec.ts`,
   `${PROJECT_ROOT}/tsconfig.spec.json`,
+  // Fourth class, added for `lint`'s negative control below: a real workspace-
+  // root path OUTSIDE the project root. It is genuinely not linted (the phase-7
+  // scope deviation) and it already appears in `test.inputs` as a
+  // `{workspaceRoot}` string, so a reader can see the two frames side by side.
+  // Safe for every assertion above: all of them are toContain / not.toContain
+  // on a named path, none is a whole-array comparison.
+  'start-cache-server/entry.ts',
 ];
 
 function hashedFilesFor(target: string): string[] {
@@ -111,6 +118,83 @@ describe('typecheck hashes everything its command compiles', () => {
   });
 });
 
+describe('lint hashes everything it lints', () => {
+  // `lint` runs `eslint .` from the project directory, and its inputs start
+  // from `default` (`{projectRoot}/**/*`), so BOTH classes of project source
+  // are in scope -- unlike `typecheck`, `lint` is supposed to hash specs.
+  it('hashes the lib sources', () => {
+    expect(hashedFilesFor('lint')).toContain(`${PROJECT_ROOT}/src/index.ts`);
+  });
+
+  it('hashes the spec sources', () => {
+    expect(hashedFilesFor('lint')).toContain(
+      `${PROJECT_ROOT}/src/index.spec.ts`,
+    );
+  });
+
+  // NON-VACUITY control for `lint`, and its discriminator had to be CHOSEN
+  // rather than copied. `build` -- the discriminator the typecheck probes use
+  // -- is unusable here: `lint` starting from `default` means hashing a spec is
+  // exactly what it is SUPPOSED to do, so a build-shaped negative would assert
+  // something false about this target. The honest negative is a probe path
+  // outside `{projectRoot}`. It discriminates for the same reason the `build`
+  // one does: filterUsingGlobPatterns returns the WHOLE probe list untouched
+  // when the resolved pattern list is empty, so both toContain()s above would
+  // pass together on a resolver that resolved nothing -- and an out-of-project
+  // path is dropped only if the filter genuinely filtered.
+  it('does NOT hash a path outside the project root, proving the filter filters', () => {
+    expect(hashedFilesFor('lint')).not.toContain('start-cache-server/entry.ts');
+  });
+});
+
+describe('lint declares its full input set (LINT-04)', () => {
+  // The inferred input list carries `{ externalDependencies: ['eslint'] }` and
+  // nothing else, and `targetDefaults.<target>.inputs` REPLACES that list
+  // rather than merging with it. Naming only the linter IS the stale-cache
+  // hole: a typescript-eslint or comments-plugin bump changes what `eslint .`
+  // reports while the `lint` hash never moves, so a cached PASS stands in for
+  // an unrun gate.
+  it('lists all four ESLint packages as external dependencies', () => {
+    const externalDependencies = nxJson.targetDefaults.lint.inputs.flatMap(
+      (input) =>
+        typeof input === 'object' && 'externalDependencies' in input
+          ? (input.externalDependencies ?? [])
+          : [],
+    );
+
+    expect([...externalDependencies].sort()).toEqual([
+      '@eslint-community/eslint-plugin-eslint-comments',
+      '@eslint/js',
+      'eslint',
+      'typescript-eslint',
+    ]);
+  });
+
+  // `eslint .` with no --output-file writes nothing, so an empty array is the
+  // honest declaration -- and it drops the {options.outputFile} token from
+  // hash_project_config entirely.
+  it('declares no outputs', () => {
+    expect(nxJson.targetDefaults.lint.outputs).toEqual([]);
+  });
+
+  // CORR-04: a platform discriminator makes a target's hash OS-sensitive, which
+  // is a deliberate, single-target decision. `integration` owns it because it
+  // exercises real per-OS behaviour; every other target -- `lint` included --
+  // must stay OS-invariant or the cross-OS cache sharing this milestone exists
+  // to protect silently stops working.
+  it('integration is still the only target with a platform runtime input', () => {
+    const targetsWithRuntimeInput = Object.entries(nxJson.targetDefaults)
+      .filter(([, target]) =>
+        target.inputs.some(
+          (input) => typeof input === 'object' && 'runtime' in input,
+        ),
+      )
+      .map(([name]) => name);
+
+    expect(targetsWithRuntimeInput).toEqual(['integration']);
+  });
+});
+
 describe('the guard cannot replay a stale pass', () => {
   // This one DOES pin a literal, deliberately: there is no resolver to delegate
   // to for a `{workspaceRoot}` entry, and the wiring IS the invariant. Its
@@ -137,6 +221,27 @@ describe('the guard cannot replay a stale pass', () => {
   it('eslint.config.mjs is a test input, so editing a rule re-runs the lint guard', () => {
     expect(nxJson.targetDefaults.test.inputs).toContain(
       '{workspaceRoot}/eslint.config.mjs',
+    );
+  });
+
+  // Same literal-pinning reason, one target over. The config lives OUTSIDE the
+  // project root, so no `{projectRoot}` pattern can reach it and the resolver
+  // has nothing to delegate to -- the entry IS the invariant. Without it,
+  // editing a rule replays a cached `lint` PASS: the gate reports the OLD rule
+  // set's verdict about the NEW one, which is the LINT-04 hole itself.
+  it('eslint.config.mjs is a lint input, so editing a rule re-runs lint', () => {
+    expect(nxJson.targetDefaults.lint.inputs).toContain(
+      '{workspaceRoot}/eslint.config.mjs',
+    );
+  });
+
+  // The custom-rule directory does not exist today. The entry is still declared
+  // rather than deferred: the day someone adds a local rule, its authoring
+  // commit must bust the lint hash, and remembering to wire the input at that
+  // moment is exactly the kind of thing nobody remembers.
+  it('the custom rule directory is a lint input', () => {
+    expect(nxJson.targetDefaults.lint.inputs).toContain(
+      '{workspaceRoot}/tools/eslint-rules/**/*',
     );
   });
 });

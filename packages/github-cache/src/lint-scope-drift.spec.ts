@@ -42,9 +42,16 @@ import { beforeAll, describe, expect, it } from 'vitest';
  */
 
 // Three levels up from `src/*.spec.ts`: `src/` -> `packages/github-cache/` ->
-// `packages/` -> the workspace root. Never `__dirname`, never `process.cwd()` --
-// and in THIS file doubly so, since an ambient read here would be banned by the
-// very rule it is guarding.
+// `packages/` -> the workspace root. Never `__dirname`, never `process.cwd()`:
+// the house convention, and its reason is invocation-independence -- a
+// cwd-relative read resolves differently depending on the directory the runner
+// was started from.
+//
+// NOT because the rule this file guards would ban it, which is what this comment
+// used to claim. Measured: `process.cwd()` at a unit spec path reports nothing,
+// because no selector reaches a CALL on `process`. CORR-06 is about deriving an
+// expectation from the running MACHINE; the working directory is a property of
+// the invocation.
 const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
 
 interface FlatConfigObject {

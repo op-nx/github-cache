@@ -48,9 +48,19 @@ import { beforeAll, describe, expect, it } from 'vitest';
 // From `src/*.spec.ts` the workspace root is THREE levels up: `src/` ->
 // `packages/github-cache/` -> `packages/` -> the root. Resolved from
 // `import.meta.url`, never `__dirname` and never `process.cwd()` -- the house
-// convention at five existing sites, and doubly load-bearing in this file, because
-// an ambient `process.cwd()` read inside a unit spec is precisely the shape
-// LINT-02 exists to ban.
+// convention at five existing sites. The reason is invocation-independence: a
+// cwd-relative read resolves differently depending on the directory the runner
+// was started from, so the same spec passes locally and fails under a different
+// invocation.
+//
+// It is NOT because LINT-02 bans it, which is what this comment used to say.
+// Measured: `export const v = process.cwd();` at a unit spec path reports
+// NOTHING -- no selector reaches a CALL on `process` (P1 is constrained to
+// platform|arch, P2 to computed access). Nor should it: CORR-06 is about
+// deriving an expectation from the running MACHINE, and the working directory
+// is a property of the invocation, not of the OS. Overstating the control's
+// coverage in the very file that documents the control is a defect in this
+// house's terms, so the claim is stated as convention.
 const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
 const WORKSPACE_ROOT = fileURLToPath(WORKSPACE_ROOT_URL);
 

@@ -4,8 +4,8 @@ fixed_at: 2026-07-27
 review_path: .planning/phases/07-lint-toolchain-and-the-ambient-platform-read-ban/07-REVIEW.md
 iteration: 1
 findings_in_scope: 15
-fixed: 13
-skipped: 2
+fixed: 14
+skipped: 1
 status: partial
 diff_base: 0ef4aad
 ---
@@ -13,10 +13,20 @@ diff_base: 0ef4aad
 # Phase 7: Code Review Fix Report
 
 **Source review:** `07-REVIEW.md` (1 CRITICAL, 2 HIGH, 6 MEDIUM, 6 LOW)
-**Base:** `0ef4aad` -- **Head:** `f70ebc8` -- 13 commits, one per finding
+**Base:** `0ef4aad` -- **Head:** `a6af663` -- 14 fix commits, one per finding
 
-**Summary:** 13 fixed, 2 declined (ME-01 escalated, ME-05 assessed).
+(`0ef4aad..HEAD` contains 16 commits. Two are the orchestrator's, interleaved
+while this ran: `345e570` recording the planning artifacts and `d6e6d4a` updating
+STATE.md. Both touch `.planning/` only and raced no source file. The 4 non-ASCII
+characters in the range are em dashes in `d6e6d4a`'s STATE.md; all 14 fix commits
+are pure ASCII.)
+
+**Summary:** 14 fixed, 1 declined (ME-05 assessed, no code change warranted).
 All nine battery commands verified green from the repo root at EVERY commit.
+
+ME-01 was initially declined and escalated as a locked-decision conflict; the
+coordinator returned **Option A -- re-derive both globs from the runner configs**,
+which is applied in `a6af663` with D-16 and D-19 amended in place.
 
 ## Disposition
 
@@ -25,7 +35,7 @@ All nine battery commands verified green from the repo root at EVERY commit.
 | CR-01 | CRITICAL | fixed | `5e662a7` |
 | HI-01 | HIGH | fixed | `5b9f5ca` |
 | HI-02 | HIGH | fixed | `2cc6203` |
-| ME-01 | MEDIUM | **DECLINED -- escalated, needs a D-16 decision** | -- |
+| ME-01 | MEDIUM | fixed (escalated first; Option A applied, D-16/D-19 amended) | `a6af663` |
 | ME-02 | MEDIUM | fixed | `7afb251` |
 | ME-03 | MEDIUM | fixed (ceiling recorded) | `eb765e2` |
 | ME-04 | MEDIUM | fixed (primary half; latent half declined) | `31a1e73` |
@@ -106,6 +116,96 @@ Mutation: add a second include glob `e2e/**/*.integration.spec.{tsx}` to the rea
 
 Reverted; `vitest.integration.config.mts` confirmed byte-identical.
 
+### ME-01 -- `a6af663`
+
+Escalated first as a locked-decision conflict; coordinator returned **Option A**.
+D-16 and D-19 amended in place (struck, dated, citing ME-01), `07-CONTEXT.md`.
+
+Final globs, **asymmetric on purpose** -- each mirrors a DIFFERENT vitest key:
+
+```js
+files:   ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],  // unit include
+ignores: ['**/*.integration.spec.{ts,mts,cts}'],                // unit exclude
+```
+
+D-19's invariants, replaced. All three read the REAL configs and compare the
+BASENAME pattern (name family + extension set, as sorted sets), because the path
+anchor legitimately differs -- ESLint matches from the config file's directory
+(`**/`), vitest from the package root (`{src,tests}/**/`).
+
+| | Invariant |
+|---|---|
+| ~~old (a)~~ | ~~ESLint `files` == ESLint `ignores`~~ |
+| ~~old (b)~~ | ~~ESLint `files` superset-of integration include~~ |
+| **new (1)** | ESLint `files` == `vitest.config.mts` `include` |
+| **new (2)** | ESLint `ignores` == `vitest.config.mts` `exclude` |
+| **new (3)** | unit `exclude` == integration `include` (old (b), stated exactly) |
+
+**RED for new (1)** -- against the unwidened config, before the change:
+
+```
+x applies the ban to exactly what the unit runner COLLECTS (D-19 new (1))
+AssertionError: the ban covers the name family {spec} but the unit runner
+collects {spec,test} -- a file in the difference runs as a unit test with the
+ambient-platform ban silently OFF: expected [ 'spec' ] to deeply equal
+[ 'spec', 'test' ]
+1 failed | 5 passed (6)
+```
+
+Green after the change (6/6).
+
+**RED for new (2)** -- honest note: new (2) was **already green** before the
+config change, because `ignores` was already aligned with the unit exclude. It is
+proven by independent mutation instead, and that mutation is the measured
+justification for replacing a locked invariant:
+
+Mutation: widen `ignores` to the same eight extensions as `files` (the naive
+symmetric "tidy" the old invariant would have encouraged).
+
+| Check | Result |
+|---|---|
+| **old (a)** `files` == `ignores` | ext sets both `[cjs,cts,js,jsx,mjs,mts,ts,tsx]` -> **PASSES, completely blind** |
+| **new (2)** | **FAILS** -- "the ban exempts `.{cjs,cts,js,jsx,mjs,mts,ts,tsx}` but the unit runner hands off `.{cts,mts,ts}`" |
+| behaviour, measured via the ESLint Node API | `x.integration.spec.tsx` goes **BANNED -> clean**: exempt from the ban while still running as a unit test |
+
+That is the `.tsx` corner old (a) cannot express, since it has no term for the
+runner at all.
+
+**new (3)** regression-checked against ME-04's case (a second integration include
+glob `e2e/**/*.integration.spec.{tsx}`): FAILS correctly with "the unit runner
+hands off `.{cts,mts,ts}` but the integration runner collects `.{cts,mts,ts,tsx}`
+-- a file in the difference either runs TWICE or not at all". Old (b)'s coverage
+is preserved.
+
+All mutations reverted; every mutated file verified byte-identical.
+
+**Ban behaviour after the widening**, measured at real in-tree paths:
+
+| Path class | Verdict |
+|---|---|
+| `x.spec.{ts,mts,cts,tsx,js,mjs,cjs,jsx}` | BANNED (all eight) |
+| `x.test.ts`, `x.test.tsx` | BANNED (the newly covered name family) |
+| `x.integration.spec.{ts,mts,cts}` | clean (exempt, as CORR-06 requires) |
+| `x.integration.spec.tsx` (the corner) | BANNED -- correct, it runs as a unit test |
+| `x.ts`, a plain `.cjs` | untouched |
+
+**The `.cjs` interaction finding.** A `foo.spec.cjs` now matches BOTH the
+`**/*.cjs` override and the ban block. **The ban still fires** -- no
+config-object reordering was needed. C5's original ordering reason is intact: the
+`.cjs` override still sits AFTER the `tseslint.configs.recommended` spread (so it
+still wins on `languageOptions`), and the ban block sits after both and sets only
+`rules`, so the two compose rather than collide. Confirmed live -- `x.spec.cjs`
+reports the ban error AND reports no `no-undef` on `process`, which is the
+override's inline globals map still being active.
+
+Secondary, recorded under D-13 and deliberately not fixed: a hypothetical
+`*.spec.{js,mjs,jsx}` would ALSO trip `no-undef` on `process`, because
+`typescript-eslint/eslint-recommended` scopes `no-undef: 'off'` to
+`{ts,tsx,mts,cts}` only and the `.cjs` override covers `.cjs` only. Noise on a
+file that does not exist, not a hole -- the ban fires regardless. Adding a globals
+map for those three extensions would be speculative config for files nobody has
+written.
+
 ### LO-01 -- `331a60c`
 
 Mutation: remove `{workspaceRoot}/tools/eslint-rules/**/*` from `test.inputs`,
@@ -150,37 +250,6 @@ them:
   in its prose (read directly); the stripping rationale's factual claim was false.
 
 ## Declined
-
-### ME-01 -- the ban's `files` glob is narrower than the unit runner's -- ESCALATED
-
-**Not fixed. This one needs a decision, not a patch.**
-
-The finding is real and I reproduced its premise: `vitest.config.mts` collects
-`{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}` while the ban
-covers `**/*.spec.{ts,mts,cts}`, so `*.test.ts`, `*.spec.tsx` and `*.spec.cjs`
-would run as unit tests with the ban silently off. Measured: zero such files
-exist today, which is exactly why nothing would notice the first one.
-
-Declined because the fix collides with two LOCKED decisions, and the hard
-constraint on this task is to stop and report rather than proceed:
-
-1. **D-16** pins the glob text verbatim -- `files: ['**/*.spec.{ts,mts,cts}']`
-   with `ignores: ['**/*.integration.spec.{ts,mts,cts}']`. Widening to
-   `**/*.{test,spec}.{ts,mts,cts,tsx}` changes the locked string. It arguably
-   preserves D-16's *purpose* (the full extension set in BOTH globs, against the
-   E5 inversion), but "the locked decision meant something broader than it says"
-   is precisely the call a fixer should not make alone.
-2. **D-19** enumerates exactly TWO invariants for the drift guard and explicitly
-   excludes the unit-vitest include from comparison ("an equality assertion would
-   be permanently red"). The reviewer's second half -- "add a drift assertion that
-   the unit include's `{test,spec}` name set is covered" -- adds a THIRD invariant
-   over the config D-19 deliberately left out.
-
-**Recommended resolution:** take it to a discuss-phase decision on D-16/D-19
-rather than a review fix. The cheap interim, if a decision is not wanted now, is
-a one-line ceiling comment in `eslint.config.mjs` naming the uncovered naming
-family -- which is D-21's own remedy for a known gap and needs no locked-decision
-change. I did not add even that, because it belongs in the same decision.
 
 ### ME-05 -- undici 6.27.0 -> 6.28.0 consumer impact -- ASSESSED, no exposure
 
@@ -259,7 +328,11 @@ note is the reviewable record.
 Files changed across the range: `.github/workflows/ci.yml`, `eslint.config.mjs`,
 `nx.json`, `src/lib/release-asset-name.spec.ts` (comment only),
 `src/lint-rules.spec.ts`, `src/lint-scope-drift.spec.ts`,
-`src/nx-target-inputs.spec.ts`. 7 files, +416 / -67.
+`src/nx-target-inputs.spec.ts`, plus `07-CONTEXT.md` (the D-16/D-19 amendment).
+
+Blast radius of the ME-01 glob change, checked before amending: repo-only. The
+npm tarball carries 53 files and zero eslint/lint/spec/vitest artifacts, so none
+of the three source files touched by ME-01 ship to consumers.
 
 ## Notes for the next reader
 

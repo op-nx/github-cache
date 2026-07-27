@@ -6,7 +6,7 @@ current_phase: 7
 status: verifying
 last_updated: "2026-07-27T07:09:50.342Z"
 last_activity: 2026-07-27
-last_activity_desc: Phase 7 executed (4/4 plans) — ready for verification
+last_activity_desc: Phase 7 executed (4/4 plans) -- ready for verification
 progress:
   total_phases: 6
   completed_phases: 0
@@ -23,15 +23,15 @@ current_phase_name: Lint Toolchain and the Ambient-Platform-Read Ban
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 7 — Lint Toolchain and the Ambient-Platform-Read Ban
+**Current focus:** Phase 7 -- Lint Toolchain and the Ambient-Platform-Read Ban
 
 ## Current Position
 
 Phase: 7 - Lint Toolchain and the Ambient-Platform-Read Ban
 Plan: 4/4 complete
-Status: Phase complete — ready for verification
+Status: Phase complete -- ready for verification
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-27 — Phase 7 executed (4/4 plans) — ready for verification
+Last activity: 2026-07-27 -- Phase 7 executed (4/4 plans) -- ready for verification
 
 ## Performance Metrics
 
@@ -132,7 +132,7 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase ?]: [Phase 03]: 03-02: resolveRepoIdentity resolves owner/name from a shape-validated GITHUB_REPOSITORY override else git remote origin (https + scp-like ssh, .git optional); non-GitHub/unparseable -> undefined, never a guess (D-10). GITHUB_REPOSITORY_PATTERN exported from select-backend.ts (1-line diff) and reused; resolveGitHubToken body byte-identical (TEST-01 intact). FOUND-02 checkbox deferred to 03-03 end-to-end wiring.
 - [Phase ?]: [Phase 03]: 03-03: createReleasesReadClient is the real default ReleaseReadClient (authenticated GitHub REST over native fetch, zero-dep): resolves token then repo BEFORE any request (D-09/D-10, zero-fetch on undefined), paginates assets (per_page=100, never inline release.assets), download drops Authorization on the 302 by spec (no redirect:manual). 404 -> silent undefined; other non-ok -> throw -> port warns+MISS (D-11). selectBackend local branch wires it and stays synchronous (async resolution deferred into fetchAsset, TRUST-05 length 0). shardTag = current-month cache-mirror-YYYYMM single-shard seam. Benign call-time-only circular import select-backend->releases-backend->local-context.
 - [Phase ?]: 04-01: sync gate is a SEPARATE predicate (isSyncTrusted / SYNC_EVENTS), never reuses the write gate allowlist (D-01 / TRUST-02 / ADR C2 CREEP control)
-- [Phase 04]: 04-02: retention.ts is the ONE coupled knob (resolveMaxAgeDays, default 30) + single-source cache-mirror-YYYYMM shard scheme (shardTag moved here); the Releases reader walks shardTagsForWindow newest-first, 404 advances shard, MISS only after exhausting the window (D-07/D-08). RETAIN-01 (cleanup) stays open -> 04-03. — One knob prevents read/retention drift; single-source template prevents silent cross-OS MISS; window walk survives month boundaries without FOUND-02 regression.
+- [Phase 04]: 04-02: retention.ts is the ONE coupled knob (resolveMaxAgeDays, default 30) + single-source cache-mirror-YYYYMM shard scheme (shardTag moved here); the Releases reader walks shardTagsForWindow newest-first, 404 advances shard, MISS only after exhausting the window (D-07/D-08). RETAIN-01 (cleanup) stays open -> 04-03. -- One knob prevents read/retention drift; single-source template prevents silent cross-OS MISS; window walk survives month boundaries without FOUND-02 regression.
 - [Phase 04]: 04-03: cleanupMirror is the list-abort/delete-isolate prune engine behind an injected CleanupClient -- LIST materializes every cache-mirror-* release+asset before any delete (any throw aborts with ZERO deletions, inverting the reader swallow discipline); DELETE prunes by created_at, per-item isolated, 404 benign vs non-404 real fault via statusOf duck-type, core.setFailed on aggregate; OBS-01 summary reports pruned/failed/scanned. Shared octokitFault test factory added (RETAIN-01/TEST-06).
 - [Phase 04]: 04-04: publishMirror is the injected-client, Octokit-free mirror engine -- nx-cache- filter (D-16) -> same-OS restore (D-03) -> lazy get-or-create current-month shard -> first-write-wins upload; pre-upload ~2 GiB fail-loud whole-run throw (D-12), 1000-asset skip-and-warn (D-11), statusOf duck-type discrimination with per-item upload fault isolated+annotated vs whole-run throw (D-13/OBS-01); asset name via releaseAssetName only (CORR-01).
 - [Phase ?]: Cleanup bin reuses GITHUB_REPOSITORY_PATTERN + resolveGitHubToken for fail-closed guards (no new code)

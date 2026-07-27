@@ -770,3 +770,71 @@ The absolute count moved 64 -> 66 since plan 07-01: `lint-scope-drift.spec.ts` (
 `nx-target-inputs.spec.ts`'s growth are tracked files ESLint now walks. The count that matters is
 that the PAIR agrees, not its absolute value. Build output restored afterwards with
 `npm run build` and `npm run typecheck` (both replayed from cache: 88 and 71 files back).
+
+### D-23 -- M1 through M9, applied, OBSERVED, and reverted
+
+Every row below was re-run first-hand in this plan against the plan 07-03 tree, including the
+five that earlier waves had already measured -- so this table is one executor's direct
+observation rather than a stitched-together citation. Each mutation was applied, the detecting
+command run, the failure set recorded, and the file restored with `git checkout --` plus a
+`git diff --exit-code` confirmation before the next mutation. **No mutation was ever committed.**
+
+Baseline for the three guard specs before any mutation: **56 passed of 56** across
+`lint-rules.spec.ts` (37), `nx-target-inputs.spec.ts` (14) and `lint-scope-drift.spec.ts` (5).
+
+| # | Mutation | Command | OBSERVED failure set | Verdict |
+|---|---|---|---|---|
+| M1 | delete the P1 member-expression selector | `npx vitest run src/lint-rules.spec.ts` | **4 failed / 33 passed.** `catches process.platform, the primary member-expression form (P1)`; and the `is CAUGHT ...` assertion at all THREE `no-restricted-syntax` sites -- `releases-backend.spec.ts`, and both `release-asset-name.spec.ts` rows. Every import-shape assertion GREEN. | **MATCH** |
+| M2 | delete the `node:os` entry from `no-restricted-imports.paths` | same | **3 failed / 34 passed.** `catches a named import of a banned accessor from the os module`; `catches a namespace import of the os module, caught by BOTH rules`; and the `is CAUGHT ...` assertion at site 1, `cache-archive-path.spec.ts`. Every `process.*` assertion GREEN. | **MATCH** |
+| M3 | delete the P6 `ImportExpression` selector | same | **1 failed / 36 passed.** `catches a dynamic import of the os module and of the path module (P6 only)`, failing `expected [] to deeply equal [ 'no-restricted-syntax', 'no-restricted-syntax' ]`. Nothing else moved. | **MATCH** (see the note below on granularity) |
+| M4 | narrow `ignores` to `['**/*.integration.spec.ts']` | `npx vitest run src/lint-scope-drift.spec.ts` | **1 failed / 4 passed.** `applies the ban to exactly the extension set it exempts`, failing through the parser's OWN non-vacuity guard: `expected the glob "**/*.integration.spec.ts" to END in a {ext,ext} group`. | **MATCH** |
+| M5 | remove `{workspaceRoot}/eslint.config.mjs` from `targetDefaults.test.inputs` | `npx vitest run src/nx-target-inputs.spec.ts` | **1 failed / 13 passed.** `eslint.config.mjs is a test input, so editing a rule re-runs the lint guard`. Zero collateral. | **MATCH** |
+| M6 | remove `{workspaceRoot}/eslint.config.mjs` from `targetDefaults.lint.inputs` | same, **plus** the G5 negative-control-1 differential above | **1 failed / 13 passed** -- `eslint.config.mjs is a lint input, so editing a rule re-runs lint`, zero collateral. The BEHAVIOURAL half is negative control 1 above: `Cache: 1/1 hit (100%)` across a real rule edit. | **MATCH, both halves** |
+| M7 | remove the global `ignores` block | the negative-control-2 file count, with build output ON disk | **66 -> 159 linted files.** The two counts DIFFER by 93 -- the generated `dist/` (88) and `out-tsc/` (71) trees minus overlap, all at an Nx hash that never moves. | **MATCH** |
+| M8 | replace the site-1 described disable with a bare `// eslint-disable-next-line no-restricted-imports` | `npx eslint .` from `packages/github-cache` | **1 error.** `cache-archive-path.spec.ts:6:0` severity 2, `@eslint-community/eslint-comments/require-description`, "Unexpected undescribed directive comment." Guard-spec collateral, also observed: `carries a described disable stating why the assertion cannot move to integration` went RED (1 failed / 36 passed). | **MATCH -- LINT-05 is LIVE** |
+| M9 | move the site-1 described disable one line PAST its violation | same | **2 errors, both expected.** `cache-archive-path.spec.ts:6:10` severity 2 `no-restricted-imports` (the ban itself, now unsuppressed) AND `:7:1` severity 2 `ruleId: null` -- "Unused eslint-disable directive (no problems were reported from 'no-restricted-imports')". | **MATCH -- LINT-06 is LIVE** |
+
+Post-restore re-measure: `npx eslint .` from `packages/github-cache` reports **66 files linted, 0
+findings, exit 0**, and `git diff` against the task-1 commit shows no source, config or spec file
+touched.
+
+#### M3 is NOT a silent gap -- but its granularity diverges from VALIDATION.md
+
+The plan flagged M3 as the mutation most likely to pass vacuously, in which case P6 would be
+untested and D-21's dynamic-import shape a silent hole. **It went red.** P6 is genuinely load-
+bearing and genuinely covered.
+
+One divergence from VALIDATION.md's prediction, recorded because it is a real difference and not
+a rounding of the same thing. The table predicts "ONLY the two dynamic-import assertions RED".
+The shipped spec folds BOTH dynamic shapes -- `await import('node:os')` and
+`await import('node:path')` -- into a SINGLE `it()` row whose expected value is the two-element
+list `['no-restricted-syntax', 'no-restricted-syntax']`. So the observed count is **one** failing
+assertion covering two shapes, not two failing assertions. Coverage is identical; the granularity
+is not. A reader checking "2 red" against this table would otherwise conclude the mutation had
+under-fired.
+
+#### What M1 and M2 prove jointly, and why D-15 needed both rules
+
+M1 leaves every import-shape assertion GREEN and M2 leaves every `process.*` assertion GREEN. The
+failure sets are DISJOINT. That is the measured form of D-15's claim that neither rule is
+sufficient alone: `no-restricted-syntax` cannot see a destructured named import and
+`no-restricted-imports` cannot ban a member of a namespace object or reach a dynamic import.
+Two mutations, two disjoint red sets, no overlap -- the guard is not asserting one thing twice.
+
+M2's namespace row is the one partial: `import * as os from 'node:os'` is caught by BOTH rules,
+so with the `node:os` path entry gone it still reports `['no-restricted-syntax']` from P4 and
+fails only on the missing `no-restricted-imports` half. That is the defence-in-depth the spec
+comment claims, observed rather than asserted.
+
+#### Mutations that produce a FALSE reading if run carelessly
+
+Recorded so a later reader does not repeat them:
+
+- **M6 through the `lint` cache.** The behavioural half must be measured with a re-warm between
+  the `nx.json` edit and the rule edit. Removing the entry rotates `hash_project_config`, so the
+  FIRST post-mutation `lint` run misses for a reason that has nothing to do with the input list.
+  Reading that first miss as "the entry was not load-bearing after all" is the trap; the
+  measurement above re-warms twice before perturbing.
+- **M8 and M9 mutate a REAL spec file**, not a fixture, so both also perturb
+  `lint-rules.spec.ts`'s site table. The guard-spec collateral is expected and is recorded above
+  rather than treated as a second finding.

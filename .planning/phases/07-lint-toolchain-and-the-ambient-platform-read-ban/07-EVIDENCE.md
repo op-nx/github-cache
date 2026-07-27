@@ -412,3 +412,27 @@ false-positive controls, 7 integration-path direction assertions and 8 site asse
 D-06 prohibitions verified clean again at this commit:
 `git diff --exit-code -- packages/github-cache/package.json` and
 `git diff --exit-code -- packages/github-cache/src/public-surface.spec.ts`.
+
+### M4 applied early, observed, and reverted (plan 07-02 task 2)
+
+M4 is formally plan 07-04's, but the D-19 guard is worthless unless it can fail, so it was
+run against the guard as it was written. Three variants, each producing exactly ONE failing
+assertion and no collateral:
+
+| Variant | Mutation to `eslint.config.mjs` | Assertion that went RED | Failure text |
+|---|---|---|---|
+| M4a (the VALIDATION.md form) | `ignores` -> `['**/*.integration.spec.ts']` | "applies the ban to exactly the extension set it exempts" | the parser's own non-vacuity guard fires first: `expected the glob "**/*.integration.spec.ts" to END in a {ext,ext} group` |
+| M4b | `ignores` -> `['**/*.integration.spec.{ts,mts}']` | same | `expected [ 'mts', 'ts' ] to deeply equal [ 'cts', 'mts', 'ts' ]` |
+| M4c | BOTH globs -> `{ts,mts}` | "covers every extension the integration vitest config includes" | `an *.integration.spec.cts would be linted as a UNIT spec: the ESLint scope covers mts, ts and the integration vitest config includes cts` |
+
+M4c is the variant that matters most and is NOT in the VALIDATION.md table: it narrows both
+globs together, so IDENTITY still holds and only the SUPERSET invariant can catch it. Both
+D-19 invariants are therefore independently load-bearing -- the guard is not asserting one
+thing twice. `eslint.config.mjs` was restored byte-identical
+(`git diff --exit-code` clean) before the commit; no mutation is committed.
+
+The ESLint side is read by IMPORTING `eslint.config.mjs` through a non-literal specifier
+(Q6's recommended route). It worked on the first attempt under both `vitest` and `typecheck`,
+so the disk-read-plus-comment-strip fallback was NOT needed there. Q6 is closed
+affirmatively. The vitest side still uses the disk-read idiom, per Q7, which was not retested.
+

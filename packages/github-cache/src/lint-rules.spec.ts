@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ESLint, type Linter } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
  * LINT-05 / LINT-06 / CORR-06: the opt-out discipline is LIVE, not merely
@@ -76,6 +76,29 @@ const INTEGRATION_PATH =
 const IGNORED_PATH = 'packages/github-cache/dist/__lint_fixture__.spec.ts';
 
 const ANY_VIOLATION = 'export const value: any = 1;\n';
+
+// One-time toolchain warm-up, deliberately OUTSIDE any test's budget.
+//
+// `new ESLint()` above is cheap -- it defers everything. The FIRST `lintText` call
+// is what loads the flat config and instantiates the TypeScript parser, and it was
+// measured at 590-910ms on an idle workstation against vitest's DEFAULT 5000ms
+// per-test budget. Left unpaid, that cost lands on whichever test happens to run
+// first, so CPU contention (`nx run-many -t typecheck,test`, or a CI runner with a
+// dogfooded background sidecar alongside the target) can time that one test out --
+// surfacing as a FLAKY failure at an arbitrary location rather than as a slow
+// import. `lint-scope-drift.spec.ts` hit exactly this and carries the same hook;
+// this file is the same exposure against the same budget and gets the same fix
+// pre-emptively, since its measured first-call cost is the same order.
+//
+// Deliberately NOT fixed by raising `testTimeout` in `vitest.config.mts`: that
+// would mask this class for every test in the repo, which is the opposite of what
+// a phase about mechanical enforcement should do.
+//
+// The source is trivially clean and the result is discarded -- this hook asserts
+// nothing, it only pays the boot. A throw here still fails the suite loudly.
+beforeAll(async () => {
+  await eslint.lintText('export const value = 1;\n', { filePath: UNIT_PATH });
+}, 30_000);
 
 /**
  * The ignore-warning shape: ESLint reports a path it considers `ignored` or

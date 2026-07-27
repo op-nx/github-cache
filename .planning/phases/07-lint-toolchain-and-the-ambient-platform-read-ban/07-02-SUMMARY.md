@@ -2,7 +2,7 @@
 phase: 07
 plan: 02
 subsystem: lint-toolchain
-tags: [eslint, no-restricted-syntax, no-restricted-imports, ambient-platform-ban, tdd, drift-guard]
+tags: [eslint, no-restricted-syntax, no-restricted-imports, ambient-platform-ban, tdd, drift-guard, flaky-test]
 status: complete
 requires:
   - eslint.config.mjs (plan 07-01)
@@ -49,6 +49,7 @@ metrics:
   duration: ~25 min
   tasks: 2
   files: 6
+  post_merge_fixes: 1
   tests: 453 -> 486
   completed: 2026-07-27
 ---
@@ -88,6 +89,7 @@ assertion cannot move to integration and naming its removal owner.
 |---|---|---|
 | 1 | `1454404` | the two rules, the RED proof, the four disables |
 | 2 | `5adde9b` | the D-19 drift guard and the D-08 lock |
+| post-merge fix | `b9997d1` | hoist the toolchain boot out of the per-test budget |
 
 Task 1 is necessarily one commit. D-31 requires the disables alongside the rules, and
 independently any commit where the rules are enforced and the disables are absent is RED --
@@ -147,6 +149,65 @@ invariants are independently load-bearing rather than one thing asserted twice.
 
 **`npx eslint .` exits 0 with zero findings.** That is the measurement proving all four
 disables are USED -- an unused one is an error under `reportUnusedDisableDirectives: 'error'`.
+
+## Post-Merge Fix: A Flaky Timeout in Both New Guards
+
+The post-merge gate caught `lint-scope-drift.spec.ts` intermittently failing under
+`nx run-many -t typecheck,test --skip-nx-cache` (exit 0, 1, 0 across three runs; Nx's own
+flaky-task detector fired on one hash with two outcomes). Fixed in `b9997d1`.
+
+**Root cause, measured rather than reasoned.** The module-level `import()` of
+`eslint.config.mjs` pulls in the whole ESLint toolchain -- `@eslint/js`, typescript-eslint's
+parser and plugin, the comments plugin. Measured in isolation on an IDLE workstation:
+
+| Cost | Measured |
+|---|---|
+| bare `import('eslint.config.mjs')` in a cold node | **981 ms** |
+| first test in `lint-scope-drift.spec.ts` (pays the resolve) | 731-883 ms |
+| every subsequent test in that file | 0-1 ms |
+| first test in `lint-rules.spec.ts` (first `lintText` loads config + TS parser) | 592-913 ms |
+
+Against vitest's DEFAULT 5000 ms per-test budget that is ~5.7x headroom on an idle box.
+Under CPU contention it is not enough, and because the cost falls on whichever test happens
+to run FIRST, the failure location is arbitrary -- which is why it presents as flakiness
+rather than as "the import is slow". CI is strictly worse: slower runners, and the four
+dogfooded jobs each run a background sidecar alongside the target.
+
+**The fix.** Hoist the one-time cost out of the per-test budget with a `beforeAll(fn, 30_000)`
+in each file, not a bigger per-test timeout. `lint-scope-drift.spec.ts` resolves the config
+in the hook and stores it, so `banConfigObject()` and all three tests become synchronous;
+`lint-rules.spec.ts` gets a discarded warm-up `lintText`. **`testTimeout` in
+`vitest.config.mts` was deliberately NOT raised** -- that would mask this class for all 486
+tests, which is the opposite of what this phase is for.
+
+`banConfigObject()`'s "exactly ONE object configures `no-restricted-syntax`" assertion stayed
+in the assertion layer and did NOT move into the hook, so it still fails the suite. It also
+became strictly harder to fool: `flatConfig` initialises to `[]`, so a hook that never ran
+now fails that length assertion instead of passing on nothing.
+
+**Proof, by controlled experiment rather than by repeat-running until green.** Three green
+runs is what the BROKEN version already produced, so repeat runs alone prove nothing. The
+decisive measurement pins the per-test budget just above the observed cost:
+
+| Version | `--testTimeout=500` | `--testTimeout=50` |
+|---|---|---|
+| pre-fix | **2 failed** / 40 passed -- `Test timed out in 500ms` on `configures the ban in ONE object...` (the exact reported failure) AND on `lint-rules.spec.ts`'s first test | not run |
+| post-fix | 42 passed | **42 passed** |
+
+The post-fix suites pass at a budget **100x tighter** than the default, at the point where
+the pre-fix version already failed. First-test duration went 731/883 ms -> 2/3 ms; headroom
+against the real 5000 ms budget went from ~5.7x to >2500x. That is structural, not
+statistical: no amount of contention times out a 2 ms test whose expensive dependency
+resolved in a 30 s hook.
+
+The pre-fix run also reproduced the timeout in `lint-rules.spec.ts`, which had NOT failed in
+the gate's three runs. Giving that file the same hook was therefore closing a measured
+exposure, not a speculative one.
+
+Repeat evidence on the final state: `npm exec -- nx run-many -t typecheck,test
+--skip-nx-cache` run **8 times, exit 0 every time** (`0 0 0 0 0 0 0 0`), zero `Test timed
+out` across all eight logs. M4b was re-run against the refactored guard and still fails on
+exactly the right assertion, so the hoist did not cost the guard its teeth.
 
 ## Deviations from Plan
 

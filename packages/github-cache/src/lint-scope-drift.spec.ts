@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
  * LINT-02 / D-19 / D-08 scope-drift guard for the ambient-platform-read ban.
@@ -65,8 +65,32 @@ const eslintConfigModule = import(
   new URL('eslint.config.mjs', WORKSPACE_ROOT_URL).href
 ) as Promise<{ default: readonly FlatConfigObject[] }>;
 
-async function banConfigObject(): Promise<FlatConfigObject> {
-  const { default: flatConfig } = await eslintConfigModule;
+let flatConfig: readonly FlatConfigObject[] = [];
+
+// The await is hoisted OUT of every test's budget on purpose, and this hook must
+// not be tidied back into a top-level await inside the tests.
+//
+// Resolving that import pulls in the whole ESLint toolchain -- @eslint/js,
+// typescript-eslint's parser and plugin, the comments plugin. Measured at ~1000ms
+// on an idle workstation here, against vitest's DEFAULT 5000ms per-test budget.
+// Awaited inside a test, that one-time cost lands on whichever test happens to run
+// FIRST, so a 5x slowdown under CPU contention -- `nx run-many -t typecheck,test`,
+// or a CI runner with a dogfooded background sidecar -- times that test out. The
+// symptom is a FLAKY failure at an arbitrary location rather than an honest "the
+// import is slow", which is the worst possible shape for a guard whose entire job
+// is mechanical enforcement: the first red run teaches everyone to re-run instead
+// of read. Paid here with a generous timeout, every assertion below is synchronous
+// and measures the config, not the toolchain boot.
+//
+// Deliberately NOT fixed by raising `testTimeout` in `vitest.config.mts`: that
+// would mask this whole class for all 486 tests in the repo.
+beforeAll(async () => {
+  ({ default: flatConfig } = await eslintConfigModule);
+}, 30_000);
+
+function banConfigObject(): FlatConfigObject {
+  // Non-vacuity: if the hook above never ran, `flatConfig` is still the empty
+  // default and the length assertion below fails rather than passing on nothing.
   const banObjects = flatConfig.filter(
     (entry) => entry?.rules?.['no-restricted-syntax'] !== undefined,
   );
@@ -119,8 +143,8 @@ const integrationConfigCode = integrationConfigSource
   .join('\n');
 
 describe('the ESLint ban scope cannot drift from the vitest partition (LINT-02, D-19)', () => {
-  it('configures the ban in ONE object with ignores a SIBLING of files (D-17)', async () => {
-    const banConfig = await banConfigObject();
+  it('configures the ban in ONE object with ignores a SIBLING of files (D-17)', () => {
+    const banConfig = banConfigObject();
 
     // Structural proof of D-17, not a reading of the source text. An `ignores`
     // hoisted into its own object would leave THIS object with `files` and no
@@ -132,8 +156,8 @@ describe('the ESLint ban scope cannot drift from the vitest partition (LINT-02, 
     expect(banConfig.ignores).toHaveLength(1);
   });
 
-  it('applies the ban to exactly the extension set it exempts', async () => {
-    const banConfig = await banConfigObject();
+  it('applies the ban to exactly the extension set it exempts', () => {
+    const banConfig = banConfigObject();
     const banned = extensionsOf(banConfig.files?.[0] ?? '', 'ESLint files');
     const exempt = extensionsOf(banConfig.ignores?.[0] ?? '', 'ESLint ignores');
 
@@ -149,8 +173,8 @@ describe('the ESLint ban scope cannot drift from the vitest partition (LINT-02, 
     expect(exempt).toEqual(banned);
   });
 
-  it('covers every extension the integration vitest config includes', async () => {
-    const banConfig = await banConfigObject();
+  it('covers every extension the integration vitest config includes', () => {
+    const banConfig = banConfigObject();
     const banned = extensionsOf(banConfig.files?.[0] ?? '', 'ESLint files');
     const includeMatch = /include:\s*\[\s*'([^']+)'/.exec(
       integrationConfigCode,

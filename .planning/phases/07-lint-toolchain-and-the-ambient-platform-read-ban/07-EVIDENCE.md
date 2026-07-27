@@ -436,3 +436,41 @@ The ESLint side is read by IMPORTING `eslint.config.mjs` through a non-literal s
 so the disk-read-plus-comment-strip fallback was NOT needed there. Q6 is closed
 affirmatively. The vitest side still uses the disk-read idiom, per Q7, which was not retested.
 
+### Post-merge flake: the toolchain boot was inside the per-test budget
+
+The post-merge gate caught `lint-scope-drift.spec.ts` failing intermittently under
+`nx run-many -t typecheck,test --skip-nx-cache` (exit 0, 1, 0 over three runs; Nx's flaky-task
+detector fired on one hash with two outcomes). Both new guard files were affected. Measured
+costs on an IDLE workstation, against vitest's DEFAULT 5000 ms per-test budget:
+
+| What | Measured |
+|---|---|
+| bare `import('eslint.config.mjs')` in a cold node | **981 ms** |
+| first test in `lint-scope-drift.spec.ts` (pays the resolve) | 731-883 ms |
+| every subsequent test in that file | 0-1 ms |
+| first test in `lint-rules.spec.ts` (first `lintText` boots config + TS parser) | 592-913 ms |
+
+~5.7x headroom on an idle box, and the cost falls on whichever test runs FIRST -- so the
+failure location is arbitrary and the symptom is flakiness rather than "the import is slow".
+
+Fixed by hoisting the one-time cost into `beforeAll(fn, 30_000)` in each file, NOT by raising
+`testTimeout` (which would mask the class for all 486 tests). Controlled experiment, pinning
+the per-test budget just above the observed cost, because repeat-running until green proves
+nothing when the broken version already produced three green runs:
+
+| Version | `--testTimeout=500` | `--testTimeout=50` |
+|---|---|---|
+| pre-fix | **2 failed** / 40 passed, `Test timed out in 500ms` on the exact reported test AND on `lint-rules.spec.ts`'s first test | not run |
+| post-fix | 42 passed | **42 passed** |
+
+Post-fix passes at a budget 100x TIGHTER than the default, where pre-fix already failed.
+First-test duration 731/883 ms -> 2/3 ms; headroom ~5.7x -> >2500x. Structural, not
+statistical.
+
+Note the pre-fix run reproduced the timeout in `lint-rules.spec.ts` too, which had NOT failed
+in the gate's three runs -- so treating that file was closing a measured exposure rather than
+a speculative one.
+
+Final state: `npm exec -- nx run-many -t typecheck,test --skip-nx-cache` run 8 times, exit 0
+every time, zero `Test timed out` in any log. M4b re-run against the refactored guard still
+fails on exactly the right assertion.

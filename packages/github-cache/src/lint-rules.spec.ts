@@ -539,6 +539,152 @@ describe('the identical source at an *.integration.spec.ts path is exempt from t
   }
 });
 
+// ===========================================================================
+// The ban's WIDTH (LINT-02, ME-01) -- behavioural, one path shape at a time
+// ===========================================================================
+
+/**
+ * ME-01 widened the ban from `**\/*.spec.{ts,mts,cts}` to
+ * `**\/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}` -- two name families and
+ * eight extensions -- because the narrower form left `*.test.ts`, `*.spec.tsx`
+ * and `*.spec.cjs` running as unit tests with the ban silently OFF.
+ *
+ * Everything ABOVE this line lints exactly ONE of those sixteen shapes,
+ * `*.spec.ts`. The width itself was checked only two ways, and neither is a
+ * committed assertion about BEHAVIOUR:
+ *
+ *   - `lint-scope-drift.spec.ts` compares the ESLint globs to the vitest globs
+ *     as TEXT. It deliberately drops the path anchor, and its own header defers
+ *     the behavioural half to this file: "proven live by `lint-rules.spec.ts`,
+ *     which lints real in-tree paths through the ESLint Node API". That deferral
+ *     was only true for `.spec.ts`.
+ *   - The ME-01 fix and the security audit each MEASURED all eight extensions by
+ *     hand and recorded a table. A hand measurement in a markdown file does not
+ *     re-run.
+ *
+ * So these rows are the width, asserted. They catch what glob-text comparison
+ * structurally cannot: a per-extension CONFIG INTERACTION that silences the ban
+ * at one shape while every glob still reads correct. That is not hypothetical
+ * here -- `*.spec.cjs` matches BOTH the `**\/*.cjs` override (which rewrites
+ * `sourceType` and turns a rule off) and the ban block, and the two composing
+ * rather than colliding is a property of their ORDER in the exported array,
+ * which no glob comparison can see.
+ *
+ * The two lists are LITERAL and must stay literal. Deriving them from
+ * `eslint.config.mjs` would make the guard agree with whatever the config says,
+ * which is the vacuity this whole file exists to avoid: narrowing the glob would
+ * narrow the test with it and stay green.
+ */
+const BAN_NAME_FAMILIES = ['spec', 'test'] as const;
+const BAN_EXTENSIONS = [
+  'js',
+  'mjs',
+  'cjs',
+  'ts',
+  'mts',
+  'cts',
+  'jsx',
+  'tsx',
+] as const;
+
+/**
+ * Deliberately NOT `export const` and deliberately not TypeScript-flavoured: it
+ * has to parse identically at all eight extensions, and three of them are not
+ * `sourceType: 'module'` -- `**\/*.cjs` is `commonjs` under the D-13 override, so
+ * a top-level `export` is a PARSE error there rather than a lint verdict. The
+ * unused binding trips `no-unused-vars` at the TS extensions; that is filtered
+ * out by `banRuleIdsOf`, which is what that filter is for.
+ */
+const AMBIENT_PLATFORM_READ = 'const platformValue = process.platform;\n';
+
+/** The exempt rows can afford the stronger source: `{ts,mts,cts}` are all
+ * modules, so the `export` parses, and pairing the platform read with a
+ * NON-ban violation lets one assertion carry both directions -- the ban stayed
+ * silent AND the file was genuinely linted. */
+const EXEMPT_PROBE = `export ${AMBIENT_PLATFORM_READ}${ANY_VIOLATION}`;
+
+function fixturePath(basename: string): string {
+  return `packages/github-cache/src/__lint_fixture__.${basename}`;
+}
+
+describe('the ban fires at EVERY path shape that runs as a unit test (LINT-02, ME-01)', () => {
+  const unitShapes = BAN_NAME_FAMILIES.flatMap((family) =>
+    BAN_EXTENSIONS.map((extension) => `${family}.${extension}`),
+  );
+
+  it.each(unitShapes)('catches a platform read at *.%s', async (basename) => {
+    const messages = await lintFixture(
+      AMBIENT_PLATFORM_READ,
+      fixturePath(basename),
+    );
+
+    expect(banRuleIdsOf(messages)).toEqual(['no-restricted-syntax']);
+  });
+});
+
+/**
+ * The other half of ME-01, and the half that is a DECISION rather than a
+ * widening: `ignores` mirrors the unit runner's EXCLUDE, not its include, so it
+ * stays at `*.integration.spec.{ts,mts,cts}` while `files` covers eight
+ * extensions and two name families. The two globs are asymmetric on purpose and
+ * `eslint.config.mjs` carries a header forbidding the "tidy" that would make
+ * them match.
+ *
+ * These rows are what that decision BUYS. An `integration.spec.tsx` is not
+ * collected by the integration runner and not caught by the unit runner's
+ * exclude, so it runs as a UNIT test -- and must therefore be banned despite
+ * carrying `integration` in its name. Same for the four other extensions, and
+ * same for the `integration.test.ts` shape, which pins that the exemption is
+ * keyed on the `spec` name family alone.
+ *
+ * Widening `ignores` to match `files` flips all six of these to exempt while
+ * every glob still reads tidy. `lint-scope-drift.spec.ts` catches that too, by
+ * comparison; these catch it by verdict.
+ */
+const INTEGRATION_EXEMPT_EXTENSIONS = ['ts', 'mts', 'cts'] as const;
+const INTEGRATION_STILL_BANNED_BASENAMES = [
+  'integration.spec.js',
+  'integration.spec.mjs',
+  'integration.spec.cjs',
+  'integration.spec.jsx',
+  'integration.spec.tsx',
+  'integration.test.ts',
+] as const;
+
+describe('the exemption is exactly the integration suite, not everything named integration (CORR-06, ME-01)', () => {
+  it.each(INTEGRATION_EXEMPT_EXTENSIONS)(
+    'exempts *.integration.spec.%s, which the integration runner really collects',
+    async (extension) => {
+      const messages = await lintFixture(
+        EXEMPT_PROBE,
+        fixturePath(`integration.spec.${extension}`),
+      );
+
+      // Exactly the non-ban rule. Its presence proves the path was linted
+      // rather than silently unconfigured; its being ALONE proves the ban was
+      // the only thing lifted (D-17 ignores-beside-files, not a global unlint).
+      expect(ruleIdsOf(messages)).toEqual([
+        '@typescript-eslint/no-explicit-any',
+      ]);
+    },
+  );
+
+  it.each(INTEGRATION_STILL_BANNED_BASENAMES)(
+    'still bans *.%s, which runs as a UNIT test despite the name',
+    async (basename) => {
+      const messages = await lintFixture(
+        AMBIENT_PLATFORM_READ,
+        fixturePath(basename),
+      );
+
+      expect(
+        banRuleIdsOf(messages),
+        `${basename} is collected by the UNIT runner (the integration runner takes only *.integration.spec.{ts,mts,cts}), so exempting it would be a unit spec with the ban off -- do not "tidy" ignores to match files`,
+      ).toEqual(['no-restricted-syntax']);
+    },
+  );
+});
+
 /**
  * D-22: each of the FOUR extant CORR-05 violations is proven CAUGHT while it
  * still exists. Phases 9 and 10 remove the violations themselves; Phase 7 must
@@ -668,7 +814,23 @@ describe('every extant CORR-05 violation is caught while it still exists (LINT-0
         // A described disable whose description concedes it is unnecessary is
         // precisely the failure this control exists to prevent, so requiring the
         // word in the SURVIVING PROSE is what makes the clause mean anything.
-        const prose = reason.replace(/\S+\.integration\.spec\.[cm]?ts/g, '');
+        //
+        // The extension part is `\w+`, not the `[cm]?ts` this used to carry
+        // (security audit residual N-2). Keying on the integration runner's
+        // collect set was the wrong frame: the token being stripped is a
+        // FILENAME QUOTED IN PROSE, and prose can cite any name at all --
+        // including one whose file would NOT be an integration spec, which is
+        // precisely the case where the reason is misleading and the strip
+        // matters most.
+        //
+        // Measured, so the residual is stated correctly rather than as the
+        // security audit phrased it. `.tsx` was never the hole: `[cm]?ts`
+        // matches the `ts` inside `.tsx` and strips the token anyway, leaving a
+        // stray `x`. The four that LEAKED are the JS family --
+        // `.js`, `.mjs`, `.cjs`, `.jsx` -- all four of which ME-01 brought into
+        // the ban's `files` set, so all four are now real in-scope path shapes
+        // rather than the theoretical one N-2 described.
+        const prose = reason.replace(/\S+\.integration\.spec\.\w+/g, '');
 
         expect(
           prose,

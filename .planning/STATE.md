@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 7
 current_phase_name: Lint Toolchain and the Ambient-Platform-Read Ban
 status: executing
-last_updated: "2026-07-27T04:59:38.742Z"
+last_updated: "2026-07-27T05:34:37.899Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 7 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 7 (Lint Toolchain and the Ambient-Platform-Read Ban) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
 Last activity: 2026-07-27 — Phase 7 execution started
@@ -92,6 +92,7 @@ Last activity: 2026-07-27 — Phase 7 execution started
 | Phase 06 P04 | 16 | 3 tasks | 7 files |
 | Phase 07 P01 | 40 | 3 tasks | 10 files |
 | Phase 07 P02 | ~25 min | 2 tasks | 6 files |
+| Phase 07 P03 | ~20 min | 2 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -159,6 +160,8 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 07]: 07-02: the ambient-platform ban is TWO core rules behind ONE shared BAN_MESSAGE, scoped by files ['**/*.spec.{ts,mts,cts}'] with ignores ['**/*.integration.spec.{ts,mts,cts}'] as a SIBLING key so integration specs keep every other rule and lose only the ban (D-17). P6, the ImportExpression selector, is MANDATORY and proven so: no-restricted-imports at 9.39.5 has no import-expression visitor, so it closes the STATIC import family only and a dynamic import of node:os would otherwise be a silent hole. P7 was INCLUDED rather than declined, so globalThis.process.platform is caught rather than recorded as a ceiling; the two ceilings that ARE recorded are P4/P5's hardcoded namespace binding names and T-07-12's helper-in-another-module read.
 - [Phase 07]: 07-02: Q5 and Q6 closed affirmatively -- every esquery-measured selector verdict reproduced under real ESLint with @typescript-eslint/parser (including the two-rule double report on a namespace import), and the non-literal dynamic import of eslint.config.mjs works under both vitest and typecheck, so the D-19 drift guard reads the REAL evaluated config array instead of matching source text. One consequence worth carrying: import * as path from 'node:path' IS an error, because no-restricted-imports reports a namespace specifier whenever the entry lists importNames -- so the path.join false-positive control uses a LOCAL object and the namespace form is asserted as an evasion shape instead.
 - [Phase 07]: 07-02: four described disables at FOUR error positions, and there is no fifth. cache-archive-path.spec.ts:26 is a SITE (it leaves with the import under VER-02 in Phase 9) but NOT an error position -- in strict ESM that binding cannot exist without the import, and the import is the chokepoint -- so a directive there would be UNUSED and reportUnusedDisableDirectives:'error' would fail the build through the phase's own opt-out discipline. ROADMAP SC3's "three CORR-05 violations" is a miscount; REQUIREMENTS, CONTEXT and RESEARCH all say FOUR. Both corrections are comment-locked on CORR_05_SITES, which keys on FILE + EXPRESSION TEXT because inserting the disables shifts every later line in the same commit.
+- [Phase 07]: 07-03: the lint target is INFERRED, not declared, and its existence was PROVEN via nx show project rather than assumed -- @nx/eslint's createNodes short-circuits and returns nothing SILENTLY when no eslint.config.* is found, so an absent target and a broken plugin look identical from outside. targetDefaults.lint REPLACES the inferred input list: it restates default, ^default, the workspace-root config and the custom-rule directory, widens the inferred single-entry { externalDependencies: ['eslint'] } to all four ESLint packages (that single entry IS the LINT-04 hole -- a typescript-eslint bump would not have invalidated the cache), and pins outputs to [] instead of ['{options.outputFile}']. The real inferred list was read from the INSTALLED PLUGIN, not from STACK.md's quote, which is one entry short (C7): the missing tsconfig-chain entry resolves to tsconfig.base.json, already folded into default via sharedGlobals, so the replacement needed no addition -- a checked conclusion, not an inherited one.
+- [Phase 07]: 07-03: build is UNUSABLE as lint's negative control, because lint's inputs start from default so hashing a spec is exactly what lint is SUPPOSED to do -- a build-shaped negative would assert something false about the target. The honest discriminator is a probe path OUTSIDE {projectRoot}. A vacuity mutation (lint.inputs reduced so the self pattern list resolves EMPTY) proved the choice load-bearing: filterUsingGlobPatterns returns the whole probe list on an empty pattern list, so BOTH positive assertions still passed and the negative control was the only glob-resolution assertion that caught it. Separately, this commit rotates EVERY task hash and rotates test twice over ({workspaceRoot}/nx.json is already an explicit test input), so Phase 7's first default-branch push is a LEGITIMATE all-MISS push -- Phase 9's OBS-04 tripwire must be authored as 'two consecutive all-miss pushes with NO version-affecting change in between' (D-36). D-35's hashed-node baseline for Phase 8 CORR-03 is recorded in 07-EVIDENCE.md; options.cwd is the row most likely to diverge across OSes and it IS hashed.
 
 ### Pending Todos
 
@@ -285,8 +288,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-27T04:59:38.729Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-07-27T05:34:37.882Z
+Stopped at: Completed 07-03-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

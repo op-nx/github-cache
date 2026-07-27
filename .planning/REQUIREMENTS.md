@@ -71,6 +71,7 @@ cache, and the public-repo exposure surface, are not deferred.
   with no OS component -- derived by both reader and publisher from the single `releaseAssetName`
   helper, and recognisable to the cleanup filter. Supersedes CORR-01's "OS-namespaced by default"
   branch.
+
 - [ ] **CORR-03**: A single cross-OS measurement, run as a build-gating CI job over BOTH matrix
   legs at one commit, asserts: (a) exactly two platform records exist, each carrying a non-empty
   hash per target -- fewer than two is a FAILURE, not a skip; (b) the `integration` hash DIFFERS
@@ -79,9 +80,11 @@ cache, and the public-repo exposure surface, are not deferred.
   explanation for (b) is the declared discriminator. The discriminator command's raw stdout AND
   stderr are recorded per leg. A textual assertion that `nx.json` contains the input does NOT
   satisfy this.
+
 - [ ] **CORR-04**: `integration` declares a platform discriminator in its Nx inputs, and is the
   ONLY target that does. After VER-03 this is the SOLE mechanism separating OS-sensitive targets;
   removing it is a Core-Value regression.
+
 - [ ] **CORR-05**: Every target shared cross-OS (`build`, `typecheck`, `test`) is
   platform-agnostic -- its RESULT does not depend on the OS, architecture, or filesystem semantics
   of the machine that produced it. This is what makes first-write-wins safe in EITHER direction,
@@ -112,6 +115,7 @@ cache, and the public-repo exposure surface, are not deferred.
   non-vacuity proof for CORR-01, and CORR-02 destroys it on purpose. Phase 10 must name the
   replacement -- assert the reader requested EXACTLY ONE asset name, equal to the imported
   `releaseAssetName(hash)`, containing no platform token -- or coverage drops silently.
+
 - [x] **CORR-06**: The strategy is MECHANICALLY enforced, not documented: a guard fails the `test`
   target when a non-integration spec reads AMBIENT platform state -- `process.platform`,
   `process.arch`, any `node:os` accessor (`tmpdir`, `EOL`, `platform`, `arch`, `homedir`, `type`,
@@ -130,7 +134,7 @@ cache, and the public-repo exposure surface, are not deferred.
 
 This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own phase.
 
-- [ ] **LINT-01**: ESLint is adopted with a v9 FLAT config and a `lint` target wired into the CI
+- [x] **LINT-01**: ESLint is adopted with a v9 FLAT config and a `lint` target wired into the CI
   battery. v9 is mandatory, not preference: Nx 23.1 dropped ESLint v8 support (`@nx/eslint@23.1.0`
   peers `eslint ^9 || ^10`). New dev dependencies are exact-pinned AND their NAMES are added to
   `pinned-deps.spec.ts`. These are two separate tasks: that guard is a hard-coded name list with one
@@ -139,6 +143,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   the names leaves them unguarded, and a later `npm install eslint@latest` passes every check. The
   ROBUST-03-class decision is recorded in the spec's comment, since the precedent is genuinely
   ambiguous: `esbuild` IS in the list, `prettier` is NOT.
+
 - [x] **LINT-02**: The rules ban AMBIENT platform reads in unit specs and ALLOW them in integration
   specs. **TWO rules are required, not one** -- `no-restricted-syntax` is an AST-selector matcher
   and cannot see a destructured named import, and one of the four CORR-05 sites is exactly that
@@ -155,6 +160,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   `arch`, `homedir`, `type`, `release`), and `path.sep`/`path.delimiter`/`path.win32`/`path.posix`.
   NOT banned: injected or explicit platform values -- `cachePlatform('win32')` is the canonical
   allowed shape. Only deriving an expectation from the RUNNING machine is prohibited.
+
 - [x] **LINT-03**: The rule set is proven RED before GREEN. The fixture covers the EVASION shapes,
   not only the four extant CORR-05 sites -- `const { platform } = process`, `const p = process;
   p.platform`, `import { platform } from 'node:os'`, `import * as os from 'node:os'`, `const
@@ -162,7 +168,8 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   confirmed CAUGHT while it still exists, before Phases 9 and 10 remove it. A rule that matches
   nothing is indistinguishable from a rule that is not wired up, and a rule proven only against the
   cases that already exist is proven against the easy half.
-- [ ] **LINT-04**: The `lint` target's Nx inputs are declared so it cannot serve a stale-cache
+
+- [x] **LINT-04**: The `lint` target's Nx inputs are declared so it cannot serve a stale-cache
   false PASS. This repo has already hit that class once: `typecheck`'s inputs excluded `*.spec.ts`
   while its command compiled them, so a real error was masked by a cache hit. Three lint-specific
   instances: (a) `eslint.config.*` AND anything it imports must be inputs -- otherwise editing a
@@ -174,6 +181,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   every file in the TypeScript program plus the tsconfigs. Extend `nx-target-inputs.spec.ts` rather
   than building a new mechanism; note its own caveat that reading `nx.json` from a spec is safe only
   because `{workspaceRoot}/nx.json` is a `test` input, and only `test` declares it.
+
 - [ ] **LINT-05**: An intentional violation opts out ONLY via an inline disable annotation
   carrying a DESCRIPTION that names the reason -- `// eslint-disable-next-line <rule> -- <reason>`.
   A bare disable is itself a lint error, enforced by a require-description rule
@@ -181,6 +189,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   equivalent), so an opt-out can never be silent. The same discipline applies to TypeScript
   suppressions: `@typescript-eslint/ban-ts-comment` is configured `allow-with-description`, so a
   bare `@ts-expect-error`/`@ts-ignore` is also an error.
+
 - [ ] **LINT-06**: `linterOptions.reportUnusedDisableDirectives` is `error`. A disable left behind
   after its violation is removed must FAIL, not linger -- a stale annotation silently pre-authorises
   a future violation on that line, which is the same silent-widening failure class as a dead
@@ -201,6 +210,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   until freshness is pinned. Leading hypothesis, now specific: a Windows-only inference difference
   visible ONLY on a cold graph -- the `@nx/vitest` / `@nx/js/typescript` OS-dependent
   `ProjectConfiguration` class, freshness-gated, which is why the v0.0.1 fixes appeared to hold.
+
 - [ ] **PARITY-02**: The named capture instrument emits the per-NODE hash `details` map
   (`TaskHashDetails.details`). `nx show target inputs` is NOT sufficient and a "no difference"
   result from it is not evidence: it SKIPS `ProjectConfiguration` (per `HashPlanInspector`'s own
@@ -208,27 +218,33 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   invisible to it. `nx-target-inputs.spec.ts` is the in-repo precedent for reaching into
   `nx/src/hasher/*`. `.nx/cache/run.json` is the per-TASK surface and is complementary, not a
   substitute; it is overwritten by every `nx` invocation, so read it immediately.
+
 - [ ] **PARITY-03**: `build`, `typecheck` and `test` compute a byte-identical Nx task hash for the
   same commit at all three observation points -- native Windows workstation (O1's precondition),
   windows-11-arm runner (O4's precondition), ubuntu-24.04-arm runner -- with the Windows workstation
   measured in BOTH graph states. Four values per target, not two. Enforced continuously by
   CORR-03(c), not measured once.
+
 - [ ] **PARITY-04**: "A warm local box computes the hash cold CI published" is a SEPARATE named
   acceptance question from cross-OS parity. If it is false, O1 is unreachable regardless of OS
   parity. It MUST NOT be resolved silently by `nx reset`: TEST-10's mandated reset clears
   `.nx/workspace-data` too and forces the COLD state, which is convenient for the proof and
   misleading as evidence of the everyday developer experience. Record which question each proof
   answers.
+
 - [ ] **PARITY-05**: `integration` computes a byte-identical hash between the native Windows
   workstation and windows-11-arm (O2's precondition).
+
 - [ ] **PARITY-06**: Every measurement records the Nx version, the Node version, the install mode
   (`npm ci` vs `npm install`), and the GRAPH STATE (cold / warm `.nx/workspace-data`). The
   23.0.2 -> 23.1.0 hash-planner rewrite makes cross-version measurements non-comparable, and
   `.node-version` is a moving alias (`lts/krypton`). Note `typecheck` carries a THIRD variance
   source beyond OS and freshness -- four distinct values across the four probe measurements --
   plausibly install mode reaching it via `dependentTasksOutputFiles` or `externalDependencies`.
+
 - [ ] **PARITY-07**: The public-surface guard passes unchanged -- no new env knob, no new action
   input, no new package export (D2-02).
+
 - [ ] **PARITY-08**: `{workspaceRoot}/.github/workflows/ci.yml` is registered as a `test` input and
   `nx.json`'s explicit input list is comment-locked. `nx.json` lists `cleanup.yml` and NOT `ci.yml`,
   so any spec asserting on `ci.yml` serves a stale cached PASS -- the same false-pass class the
@@ -247,17 +263,20 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   absolutized, and MUST NOT derive from `os.tmpdir()`, `RUNNER_TEMP`, or `~`. `@actions/cache`
   sha256s the raw path strings into the cache version, so any separator difference is a silent
   cross-OS MISS.
+
 - [ ] **VER-02**: The two version-determining inputs are pinned by spec -- the archive-path
   literal is byte-identical for `win32` and `linux`, and `enableCrossOsArchive` is `true` at every
   call site. The derived version itself is NOT assertable: `getCacheVersion` is not on
   `@actions/cache`'s exported surface (verified: `ERR_PACKAGE_PATH_NOT_EXPORTED`).
   `cache-archive-path.spec.ts:25-26` is REPLACED, not relaxed -- it currently pins
   `dirname === tmpdir()`.
+
 - [ ] **VER-03**: `enableCrossOsArchive: true` is hardcoded at ALL THREE `@actions/cache` call
   sites -- `restoreCache` (read, `:46`), `saveCache` (write, `:101`), and the `lookupOnly`
   existence probe (`:107`). It is a POSITIONAL argument at a different index in each function, and
   upstream's JSDoc documents the wrong order. A spec asserts the argument list of each call and
   the call count, so a fourth site added later fails.
+
 - [ ] **VER-04**: The process asserts, ONCE at `createActionsCacheBackend()` construction, the
   CONJUNCTION: cwd is the Nx workspace root AND (`GITHUB_WORKSPACE` is unset OR
   `resolve(GITHUB_WORKSPACE) === resolve(cwd)`), compared case-normalised. "The Nx workspace root"
@@ -272,6 +291,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   (`research/v0.0.2/PROBE-RESULTS.md` Q2), so this is a drift guard, not a fix for a live break --
   nothing currently defends it. Record the asymmetry: the same fault is LOUD in `publishMirror` and
   SILENT in `serve`, so a green publish job is not evidence the serve path is healthy.
+
 - [ ] **VER-05**: The resolved `@actions/cache` compression method is surfaced in the publish
   summary. It is a third version component, pushed into the version UNCONDITIONALLY -- before and
   independent of the `enableCrossOsArchive` branch -- so the flag cannot rescue a mismatch. The
@@ -286,6 +306,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   1.35 ARE present on `windows-11-arm`, so O4 is not blocked -- but zstd comes from `C:\tools\zstd`,
   NOT bundled by Git for Windows as the debug report claimed, which makes its presence a runner-image
   provisioning choice and MORE likely to move than assumed.
+
 - [ ] **VER-06**: The cross-OS behavioural close is a `dogfood-verify` leg on windows-11-arm that
   reads back the entry `dogfood-seed` wrote on ubuntu-24.04-arm. A MISS fails the job. This, not a
   unit spec, is the load-bearing control: a spec runs in one process on one OS and cannot observe
@@ -296,6 +317,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   Windows leg read a LINUX-produced body. The vacuity condition is written into the job comment.
   This is the Actions-cache mirror image of the Releases-side trap OBS-05 closes; the asymmetry was
   an omission, not a decision.
+
 - [ ] **VER-07**: The archive directory exists and the literal stays gitignored. `put()` calls
   `writeFile` before anything creates `.nx/cache`, so on a fresh runner or after `nx reset` that is
   ENOENT, which rethrows (not a `ReserveCacheError`) into a 500 and fails the build -- writes are
@@ -306,6 +328,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   intermittent task-hash perturbation. Comment-lock the literal as chosen because it is GITIGNORED,
   not merely because it is workspace-relative. `nx reset` deletes `.nx/cache`, and TEST-10 mandates
   a reset, so the Phase 11 proof order is reset FIRST, then start the sidecar.
+
 - [ ] **ROBUST-04**: `npm run build:action` runs in the SAME COMMIT as any edit to a
   `serve()`-reachable source. The committed `start-cache-server/index.js` INLINES both
   comment-locked helpers and `getCacheVersion`'s `windows-only` branch, and four `ci.yml` sidecar
@@ -319,9 +342,11 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 - [ ] **XOS-01**: A local Windows developer gets a cache HIT for `build`, `typecheck` and `test`
   from artifacts produced by Linux CI, via the Releases mirror. (O1)
+
 - [ ] **XOS-02**: A local Windows developer gets a cache HIT for `integration` from artifacts
   produced by Windows CI. Measured BEFORE the CORR-02 rename as a baseline and AFTER as a
   non-regression. (O2)
+
 - [ ] **XOS-03**: Windows CI gets a cache MISS for `integration` produced by Linux CI. **This is a
   statement about Nx HASHES, not about cache storage.** After VER-01/VER-03 the storage layer no
   longer partitions by OS, so a storage-level probe for the Linux hash from a Windows runner would
@@ -330,9 +355,11 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   MEASURED 2026-07-26: `integration` hashes differ across the two runners as designed
   (`8865876519165210738` vs `1822904335635353663`), so CORR-04's mechanism is confirmed working at
   this commit. (O3)
+
 - [ ] **XOS-04**: `ci.yml` runs `build`, `typecheck` and `test` on a windows-11-arm leg in addition
   to the ubuntu leg. Without this there is no Windows job that could exhibit O4's HIT. Note the
   `integration` matrix is NOT the wiring precedent here -- see XOS-08.
+
 - [ ] **XOS-05**: Those Windows legs get a cache HIT for all three targets from entries saved by
   the ubuntu leg. Whether they also WRITE is an explicit recorded decision; if they write, the loss
   of clean Linux attribution is recorded alongside TRUST-11/12, **and a scheduled
@@ -340,6 +367,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   replays Linux verdicts for all three targets, a Windows-only regression in the code under test is
   otherwise invisible forever, and the success signal for O4 (every target `[remote cache]`, wall
   time collapsing to sidecar overhead) is the identical observation. (O4)
+
 - [ ] **XOS-08**: The O4 proof has an explicit producer-to-consumer ordering: the Windows legs
   declare `needs:` on the corresponding ubuntu jobs, mirroring `dogfood-seed` -> `dogfood-verify`.
   The `integration` matrix precedent does NOT transfer -- its two legs compute DIFFERENT hashes, so
@@ -347,11 +375,13 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   both execute, and both race `saveCache`. The cross-push alternative is also foreclosed: once
   PARITY-08 lands, the very commit that ADDS the Windows legs invalidates the `test` hash, so
   proving it on a later push would need a second no-op push.
+
 - [ ] **XOS-06**: `max-parallel: 1` is RETAINED for its existing reasons (serialised legs, no
   concurrent shard-creation or delete races) but MUST NOT become a correctness control. No
   requirement may depend on which OS leg wins the first-write-wins race -- cross-OS sharing is made
   safe by CORR-05's platform-agnosticism, not by ordering. A comment records this explicitly so a
   future reader does not reconstruct the rejected ordering argument.
+
 - [ ] **XOS-07**: `publish` depends on every job producing a mirrored entry (`build`, `typecheck`,
   `test`, `integration`), not on `build` alone, so one default-branch push mirrors that push's full
   task set. Otherwise the O1 proof races job completion and can fail on a correct implementation.
@@ -365,6 +395,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   `CACHE_OS_VALUES` is retained and annotated as intentionally-kept legacy support so `fallow`
   dead-code analysis does not prune it. Proven by specs over both name families plus a cleanup
   dry-run over a mixed shard.
+
 - [ ] **RETAIN-05**: Three things RETAIN-04 does not cover. (a) The shard already holds ~50 PoC-era
   `<hash>.tar.gz` assets that match NO filter, before or after RETAIN-04 -- they have never been
   prunable and are permanent occupants of the 1000-asset per-release cap, whose overflow degrades to
@@ -386,6 +417,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   pinned by spec and comment-locked: with the OS-version barrier removed it becomes the ONLY
   in-repo control keeping non-default-branch trusted writes (`TRUSTED_EVENTS` includes `push` with
   no ref check) out of the world-readable mirror.
+
 - [ ] **TRUST-11**: The phase threat model records where first-write-wins arbitrates between
   NON-identical payloads -- **at `saveCache`, not at the Release upload.** Two publish legs never
   produce differing payloads: for a given hash the Actions cache holds exactly ONE entry, and both
@@ -403,11 +435,13 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   transport. Separately and regardless: `publish-mirror.ts:159`'s "byte-identical under CORR-01"
   comment is rewritten in the SAME COMMIT as CORR-02 -- byte-identity survives, but its REASON
   changes from OS-namespacing to one-entry-per-hash.
+
 - [ ] **TRUST-12**: The phase threat model records that VER-01/VER-03 remove the incidental
   within-scope OS partitioning, leaving CORR-04's declared discriminator as the sole separation
   mechanism; and records the public-repo EXPOSURE DELTA -- a single-OS publish leg can now restore
   and mirror every OS's entries, so the captured terminal output of every CI job on every OS
   crosses into the anonymously-readable Releases mirror.
+
 - [ ] **TRUST-13**: TRUST-11 and TRUST-12 are classified by gsd-security-auditor in SECURITY.md,
   not self-certified. The proposed classification (neither crosses a trust boundary, because the
   Actions cache's boundary is ref scope, not OS) is offered as INPUT to that audit, not as its
@@ -423,6 +457,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   `process.platform` does not cover (this repo cannot exercise them -- every machine here is
   arm64). The documented discriminator command must be stderr-immune, since `hash_runtime` hashes
   stdout AND stderr. Registered in `nx.json`'s `test` inputs and guarded against drift.
+
 - [ ] **DOCS-08**: Every location asserting same-OS restore as a load-bearing invariant is
   corrected, since VER-03 inverts it. The list is FOUR, not two: `docs/advanced.md:54-57`,
   `docs/advanced.md:45`, `ci.yml:577-583`, and `ci.yml:356-360` (the integration job's comment makes
@@ -453,6 +488,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   Every "the job was green" claim is paired with a COUNT that would differ under the failure
   hypothesis, named in the plan rather than after the run; `ACTIONS_STEP_DEBUG` is on for the
   proving run, since restore MISSes log at `core.debug` and are otherwise absent from the log.
+
 - [ ] **TEST-09**: The O3 proof is an Nx-HASH proof, not a storage probe, and runs AFTER VER-01 and
   VER-03 have landed. A storage-level probe is now INVALID: with the version OS-invariant,
   `restoreCache([path], 'nx-cache-<H_linux>')` on windows-11-arm would HIT, so asserting a 404 would
@@ -468,6 +504,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   shape, so this extends a proven pattern. A run that MISSes everything is not a valid proof.
   So reframed, the proof is STRONGER: it shows the declared Nx input is the only thing separating
   the two targets, which is CORR-04's actual claim.
+
 - [ ] **TEST-10**: The O1/O2 local proofs begin from a cleared local Nx cache (`nx reset`), and the
   order is reset FIRST, THEN start the sidecar -- `nx reset` deletes `.nx/cache`, which is where
   VER-07 puts the archive, so resetting under a running sidecar makes the next PUT 500. A HIT
@@ -491,6 +528,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   it cannot separate local from remote, cannot attribute a producer OS, and prints an identical
   `0%` line for a run with no sidecar at all. It renders to the job summary in CI and to the
   terminal locally.
+
 - [ ] **OBS-03**: Every mirrored asset records `mirrored-by: <os>` in Release asset metadata that
   is NOT part of the lookup name (the free-form `label` field). The store stays OS-invariant for
   lookup; only attribution is preserved. CORR-02 otherwise removes the only means of attributing a
@@ -507,6 +545,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   Requires a seam widening no other requirement mentions: `uploadReleaseAsset(releaseId, name,
   bytes)` gains a `label` parameter, plumbed through `action/index.ts` and every fake in
   `publish-mirror.spec.ts`.
+
 - [ ] **OBS-04**: The all-restore-MISS warning's message drops the now-false "different OS"
   explanation and names cache-version rotation as a candidate cause. The expected signal of the
   first post-change push is recorded IN ADVANCE (all-miss on both publish legs, `mirrored == 0`).
@@ -519,6 +558,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   failure. Note `enableCrossOsArchive` alone rotates only WINDOWS entries -- on Linux and macOS the
   flag is a no-op on the version -- so the first-push all-MISS on BOTH legs is caused by the PATH
   change, not the flag.
+
 - [ ] **OBS-05**: Each `publish` matrix leg seeds a leg-DISTINGUISHABLE hash and each
   `publish-verify` leg reads back its OWN leg's asset. Today both legs seed
   `GITHUB_RUN_ID` (`read-back.ts:37`) and are separated only by the OS suffix, so CORR-02 would
@@ -569,10 +609,10 @@ honour table: `.planning/ROADMAP.md`.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LINT-01 | Phase 7 | Pending |
+| LINT-01 | Phase 7 | Complete |
 | LINT-02 | Phase 7 | Complete |
 | LINT-03 | Phase 7 | Complete |
-| LINT-04 | Phase 7 | Pending |
+| LINT-04 | Phase 7 | Complete |
 | LINT-05 | Phase 7 | Pending |
 | LINT-06 | Phase 7 | Pending |
 | CORR-06 | Phase 7 | Complete |

@@ -136,7 +136,7 @@ parity bug of exactly the `@nx/vitest` / `@nx/js/typescript` class Phase 8 exist
 > three files (`release-asset-name.spec.ts` carries two). Use FOUR. There are four error
 > POSITIONS; `cache-archive-path.spec.ts:26` is not one of them.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 Plans:
 
@@ -146,7 +146,7 @@ Plans:
 - [x] 07-02-PLAN.md -- The ban itself: RED before GREEN over the evasion shapes and the four extant
       sites, the two core rules, the four described disables, and the scope-drift guard (wave 2)
 
-- [ ] 07-03-PLAN.md -- Wire the target: `@nx/eslint` registration, the declared `lint` inputs, the
+- [x] 07-03-PLAN.md -- Wire the target: `@nx/eslint` registration, the declared `lint` inputs, the
       input probes with their negative control, the root script and the CI job (wave 3)
 
 - [ ] 07-04-PLAN.md -- Evidence: the LINT-04 differential with both negative controls, mutations
@@ -661,7 +661,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 4. Publish + Retention + Observability | v0.0.1 | 6/6 | Complete | 2026-07-20 |
 | 5. Trust-Widening + PPE Gate | v0.0.1 | 4/4 | Complete | 2026-07-20 |
 | 6. Distribution + Docs + Governance | v0.0.1 | 5/5 | Complete | 2026-07-21 |
-| 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 2/4 | In Progress|  |
+| 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 3/4 | In Progress|  |
 | 8. Nx Task-Hash Parity | v0.0.2 | 0/? | Not started | - |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 0/? | Not started | - |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 0/? | Not started | - |

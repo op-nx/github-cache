@@ -316,6 +316,32 @@ export default [
       // excludes for a stated reason (it widens the `lint` input set to the whole
       // TypeScript program and with it the stale-cache blast radius), so this one is
       // accepted rather than scheduled.
+      //
+      // ponytail: two INDIRECT module-loading shapes reach no selector, both
+      // measured `[]` at a unit spec path. Recorded here rather than left silent
+      // because D-21 requires it and because the first is a direct sibling of a
+      // shape that IS in EVASION_SHAPES -- a reader who sees `await
+      // import('node:os')` caught will reasonably conclude the dynamic family is
+      // closed, and it is not:
+      //
+      //   const m = 'node:os';
+      //   export const v = await import(m);          // P6 needs a LITERAL source
+      //
+      //   import { createRequire } from 'node:module';
+      //   const req = createRequire(import.meta.url);
+      //   export const v = req('node:os').platform(); // no selector reaches a
+      //                                               // require handle
+      //
+      // Ceiling = a module specifier that is not a literal at the import site.
+      // Upgrade path for the first is broadening P6 to any `ImportExpression`
+      // whose source is not a literal -- deliberately NOT taken: it would flag
+      // every legitimate computed dynamic import in the repo to close a shape
+      // nobody writes by accident, and a rule that cries wolf gets disabled. The
+      // second needs data-flow, i.e. the same type-aware linting D-11 excludes
+      // above. Both are accepted rather than scheduled; the honest reason they
+      // are tolerable is that neither is something you reach for by mistake --
+      // unlike `import osx from 'node:os'`, which is why THAT one was fixed
+      // instead of recorded.
       'no-restricted-syntax': [
         'error',
         {

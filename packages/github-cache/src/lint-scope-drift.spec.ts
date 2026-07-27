@@ -75,9 +75,22 @@ interface FlatConfigObject {
 // yields the REAL evaluated array, so a glob assembled at runtime, or a config
 // object placed where a later one overrides it, cannot hide behind matching
 // source text.
-const eslintConfigModule = import(
-  new URL('eslint.config.mjs', WORKSPACE_ROOT_URL).href
-) as Promise<{ default: readonly FlatConfigObject[] }>;
+//
+// The `.catch` is attached AT CREATION and that placement is the point. This
+// import starts at module evaluation, but the only consumer is the `beforeAll`
+// below, so without a handler here the rejection is unhandled for at least one
+// turn -- and vitest surfaces that as a worker-level unhandled rejection rather
+// than as a clean failure attributed to this hook. A guard whose whole job is
+// mechanical enforcement failing in the least attributable way available is the
+// exact opposite of what the hook's own comment is trying to achieve. Rethrowing
+// keeps the hook failing (the handler does not swallow), and names the file.
+const eslintConfigModule = (
+  import(new URL('eslint.config.mjs', WORKSPACE_ROOT_URL).href) as Promise<{
+    default: readonly FlatConfigObject[];
+  }>
+).catch((error: unknown) => {
+  throw new Error(`failed to load the root eslint.config.mjs: ${error}`);
+});
 
 let flatConfig: readonly FlatConfigObject[] = [];
 

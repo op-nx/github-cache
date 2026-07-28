@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
-current_phase: 7
+current_phase: 8
+current_phase_name: Nx Task-Hash Parity
 status: executing
-last_updated: "2026-07-28T00:12:48.439Z"
+last_updated: "2026-07-28T01:00:19.801Z"
 last_activity: 2026-07-28
-last_activity_desc: "Phase 7 complete: executed, verified, secured, validated, learnings extracted"
+last_activity_desc: "Phase 8 plan 08-01 complete: the capture instrument and the opened root-cause record"
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 5
-  completed_plans: 4
+  total_plans: 11
+  completed_plans: 5
   percent: 0
-current_phase_name: Lint Toolchain and the Ambient-Platform-Read Ban
 ---
 
 # Project State
@@ -23,15 +23,15 @@ current_phase_name: Lint Toolchain and the Ambient-Platform-Read Ban
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 7 -- Lint Toolchain and the Ambient-Platform-Read Ban
+**Current focus:** Phase 8 -- Nx Task-Hash Parity
 
 ## Current Position
 
-Phase: 7 - Lint Toolchain and the Ambient-Platform-Read Ban
-Plan: 4/4 complete
+Phase: 8 (Nx Task-Hash Parity) -- EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-28 - Phase 7 complete: executed, verified, secured, validated, learnings extracted
+Last activity: 2026-07-28 -- Phase 8 plan 08-01 complete (capture instrument + root-cause record opened)
 
 ## Performance Metrics
 
@@ -94,6 +94,7 @@ Last activity: 2026-07-28 - Phase 7 complete: executed, verified, secured, valid
 | Phase 07 P02 | ~25 min | 2 tasks | 6 files |
 | Phase 07 P03 | ~20 min | 2 tasks tasks | 5 files files |
 | Phase 07 P04 | ~55 min | 3 tasks | 2 files |
+| Phase 08 P01 | 39min | 2 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -165,6 +166,8 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 07]: 07-03: build is UNUSABLE as lint's negative control, because lint's inputs start from default so hashing a spec is exactly what lint is SUPPOSED to do -- a build-shaped negative would assert something false about the target. The honest discriminator is a probe path OUTSIDE {projectRoot}. A vacuity mutation (lint.inputs reduced so the self pattern list resolves EMPTY) proved the choice load-bearing: filterUsingGlobPatterns returns the whole probe list on an empty pattern list, so BOTH positive assertions still passed and the negative control was the only glob-resolution assertion that caught it. Separately, this commit rotates EVERY task hash and rotates test twice over ({workspaceRoot}/nx.json is already an explicit test input), so Phase 7's first default-branch push is a LEGITIMATE all-MISS push -- Phase 9's OBS-04 tripwire must be authored as 'two consecutive all-miss pushes with NO version-affecting change in between' (D-36). D-35's hashed-node baseline for Phase 8 CORR-03 is recorded in 07-EVIDENCE.md; options.cwd is the row most likely to diverge across OSes and it IS hashed.
 - [Phase 07]: 07-04: LINT-04 is closed BY DIFFERENTIAL, not by reading the config. Editing a RULE and editing a linted SOURCE each make lint EXECUTE (Cache 0/1) where the unperturbed tree replays (1/1), and the same rule edit makes test EXECUTE too -- the D-25 second-order hole, measured BEFORE any mutation result was trusted. The load-bearing one is negative control 1: A and B BOTH pass on a lint target with no declared input block at all, because @nx/eslint's inferred inputs already contain default and the workspace-root config, so A and B alone prove nothing about D-24. Deleting that one entry and watching a real rule change serve Cache 1/1 hit (100%) is the proof. A methodological trap worth carrying: a differential's perturbed side must be run exactly ONCE -- running it twice caches the perturbed hash, so a later repeat of the same edit reads as a HIT indistinguishable from the defect.
 - [Phase 07]: 07-04: all nine mutations M1-M9 applied, OBSERVED and reverted first-hand; every one matched, and nothing was committed mutated. M1 and M2 produce DISJOINT red sets, which is the measured form of D-15 (neither ban rule is sufficient alone). M3 -- the one flagged most likely to be silently vacuous -- went RED, so P6 and the dynamic-import shape are genuinely covered; but VALIDATION.md's predicted count is off by one, because the shipped spec folds BOTH dynamic shapes into ONE it() row, so the observed result is 1 failing assertion covering two shapes rather than 2. M8 produces the require-description error and M9 produces BOTH the unsuppressed ban error and a severity-2 unused-directive report, which is what makes LINT-05 and LINT-06 LIVE rather than merely configured -- and is why plans 07-01 and 07-02 correctly left those two requirement boxes unticked until now. requirements.mark-complete was skipped and REQUIREMENTS.md hand-edited, since that tool corrupted the same file in both prior waves.
+- [Phase 08]: 08-01: capture-hashes.mjs is the root-level dev-only ESM instrument (D-01/D-02) -- four Nx internal-subpath imports drive createProjectGraphAsync -> createTaskGraph -> createTaskHasher().hashTask() over the five D-05 targets, emitting each target's hash/command/details.nodes map PLUS the merged projectConfiguration node. That last addition is beyond D-04's minimum and is what makes PARITY-01 answerable: the node map holds exactly ONE <project>:ProjectConfiguration entry covering all five targets, so a difference there cannot be localised to a field without the merged node. PROVEN, not asserted: in one uninterrupted session at 5a8f7c5 the instrument's build (15091651677672778193) and test (17043910507556371878) hashes were byte-identical to what nx run wrote into .nx/cache/run.json, with Pitfall 2 discipline held (each copy read before the next nx command; the nx show runs sequenced afterwards). D-01(b) is STRUCTURAL: root package.json nx.includedScripts stays [], so the capture:hashes script cannot become an Nx target and a capture can never be a replay.
+- [Phase 08]: 08-01: graphState is derived from workspaceDataEntries ALONE, correcting 08-RESEARCH.md's recommended both-counts-zero recipe. Measured: getNativeFileCacheLocation() is not a hash cache at all -- nx/dist/src/native/index.js:96-107 uses it to hold ONE version-prefixed copy of the .node addon binary, and the instrument's own static import of project-graph.js puts it there before any measurement can run (probed against a fresh empty dir: 0 entries at process entry, 0 after importing native-file-cache-location.js, 1 immediately after importing project-graph.js). The prescribed derivation would therefore have returned `warm` unconditionally forever, mislabelling every Phase 8 observation point -- the same silently-always-passes class D-04 exists to prevent. The record now carries meta.graphStateBasis so it states its own derivation. Two further verification-surface corrections in the same plan: `--inputs` is NOT a flag at Nx 23.1.0 but a SUBCOMMAND, so 08-RESEARCH.md's `nx show target <t> --inputs` exits 0 with the flag INERT (both forms captured so the D-03 evidence cannot be dismissed as the wrong command); and the acceptance check "grep the source for a --graph-state flag and find none" was initially satisfiable by a COMMENT saying no such flag exists, so the comment was reworded -- Phase 7's "a lexical guard can be satisfied by the wrong token" recurring.
 
 ### Pending Todos
 
@@ -291,8 +294,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-27T22:53:10.970Z
-Stopped at: Phase 8 context gathered
+Last session: 2026-07-28T01:00:19.789Z
+Stopped at: Completed 08-01-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.
@@ -360,7 +363,7 @@ Stopped at: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-r
 Task 3a (413-flush, F14) RESOLVED as a documented HTTP/1.1 limitation (lead-approved option a): a bounded raw-socket investigation proved the ECONNRESET is deterministic for a client streaming a body far over the cap (60/60 on a 100MB repro; <=16KB-over-cap gets a clean 413, >=256KB resets), and the prescribed destroy-on-finish fix does NOT resolve it (and one variant hangs). Landed a ponytail ceiling comment at both destroy sites (cb2832d), no behavior change, no bundle diff, no flaky test. The memory-bounding cap (backend.put never reached, proven by the mid-stream abort test) is intact regardless.
 HELD (deliberately, for the lead): the branch push and the PR-body update. The lead handles the outward-facing push after independently verifying the series. This executor did not push and did not touch the PR body.
 Final local battery at HEAD cb2832d: fmt / build / typecheck / typecheck:action / test (430) / fallow:ci / check:action / pack:check all exit 0.
-Resume file: .planning/phases/08-nx-task-hash-parity/08-CONTEXT.md
+Resume file: None
 Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates the PR #3 body. Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.
 
 ## Operator Next Steps

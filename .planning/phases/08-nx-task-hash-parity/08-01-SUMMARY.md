@@ -44,6 +44,14 @@ patterns-established:
   - "Pattern: a derived environment field records its own basis (meta.graphStateBasis) so a reader need not consult the source to learn which surface decided"
   - "Pattern: an evidence document quotes the wording it corrects, so a framing correction is attributable rather than a silent rewrite"
 
+# Deliberately empty. This plan's frontmatter claims PARITY-01, PARITY-02 and PARITY-06, but none of
+# the three is CLOSED by it: PARITY-01 needs the node-by-node naming that plan 08-04 writes,
+# PARITY-06 needs the four observation points plan 08-03 measures, and PARITY-02's instrument half is
+# built but its evidence is only complete once a record exists at the anchor commit. Marking any of
+# them here would be a claim, not a fact. Additionally, `requirements.mark-complete` has corrupted
+# REQUIREMENTS.md in two prior waves of this project (recorded in STATE.md, Phase 07 P04), so the
+# tool was not invoked. The phase-end verifier closes these against VERIFICATION + SUMMARY +
+# REQUIREMENTS.
 requirements-completed: []
 
 coverage:

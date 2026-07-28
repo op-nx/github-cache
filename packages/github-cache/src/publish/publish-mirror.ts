@@ -290,19 +290,42 @@ export async function publishMirror(
   }
 
   // Silent-degradation signal (WARN, not fail): if EVERY enumerated server-produced
-  // entry restored as a MISS and nothing mirrored, that is either the legitimate
-  // cross-OS case (this OS's publish leg cannot restore entries saved on another OS)
-  // OR an Actions-cache read-scope regression that looks identical to "nothing to
-  // do" and would otherwise exit green. A hard fail would break legitimate cross-OS
-  // runs, so surface it as a warning rather than swallowing it. The message's
-  // "entr(y|ies)" counts DISTINCT keys, not enumerated rows, since the dedup above --
-  // a strict improvement, but the wording shifted meaning silently, hence this clause.
+  // entry restored as a MISS and nothing mirrored, the axis is the `@actions/cache`
+  // cache VERSION -- the sha256 over (archive paths | compression method |
+  // ('windows-only') | salt) at cacheUtils.js:157-172, whose FIRST components are the
+  // archive path literals, which is why changing the path rotates the version. That is
+  // a SEPARATE mechanism from the Nx TASK hash and from the Release ASSET NAME, each of
+  // which produces a superficially similar all-MISS through unrelated machinery -- so
+  // the message names the axis rather than saying only "rotation", or a reader
+  // misdiagnoses one of the other two (OBS-04, D-30).
+  //
+  // The alternative cause is an Actions-cache read-scope regression, which looks
+  // identical to "nothing to do" and would otherwise exit green. This STAYS a warning:
+  // a hard fail would break every legitimate rotation window, and a tripwire that fires
+  // on correct work gets disabled (D-28b).
+  //
+  // The expectation for this milestone's rotation was recorded IN ADVANCE, before the
+  // commit that changed the version's input, at
+  // `.planning/phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md`.
+  // Read it before acting on this warning -- it carries the per-leg predicted counts,
+  // the non-triggers, and the bundle-drift signal that looks exactly like this one but
+  // is a defect.
+  //
+  // The message's "entr(y|ies)" counts DISTINCT keys, not enumerated rows, since the
+  // dedup above -- a strict improvement, but the wording shifted meaning silently,
+  // hence this clause.
   if (hashes.length > 0 && readMisses === hashes.length && mirrored === 0) {
     core.warning(
       `github-cache publish: all ${hashes.length} server-produced cache ` +
         `entr${hashes.length === 1 ? 'y' : 'ies'} restored as a MISS; nothing ` +
-        'mirrored. Expected when publishing from a different OS than the entries ' +
-        "were saved on; otherwise check the runtime token's Actions-cache read scope.",
+        'mirrored. The axis here is the @actions/cache cache VERSION -- a SEPARATE ' +
+        'mechanism from the Nx TASK hash and from the Release ASSET NAME, each of ' +
+        'which produces a look-alike all-MISS through unrelated machinery. Two ' +
+        'candidate causes: (1) a cache-version rotation in this commit range -- the ' +
+        'archive path literal or the cross-OS flag changed; (2) the runtime ' +
+        "token's Actions-cache read scope. This is expected ONCE per " +
+        'version-affecting change. Two consecutive all-miss pushes with NO ' +
+        'version-affecting change in between is the signal to act.',
     );
   }
 

@@ -185,6 +185,12 @@ Every read fault degrades to a MISS -- never a wrong result and never a broken
 build (Core Value). A MISS costs a rebuild; a wrong result would be a correctness
 violation.
 
+That guarantee is about read **faults**, and it carries one precondition: a cached
+task's outputs must not depend on which OS produced them. From v0.0.2 the store
+does not partition by runner OS, so a task whose output genuinely differs per OS
+must declare that difference as an Nx input -- this repo's `integration` target
+carries a platform discriminator for exactly that reason.
+
 ---
 
 _Rendered from the single sources above. The `docs-trust` guard

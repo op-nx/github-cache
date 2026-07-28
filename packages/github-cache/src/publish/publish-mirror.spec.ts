@@ -438,6 +438,66 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
       expect.stringContaining('restored as a MISS'),
     );
   });
+
+  it('names the cache-VERSION axis, both candidate causes, and the two-push gate (OBS-04, D-27, D-28b, C-10)', async () => {
+    getMock.mockResolvedValue(MISS);
+    const fake = client();
+
+    await publishMirror(fake);
+
+    // Asserted on CONTENT, not on the fact that a warning was emitted: the three
+    // `restored as a MISS` assertions in this describe already prove the branch is
+    // REACHED, and they would keep passing against a message that had silently lost
+    // everything a reader actually needs.
+    //
+    // The axis, in the SAME WORDS as 09-ROTATION-SIGNAL.md's "The axis, and why naming
+    // it matters" section. Two copies of one diagnosis: if they drift, a reader who
+    // finds one and not the other gets a different answer.
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('@actions/cache cache VERSION'),
+    );
+    // ... explicitly distinguished from the two mechanisms that produce a look-alike
+    // all-MISS (rotation windows 1 and 3 of this milestone -- D-30 forbids a tripwire
+    // that fires on them, so the message must let a reader tell them apart).
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('Nx TASK hash'),
+    );
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('Release ASSET NAME'),
+    );
+    // Cause 1 (D-27): the archive path literal or the cross-OS flag moved.
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('cache-version rotation in this commit range'),
+    );
+    // Cause 2 (D-27), the one that survives from the pre-Phase-9 message.
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining("runtime token's Actions-cache read scope"),
+    );
+    // The gate (D-28b): a raw push counter would fire on correct work, so the message
+    // carries the reading instruction instead of persisting cross-push state.
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('Two consecutive all-miss pushes'),
+    );
+    // Still a warning, never a failure -- three legitimate rotation windows exist.
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  it('no longer offers the storage-partitioning explanation this milestone made false (OBS-04, D-27)', async () => {
+    getMock.mockResolvedValue(MISS);
+    const fake = client();
+
+    await publishMirror(fake);
+
+    // The single-character character class below is load-bearing, not style. This
+    // assertion claims a phrase is ABSENT from the message, so spelling that phrase
+    // here would plant it in the very file that proves it is gone -- and a repo-wide
+    // search could then no longer tell this guard apart from a regression. The bracket
+    // splits the token for a reader's search without changing what the regex matches.
+    // Same technique, same reason, as the scan idiom in lint-scope-drift.spec.ts.
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.not.stringMatching(/differen[t] OS/),
+    );
+  });
 });
 
 describe('publishMirror duplicate-row dedup', () => {

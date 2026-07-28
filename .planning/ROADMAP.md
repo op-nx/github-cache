@@ -85,7 +85,7 @@ Full phase detail, success criteria, traceability, and coverage validation archi
 
 - [x] **Phase 7: Lint Toolchain and the Ambient-Platform-Read Ban** - Adopt ESLint 9 flat config and a `lint` target, then make "unit specs must not read the running machine" a build failure instead of a convention. (completed 2026-07-27)
 - [x] **Phase 8: Nx Task-Hash Parity** - Root-cause the cross-OS hash divergence node by node, fix it, and keep `integration` the only target that diverges -- enforced by a build-gating CI measurement. (completed 2026-07-28)
-- [ ] **Phase 9: OS-Invariant Actions-Cache Version** - Make the `@actions/cache` version stop depending on the OS: one hardcoded forward-slash path plus `enableCrossOsArchive` at every call site, closed behaviourally by a Windows runner reading back a Linux-written entry.
+- [x] **Phase 9: OS-Invariant Actions-Cache Version** - Make the `@actions/cache` version stop depending on the OS: one hardcoded forward-slash path plus `enableCrossOsArchive` at every call site, closed behaviourally by a Windows runner reading back a Linux-written entry. (completed 2026-07-28)
 - [ ] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed.
 - [ ] **Phase 11: Live Proofs -- O1, O2, O3** - Record the three live proofs in the mandated order, including the producer attribution that enabling O4 destroys forever.
 - [ ] **Phase 12: Windows CI Reuse (O4) + Consumer Recipe** - Add the Windows `build`/`typecheck`/`test` legs, prove they HIT on Linux-produced entries, and ship the safe-by-default adoption recipe.
@@ -318,7 +318,7 @@ OBS-04, DOCS-08.
      correction -- both frame "never a wrong result" as a consequence of fault degradation, which
      stays true. (OBS-04, DOCS-08)
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans complete
 
 - [x] 09-01-PLAN.md
 - [x] 09-02-PLAN.md
@@ -326,7 +326,7 @@ OBS-04, DOCS-08.
 - [x] 09-04-PLAN.md
 - [x] 09-05-PLAN.md
 - [x] 09-06-PLAN.md
-- [ ] 09-07-PLAN.md
+- [x] 09-07-PLAN.md
 
 **Live-CI close**: VER-06's cross-OS `dogfood-seed`/`dogfood-verify` pair and OBS-04's one-time
 rotation signal are only observable on a real runner and a real default-branch push.
@@ -698,7 +698,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 6. Distribution + Docs + Governance | v0.0.1 | 5/5 | Complete | 2026-07-21 |
 | 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 4/4 | Complete   | 2026-07-27 |
 | 8. Nx Task-Hash Parity | v0.0.2 | 6/6 | Complete   | 2026-07-28 |
-| 9. OS-Invariant Actions-Cache Version | v0.0.2 | 6/7 | In Progress|  |
+| 9. OS-Invariant Actions-Cache Version | v0.0.2 | 7/7 | Complete   | 2026-07-28 |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 0/? | Not started | - |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 0/? | Not started | - |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 0/? | Not started | - |

@@ -3067,3 +3067,329 @@ re-taken; nothing about the values would change.
 by an `nx.json` change" is superseded.** It was right that `nx.json` cannot reach the build-output
 variable. It was wrong that the variable had to remain -- the variable was an artefact of measuring
 outside the dependency chain, and it was closed by fixing the MEASUREMENT rather than the config.
+
+---
+
+## The gate can fail
+
+This section exists because of Phase 7's learning `### Prove a guard can fail before trusting it`,
+and its two companions `### The vacuity mutation, distinct from the deletion mutation` and `### A
+lexical guard can be satisfied by the wrong token`. Phase 7 recorded TWO separate instances of a
+guard that passed for the wrong reason, so a green gate is not evidence of anything until its RED has
+been seen. D-22 is the standing form of that lesson, and D-18 forbids softening it with an advisory
+period.
+
+Plan 08-02 already observed every one of the comparator's clauses failing against FIXTURES, in two
+passes. What a fixture cannot show is that the WHOLE CHAIN turns red when the underlying fact stops
+holding: two real legs, two real uploads, a real cross-job download, a real parse, and a real verdict
+that gates the branch. Two demonstrations close that, one per half of the gate.
+
+### Why THIS mutation, and not the discriminator one
+
+The obvious mutation is to delete or re-spell `integration`'s `{ "runtime": "node -p
+process.platform" }` and watch clause (b) fire. It was REJECTED, deliberately.
+
+**D-14 requires that string byte-identical**, and after VER-03 it is the sole mechanism separating
+OS-sensitive targets in this workspace -- so a remove-then-restore of it is a needless risk taken on
+the one string the milestone's cache-correctness rests on. A purely ADDITIVE, obviously-wrong
+mutation on a DIFFERENT target reddens a clause of the same gate at no such risk, and it reddens the
+clause that matters more: clause (c), the non-vacuity control that makes clause (b) mean anything.
+
+Both mutations were also chosen to be visibly, unmistakably wrong at a glance, so that neither commit
+can be mistaken for a fix by a reader skimming `git log`.
+
+### Demonstration 1 -- the invariant-target clause, on real legs
+
+**Baseline first.** Run [`30355822956`](https://github.com/op-nx/github-cache/actions/runs/30355822956)
+at `77c82383cd2f1487f2c7e7fb95dfaf6a1c32fe31`, the commit that wired the job. `hash-parity-compare`
+GREEN, `download-artifact` reporting `Total of 2 artifact(s) downloaded`, and one stdout line:
+
+```
+hash-parity: PARITY OK linux vs win32 -- build=17197827372395989528/17197827372395989528 typecheck=8949082127832201885/8949082127832201885 test=1367622961810189968/1367622961810189968 integration=11946835023040710407/1193647465557986036 lint=6930879416208693542/6930879416208693542
+```
+
+Every value matches the four-observation-point table above. A green gate at a KNOWN-good commit is
+the control the RED is measured against.
+
+**The mutation, at `6260496bff8c76abab3e07499fd2a47c689572ae`.** One line appended to
+`targetDefaults.build.inputs`:
+
+```json
+{ "runtime": "node -p process.platform" }
+```
+
+That makes `build`'s hash OS-sensitive, so the invariant-target clause must fail NAMING `build`.
+
+**The RED.** Run [`30356229082`](https://github.com/op-nx/github-cache/actions/runs/30356229082),
+`hash-parity-compare` conclusion `failure`. Verbatim, from the comparison step:
+
+```
+hash-parity: PARITY FAILED (invariant-target-diverged) -- `build` must be IDENTICAL across platforms but diverged: linux=5346514019200865346 vs win32=12093782812520948388. Localise it with `node capture-hashes.mjs --diff <recordA.json> <recordB.json>`, which partitions the two node maps into only-in-A / only-in-B / value-changed and diffs the merged project configuration field by field.
+```
+
+It names the CLAUSE (`invariant-target-diverged`), the DIVERGING TARGET (`build`), both hashes with
+their platforms, and the next command to run. That is the whole point of a named reason: a red gate
+that says only "a comparison failed" puts the reader one job further from the cause than necessary.
+
+**Three things about this RED that a fixture could not have produced:**
+
+1. **Both capture legs were `success`.** `download-artifact` again reported `Total of 2 artifact(s)
+   downloaded`. So the verdict came from record CONTENT, exactly as D-23 requires -- there is no
+   reading of this failure in which an upstream job result contributed to it. The compare job went
+   red while every job it `needs` was green.
+2. **The mutated `build` hash differs on BOTH sides from its pre-mutation value.** Adding an input
+   rotates the hash on both platforms AND makes them disagree; the disagreement is the clause, and
+   the rotation is the corroboration that the config edit actually reached the graph.
+3. **The `test` job went red too**, on the same commit, for an independent reason -- see the bonus
+   signal below.
+
+**The bonus local signal, an independent confirmation the mutation was real.** Before pushing, the
+same mutation was applied locally and `npx nx test @op-nx/github-cache --skip-nx-cache` run:
+
+```
+FAIL  |@op-nx/github-cache| src/nx-target-inputs.spec.ts > lint declares its full input set (LINT-04) > integration is still the only target with a platform runtime input
+AssertionError: expected [ 'integration', 'build' ] to deeply equal [ 'integration' ]
+      Tests  1 failed | 561 passed (562)
+```
+
+That is the pre-existing CORR-04 guard, reddening on the same edit through a completely different
+mechanism -- a local unit assertion over `nx.json`, not a cross-OS comparison of runner records. Two
+independent guards agreeing that the mutation happened is stronger than either alone, and it is the
+CORR-04 half of the phase re-confirming itself for free.
+
+**The revert, and its matching GREEN.** `65a2e13c7af956c32a2a9cf09ddfa192ecf31df6` restores
+`nx.json`; `git diff --exit-code 77c8238 -- nx.json` exits 0, so it is byte-identical rather than
+merely equivalent. Run
+[`30356937751`](https://github.com/op-nx/github-cache/actions/runs/30356937751),
+`hash-parity-compare` GREEN, with `build` back at `17197827372395989528` on both legs and every other
+value unchanged.
+
+**The matching GREEN is not a formality.** A RED with no GREEN after it does not distinguish "the
+gate fired on the mutation" from "the branch is broken and the gate is red about something else".
+This is the same methodological trap Phase 7 recorded for differentials, one level up: the perturbed
+side has to be run exactly once and the unperturbed side has to be re-run afterwards, or the reading
+is not attributable.
+
+### Demonstration 2 -- clause (a), on real legs, and RESEARCH assumption A4 executed
+
+Clause (a) -- "fewer than two records is a FAILURE, not a skip" -- is the one clause whose
+reachability depends on WORKFLOW WIRING rather than on the comparator. The fixture cases prove the
+comparator returns `wrong-record-count`; they cannot prove the compare job ever RUNS to ask it when a
+leg has died. That is `08-RESEARCH.md`'s assumption **A4**, recorded as "not executed this session",
+with the consequence spelled out: if it is wrong, D-17's requirement is unreachable in this shape.
+
+It was cheap to close, so it was closed rather than recorded as a residual.
+
+**The mutation, at `c9bd654b38f6c2d54ddb4dfef37f9b43f1f86463`.** A windows-only step in the capture
+job deletes that leg's record AFTER the capture wrote it and BEFORE the upload:
+
+```yaml
+- name: D-22 demonstration -- drop the windows record before the upload
+  if: matrix.os == 'windows-11-arm'
+  shell: bash
+  run: rm -f hash-parity-${{ matrix.os }}.json
+```
+
+**Run [`30357290164`](https://github.com/op-nx/github-cache/actions/runs/30357290164) showed all
+three consequences, verbatim:**
+
+1. `if-no-files-found: error` failed the LEG rather than delivering silence. From the windows leg:
+
+   ```
+   ##[error]No files were found with the provided path: hash-parity-windows-11-arm.json. No artifacts will be uploaded.
+   ```
+
+   `hash-parity (windows-11-arm)` conclusion `failure`. Without that setting the default is `warn`,
+   the leg would have gone GREEN having measured nothing, and the blame would have landed a job away.
+
+2. **`hash-parity-compare` still RAN**, with an upstream matrix leg at conclusion `failure`. **A4 is
+   closed, for the narrower `!cancelled()` form specifically** -- which is the form actually wired,
+   so the closure is about the shipped expression rather than about D-17's prose. `download-artifact`
+   reported `Total of 1 artifact(s) downloaded`, so the zero-match path was not exercised here (see
+   the residual below).
+
+3. Clause (a) fired:
+
+   ```
+   hash-parity: PARITY FAILED (wrong-record-count) -- expected exactly 2 platform records, one per matrix leg, but got 1. Suspect a leg that failed before its upload step, an upload whose `if-no-files-found` defaulted to `warn` and so produced no artifact at all, or a download pattern that matched nothing. The compare job runs `if: always()` (D-17) precisely so a missing leg arrives here as a FAILURE instead of vanishing as a skipped job.
+   ```
+
+   Note the FIRST suspect it names is the one that actually happened. That is the message doing its
+   job.
+
+**The revert:** `a0fb1b34016f1129918b9153acb200f34a200ad4`. `git diff --exit-code 65a2e13 --
+.github/workflows/ci.yml` exits 0.
+
+### The finding this demonstration produced
+
+**The quoted message above contains a false statement, and printing it for real is what surfaced
+it.** It says the compare job runs `if: always()`; the wired job runs `if: !cancelled()`, chosen
+deliberately over `always()` and documented as such in the job's rationale block. Fixture tests
+never noticed because none of them asserts on that sentence -- they assert on the reason and on the
+three suspects.
+
+This is not a wording nit. It is the phase's own recurring finding in a new place: **the correct
+verdict with the wrong cause named.** The string is read by whoever is debugging a gate that is
+ALREADY red, and it sent them looking for an expression `ci.yml` does not contain. Fixed at
+`f866210fdb09da47524a287ca82c964a3703ceaf`, in `compare.ts` and in the spec's clause (a) comment,
+which now also records that the one-record case is measured rather than assumed. The quotation above
+is left as it was PRINTED, pre-fix, because that is what the run shows.
+
+The same commit's own run is the final GREEN: run
+[`30358020343`](https://github.com/op-nx/github-cache/actions/runs/30358020343).
+
+```
+hash-parity: PARITY OK linux vs win32 -- build=140274194769865569/140274194769865569 typecheck=4678325324251623133/4678325324251623133 test=5058222226783247370/5058222226783247370 integration=9553643947593596122/7983796642337867957 lint=16122270460632698382/16122270460632698382
+```
+
+**Every value rotated, and the property held.** `compare.ts` and `compare.spec.ts` are under
+`{projectRoot}/**/*`, so editing them rotates all five hashes. All four invariant targets are still
+byte-identical cross-OS at the new values and `integration` still diverges. That is a fifth, unplanned
+observation and the most reassuring one in this section: **PARITY-03 is a PROPERTY of the
+configuration, not a coincidence of one set of numbers.** Only a continuously-enforced gate could
+have shown that; a measurement taken once could not.
+
+### Named residual: the zero-match download path
+
+The compare job creates the records directory before the download, so the loader always has a
+directory to read. If the download action ITSELF errors on a pattern matching ZERO artifacts, the job
+is still RED but the blame lands one step earlier than the comparator's named `wrong-record-count`
+reason. That path was NOT exercised on a real leg -- demonstration 2 produced ONE artifact, not zero
+-- so it is recorded here as an accepted, named residual rather than claimed as observed. An honest
+residual beats a claimed observation. The clause itself is covered either way: the zero-record fixture
+case is unit-proven in `compare.spec.ts`, and the one-record case is now proven live.
+
+### The mutation commits, and what they do to 08-04's ordering proof
+
+**Nothing is committed mutated.** Both mutations are present on the branch as adjacent
+applied-and-reverted PAIRS, not dropped, and both reverts are verified byte-identical to their
+pre-mutation text:
+
+| # | Applied | Reverted | File | Byte-identity check |
+|---|---------|----------|------|---------------------|
+| 1 | `6260496` | `65a2e13` | `nx.json` | `git diff --exit-code 77c8238 -- nx.json` exits 0 |
+| 2 | `c9bd654` | `a0fb1b3` | `.github/workflows/ci.yml` | `git diff --exit-code 65a2e13 -- .github/workflows/ci.yml` exits 0 |
+
+The pairs were kept rather than squashed away on purpose: a demonstration whose commits are gone is
+indistinguishable from one that never happened, which is the same reasoning D-21 applies to a
+downgraded clause.
+
+**THE CONSEQUENCE FOR 08-04's ORDERING PROOF, stated here so a future reader does not have to
+re-derive it.** `## The ordering proof` above reads `git log --oneline 7bfe64f..HEAD -- nx.json` and
+its value at the time was ONE commit, `163e6b9`, the fix. **It now returns THREE:**
+
+```
+$ git log --oneline 7bfe64f..HEAD -- nx.json
+65a2e13 test(08-06): revert the D-22 gate-RED demonstration -- nx.json restored byte-for-byte
+6260496 test(08-06): D-22 GATE-RED DEMONSTRATION, NOT A FIX -- reverted by the next commit
+163e6b9 fix(08-05): declare targetDefaults.typecheck.outputs to close the cross-OS divergence
+```
+
+**Commits 2 and 3 in that listing -- `6260496` and `65a2e13` -- are the D-22 demonstration, not
+fixes.** `163e6b9` remains the ONLY `nx.json` fix commit in Phase 8, and it is the OLDEST of the
+three, so the ordering claim is unchanged: the record was complete before any `nx.json` commit
+existed in this phase. What changed is only that the claim is no longer self-evident from an
+unqualified `-- nx.json` log, which is why the SHAs are named here.
+
+**The check a future auditor should run instead**, which is exact rather than approximate:
+
+```
+$ git log --oneline 7bfe64f..eeace53 -- nx.json
+(exit 0; lines: 0)
+```
+
+`eeace53` is the commit that closed this record with the root cause and the fix route. Zero `nx.json`
+commits up to and including it. That is the ordering proof, stated against a fixed endpoint that no
+later commit can perturb -- and it is what `## The ordering proof`'s closing paragraph already
+anticipated when it said "anyone auditing it re-runs listing 1 with `HEAD` replaced by this commit's
+SHA".
+
+---
+
+## Live-CI closures
+
+Per `.planning/codebase/TESTING.md`'s Live-CI first-push pattern, every item below is one that only a
+REAL runner could settle, NAMED individually rather than folded into a general "CI is green". Each
+carries a run reference, or an explicit open-with-reason line.
+
+| # | Item | Requirement | How it closed | Run |
+|---|------|-------------|---------------|-----|
+| 1 | `ubuntu-24.04-arm` as an observation point | PARITY-03, PARITY-06 | Capture leg `success`, record validated before reading (`meta.commit` == checked-out HEAD, != `meta.githubSha`) | [`30335453685`](https://github.com/op-nx/github-cache/actions/runs/30335453685), re-taken at [`30354448537`](https://github.com/op-nx/github-cache/actions/runs/30354448537) |
+| 2 | `windows-11-arm` as an observation point | PARITY-03, PARITY-05, PARITY-06 | Same, on the second leg. Also the first `windows-11-arm` artifact upload in this repo's history | [`30335453685`](https://github.com/op-nx/github-cache/actions/runs/30335453685), re-taken at [`30354448537`](https://github.com/op-nx/github-cache/actions/runs/30354448537) |
+| 3 | `integration` byte-identical, workstation vs `windows-11-arm` | PARITY-05 | Both `1193647465557986036`, zero differing nodes across all 430 | [`30335453685`](https://github.com/op-nx/github-cache/actions/runs/30335453685) |
+| 4 | The two-leg comparison itself, wired and gating | CORR-03 | `hash-parity-compare` GREEN on `Total of 2 artifact(s) downloaded`, printing the `PARITY OK` line with all five hashes | [`30355822956`](https://github.com/op-nx/github-cache/actions/runs/30355822956) |
+| 5 | The gate can FAIL on a real leg, not only on a fixture | CORR-03, D-22 | `invariant-target-diverged` naming `build`, with BOTH capture legs `success` | RED [`30356229082`](https://github.com/op-nx/github-cache/actions/runs/30356229082), GREEN after revert [`30356937751`](https://github.com/op-nx/github-cache/actions/runs/30356937751) |
+| 6 | Clause (a) on a real leg, and `if:` reachability past a FAILED leg (assumption A4) | CORR-03, D-17 | `wrong-record-count` at 1 record, with `hash-parity (windows-11-arm)` at conclusion `failure` and the compare job still running | RED [`30357290164`](https://github.com/op-nx/github-cache/actions/runs/30357290164), GREEN after revert [`30358020343`](https://github.com/op-nx/github-cache/actions/runs/30358020343) |
+| 7 | `if-no-files-found: error` fails the LEG rather than uploading silence | CORR-03 | `No files were found with the provided path ... No artifacts will be uploaded`, leg red | [`30357290164`](https://github.com/op-nx/github-cache/actions/runs/30357290164) |
+| 8 | Whether `lint` diverges cross-OS -- Phase 7's D-35 UNVERIFIED-BY-DESIGN question | D-21, SC6 | IDENTICAL on both legs (`6930879416208693542`), so D-21's PRIMARY branch applies and `lint` is asserted as the FOURTH invariant target. The named fallback does NOT apply and the clause was never downgraded | [`30335453685`](https://github.com/op-nx/github-cache/actions/runs/30335453685), re-taken at [`30354448537`](https://github.com/op-nx/github-cache/actions/runs/30354448537), enforced from [`30355822956`](https://github.com/op-nx/github-cache/actions/runs/30355822956) |
+| 9 | `upload-artifact@v7` + `download-artifact@v8` works, including on `windows-11-arm` (assumption A5) | CORR-03 | Both legs uploaded, `merge-multiple` produced two records in one directory | [`30355822956`](https://github.com/op-nx/github-cache/actions/runs/30355822956) |
+| 10 | PARITY-03 holds across a hash ROTATION, not just at one set of values | PARITY-03 | All five hashes rotated when `compare.ts` changed; four invariant targets still identical, `integration` still divergent | [`30358020343`](https://github.com/op-nx/github-cache/actions/runs/30358020343) |
+
+**Items that did NOT close, stated rather than omitted:**
+
+- **The zero-match download path.** Open, with the reason recorded above under
+  `### Named residual: the zero-match download path`. Not a gate hole -- the clause is unit-proven and
+  the live one-record case is closed; only the blame LOCATION for a zero-artifact run is unobserved.
+- **The upstream `@nx/js/typescript` OS-dependent project-reference classification.** Not a Live-CI
+  item at all and deliberately not closed here: `nx.json` NORMALISES the symptom at the merged node.
+  A report upstream remains a legitimate follow-up, filed as its own work.
+- **PARITY-08 (registering `ci.yml` as a declared `test` input).** Deferred to Phase 9 by design, so
+  that nothing in Phase 8 asserts on `ci.yml` content behind a stale cached PASS.
+
+---
+
+## PARITY-07, confirmed at the phase's end (D-16)
+
+This is a CONFIRMATION, not a new assertion. D-16 asks that the public-surface guard pass
+**unchanged**, and the whole force of that requirement is in the last word: a guard edited until it
+passes proves nothing, and editing it would BE the failure. So the evidence is a diff that is empty.
+
+**Across the whole phase, `7bfe64f..HEAD`:**
+
+```
+$ git diff --name-only 7bfe64f..HEAD -- packages/github-cache/src/public-surface.spec.ts packages/github-cache/src/index.ts packages/github-cache/src/test/consumer-contract.ts
+(exit 0; lines: 0)
+```
+
+Zero files. `git diff --exit-code` over the same three paths exits 0. All three are byte-identical to
+their Phase 7 text, and `public-surface.spec.ts`'s barrel pin passes as part of the green `test`
+target.
+
+**The three negatives, stated explicitly because an absence is what is being claimed:**
+
+- **No new env knob.** Nothing this phase added reads an environment variable in shipped code.
+- **No new action input.** Neither `packages/github-cache/action.yml`, `start-cache-server/action.yml`
+  nor `ppe/action.yml` gained an input.
+- **No new package export.** `src/index.ts` is untouched, so the barrel is byte-identical and the
+  deep-equality pin in `public-surface.spec.ts` did not have to be relaxed.
+
+**The tarball still excludes the comparator, and the exclusion is still ASSERTED.**
+`npm run pack:check` exits 0:
+
+```
+pack-check: @op-nx/github-cache tarball ships 53 files -- the consumer subset of dist/ + LICENSE + README.md + package.json only; no internals leaked (dist/action, dist/roundtrip, dist/test, dist/hash-parity excluded).
+```
+
+`dist/hash-parity` is named in that message because `pack-check.cjs` DERIVES the message from the same
+`DIST_SUBTREES` array its predicates use -- so the guard cannot pass while silently having stopped
+checking one subtree. Plan 08-02 observed the predicate FIRING (exclusion removed, exit 1 naming all
+four leaked paths, then reverted), so this is an asserted exclusion rather than a declared one.
+
+**Full battery at this plan's final commit:** `format:check`, `build`, `typecheck`,
+`typecheck:action`, `test`, `lint`, `fallow:ci`, `check:action`, `pack:check` -- all nine exit 0.
+
+### Two lines a future reader would otherwise misread
+
+- **The Nx environment variables in the cold-capture recipe are NOT a public knob.** `NX_DAEMON`,
+  `NX_CACHE_DIRECTORY` and friends are Nx's OWN variables, set process-scoped inside a single shell or
+  a single CI step, read by no shipped code in this package, and absent from every `action.yml`. They
+  are part of the MEASURING INSTRUMENT, not of the consumer surface -- which is why PARITY-07 is
+  satisfied with them present and why D-16's "no new env knob" is not contradicted by them.
+- **This phase's fix commits are one of milestone v0.0.2's THREE legitimate all-MISS hash-rotation
+  windows**, pre-recorded by Phase 7's D-36 and again above under `## Pre-recorded: this phase's fix
+  commits are a LEGITIMATE all-MISS rotation window`. The resulting cache misses are correct
+  behaviour, not a defect. No tripwire authored later may fire on them: the condition that
+  distinguishes a real defect is TWO CONSECUTIVE all-miss pushes with no version-affecting change in
+  between. Note that the window is WIDER than originally predicted -- `f866210`'s edit to
+  `compare.ts` rotated all five hashes again, for the same reason and just as legitimately, because
+  every `{projectRoot}` source file is a declared input.

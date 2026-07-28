@@ -16,6 +16,9 @@ vi.mock('@actions/core', () => {
   const summary = {
     addHeading: vi.fn(() => summary),
     addTable: vi.fn(() => summary),
+    // addRaw joins the mock for VER-05's appended compression-method line. Chainable
+    // like its siblings, matching the real Summary's fluent shape.
+    addRaw: vi.fn(() => summary),
     write: vi.fn(async () => summary),
   };
 
@@ -35,6 +38,17 @@ vi.mock('../publish/publish-mirror.js', () => ({ publishMirror: vi.fn() }));
 // mock cannot satisfy. runPublish's tests never reach construction anyway.
 vi.mock('../lib/resilient-octokit.js', () => ({
   createResilientOctokit: vi.fn(),
+}));
+// Module-mock the sibling leaf. This is the repo's established seam for a sibling
+// leaf (local-context.spec.ts, select-backend.spec.ts:24), and here it is what makes
+// the asserted summary text DETERMINISTIC: the real resolveCompressionMethod spawns
+// `zstd`, so leaving it live would make the expected line depend on whether the
+// machine running the suite happens to have zstd installed -- green on a workstation
+// with it, red on one without, which is a flake waiting to happen rather than a test.
+// The derivation itself is asserted in compression-method.spec.ts, where the seam
+// sits at node:child_process precisely so the branch under test survives.
+vi.mock('../lib/compression-method.js', () => ({
+  resolveCompressionMethod: vi.fn(() => 'zstd-without-long'),
 }));
 // Keep the real GITHUB_REPOSITORY_PATTERN; only stub the token resolver.
 vi.mock('../lib/github-identity.js', async (orig) => {
@@ -120,7 +134,44 @@ describe('runPublish OBS-01 summary rows (D-17)', () => {
     // reader double-count (2 + 23 + 12 != 25).
     expect(rows).toContainEqual(['scanned', '25']);
     expect(rows).toContainEqual(['restore-MISS (of skipped)', '12']);
-    expect(core.summary.write).toHaveBeenCalledOnce();
+    // TWICE, not once: writeCountSummary's table, then VER-05's appended line. The
+    // count moved from one to two in the same commit that added the second write,
+    // because write() APPENDS by default (summary.js:69-77) and the two writes are
+    // the whole append mechanism.
+    expect(core.summary.write).toHaveBeenCalledTimes(2);
+  });
+
+  // VER-05 / D-16. Asserted on CONTENT, not only on the write count: a bare count of
+  // two is satisfied by two EMPTY writes, so a count-only assertion would stay green
+  // if the surfacing silently reverted to nothing. It is a RAW line rather than a
+  // table row because writeCountSummary renders a column headed `count` and takes
+  // [string, number] pairs, which `zstd-without-long` cannot go through.
+  it('appends the resolved compression method as a raw summary line, surfaced and never gated (VER-05)', async () => {
+    isSyncTrustedMock.mockReturnValue({ trusted: true });
+    process.env.GITHUB_REPOSITORY = 'op-nx/github-cache';
+    resolveGitHubTokenMock.mockReturnValue('token');
+    publishMirrorMock.mockResolvedValue({
+      scanned: 1,
+      mirrored: 1,
+      skipped: 0,
+      readMisses: 0,
+      failed: 0,
+    });
+
+    await runPublish();
+
+    expect(core.summary.addRaw).toHaveBeenCalledOnce();
+    expect(core.summary.addRaw).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'compression method (@actions/cache): zstd-without-long',
+      ),
+      true,
+    );
+    // Also in the log, not only the summary (D-16): a job summary is not readable
+    // from a failed step's output, and the log is.
+    expect(core.info).toHaveBeenCalledWith(
+      expect.stringContaining('resolved compression method zstd-without-long'),
+    );
   });
 });
 

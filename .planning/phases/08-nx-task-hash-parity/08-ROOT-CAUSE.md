@@ -1228,7 +1228,9 @@ differs from cold-windows for every target" -- holds: all five targets differ. I
 "warm local Windows `build`/`test` equal cold ubuntu CI to the digit" -- holds, and `lint` joins
 them as a third. Its third clause -- "cold local Windows equals cold windows CI to the digit" --
 holds for `build`, `test`, `integration` and `lint`, and NOT for `typecheck`, for the reason the
-D-11 section below root-causes.
+D-11 section below root-causes. *(That reading of the anchor records is unchanged. Plan 08-05
+corrected what it MEANS: the `typecheck` gap is the instrument hashing outside the dependency chain,
+not a divergence between the two machines -- see `## CORRECTION: D-11's consequence is FALSIFIED`.)*
 
 ---
 
@@ -1357,13 +1359,25 @@ legs, and the record should state it." Both statements are confirmed, and the se
 
 Two binary variables, four combinations, four values. Nothing is left unexplained.
 
-**Consequence for the gate, and it is a real one.** The build-output variable is NOT closed by
-08-05's `nx.json` fix -- it is a property of what has run in a given workspace, not of the config.
-Both `hash-parity` legs skip the build for exactly this reason, so the gate compares like with
-like. But a developer running `nx typecheck` on a box that has built will compute a different
-`typecheck` hash from CI even after the OS axis is closed. That is a DOCS-07 item for Phase 12,
-alongside the `nx reset` note, and it is recorded here so Phase 12 inherits it rather than
-rediscovering it.
+**Consequence for the gate.** CORRECTED by plan 08-05 -- see
+`## CORRECTION: D-11's consequence is FALSIFIED, and the instrument was measuring outside the
+dependency chain` below. **The decomposition table above stands**; it is mechanically correct about
+why the INSTRUMENT saw four values. The consequence originally drawn from it did not, and the
+original wording is quoted in that section rather than deleted.
+
+What is true, measured at the fix commit: `typecheck` carries an INFERRED
+`dependsOn: ["build", "^typecheck"]` -- produced by `@nx/js/typescript`, absent from `nx.json` --
+so Nx defers its hash until `build` has produced `dist/`. Two real `--skip-nx-cache` runs, one from
+a populated `dist/` and one from a deleted one, both compute `8949082127832201885`. **A developer
+who has built and one who has not compute the SAME `typecheck` hash.** The four values are an
+artefact of the instrument calling `hashTask` outside the dependency chain, not a divergence any
+machine experiences.
+
+The live consequence is therefore for the GATE, not for developers: a job that hashes `typecheck`
+without building first records a number nothing computes. Both `hash-parity` legs originally skipped
+the build so the two legs would be identical in that respect -- correct instinct, wrong resolution,
+since "both build" is equally identical AND measures the real value. The job is fixed in
+`## The hash-parity job now builds before capturing` below.
 
 ---
 
@@ -1729,11 +1743,21 @@ They are written out here explicitly so Phase 12 inherits a list rather than a r
    whereas `nx reset` is an operation that can fail. It is also non-destructive, which matters
    because the stale graph is itself a measurement subject and cannot be regenerated once cleared.
 
-6. **A developer who has BUILT computes a different `typecheck` hash from CI, and 08-05's fix does
-   NOT close it.** `typecheck` declares a `dependentTasksOutputFiles` input (`nx.json:137`) that
-   hashes the CONTENT of `packages/github-cache/dist/`; both CI legs deliberately skip the build, so
-   their `dist/` is absent. This is a property of what has run in a workspace, not of the config, so
-   no `nx.json` change reaches it. Documented alongside the reset note, not instead of it.
+6. **REWRITTEN by plan 08-05 -- the original claim here was FALSE and must not be documented.** This
+   item previously read: "A developer who has BUILT computes a different `typecheck` hash from CI,
+   and 08-05's fix does NOT close it." **That is measured false** -- see
+   `## CORRECTION: D-11's consequence is FALSIFIED, and the instrument was measuring outside the
+   dependency chain`. `typecheck` carries an inferred `dependsOn: ["build", "^typecheck"]`, so Nx
+   hashes it only after `build` has produced `dist/`; two real runs from opposite `dist/` states
+   both compute `8949082127832201885`. The original text is preserved here, struck, precisely
+   because shipping it to adopters was the risk that made the correction mandatory.
+
+   **What Phase 12 should document instead: nothing.** There is no developer-facing portability
+   hazard here, and adding a reassurance about a non-problem is worse than silence. `typecheck`'s
+   `dependentTasksOutputFiles` input over `dist/` is correctly modelled and must stay. The only
+   audience for the build-output variable is whoever writes a job or a script that hashes
+   `typecheck` WITHOUT running it -- and that audience is served by the `hash-parity` job's own
+   comment block, not by a portability checklist. Items 1 through 5 are unaffected.
 
 ---
 
@@ -1869,7 +1893,10 @@ measured in BOTH graph states -- four values per target. All four values exist, 
 carrying its full `meta` block. They are not identical, and reporting the row as covered because the
 measurement was taken would be exactly the failure mode this audit exists to catch. **This record's
 job for PARITY-03 is the measurement; the outcome belongs to 08-05, and the continuous enforcement
-belongs to 08-06.** Note also that only THREE of the four values can ever be brought into agreement
+belongs to 08-06.** *(CORRECTED by plan 08-05: the sentence that follows is superseded -- all FOUR
+values converge once `typecheck` is hashed inside its dependency chain. See
+`## CORRECTION: D-11's consequence is FALSIFIED` and the post-build-step re-measurement.)*
+Note also that only THREE of the four values can ever be brought into agreement
 by an `nx.json` change: the workstation's `typecheck` carries the build-output variable that
 `nx.json` cannot reach (D-11, item 6 of the Phase 12 hand-off).
 
@@ -2325,6 +2352,13 @@ isolates it to a single `dependentTasksOutputFiles` node. `nx.json` cannot reach
 a property of whether the workspace has BUILT. This is pre-committed non-trigger N1 and a DOCS-07
 item, item 6 of the Phase 12 hand-off, not a U-01 trigger.
 
+*(CORRECTED by plan 08-05. The `NO -- D-11` row above is an artefact of the INSTRUMENT hashing
+`typecheck` outside its dependency chain, not a real divergence: a real `nx typecheck` run computes
+`8949082127832201885` from either `dist/` state, and that IS the value in the local column. Once the
+`hash-parity` job builds before capturing, the CI column reads the same number and the row becomes
+YES -- five of five. See `## CORRECTION: D-11's consequence is FALSIFIED` and the post-build-step
+re-measurement. Hand-off item 6 is rewritten; N1's non-trigger status is unchanged.)*
+
 **Consequence for the Phase 12 hand-off, measured rather than predicted.** Hand-off item 2 warned
 that the persisted plugin cache would NOT self-heal and that a developer who does nothing after
 pulling the fix keeps computing the pre-fix value -- "the single most likely way for the fix to look
@@ -2737,3 +2771,106 @@ than carried in this phase's diff.
 record. Editing the context document after the fact would erase the evidence that the item was
 genuinely open when the phase started, which is the property that makes this resolution worth
 anything.
+
+---
+
+## CORRECTION: D-11's consequence is FALSIFIED, and the instrument was measuring outside the dependency chain
+
+Raised while reviewing plan 08-05's checkpoint, reproduced independently here before being recorded.
+This CORRECTS a conclusion this record itself reached in `## D-11: typecheck's third variance source,
+ROOT-CAUSED` and shipped into the Phase 12 hand-off. It is recorded as a correction with its
+evidence, in the same style as the D-10 supersession, rather than applied silently.
+
+**Why it could not be left standing:** hand-off item 6 as written would have shipped a false
+statement to every adopter of this project. That is the reason this correction is not optional.
+
+### `typecheck` carries an INFERRED `dependsOn`, and that is the fact everything turns on
+
+```
+$ npx nx show project @op-nx/github-cache --json
+build        dependsOn=["^build"]
+typecheck    dependsOn=["build","^typecheck"]      <- INFERRED
+test         dependsOn=["^build"]
+integration  dependsOn=["^build"]
+lint         dependsOn=undefined
+
+$ git grep -n "dependsOn" -- nx.json
+nx.json:49:      "dependsOn": ["^build"],       (test)
+nx.json:90:      "dependsOn": ["^build"],       (integration)
+```
+
+`typecheck -> build` is produced by `@nx/js/typescript` and appears NOWHERE in `nx.json`, which is
+why four plans of reading the config never surfaced it. Nx defers the hash of a task that depends on
+another task's outputs until those outputs exist -- `hashTasksThatDoNotDependOnOutputsOfOtherTasks`
+is the pass that arranges it -- so in a REAL run `typecheck` is hashed AFTER `build` has produced
+`dist/`.
+
+### Measured, on this workstation, at the fix commit
+
+Two real runs, both `--skip-nx-cache`, each `run.json` copied immediately after its own `nx`
+invocation with nothing interleaved (the Pitfall 2 discipline this record already requires):
+
+| Starting state | `build` hash | `typecheck` hash |
+|---|---|---|
+| `dist/` and `out-tsc/` POPULATED | `17197827372395989528` | `8949082127832201885` |
+| `dist/`, `out-tsc/` and `tsconfig.tsbuildinfo` DELETED first | `17197827372395989528` | `8949082127832201885` |
+
+**Identical.** The pre-run state of `dist/` does not affect the hash a real `nx typecheck` run
+computes, because `build` runs first either way and `typecheck` is hashed against what `build`
+produced.
+
+### What is falsified, and what is NOT
+
+**NOT falsified -- the input contract.** `dist/` is gitignored, so it never entered the hash through
+`default` or the file map; it enters only through the `dependentTasksOutputFiles` entry at
+`nx.json:137`. That input is CORRECTLY modelled, because `build` genuinely IS a declared dependency
+of `typecheck`. **`dist/` must not be removed from `typecheck`'s inputs.** Nothing about the
+configuration is wrong.
+
+**NOT falsified -- the D-11 decomposition table.** The table in `## D-11: typecheck's third variance
+source, ROOT-CAUSED` is mechanically correct about why the INSTRUMENT saw four values: two binary
+variables, four combinations, four values, no residue. It stays as written.
+
+**FALSIFIED -- the consequence drawn from it.** The claim that "a developer running `nx typecheck`
+on a box that has built will compute a different `typecheck` hash from CI even after the OS axis is
+closed" is measured false above. The corrected paragraph is in place at that section, and Phase 12
+hand-off item 6 is rewritten.
+
+### The defect is in the MEASUREMENT, not in the configuration
+
+`capture-hashes.mjs` calls `hashTask` directly on a single task, OUTSIDE the dependency chain
+(`## Method` documents this construction; it is what makes the instrument a hasher rather than a
+runner). For four of the five targets that is harmless -- `build`, `test`, `integration` and `lint`
+do not depend on another task's OUTPUTS in a way that reaches their own hash. For `typecheck` it is
+not harmless: the instrument observes a value real execution never produces.
+
+Two consequences, both measured:
+
+- **The workstation readings were RIGHT BY COINCIDENCE.** All three local post-fix readings report
+  `typecheck = 8949082127832201885`, which is exactly the value a real run computes. They agree only
+  because the battery had just run `build`, so `dist/` happened to hold precisely what `build`
+  produces at this commit. A STALE `dist/` would have produced a third value that is equally
+  unreal. The instrument does not know the difference, so this is not a property to rely on.
+- **The `hash-parity` job recorded a value nothing computes.** Its deliberate no-build design
+  produced `1284533355439392975` on BOTH legs. That number is internally consistent and cross-OS
+  identical, and no developer and no real CI run will ever compute it.
+
+**The cross-OS conclusion is unaffected.** Both legs were wrong in the SAME way, so the comparison
+between them was still like-for-like, and the four verdicts stand. What was wrong is the ABSOLUTE
+value of one row, not the equality it was being read for. This is worth stating plainly because it
+is the difference between "the gate was measuring nothing" and "the gate was measuring the right
+comparison at the wrong offset" -- it was the second.
+
+### N1 and U-01 are untouched
+
+N1 stays a pre-committed NON-trigger and the reasoning that put it there was sound: the difference
+it names is real in the instrument's readings, it is not the OS axis, and it is not something
+`targetDefaults` reaches. The correction narrows WHY it is not a trigger -- it is an artefact of
+hashing outside the dependency chain rather than a developer-facing divergence -- and a non-trigger
+that turns out to be even less alarming than believed does not disturb a verdict that was reached
+without counting it. **U-01's resolution stands as recorded.**
+
+### The gate must therefore measure inside the dependency chain
+
+The `hash-parity` job's no-build design is replaced in the section below, with its original
+rationale re-stated rather than quietly reversed.

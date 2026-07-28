@@ -494,8 +494,18 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
     // search could then no longer tell this guard apart from a regression. The bracket
     // splits the token for a reader's search without changing what the regex matches.
     // Same technique, same reason, as the scan idiom in lint-scope-drift.spec.ts.
-    expect(core.warning).toHaveBeenCalledWith(
-      expect.not.stringMatching(/differen[t] OS/),
+    //
+    // ASSERTED OVER EVERY RECORDED ARGUMENT, not as
+    // `toHaveBeenCalledWith(expect.not.stringMatching(...))`. That form passes when ANY
+    // ONE call fails to match, so it states "some warning lacks the phrase" rather than
+    // "no warning carries it" -- non-vacuous today only because this path happens to emit
+    // exactly one warning, which is a property of the fixture and not of the claim. A
+    // second warning added to this path (a per-entry annotation, say) would silently
+    // vacate the retraction while this test stayed green. The call count is pinned too, so
+    // the two clauses cover the same fact from both sides.
+    expect(core.warning).toHaveBeenCalledOnce();
+    expect(vi.mocked(core.warning).mock.calls.flat()).not.toContainEqual(
+      expect.stringMatching(/differen[t] OS/),
     );
   });
 });

@@ -4,6 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSyncTrusted } from '../lib/sync-gate.js';
 import { resolveGitHubToken } from '../lib/github-identity.js';
 import { publishMirror } from '../publish/publish-mirror.js';
+import {
+  CACHE_OS_VALUES,
+  cachePlatform,
+  type CacheOs,
+} from '../lib/release-asset-name.js';
 import { serve } from '../serve.js';
 import { createPublishClient, run, runPublish } from './index.js';
 
@@ -56,12 +61,46 @@ vi.mock('../lib/github-identity.js', async (orig) => {
 
   return { ...actual, resolveGitHubToken: vi.fn() };
 });
+// Partial-mock the platform mapper -- same idiom as github-identity.js above, and only
+// `cachePlatform` is replaced so `CACHE_OS_VALUES` below is still the real single-sourced
+// tuple.
+//
+// WHY, and it is a SAMPLING-RATE fix rather than a new assertion. The verify branch's
+// expected producer is the hardcoded literal `'linux'` (index.ts, D-19/D-20/D-21). The only
+// thing that had caught a `cachePlatform()` substitution there was the hand-authored
+// literal payload in the setSecret test below, and that test's BITE is
+// platform-dependent: on ubuntu -- the only OS the `test` job runs (ci.yml:337-338, Windows
+// legs are XOS-04/Phase 12) -- the ambient value IS `'linux'`, so the correct form and the
+// substituted form are both green and CI samples the property at a rate of ZERO. The
+// substitution reddens only the live `dogfood-verify (windows-11-arm)` leg, which is
+// push-gated to `main` and therefore unobservable before a merge.
+//
+// Stubbing the ambient value is what makes the check machine-INDEPENDENT: LINT-02 bans
+// reading the real platform in a spec (eslint.config.mjs, the no-restricted-syntax ban)
+// precisely because a machine-dependent expectation is how a guard becomes right on one
+// matrix leg and wrong on another. The default is the seed leg's own OS so every other
+// test in this file reads the same value it read before, deterministically rather than
+// from whatever machine happens to run the suite.
+vi.mock('../lib/release-asset-name.js', async (orig) => {
+  const actual = await orig<typeof import('../lib/release-asset-name.js')>();
+
+  return { ...actual, cachePlatform: vi.fn((): CacheOs => 'linux') };
+});
 
 const isSyncTrustedMock = vi.mocked(isSyncTrusted);
 const resolveGitHubTokenMock = vi.mocked(resolveGitHubToken);
 const publishMirrorMock = vi.mocked(publishMirror);
 const serveMock = vi.mocked(serve);
 const getInputMock = vi.mocked(core.getInput);
+const cachePlatformMock = vi.mocked(cachePlatform);
+
+/**
+ * The seed leg's OS, as a literal -- the same value the verify branch hardcodes and
+ * `dogfood-body.spec.ts` pins. Named once here so the cross-OS cases below derive their
+ * reader OSes from the real `CACHE_OS_VALUES` minus this one, rather than spelling "the OS
+ * that is not this machine's" (which is the banned machine-dependent form).
+ */
+const SEED_PRODUCER_OS = 'linux';
 
 const ORIGINAL_ENV = process.env;
 
@@ -210,6 +249,10 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
   beforeEach(() => {
     process.env.ACTIONS_RUNTIME_TOKEN = 'runtime';
     process.env.ACTIONS_RESULTS_URL = 'https://results';
+    // Restored per test, because mockClear (the file-level beforeEach) does NOT undo a
+    // mockReturnValue -- so without this the cross-OS cases below would leak their reader
+    // OS into every later test in this describe.
+    cachePlatformMock.mockReturnValue(SEED_PRODUCER_OS);
   });
 
   it('masks the bearer token with setSecret before driving any request (T-2-19)', async () => {
@@ -277,4 +320,46 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
       expect.stringContaining('did not match'),
     );
   });
+
+  // VER-06's leaf-level NON-VACUITY control, and the one clause in this file whose verdict
+  // does not depend on which machine ran the suite. `dogfood-body.spec.ts` proves the
+  // producer argument REACHES the bytes; this proves the verify branch's expectation is not
+  // DERIVED from the reader's own platform. Those are different mutations and the first
+  // does not catch the second.
+  //
+  // Reader OSes come from the real CACHE_OS_VALUES minus the seed's, so adding an OS
+  // discriminator to that tuple automatically adds a case here rather than leaving one
+  // reader OS unsampled.
+  it.each(CACHE_OS_VALUES.filter((os) => os !== SEED_PRODUCER_OS))(
+    'accepts the linux-seeded payload on a %s reader and names linux as the producer (VER-06)',
+    async (readerOs) => {
+      getInputMock.mockImplementation((name: string) =>
+        name === 'operation' ? 'verify' : 'run-1',
+      );
+      serveMock.mockResolvedValue(fakeServer());
+      cachePlatformMock.mockReturnValue(readerOs);
+      // The same hand-authored literal the setSecret test pins (the pinned-literal
+      // discipline, A1b) -- deliberately NOT dogfoodBody(...), which would survive a
+      // template rename.
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(Buffer.from('nx-github-cache-dogfood:linux:run-1'), {
+          status: 200,
+        }),
+      );
+
+      await run();
+
+      expect(core.setFailed).not.toHaveBeenCalled();
+      // The live VER-06 log line, reproduced machine-independently: the reader's OS and the
+      // producer's OS are DIFFERENT strings in one message. A verify branch that derived its
+      // expectation from the ambient platform cannot produce this line at all -- it would
+      // setFailed with the provenance mismatch instead, and it would do so on EVERY runner
+      // rather than only on the push-gated Windows leg.
+      expect(core.info).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `cache HIT for run-1 on ${readerOs} with bytes matching a '${SEED_PRODUCER_OS}'-produced payload`,
+        ),
+      );
+    },
+  );
 });

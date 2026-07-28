@@ -107,3 +107,46 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
     expect(seed, reason).toMatch(/runs-on:\s*ubuntu-24\.04-arm/);
   });
 });
+
+/**
+ * ROBUST-04's SAMPLING RATE, and it lives in VER-06's guard because it is the same fact
+ * about which event samples what.
+ *
+ * A green `dogfood-verify` is NOT ROBUST-04 evidence: both dogfood jobs use
+ * `./packages/github-cache`, whose `dist/action/index.js` is built from source IN-JOB, so
+ * neither ever executes the committed `start-cache-server/index.js` that four of the five
+ * sidecar `uses:` sites run. `action-bundle-drift` is the only control tying the two
+ * together, and `09-RESEARCH.md`'s validation table states ROBUST-04's sampling rate as
+ * "every PR and every push" on the strength of that job carrying NO `if:`.
+ *
+ * Nothing in the tree asserted that shape. Adding `if: github.event_name == 'push'` to it
+ * -- the same gate that makes VER-06 and OBS-04 unobservable pre-merge, and therefore the
+ * edit a reader is most likely to make while believing they are being consistent -- would
+ * silently drop the committed bundle's only standing sampler to push-to-`main` only, while
+ * every spec in this file and every other ci.yml guard stayed green.
+ */
+describe('ci.yml action-bundle-drift stays PR-eligible (ROBUST-04)', () => {
+  // POSITIVE CONTROL, and it has to come first for the same reason the job-block control
+  // above does: the clause below asserts an ABSENCE, which an empty or mis-extracted block
+  // satisfies trivially.
+  it('scopes to a real job block that runs the bundle diff', () => {
+    expect(jobBlock('action-bundle-drift')).toMatch(
+      /run:\s*npm run check:action/,
+    );
+  });
+
+  it('declares NO job-level if:, so the committed bundle is diffed on pull requests too', () => {
+    // Anchored at FOUR spaces -- a job's own keys sit one level under the two-space job
+    // key, so this matches a job-level gate and deliberately not a step-level `if:`
+    // (eight spaces, inside a `- ` item), which gates one step rather than the sampler.
+    expect(
+      jobBlock('action-bundle-drift'),
+      'action-bundle-drift has acquired a job-level `if:`. That job is the ONLY standing ' +
+        'control proving the committed start-cache-server/index.js matches a fresh build, ' +
+        'and four of the five sidecar sites execute THAT file rather than the in-job build ' +
+        'the dogfood jobs use. Gating it on an event drops ROBUST-04 from "every PR and ' +
+        'every push" to push-only, which is exactly the gate that already makes VER-06 and ' +
+        'OBS-04 unobservable before a merge.',
+    ).not.toMatch(/^ {4}if:/m);
+  });
+});

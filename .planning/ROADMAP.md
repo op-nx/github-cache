@@ -84,7 +84,7 @@ Full phase detail, success criteria, traceability, and coverage validation archi
 ### v0.0.2 OS-invariant cross-OS sharing
 
 - [x] **Phase 7: Lint Toolchain and the Ambient-Platform-Read Ban** - Adopt ESLint 9 flat config and a `lint` target, then make "unit specs must not read the running machine" a build failure instead of a convention. (completed 2026-07-27)
-- [ ] **Phase 8: Nx Task-Hash Parity** - Root-cause the cross-OS hash divergence node by node, fix it, and keep `integration` the only target that diverges -- enforced by a build-gating CI measurement.
+- [x] **Phase 8: Nx Task-Hash Parity** - Root-cause the cross-OS hash divergence node by node, fix it, and keep `integration` the only target that diverges -- enforced by a build-gating CI measurement. (completed 2026-07-28)
 - [ ] **Phase 9: OS-Invariant Actions-Cache Version** - Make the `@actions/cache` version stop depending on the OS: one hardcoded forward-slash path plus `enableCrossOsArchive` at every call site, closed behaviourally by a Windows runner reading back a Linux-written entry.
 - [ ] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed.
 - [ ] **Phase 11: Live Proofs -- O1, O2, O3** - Record the three live proofs in the mandated order, including the producer attribution that enabling O4 destroys forever.
@@ -208,7 +208,7 @@ CORR-03, CORR-04.
      export. `typecheck`'s third variance source (four distinct values across the four probe
      measurements) is either root-caused or explicitly recorded as open. (PARITY-06, PARITY-07)
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 Plans:
 
@@ -228,7 +228,7 @@ Plans:
       drift guard, a three-state local plus two-leg CI re-measurement, and U-01 closed by the
       maintainer (wave 5)
 
-- [ ] 08-06-PLAN.md -- Gate: the build-gating compare job, and the proof it can fail on a REAL leg
+- [x] 08-06-PLAN.md -- Gate: the build-gating compare job, and the proof it can fail on a REAL leg
       rather than only on a fixture (wave 6)
 
 > Correction carried into the plans, recorded so the verifier does not read it as drift: SC1 above
@@ -689,7 +689,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 5. Trust-Widening + PPE Gate | v0.0.1 | 4/4 | Complete | 2026-07-20 |
 | 6. Distribution + Docs + Governance | v0.0.1 | 5/5 | Complete | 2026-07-21 |
 | 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 4/4 | Complete   | 2026-07-27 |
-| 8. Nx Task-Hash Parity | v0.0.2 | 5/6 | In Progress|  |
+| 8. Nx Task-Hash Parity | v0.0.2 | 6/6 | Complete   | 2026-07-28 |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 0/? | Not started | - |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 0/? | Not started | - |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 0/? | Not started | - |

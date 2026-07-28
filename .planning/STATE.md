@@ -5,15 +5,15 @@ milestone_name: framing
 current_phase: 8
 current_phase_name: Nx Task-Hash Parity
 status: executing
-last_updated: "2026-07-28T11:32:32.061Z"
+last_updated: "2026-07-28T12:28:41.462Z"
 last_activity: 2026-07-28
 last_activity_desc: Phase 8 plan 08-05 complete (the nx.json fix landed, four invariant targets byte-identical cross-OS, U-01 resolved as confirm-d12, and the record's own D-11 consequence falsified and corrected)
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 11
-  completed_plans: 9
-  percent: 0
+  completed_plans: 10
+  percent: 17
 ---
 
 # Project State
@@ -99,6 +99,7 @@ Last activity: 2026-07-28 -- Phase 8 plan 08-05 complete (the nx.json fix landed
 | Phase 08 P03 | 33min | 3 tasks | 2 files |
 | Phase 08 P04 | 28min | 2 tasks | 1 files |
 | Phase 08 P05 | 5h 6m | 3 tasks | 4 files |
+| Phase 08 P06 | 42min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -184,6 +185,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 08]: 08-05: U-01 RESOLVED as confirm-d12 -- nx.json targetDefaults is a sufficient fix location for this workspace, decided against a condition committed to git before the experiment ran
 - [Phase 08]: 08-05: typecheck.outputs pinned to the SEVEN-entry list: the enumeration shows it covers 136 of 136 emitted files, and outputs is what Nx caches and restores, so a stable-but-wrong list is a silent cache-correctness regression
 - [Phase 08]: 08-05: The hash-parity job builds before capturing -- typecheck carries an inferred dependsOn on build, so hashing it outside that chain records a value no real run computes
+- [Phase 08]: 08-06: the compare job uses if: !cancelled() rather than D-17's always(), chosen deliberately -- it covers failed and skipped legs (D-17's actual requirement) and is already this file's house form on a dependent job; the two forms differ only on cancellation, where a red gate is noise
+- [Phase 08]: 08-06: the D-22 real-leg RED used an ADDITIVE OS-sensitive input on build, not a removal of integration's discriminator -- D-14 requires that string byte-identical, and a remove-then-restore of it is a needless risk when an obviously-wrong mutation on a different target reddens the same clause
+- [Phase 08]: 08-06: both mutations are kept on the branch as adjacent applied-and-reverted PAIRS rather than squashed away, because a demonstration whose commits are gone is indistinguishable from one that never happened (the same reasoning D-21 applies to a downgraded clause)
 
 ### Pending Todos
 
@@ -310,8 +314,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-28T11:32:20.075Z
-Stopped at: Completed 08-05-PLAN.md
+Last session: 2026-07-28T12:25:52.420Z
+Stopped at: Completed 08-06-PLAN.md -- phase 08 ready for verification
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

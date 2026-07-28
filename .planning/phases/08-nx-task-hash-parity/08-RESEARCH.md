@@ -1247,9 +1247,14 @@ includes the commit SHA and the measured (not asserted) graph state.
 
 ---
 
-## Open Questions
+## Open Questions (ALL ROUTED TO PLAN TASKS -- none left unowned)
+
+> Resolution pointers added 2026-07-28 after planning, per the plan-checker's audit-trail finding.
+> "Routed" means a specific plan task OWNS the question -- not that the answer is known. Four of
+> the five can only be answered by running something; the fifth is a scope decision and is taken.
 
 1. **Does the cross-OS axis diverge at the same node as the staleness axis?**
+   - **ROUTED -> 08-03 Task 3.** The two-leg capture job answers it on its first run.
    - Known: the staleness axis is `ProjectConfiguration`, one node, all five targets.
    - Unclear: the Linux leg is unmeasurable from this workstation. A differing external-dependency
      SET (`only-in-*` keys) is an equally plausible cross-OS shape and would NOT show up as
@@ -1258,19 +1263,26 @@ includes the commit SHA and the measured (not asserted) graph state.
      tooling to report both bucket kinds prominently so whichever it is, it is legible.
 
 2. **Is the 7-entry or the 1-entry `typecheck` outputs list correct?** (A6)
+   - **ROUTED -> 08-03 Task 2 Step 6**, which runs `tsc --build tsconfig.json
+     --emitDeclarationOnly` and enumerates what it actually writes. 08-04 requires the proposed
+     fix to cite that enumeration rather than either candidate list's size.
    - Recommendation: check what the command actually emits before pinning either.
 
 3. **Does `lint` diverge cross-OS?** (D-21's named fallback)
+   - **ROUTED -> 08-03 Task 3 Step 5**, with D-21's two branches pre-specified. Only the runner
+     can settle it.
    - Known: `@nx/eslint` inference is the newest in the workspace and Phase 7 left it
      UNVERIFIED BY DESIGN.
    - Recommendation: the job measures it either way; D-21 already specifies both branches. No
      research can settle it -- only the runner can.
 
 4. **How is `installMode` obtained honestly?** (Pitfall 6)
+   - **ROUTED -> 08-01 Task 1**, which makes `--install-mode` a required flag with NO default.
    - Recommendation: a required CLI flag with NO default, set by the CI step that ran the install.
      A defaulted flag records a guess as a measurement.
 
 5. **Should `AGENTS.md`'s worktree/`.nx` claim be corrected in this phase?** (Pitfall 7)
+   - **DECIDED -> NO. Surfaced, not fixed** (08-03 Task 3 Step 7). Out of the `<domain>` boundary.
    - Recommendation: raise it, do not drive-by fix it. It is a doc edit outside the phase boundary
      and CONTEXT.md's `<domain>` block is explicit about what is not in this phase.
 

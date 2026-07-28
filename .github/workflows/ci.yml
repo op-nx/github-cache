@@ -816,10 +816,45 @@ jobs:
 
   dogfood-verify:
     # Reads back exactly what dogfood-seed wrote, keyed on the same run id, so a real
-    # cross-job HIT is the only way this job passes; a MISS fails the job loudly.
+    # cross-job HIT is the only way this job passes; a MISS fails the job loudly. TWO
+    # LEGS, and the Windows one is VER-06's whole proof: it restores a body a LINUX
+    # runner produced, so a green windows-11-arm leg is the live evidence that an
+    # Actions-cache entry saved on Linux is readable on Windows. The action compares
+    # against the LITERAL 'linux' producer stamp folded into the payload bytes, so this
+    # is a PROVENANCE check, not a presence check -- see action/index.ts's verify branch.
+    # fail-fast off so a Windows-only failure never hides the ubuntu result.
+    #
+    # THE VACUITY CONDITION -- read this before adding a Windows dogfood-seed leg.
+    # dogfood-seed is ubuntu-ONLY BY DESIGN and must stay that way. The seed key is
+    # nx-cache-<GITHUB_RUN_ID>: ONE key per RUN, not per OS. So a Windows seed leg would
+    # make the Windows verify leg restore a WINDOWS-written entry and pass even with
+    # cross-OS restore completely dead -- the proof would go green while proving nothing.
+    # If a Windows seed leg is ever genuinely wanted, the expected-producer literal in
+    # action/index.ts's verify branch has to change in the same commit.
+    # dogfood-cross-os.spec.ts asserts BOTH halves of this shape from disk (this job has
+    # the two-leg matrix; dogfood-seed has no matrix) so neither can drift unnoticed.
+    #
+    # The ubuntu verify leg is KEPT rather than traded for the Windows one: it preserves
+    # the v0.0.1 same-OS round-trip close instead of swapping one proof for another. Both
+    # legs assert a LINUX-produced body -- trivially true for the ubuntu leg, and the
+    # entire point for the Windows one.
+    #
+    # A GREEN dogfood-verify IS NOT ROBUST-04 EVIDENCE. Both dogfood jobs run
+    # `uses: ./packages/github-cache`, whose dist/action/index.js is built from source
+    # in-job, so they never execute the COMMITTED start-cache-server/index.js -- which is
+    # what four of the five bundle sites actually run. action-bundle-drift (no `if:`, so
+    # it runs on PRs too) is the only control tying the two together. The misreading is
+    # natural, so it is recorded here where a reader will look.
     if: github.event_name == 'push'
     needs: dogfood-seed
-    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job. Matches the `integration` job's value;
+    # this job had none before it grew a matrix.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

@@ -13,12 +13,21 @@
  * dogfood-stays-local applies INSIDE dist/ too, not only at the repo root: the
  * `files` negated globs exclude dist/action (the internal dogfood action's built
  * main), dist/roundtrip (the CI round-trip bin), dist/test (spec-only helpers),
- * and the *.tsbuildinfo / *.d.ts.map build metadata. tsc still EMITS all of it
+ * dist/hash-parity (the CORR-03 comparator and its CI bin), and the
+ * *.tsbuildinfo / *.d.ts.map build metadata. tsc still EMITS all of it
  * (action.yml resolves dist/action/index.js from the repo checkout, ci.yml runs
- * dist/roundtrip/read-back.js, specs import dist/test) -- npm just does not PACK
- * it. This guard proves both halves: the internal subtrees are absent AND the
- * genuine consumer entry points are present, so an over-narrow `files` edit
- * cannot silently ship an empty package (T-06-01-01).
+ * dist/roundtrip/read-back.js and dist/hash-parity/assert-parity.js, specs
+ * import dist/test) -- npm just does not PACK it. This guard proves both halves:
+ * the internal subtrees are absent AND the genuine consumer entry points are
+ * present, so an over-narrow `files` edit cannot silently ship an empty package
+ * (T-06-01-01).
+ *
+ * This paragraph is the ONE place the subtree list is restated BY HAND. The
+ * FORBIDDEN predicates and both operator-facing messages are derived from the
+ * DIST_SUBTREES constant below, so they cannot disagree with what is enforced; a
+ * comment cannot be derived at runtime, so this one is maintained manually and
+ * says so rather than going quietly stale. Adding a fifth subtree means editing
+ * DIST_SUBTREES and this sentence's list -- nothing else.
  *
  * Dependency-free (node builtins only), so CI can run
  * it right after `npm ci` with no extra install. Fail-loud: any violation exits
@@ -78,6 +87,37 @@ const REQUIRED = [
   'dist/serve.js',
 ];
 
+/**
+ * dogfood-stays-local INSIDE dist/: these subtrees are built (tsc emits them so
+ * the repo's own action.yml/ci.yml/specs resolve them) but must NOT ship to
+ * consumers -- excluded via the `files` negated globs, asserted below so a
+ * reintroduction fails the guard. An unasserted exclusion is how the first three
+ * would have regressed.
+ *
+ * THE ONE AUTHORED SOURCE for that set. Three sites used to enumerate it
+ * independently -- the FORBIDDEN predicates, the failure message and the success
+ * message -- so a fourth subtree could be half-added and the printed sentence
+ * would keep claiming three. All three now derive from here.
+ * ponytail: a map and a join replace two hand-maintained enumerations. It buys
+ * exactly one thing -- the fifth subtree cannot be half-added -- and the module
+ * header above stays hand-written because a comment has no runtime.
+ */
+const DIST_SUBTREES = [
+  {
+    directory: 'dist/action',
+    label: 'the internal dogfood action build output',
+  },
+  { directory: 'dist/roundtrip', label: 'the CI round-trip build output' },
+  { directory: 'dist/test', label: 'test-support build output' },
+  {
+    directory: 'dist/hash-parity',
+    label: 'the hash-parity comparator build output',
+  },
+];
+
+/** The derived prose list, so no message can disagree with what is enforced. */
+const DIST_SUBTREE_LIST = DIST_SUBTREES.map((s) => s.directory).join(', ');
+
 /** Internal paths that MUST NOT ship; a match on any predicate is a leak. */
 const FORBIDDEN = [
   { label: 'src/ sources', test: (p) => p.startsWith('src/') },
@@ -101,22 +141,13 @@ const FORBIDDEN = [
     label: 'the start-cache-server action',
     test: (p) => p.startsWith('start-cache-server/'),
   },
-  // dogfood-stays-local INSIDE dist/: these subtrees are built (tsc emits them so
-  // the repo's own action.yml/ci.yml/specs resolve them) but must NOT ship to
-  // consumers -- excluded via the `files` negated globs, asserted here so a
-  // reintroduction fails the guard.
-  {
-    label: 'the internal dogfood action build output',
-    test: (p) => p.startsWith('dist/action/'),
-  },
-  {
-    label: 'the CI round-trip build output',
-    test: (p) => p.startsWith('dist/roundtrip/'),
-  },
-  {
-    label: 'test-support build output',
-    test: (p) => p.startsWith('dist/test/'),
-  },
+  // Generated from DIST_SUBTREES (see its comment). Each predicate is the same
+  // prefix test on the same string the hand-written ones used, so this is
+  // behaviour-preserving for the first three and additive for the fourth.
+  ...DIST_SUBTREES.map(({ directory, label }) => ({
+    label,
+    test: (p) => p.startsWith(`${directory}/`),
+  })),
   {
     label: 'a tsbuildinfo build artifact',
     test: (p) => p.endsWith('.tsbuildinfo'),
@@ -153,8 +184,8 @@ function main() {
         problems.map((m) => '  - ' + m).join('\n') +
         '\n\nThe published package must ship ONLY the CONSUMER subset of dist/ + ' +
         'LICENSE + README.md + package.json; no src/, CI, or dogfood internals, ' +
-        'and INSIDE dist/ no dist/action, dist/roundtrip, dist/test, or build ' +
-        'metadata (dogfood-stays-local applies inside dist/, not just at the repo ' +
+        `and INSIDE dist/ no ${DIST_SUBTREE_LIST}, or build metadata ` +
+        '(dogfood-stays-local applies inside dist/, not just at the repo ' +
         'root).\n',
     );
     process.exit(1);
@@ -163,7 +194,7 @@ function main() {
   process.stdout.write(
     `pack-check: ${PACKAGE_NAME} tarball ships ${files.length} files -- ` +
       'the consumer subset of dist/ + LICENSE + README.md + package.json only; ' +
-      'no internals leaked (dist/action, dist/roundtrip, dist/test excluded).\n',
+      `no internals leaked (${DIST_SUBTREE_LIST} excluded).\n`,
   );
   process.exit(0);
 }

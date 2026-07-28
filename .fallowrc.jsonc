@@ -25,6 +25,11 @@
     // cannot infer it. Resolves the mirrored asset through the real Releases reader
     // behind a pathToFileURL(main) guard.
     "packages/github-cache/src/roundtrip/read-back.ts",
+    // Cross-OS hash-parity gate entry: ci.yml's hash-parity-compare job invokes it
+    // as dist/hash-parity/assert-parity.js via node; never imported, so reachability
+    // analysis cannot infer it. Reads both legs' records and calls compareHashParity
+    // behind a pathToFileURL(main) guard (CORR-03, D-19).
+    "packages/github-cache/src/hash-parity/assert-parity.ts",
     // Consumer JS action entry: esbuild.action.mjs bundles it to
     // start-cache-server/index.js, which the runner invokes as action.yml's `main`;
     // it is never imported, so reachability analysis cannot infer it (D-09, Phase 6).

@@ -52,7 +52,10 @@ human_verification:
 measurement taken once.
 
 **Verified:** 2026-07-28T14:07:03Z
-**Status:** human_needed (7/7 criteria verified; 1 CI-round-trip confirmation outstanding)
+**Status:** passed (7/7 criteria verified; the single CI-round-trip confirmation was subsequently
+EXECUTED and matched every pre-named value -- see `## Human Verification Closed` at the end of this
+file. This line read `human_needed` at the moment of verification and was updated when the check was
+closed, not when it was waived.)
 **Re-verification:** No -- initial verification
 **HEAD at verification:** `9f5138c`, working tree clean
 

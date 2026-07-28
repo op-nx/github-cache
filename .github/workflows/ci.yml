@@ -456,6 +456,121 @@ jobs:
       - run: npm run integration
       - cancel: cache-server
 
+  # The two-leg hash-parity CAPTURE job (PARITY-03, PARITY-06; the capture half of
+  # D-17). It runs capture-hashes.mjs on both runner OSes and uploads one record per
+  # leg, so 08-ROOT-CAUSE.md can hold FOUR observation points -- two hand-captured on
+  # a developer workstation, these two from real runners -- all taken at ONE commit.
+  #
+  # CAPTURE ONLY. The build-gating comparison is a separate job, deferred to plan
+  # 08-06 (D-15 + D-18): pre-fix, the roadmap's own success criterion 1 says cold
+  # ubuntu differs from cold windows for EVERY target, so a gate wired now would be
+  # red for a reason the record has not established yet -- and D-18 forbids softening
+  # that with continue-on-error.
+  #
+  # NOT push-gated, unlike the proof jobs. Every job in this file that carries that
+  # gate does so because it WRITES (seeds a cache entry, publishes a release asset).
+  # This one only measures. Same rule the read-side jobs state at :170-172.
+  #
+  # fail-fast: false carries a SECOND reason here on top of the one at :392-393 ("so
+  # a Windows-only failure never hides the Ubuntu result"): with fail-fast ON, a
+  # Windows leg failure CANCELS the Ubuntu leg, and 08-06's compare job then reports
+  # "fewer than two records" for a reason that has nothing to do with hash parity.
+  #
+  # shell: bash on the capture step, for the reason recorded at :399-404 -- GitHub's
+  # DEFAULT shell on windows-11-arm is pwsh, which fails on the constructs this
+  # file's scripted steps use. A bare `- run:` with no shell key inherits pwsh there.
+  #
+  # NO SIDECAR BLOCK, deliberately rather than by oversight. build, typecheck, test
+  # and integration each carry a ~35-line pre-set / background start-cache-server /
+  # readiness-poll / cancel: block because they run CACHED Nx tasks. This job runs
+  # none -- it computes hashes -- so it needs no cache client at all, and leaving the
+  # block out removes an entire class of flake from a measurement that has to be
+  # trusted.
+  #
+  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full at :658-661: such a
+  # block REPLACES the workflow grant WHOLESALE rather than merging it, so adding one
+  # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
+  # covers checkout plus an artifact upload, and this job requests no secret.
+  #
+  # NO BUILD STEP, and that is load-bearing rather than a missing line. typecheck
+  # declares a dependentTasksOutputFiles input (nx.json:137), which hashes the
+  # CONTENT of packages/github-cache/dist/ -- so a leg that built first hashes a
+  # populated directory while a leg that did not hashes an empty one. Both legs must
+  # be IDENTICAL in that respect, and "neither builds" is the identical option that
+  # is also the fastest. A reader comparing against pack-check and publish-verify
+  # (both of which DO build first) should read this paragraph instead of going
+  # looking: those jobs RUN a dist/ bin, they do not measure a hash.
+  #
+  # CHECKOUT REF -- the one deliberate deviation from every other job in this file.
+  # On a pull_request event actions/checkout resolves the MERGE commit by default: a
+  # SHA no developer can reproduce locally, over a TREE that differs from the
+  # branch's whenever the default branch has moved. Either one silently breaks
+  # PARITY-03's "four values per target at ONE commit". Pinning to the PR head SHA
+  # and falling back to github.sha on push makes the same step measure the branch
+  # tree on both events. The instrument records BOTH the checked-out HEAD
+  # (meta.commit) and the runner-provided event SHA (meta.githubSha) precisely so
+  # this is CHECKABLE rather than assumed: a record whose two fields DISAGREE is the
+  # signal that this pin stopped working, and the reading is then not comparable
+  # with the workstation points.
+  #
+  # THE REPO HAD NO PRIOR ARTIFACT USAGE. The complete third-party action inventory
+  # across both workflows was actions/checkout and actions/setup-node, so there is no
+  # in-repo major to match and no precedent to copy -- upload-artifact@v7 here and
+  # download-artifact@v8 in 08-06 are asymmetric ON PURPOSE (v8 of the download
+  # action pairs itself with v7 of the upload action throughout its own README).
+  # The artifact NAME must be unique per leg: v4 onward made names immutable, so two
+  # legs uploading to one name is an error rather than a merge, and the matrix OS
+  # value is the natural discriminator. if-no-files-found: error is not tidiness --
+  # the default is `warn`, so without it a leg whose instrument produced nothing
+  # uploads an EMPTY artifact, the download merges it into nothing, and the
+  # comparator reports "fewer than two records": the correct verdict with the wrong
+  # blame, one job further from the cause than necessary. A leg that measured nothing
+  # must fail ITS OWN leg.
+  #
+  # This comment block is the ONLY place that rationale can live. ci.yml is NOT in
+  # nx.json's `test` inputs (only cleanup.yml is, nx.json:68), so a spec asserting on
+  # this file's content would serve a stale cached PASS; registering it is PARITY-08,
+  # deferred to Phase 9 so its hash rotation collapses into VER-01's window.
+  hash-parity:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # The instrument is invoked as a plain node script, never through `nx run`
+      # (D-01b): an Nx-CACHED instrument would REPLAY a stale record instead of
+      # measuring. --install-mode is REQUIRED and has no default, and `ci` is the
+      # honest value because the step above ran a clean install.
+      - name: Capture the Nx task hashes on this runner
+        shell: bash
+        env:
+          # Disabling the daemon is the CALLER's job BY DESIGN: the instrument
+          # MEASURES daemonEnabled rather than forcing it, so a leg that forgot is
+          # visible in the record instead of being silently reclassified.
+          NX_DAEMON: 'false'
+          # Passed in through env rather than interpolated into the script body, so
+          # the matrix value never lands on a command line the shell re-parses.
+          RECORD: hash-parity-${{ matrix.os }}.json
+        run: |
+          set -euo pipefail
+          node capture-hashes.mjs --install-mode ci --out "$RECORD"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hash-parity-${{ matrix.os }}
+          path: hash-parity-${{ matrix.os }}.json
+          if-no-files-found: error
+
   # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
   # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the
   # exact-pinned @actions/cache dependency (ROBUST-03): a version bump that changes

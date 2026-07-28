@@ -1,8 +1,14 @@
 ---
 phase: 08-nx-task-hash-parity
 verified: 2026-07-28T14:07:03Z
-status: human_needed
+status: passed
 score: 7/7 must-haves verified
+human_verification_closed: 2026-07-28
+human_verification_closed_by: >-
+  Orchestrator, by EXECUTING the named check rather than waiving it. The branch was
+  pushed (8 commits, 3fff526..e84fcb4), run 30367663950 completed `success`, and both
+  leg artifacts were downloaded and compared field by field. Every pre-named expected
+  value matched. See `## Human Verification Closed` at the end of this file.
 behavior_unverified: 0
 overrides_applied: 0
 verified_at_commit: 9f5138cd6df2055f936b1e84640ac6dcc986ed5d
@@ -328,3 +334,50 @@ closed.
 
 _Verified: 2026-07-28T14:07:03Z_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## Human Verification Closed
+
+**Closed:** 2026-07-28. The item above was EXECUTED, not waived.
+
+**What was done:** the branch was pushed (8 commits, `3fff526..e84fcb4`) to the existing draft
+PR #9. Workflow run `30367663950` at `e84fcb4` completed `success`, with
+`hash-parity (ubuntu-24.04-arm)`, `hash-parity (windows-11-arm)` and `hash-parity-compare` all
+`success`. Both leg artifacts were then downloaded and compared field by field, rather than the
+compare job's green being accepted as sufficient.
+
+**Why the compare job's green was NOT accepted on its own:** `hash-parity-compare` asserts
+leg-versus-leg equality. It does NOT assert that either leg equals the WORKSTATION readings. That
+third observation point is what makes criterion 3's "four values per target at ONE commit" literal
+rather than a two-value restatement, so it was checked separately.
+
+**Measured, both legs at commit `e84fcb4`:**
+
+| target | ubuntu-24.04-arm | windows-11-arm | legs match | equals the workstation reading taken at 9f5138c |
+|---|---|---|---|---|
+| `build` | `17776792307406644378` | `17776792307406644378` | YES | YES |
+| `typecheck` | `8216412676813117775` | `8216412676813117775` | YES | YES |
+| `test` | `18300191991966455953` | `18300191991966455953` | YES | YES |
+| `lint` | `8306459690425917987` | `8306459690425917987` | YES | YES |
+| `integration` | `4975009469470580751` | `14358488692745251710` | DIFFERS -- correct, the declared discriminator | n/a |
+
+Every one of the four pre-named expected values matched exactly. `integration` diverges cross-OS by
+its declared discriminator, which is the designed behaviour -- a match there would be a discriminator
+FAILURE, not a parity success.
+
+**Why the workstation readings remain comparable at `e84fcb4`.** They were taken at `9f5138c`.
+The only commits between `9f5138c` and `e84fcb4` touch `.planning/`, which is not a declared input of
+any target, so no task hash rotated across that span. This is verifiable rather than asserted:
+`git diff --name-only 9f5138c..e84fcb4` lists `.planning/` paths only.
+
+**What this closes:** the last remaining `human_needed` item. All seven ROADMAP success criteria and
+all nine requirements (PARITY-01..07, CORR-03, CORR-04) are now verified against a real two-leg run
+at the same commit the workstation measured. Status moves from `human_needed` to `passed`.
+
+**What it does NOT close.** The four residues recorded under `SURFACED, NOT FIXED` remain open and
+must not be read as closed by this section: the unreproducible one-off `test` failure at `69bd1b7`;
+`AGENTS.md:76`'s false per-worktree `.nx/cache` claim; the existence of
+`packages/github-cache/project.json` contradicting D-12's and Phase 7 D-02's stated premise; and
+`ROADMAP.md:530-534`'s shifted PARITY traceability rows with `:574`'s wrong requirement count.
+`08-VALIDATION.md` also remains a stale pre-execution ledger until `/gsd:validate-phase` runs.

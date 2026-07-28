@@ -131,4 +131,25 @@ describe('pinned build tooling (ROBUST-03)', () => {
 
     expect(specifier).toMatch(EXACT_SEMVER);
   });
+
+  // `nx` joins the class for a reason the five above do not share, and it was
+  // named as MISSING rather than assumed present: `08-01-PLAN.md`'s T-08-03
+  // accepted the risk of `capture-hashes.mjs` importing six `nx/src/*` internal
+  // subpaths -- paths with NO semver guarantee -- on the stated basis that "`nx`
+  // is exact-pinned at 23.1.0 and `pinned-deps.spec.ts` fails the build if a
+  // specifier widens". The first half was true; the second half was not, because
+  // this list asserted ten names and `nx` was not one of them. An accepted risk
+  // resting on a guard that does not exist is the weakest kind of accepted risk.
+  //
+  // `nx-target-inputs.spec.ts` imports the same internal subpaths, so a widened
+  // range that resolved a new minor could break BOTH the instrument and this
+  // suite at import time -- loudly, which is the desired failure mode, but only
+  // once someone regenerates `package-lock.json`. Until then the lockfile pins
+  // the resolved version and `npm ci` honours it, which is why the plan's
+  // overstatement was low severity rather than a live hole. This closes it.
+  it('nx is pinned to an exact version in the workspace devDependencies, never a range (T-08-03)', () => {
+    const specifier = workspaceManifest.devDependencies?.['nx'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
 });

@@ -266,7 +266,7 @@ The job creates the records directory before the download so the loader always h
 ## Verification
 
 - **Nine-command battery green at the final commit:** `format:check`, `build`, `typecheck`, `typecheck:action`, `test`, `lint`, `fallow:ci`, `check:action`, `pack:check` -- each exit 0.
-- **Both gate jobs green on the pull request at the final commit** (run [`30358020343`](https://github.com/op-nx/github-cache/actions/runs/30358020343)): `hash-parity` on both legs and `hash-parity-compare`.
+- **Both gate jobs green on the pull request**, stated precisely because "the final commit" is ambiguous once docs commits follow. The last commit in this plan that CAN rotate a task hash is `f866210`, and its run [`30358020343`](https://github.com/op-nx/github-cache/actions/runs/30358020343) is green on `hash-parity` (both legs) and `hash-parity-compare`. The docs-only commits after it touch `.planning/` only, which is not a declared input of any target, so they rotate nothing -- and their run [`30359809593`](https://github.com/op-nx/github-cache/actions/runs/30359809593) is green as well, whole run `success` with every non-skipped job succeeding.
 - **The gate observed RED on real legs and GREEN on the reverts,** with all four run references recorded in the record.
 - **No mutated tree persists on the branch.** Both reverts verified with `git diff --exit-code`, both exit 0.
 - **`public-surface.spec.ts`, `src/index.ts`, `src/test/consumer-contract.ts` byte-identical across `7bfe64f..HEAD`;** `pack:check` exit 0 naming `dist/hash-parity` excluded.

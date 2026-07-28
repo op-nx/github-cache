@@ -2,7 +2,16 @@ import { rm } from 'node:fs/promises';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as cache from '@actions/cache';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { createActionsCacheBackend } from './backend/actions-cache-backend.js';
 import { createWritableMemoryBackend } from './backend/memory-backend.js';
 import type { CacheBackend, PutResult } from './backend/types.js';
@@ -10,6 +19,7 @@ import { cacheArchivePath } from './lib/cache-archive-path.js';
 import type { Hash } from './lib/cache-key.js';
 import { selectBackend } from './lib/select-backend.js';
 import { type RunningServer, serve } from './serve.js';
+import { enterWorkspaceRootCwd } from './test/workspace-root-cwd.js';
 
 // serve() derives its backend from selectBackend(process.env). The selection
 // logic itself is unit-tested in select-backend.spec.ts; here we mock the module
@@ -23,6 +33,24 @@ vi.mock('./lib/select-backend.js');
 // that now owns the per-hash lock) through serve(), so @actions/cache must be
 // mocked here too -- it only works inside a JS action on real CI.
 vi.mock('@actions/cache');
+
+// VER-04's spec accommodation, same three lines as actions-cache-backend.spec.ts and
+// select-backend.spec.ts. This file has ONE real-backend construction (the
+// no-self-deadlock proof drives createActionsCacheBackend() through serve()), and
+// VER-04's guard asserts the cwd IS the Nx workspace root -- false under `nx test`,
+// whose merged config carries `options.cwd: "packages/github-cache"`. Deliberately the
+// same shape in all three files, so a reader comparing them sees one pattern rather than
+// three variants; the leak hazard and the mkdir rationale are comment-locked once, in
+// test/workspace-root-cwd.ts.
+let restoreCwd: () => void;
+
+beforeAll(() => {
+  restoreCwd = enterWorkspaceRootCwd();
+});
+
+afterAll(() => {
+  restoreCwd();
+});
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 

@@ -1987,3 +1987,411 @@ not as notes.
    the job failing, not by a spec asserting the job exists. This repo has shipped the
    stale-cached-PASS class three times (`governance-email.spec.ts`, `typecheck`'s own inputs, and
    the D-25 `tools/eslint-rules` hole), so the constraint is recorded rather than assumed.
+
+---
+
+## Post-fix re-measurement (local)
+
+Appended by plan 08-05, AFTER the fix commit. Everything above this line was written before any
+`nx.json` edit existed; `## The ordering proof` is checkable against the commit immediately
+preceding `163e6b9`.
+
+**The fix commit is `163e6b9e3af819ae3ad9b54ea17c870b737531b5`.** `git show --stat` lists exactly
+two files: `nx.json` (+9, one hunk) and `packages/github-cache/src/nx-target-inputs.spec.ts` (+76,
+two hunks, pure insertion). The `nx.json` hunk is the whole fix:
+
+```jsonc
+"typecheck": {
+  "outputs": [
+    "{projectRoot}/tsconfig.tsbuildinfo",
+    "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}",
+    "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}.map",
+    "{projectRoot}/dist/tsconfig.lib.tsbuildinfo",
+    "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}",
+    "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}.map",
+    "{projectRoot}/out-tsc/vitest/tsconfig.spec.tsbuildinfo"
+  ],
+  "inputs": [ /* unchanged */ ]
+}
+```
+
+`outputs` sits FIRST, matching `targetDefaults.lint`, the only prior precedent. The `plugins` array
+is untouched, no `project.json` was created, and `integration`'s runtime input is byte-identical.
+
+### The pins were RED before the fix, and the RED was a value mismatch
+
+Run BEFORE the `nx.json` hunk existed, with only the spec edit in the tree:
+
+```
+AssertionError: expected undefined to deeply equal [ ...(7) ]
+ -> src/nx-target-inputs.spec.ts:173:53
+ Test Files  1 failed | 33 passed (34)
+      Tests  1 failed | 561 passed (562)
+```
+
+Recorded because the plan flagged it as the one place a naive RED goes wrong here.
+`targetDefaults.typecheck` ALREADY EXISTED, so the helper did not throw the way it did when
+`targetDefaults.lint` was absent in Phase 7 -- there is no `TypeError`, only a value mismatch, which
+is a WEAKER signal. Asserting deep equality against the full expected list rather than a
+`toBeDefined` is what makes it unambiguous, and the failure text above is the evidence that it is.
+
+`561 passed` rather than `560` is also informative: the second new pin, the exact-equality one on
+`integration`'s discriminator string, passed on its first run. It is a REGRESSION pin over an
+already-correct value, not a RED-driven one, so it was mutation-tested separately below.
+
+### Both new pins were OBSERVED red under mutation, then restored
+
+D-22 and Phase 7's learning: a guard never seen red is not verified, and Phase 7 recorded two guards
+that passed for the wrong reason. Each mutation was applied to `nx.json`, measured, and reverted.
+Each edit busts the `test` hash by itself (`{workspaceRoot}/nx.json` is a declared `test` input), so
+none of these readings can be a cached replay.
+
+| # | Mutation | Result | Failing assertion |
+|---|----------|--------|-------------------|
+| M1 | the `outputs` key absent (the pre-fix state) | 1 failed / 561 passed | `expected undefined to deeply equal [ ...(7) ]` |
+| M2 | `outputs` set to the ONE-entry list | 1 failed / 561 passed | `expected [ Array(1) ] to deeply equal [ ...(7) ]` |
+| M3 | discriminator re-spelled `node -e "console.log(process.platform)"` | 1 failed / 561 passed | `expected [ Array(1) ] to deeply equal [ 'node -p process.platform' ]` |
+
+**M2 is the one that matters for T-08-21.** The one-entry list is the OTHER form
+`@nx/js/typescript` infers -- it is perfectly STABLE, so a guard that only checked for stability
+would pass on it while `typecheck` silently cached none of its declaration output. M2 shows the pin
+discriminates between the two candidates, not merely between present and absent.
+
+**M3 is what proves the new discriminator pin adds coverage the pre-existing guard does not have.**
+Under M3 the pre-existing CORR-04 guard at `nx-target-inputs.spec.ts:241-260` ("integration is still
+the only target with a platform runtime input") stayed GREEN -- the re-spelled command is still a
+runtime input on still exactly one target. Exactly one test failed, and it was the new pin. The
+pre-existing guard was not modified: `git diff` over the spec file reports two pure-insertion hunks,
+`@@ -136,0 +137,48 @@` and `@@ -260,0 +309,28 @@`, with zero deletions anywhere in the file.
+
+### Three readings, all at the fix commit, on a clean tree
+
+Taken in this ORDER, and the order is deliberate: warm-preexisting FIRST because it is the only
+irreplaceable one, cold second because the env-var recipe is non-destructive and re-takeable at
+will, warm-after-reset last because `nx reset` destroys the state reading 2 measures. The nine-command
+battery was run before the readings, so `packages/github-cache/dist/` is POPULATED for all three --
+the same condition observation points 1 and 2 were taken under, which keeps the D-11 variable held.
+
+#### Reading A -- native Windows workstation, WARM-PREEXISTING
+
+```json
+{
+  "os": "win32",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.13.0",
+  "installMode": "ci",
+  "commit": "163e6b9e3af819ae3ad9b54ea17c870b737531b5",
+  "workingTreeClean": true,
+  "githubSha": null,
+  "runnerOs": null,
+  "capturedAt": "2026-07-28T06:38:01.460Z",
+  "graphState": "warm",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "D:\\projects\\github\\op-nx\\github-cache\\.nx\\workspace-data",
+  "workspaceDataEntries": 18,
+  "nativeFileCacheDirectory": "C:\\Users\\LARSGY~1\\AppData\\Local\\Temp\\nx-native-file-cache-b463ff1",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": true
+}
+```
+
+Recipe: `node capture-hashes.mjs --install-mode ci --out <outside the tree>`, NO overrides at all.
+`daemonEnabled: true` and the workspace-data directory pointing at the repository's own `.nx/` are
+what make it warm-PREEXISTING rather than warm-fresh. **No `nx reset` preceded it** -- the same
+long-lived directory that carried the stale seven-entry inference at the anchor is still the one
+being read, now at 18 entries rather than 16.
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `17197827372395989528` | 428 |
+| `typecheck` | `8949082127832201885` | 429 |
+| `test` | `1367622961810189968` | 444 |
+| `integration` | `1193647465557986036` | 430 |
+| `lint` | `6930879416208693542` | 443 |
+
+Discriminator, raw and verbatim (`command: node -p process.platform`, `status: 0`):
+
+```json
+{ "stdout": "win32\n", "stderr": "" }
+```
+
+**Which question this reading answers: Q2 -- "does a warm local box compute the hash cold CI
+published".** It is still the ONLY Q2 input available and no runner can produce it.
+
+#### Reading B -- native Windows workstation, COLD
+
+```json
+{
+  "os": "win32",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.13.0",
+  "installMode": "ci",
+  "commit": "163e6b9e3af819ae3ad9b54ea17c870b737531b5",
+  "workingTreeClean": true,
+  "githubSha": null,
+  "runnerOs": null,
+  "capturedAt": "2026-07-28T06:38:17.925Z",
+  "graphState": "cold",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "C:/Users/LARSGY~1/AppData/Local/Temp/claude/D--projects-github-op-nx-github-cache/ecd11393-4351-4fdb-a1bb-f555cfb148f0/scratchpad/hp2/cold/wsdata",
+  "workspaceDataEntries": 0,
+  "nativeFileCacheDirectory": "C:/Users/LARSGY~1/AppData/Local/Temp/claude/D--projects-github-op-nx-github-cache/ecd11393-4351-4fdb-a1bb-f555cfb148f0/scratchpad/hp2/cold/nfc",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": false
+}
+```
+
+Recipe, unchanged from observation point 1 -- the environment-variable form, into a fresh temporary
+directory OUTSIDE the repository, with no `nx reset` anywhere (anti-requirement 3):
+
+```bash
+COLD="$SP/hp2/cold"
+rm -rf "$COLD"; mkdir -p "$COLD"
+NX_DAEMON=false \
+NX_WORKSPACE_DATA_DIRECTORY="$COLD/wsdata" \
+NX_NATIVE_FILE_CACHE_DIRECTORY="$COLD/nfc" \
+  node capture-hashes.mjs --install-mode ci --out "$SP/hp2/post-cold.json"
+```
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `17197827372395989528` | 428 |
+| `typecheck` | `8949082127832201885` | 429 |
+| `test` | `1367622961810189968` | 444 |
+| `integration` | `1193647465557986036` | 430 |
+| `lint` | `6930879416208693542` | 443 |
+
+Discriminator: `{ "stdout": "win32\n", "stderr": "" }`, `status: 0`.
+
+`nativeFileCacheEntries: 1` is again the CORRECT cold reading and the freshly-created directory again
+held exactly `23.1.0-nx.win32-arm64-msvc.node` and nothing else; the declared basis is
+`workspaceDataEntries`, and that count is zero. See `## Method` for why the two-surface derivation
+cannot ever return `cold`.
+
+**Which question this reading answers: Q1, cross-OS parity.** It is the workstation's contribution to
+the three-way cold comparison and the same-OS control PARITY-05 pairs with `windows-11-arm`.
+
+#### Reading C -- native Windows workstation, WARM-AFTER-RESET
+
+```json
+{
+  "os": "win32",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.13.0",
+  "installMode": "ci",
+  "commit": "163e6b9e3af819ae3ad9b54ea17c870b737531b5",
+  "workingTreeClean": true,
+  "githubSha": null,
+  "runnerOs": null,
+  "capturedAt": "2026-07-28T06:39:29.407Z",
+  "graphState": "warm",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "D:\\projects\\github\\op-nx\\github-cache\\.nx\\workspace-data",
+  "workspaceDataEntries": 13,
+  "nativeFileCacheDirectory": "C:\\Users\\LARSGY~1\\AppData\\Local\\Temp\\nx-native-file-cache-b463ff1",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": true
+}
+```
+
+Recipe: a FULL `npx nx reset` (not `--onlyWorkspaceData`, per the EPERM hazard in `## Method`),
+which reported `Successfully reset the Nx workspace` and left `.nx/workspace-data` at 0 entries; then
+`npx nx show projects`, an ordinary command a developer would run, which repopulated it to 13; then
+the capture with no overrides.
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `17197827372395989528` | 428 |
+| `typecheck` | `8949082127832201885` | 429 |
+| `test` | `1367622961810189968` | 444 |
+| `integration` | `1193647465557986036` | 430 |
+| `lint` | `6930879416208693542` | 443 |
+
+Discriminator: `{ "stdout": "win32\n", "stderr": "" }`, `status: 0`.
+
+**Which question this reading answers: Q1.** Per D-08, any proof that resets before measuring has
+answered Q1 no matter what it was aiming at -- the reset forced the box cold and then re-derived, so
+the developer whose experience Q2 is about is not its subject. It is recorded as a THIRD reading
+rather than as a replacement for reading A, because overwriting the warm-preexisting value with a
+post-reset one is precisely the move PARITY-04 names as disqualifying.
+
+#### All three side by side
+
+| Target | A warm-preexisting | B cold | C warm-after-reset | Agree? |
+|--------|--------------------|--------|--------------------|--------|
+| `build` | `17197827372395989528` | `17197827372395989528` | `17197827372395989528` | YES |
+| `typecheck` | `8949082127832201885` | `8949082127832201885` | `8949082127832201885` | YES |
+| `test` | `1367622961810189968` | `1367622961810189968` | `1367622961810189968` | YES |
+| `integration` | `1193647465557986036` | `1193647465557986036` | `1193647465557986036` | YES |
+| `lint` | `6930879416208693542` | `6930879416208693542` | `6930879416208693542` | YES |
+
+### Diff 1 -- pre-fix cold (observation point 1) versus post-fix cold (reading B)
+
+`node capture-hashes.mjs --diff point1-cold.json post-cold.json`, A = pre-fix, B = post-fix. This is
+what the fix DID, and every moving node is accounted for.
+
+```
+=== build : 4770979534943963808 (A) vs 17197827372395989528 (B) ===
+  nodes: 428 / 428    only-in-A (0)   only-in-B (0)
+    value-changed (2):
+        @op-nx/github-cache:ProjectConfiguration
+          A=3473609128188475433   B=17377863611053487263
+        workspace:[{workspaceRoot}/nx.json,{workspaceRoot}/.gitignore,{workspaceRoot}/.nxignore]
+          A=17095470214823693567  B=12322429517629369676
+    same: 426
+
+=== typecheck : 8784332057851660202 (A) vs 8949082127832201885 (B) ===
+  nodes: 429 / 429    only-in-A (0)   only-in-B (0)
+    value-changed (3):
+        workspace:[{workspaceRoot}/nx.json,...]        (the nx.json edit)
+        @op-nx/github-cache:packages/github-cache/**/* (the spec edit)
+          A=2398179098240992186   B=18133479598596954471
+        @op-nx/github-cache:ProjectConfiguration
+          A=3473609128188475433   B=17377863611053487263
+    same: 426
+
+=== test        : 1238755096132544780  -> 1367622961810189968   (4 changed, 440 same)
+=== integration : 3844377013355031551  -> 1193647465557986036   (3 changed, 427 same)
+=== lint        : 17022226934688547307 -> 6930879416208693542   (3 changed, 440 same)
+
+=== projectConfiguration (field level) ===
+    only-in-A (0): -
+    only-in-B (6): targets.typecheck.outputs.1, targets.typecheck.outputs.2,
+                   targets.typecheck.outputs.3, targets.typecheck.outputs.4,
+                   targets.typecheck.outputs.5, targets.typecheck.outputs.6
+    value-changed (0): -
+    same: 158
+```
+
+**All five hashes rotated, and that is the pre-recorded N2 / D-36 rotation window, not a defect.**
+`{workspaceRoot}/nx.json` is a declared input of every target, so the `workspace:[...nx.json...]`
+node moves on all five by construction. `test` rotates twice over -- it carries nx.json in a second,
+longer `workspace:` node as well. The `packages/github-cache/**/*` node moves on the three targets
+whose fileset includes the edited spec.
+
+**The load-bearing line is the field diff.** Six `only-in-B` entries,
+`targets.typecheck.outputs.1` through `.6`: the COLD WINDOWS graph now carries the SEVEN-entry list
+where before the fix it carried one. `targetDefaults` demonstrably reaches the field on Windows.
+158 other fields are unchanged and there are zero `value-changed` fields anywhere in the merged node,
+so the edit moved exactly the one field it was aimed at and nothing else.
+
+And the `ProjectConfiguration` node did not merely move -- it moved TO `17377863611053487263`, which
+is the value cold LINUX emitted at the anchor. Windows is now emitting the Linux node.
+
+### Diff 2 -- post-fix cold (B) versus post-fix warm-preexisting (A)
+
+`node capture-hashes.mjs --diff post-cold.json post-warm-preexisting.json`:
+
+```
+=== build       : 17197827372395989528 (A) vs 17197827372395989528 (B) === 0 changed, 428 same
+=== typecheck   : 8949082127832201885  (A) vs 8949082127832201885  (B) === 0 changed, 429 same
+=== test        : 1367622961810189968  (A) vs 1367622961810189968  (B) === 0 changed, 444 same
+=== integration : 1193647465557986036  (A) vs 1193647465557986036  (B) === 0 changed, 430 same
+=== lint        : 6930879416208693542  (A) vs 6930879416208693542  (B) === 0 changed, 443 same
+
+=== projectConfiguration (field level) ===
+    only-in-A (0): -    only-in-B (0): -    value-changed (0): -    same: 164
+```
+
+Zero `only-in-*`, zero `value-changed`, on every target and on every one of the 164 merged-node
+fields. The post-fix cold-versus-warm-after-reset diff is identical in shape -- also all zeroes.
+
+**The node the record named has stopped moving between graph states.** That is the confirming
+outcome the plan named in advance, and it is C1.
+
+**Which question the two diffs answer: both, jointly.** Diff 1 answers Q1's local half by showing
+what changed and why; diff 2 answers Q2 directly by showing that the developer's own long-lived,
+never-reset graph now computes the same number a cold graph does.
+
+### PARITY-04's answer has CHANGED, and this is the measurement
+
+At the anchor, PARITY-04's measured answer was NO on all five targets. The cold column is the shape
+of what CI computes, and the CI section below confirms the actual published values.
+
+| Target | Warm-preexisting local (A) | Cold CI, `windows-11-arm` | Agree? |
+|--------|----------------------------|---------------------------|--------|
+| `build` | `17197827372395989528` | `17197827372395989528` | **YES** |
+| `typecheck` | `8949082127832201885` | `1284533355439392975` | NO -- D-11 |
+| `test` | `1367622961810189968` | `1367622961810189968` | **YES** |
+| `integration` | `1193647465557986036` | `1193647465557986036` | **YES** |
+| `lint` | `6930879416208693542` | `6930879416208693542` | **YES** |
+
+**Four of five, up from zero of five.** The one that still disagrees is `typecheck`, and its
+remaining difference is the D-11 build-output variable and nothing else -- the same-OS diff below
+isolates it to a single `dependentTasksOutputFiles` node. `nx.json` cannot reach that variable; it is
+a property of whether the workspace has BUILT. This is pre-committed non-trigger N1 and a DOCS-07
+item, item 6 of the Phase 12 hand-off, not a U-01 trigger.
+
+**Consequence for the Phase 12 hand-off, measured rather than predicted.** Hand-off item 2 warned
+that the persisted plugin cache would NOT self-heal and that a developer who does nothing after
+pulling the fix keeps computing the pre-fix value -- "the single most likely way for the fix to look
+broken while being correct". Reading A refutes that for THIS fix, and the mechanism is worth stating:
+the stale entry is still there and still carries the seven-entry inference, but `targetDefaults`
+OVERRIDES the field in the merged node regardless of what the plugin cache says, so the stale value
+no longer reaches the hash. The prediction in `## Pre-recorded: this phase's fix commits are a
+LEGITIMATE all-MISS rotation window` -- that the staleness axis would close as a side effect of
+closing the OS axis -- is CONFIRMED. Hand-off item 2 should be narrowed in Phase 12 from "always
+reset after this fix" to "reset when a divergence is not otherwise explained"; items 1, 3, 4, 5 and 6
+are unaffected, because a `targetDefaults` override only protects the fields it declares.
+
+### The nine-command battery at the fix commit
+
+`format:check`, `build`, `typecheck`, `typecheck:action`, `test`, `lint`, `fallow:ci`,
+`check:action`, `pack:check` -- all nine exit 0 at `163e6b9`. `packages/github-cache/src/public-surface.spec.ts`, `src/index.ts` and `src/test/consumer-contract.ts`
+are byte-identical to their pre-plan state (`git diff --exit-code` clean) and `pack:check` exits 0,
+which is PARITY-07 / D-16 satisfied as both halves rather than as a passing suite over an edited
+guard.
+
+---
+
+## SURFACED during 08-05: `packages/github-cache/project.json` EXISTS, so "no `project.json`" is false
+
+Recorded with its evidence and deliberately left unfixed. It is not a defect and there is nothing to
+repair -- what is wrong is a PREMISE that three planning documents state as fact.
+
+D-12 says fixes land in `nx.json` `targetDefaults` only, "No `project.json` (**the workspace is
+deliberately free of them**)". Phase 7's D-02 says the same. `## Proposed fix` above repeats it as a
+constraint row. Measured at the fix commit:
+
+```
+$ git ls-files | rg "project\.json"
+packages/github-cache/project.json
+
+$ git log --oneline -- packages/github-cache/project.json
+7413363 test(github-cache): wire a real integration target + cross-OS HTTP round-trip (I1)
+```
+
+It has existed since well before Phase 7, and it declares the `integration` target:
+
+```json
+{
+  "name": "@op-nx/github-cache",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "targets": {
+    "integration": {
+      "command": "vitest run --config vitest.integration.config.mts",
+      "options": { "cwd": "packages/github-cache" }
+    }
+  }
+}
+```
+
+**Nothing in this plan created it and nothing in this plan should delete it** -- `integration` is the
+one target in the workspace that is NOT inferred by a plugin, so removing the file removes the
+target, and Phase 7's `nx run-many -t <missing>` learning says that would read as a silently passing
+gate rather than a failure.
+
+**Why it is recorded rather than shrugged off: it changes the cost of one of U-01's four options.**
+Option `pin-inferred-target` is priced in plan 08-05 as "Departs from D-02's no-`project.json`
+posture". That price is already paid -- the posture is not the workspace's actual state, so the
+option's real cost is narrower than stated: adding a second target to an existing file, not breaking
+a workspace-wide invariant. A maintainer reading the checkpoint should know that before weighing it.
+
+The accurate statement of the invariant, and the one this plan honoured, is the OTHER half of D-12:
+the fix landed in `nx.json` `targetDefaults`, no `project.json` was created or edited, and the
+`plugins` array is unchanged. Correcting D-12's and D-02's parenthetical is a planning-document edit
+outside this plan's file scope, and the phase whose whole point is a clean measure-then-fix ordering
+is the wrong place for a drive-by.

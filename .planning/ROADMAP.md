@@ -161,8 +161,9 @@ of a measurement taken once.
 **Depends on**: Phase 7 (LINT-01 must land before PARITY-01, or the inferred `lint` target
 changes `hash_project_config` and invalidates the root-cause record).
 
-**Requirements**: PARITY-01, PARITY-02, PARITY-03, PARITY-04, PARITY-05, PARITY-06, PARITY-07,
-CORR-03, CORR-04.
+**Requirements**: PARITY-01, PARITY-02, PARITY-03, PARITY-04, PARITY-05, PARITY-06, PARITY-07, CORR-03, CORR-04.
+<!-- KEEP ON ONE LINE (see the note on Phase 10's Requirements line). -->
+
 
 **Success Criteria** (what must be TRUE):
 
@@ -253,8 +254,9 @@ Windows runner reading back an entry a Linux runner wrote.
 **Depends on**: Phase 8 (the hash-parity work and its measurement job settle before the cache
 version is rotated, so a rotation MISS is never confused with a parity MISS).
 
-**Requirements**: PARITY-08, VER-01, VER-02, VER-03, VER-04, VER-05, VER-06, VER-07, ROBUST-04,
-OBS-04, DOCS-08.
+**Requirements**: PARITY-08, VER-01, VER-02, VER-03, VER-04, VER-05, VER-06, VER-07, ROBUST-04, OBS-04, DOCS-08.
+<!-- KEEP ON ONE LINE (see the note on Phase 10's Requirements line). -->
+
 
 **Success Criteria** (what must be TRUE):
 
@@ -346,8 +348,11 @@ delta TRUST-12 records -- a single-OS publish leg restoring and mirroring every 
 is real and verifiable in code at audit time, not hypothetical). Also Phase 7, whose lint rule
 must be proven to CATCH the three CORR-05 violations before this phase removes the last two.
 
-**Requirements**: CORR-02, CORR-05, RETAIN-04, RETAIN-05, OBS-03, OBS-05, XOS-06, XOS-07,
-TRUST-10, TRUST-11, TRUST-12, TRUST-13.
+**Requirements**: CORR-02, CORR-05, RETAIN-04, RETAIN-05, OBS-03, OBS-05, XOS-06, XOS-07, TRUST-10, TRUST-11, TRUST-12, TRUST-13.
+<!-- KEEP ON ONE LINE. gsd-tools parses `**Requirements**:` up to the first newline, so a wrapped
+     line silently drops every ID on the continuation. Measured: Phase 8 lost CORR-03/CORR-04,
+     Phase 9 lost OBS-04/DOCS-08, and this line lost all four TRUST-1x IDs until unwrapped. -->
+
 
 **Success Criteria** (what must be TRUE):
 

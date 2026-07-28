@@ -27,6 +27,7 @@ import {
   DIVERGENT_TARGET,
   EXPECTED_TARGETS,
   INVARIANT_TARGETS,
+  LIKE_FOR_LIKE_META_KEYS,
   REQUIRED_META_KEYS,
 } from './compare.js';
 import type {
@@ -188,6 +189,41 @@ describe('CORR-03(a): exactly two platform records (D-20)', () => {
     const b = leg(LINUX, 'integration-hash-on-linux-again');
 
     expect(reasonOf(compareHashParity([a, b]))).toBe('duplicate-platform');
+  });
+
+  it('FAILS with not-like-for-like when the legs measured DIFFERENT things', () => {
+    // The seven REQUIRED_META_KEYS used to be validated per record and then
+    // dropped -- `meta.os` was the only one compared ACROSS the pair -- so a pair
+    // with a different commit on each leg PASSED. Same wrong-blame class as
+    // `duplicate-platform`, one field over: without this clause the skew reaches
+    // clause (c) and reports `invariant-target-diverged`, which reads as an
+    // OS-invariance regression when the real defect is a broken checkout pin or an
+    // nx version skew. Driven from the exported list so a key added there cannot
+    // arrive without a negative.
+    for (const key of LIKE_FOR_LIKE_META_KEYS) {
+      const [a, b] = validPair();
+      b.meta[key] = `${a.meta[key]}-mutated`;
+
+      const verdict = compareHashParity([a, b]);
+
+      expect(reasonOf(verdict), key).toBe('not-like-for-like');
+      expect(detailOf(verdict), key).toContain(key);
+    }
+  });
+
+  it('PASSES a pair whose `nodeVersion` differs, because that field is measured INERT', () => {
+    // THE OVER-REACH CONTROL for the clause above, and it is load-bearing rather
+    // than decorative. The obvious "improvement" to that loop is to require all
+    // seven REQUIRED_META_KEYS equal, which would reject the comparison
+    // `08-ROOT-CAUSE.md` is built on: observation points 1 and 3 differ ONLY in
+    // Node version (`.node-version` holds the moving `lts/krypton` alias, so the
+    // runners resolved v24.18.0 against the workstation's v24.13.0) and their
+    // hashes are byte-identical with ZERO differing nodes. This test goes red the
+    // instant someone widens the list to cover a field the record proved inert.
+    const [a, b] = validPair();
+    b.meta.nodeVersion = 'v24.18.0';
+
+    expect(reasonOf(compareHashParity([a, b]))).toBe('PASS');
   });
 
   it('FAILS clause (a) on an EMPTY targets map -- the named vacuity control (D-22)', () => {
@@ -500,5 +536,23 @@ describe('the comparator constants are content-pinned, never snapshotted', () =>
       'graphState',
       'commit',
     ]);
+  });
+
+  it('LIKE_FOR_LIKE_META_KEYS is the THREE compared across the pair, and a SUBSET of the seven', () => {
+    // Three, not seven. Which three is argued at the constant's own declaration;
+    // pinning it here is what makes widening the list a reviewable diff rather
+    // than a silent tightening that rejects a legitimate record. The subset
+    // assertion is the second half: a key here that is NOT in
+    // REQUIRED_META_KEYS is never validated as a non-empty string first, so the
+    // comparison would run over two `undefined`s and find them equal -- a clause
+    // that cannot fail.
+    expect([...LIKE_FOR_LIKE_META_KEYS]).toEqual([
+      'commit',
+      'nxVersion',
+      'arch',
+    ]);
+    expect([...REQUIRED_META_KEYS]).toEqual(
+      expect.arrayContaining([...LIKE_FOR_LIKE_META_KEYS]),
+    );
   });
 });

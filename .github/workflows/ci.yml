@@ -529,10 +529,28 @@ jobs:
   # PARITY-03's "four values per target at ONE commit". Pinning to the PR head SHA
   # and falling back to github.sha on push makes the same step measure the branch
   # tree on both events. The instrument records BOTH the checked-out HEAD
-  # (meta.commit) and the runner-provided event SHA (meta.githubSha) precisely so
-  # this is CHECKABLE rather than assumed: a record whose two fields DISAGREE is the
-  # signal that this pin stopped working, and the reading is then not comparable
-  # with the workstation points.
+  # (meta.commit) and the runner-provided event SHA (meta.githubSha) so the pin is
+  # inspectable rather than assumed.
+  #
+  # WHAT CHECKS THAT PIN, AND IN WHICH DIRECTION -- corrected here, because an
+  # earlier wording of this block had it backwards and implied a check no code
+  # performs. GITHUB_SHA on a pull_request event IS the merge commit, set by the
+  # runner from the event payload; it does not follow what the job checked out. So
+  # AGREEMENT between the two fields on a pull_request is the pin FAILING (the
+  # checkout landed on the merge commit), and disagreement in the specific direction
+  # "commit == PR head, githubSha == merge commit" is the pin WORKING. On a push
+  # they agree, and that is also correct. The right reading is therefore
+  # "meta.commit must equal the anchor", never "the two fields must agree".
+  #
+  # The comparator deliberately does NOT assert on githubSha, and that is not an
+  # oversight: the correct direction is EVENT-dependent and the comparator has no
+  # event context, githubSha is null off a runner by design, and HashParityRecord
+  # does not model a field this module would neither check nor use. What IS enforced
+  # is the failure this pin actually produces -- the two legs measuring different
+  # trees -- via the cross-leg `meta.commit` equality clause (`not-like-for-like` in
+  # compare.ts), added because meta.os had been the only one of the seven meta keys
+  # compared across the pair. 08-ROOT-CAUSE.md carries the one-off API cross-check
+  # (gh api .../pulls/9) that confirmed the pin held on both legs at the anchor.
   #
   # THE REPO HAD NO PRIOR ARTIFACT USAGE. The complete third-party action inventory
   # across both workflows was actions/checkout and actions/setup-node, so there is no

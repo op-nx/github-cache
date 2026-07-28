@@ -108,9 +108,38 @@ export type ParityFailureReason =
   | 'wrong-record-count'
   | 'malformed-record'
   | 'duplicate-platform'
+  | 'not-like-for-like'
   | 'missing-target-hash'
   | 'integration-not-divergent'
   | 'invariant-target-diverged';
+
+/**
+ * The `meta` fields required EQUAL across the two legs, as opposed to merely
+ * present on each. They identify WHAT was measured -- which tree, which hasher,
+ * which architecture -- so a mismatch means the two hashes are not comparable and
+ * every later clause would report the wrong defect.
+ *
+ * THE OTHER FOUR REQUIRED_META_KEYS ARE DELIBERATELY ABSENT, and the asymmetry is
+ * recorded here so it reads as a decision rather than as the same oversight one
+ * field over:
+ *
+ * - `os` is compared, but to prove the legs DIFFER (`duplicate-platform`). These
+ *   three are compared to prove they AGREE, which is why it is not in this list.
+ * - `nodeVersion` must NOT be required equal. `08-ROOT-CAUSE.md` measured it
+ *   INERT: observation points 1 and 3 differ ONLY in Node version -- v24.13.0
+ *   against v24.18.0, because `.node-version` holds the moving `lts/krypton`
+ *   alias -- and their `build`, `test`, `integration` and `lint` hashes are
+ *   byte-identical with ZERO differing nodes. It reaches no hashed node, so
+ *   requiring it would reject the workstation-against-runner comparison the whole
+ *   record is built on.
+ * - `installMode` and `graphState` are D-09 admissibility conditions, and both CI
+ *   legs agree on both BY CONSTRUCTION (one matrix job, one list of steps). They
+ *   stay recorded-and-unenforced so the record's deliberate CROSS-state readings
+ *   stay expressible -- the warm-Windows against cold-Linux masquerade PARITY-04
+ *   exists to name. `capture-hashes.mjs --diff` is the tool for those; this gate
+ *   asserts the invariant.
+ */
+export const LIKE_FOR_LIKE_META_KEYS = ['commit', 'nxVersion', 'arch'] as const;
 
 /** Discriminated verdict: parity holds between the two named platforms, or it does not, WITH the reason. */
 export type ParityVerdict =
@@ -299,6 +328,34 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
         'instead, which reads as a discriminator defect when the real defect is a ' +
         'matrix leg that ran twice on the same runner image.',
     );
+  }
+
+  // Like-for-like, and it sits HERE for the same reason `duplicate-platform` does:
+  // before any hash is compared, because comparing hashes from two records that
+  // measured different things reports a defect neither record has. The seven
+  // REQUIRED_META_KEYS were validated per record and then DROPPED -- `meta.os` was
+  // the only one compared across the pair -- so a pair with a different `commit`,
+  // `nxVersion` or `arch` on each leg was a PASS.
+  //
+  // A cross-commit green was never substantively WRONG: an Nx task hash covers its
+  // inputs, so two matching invariant hashes mean the trees were input-identical
+  // whatever the SHAs. The cost this closes is DIAGNOSTIC, which is the whole point
+  // of a named reason. Without it a skewed pair reaches clause (c) and reports
+  // `invariant-target-diverged`, which reads as an OS-invariance regression -- the
+  // exact wrong-blame class `duplicate-platform` was added to eliminate, one field
+  // over. It also matters off a runner, over the hand-collected records
+  // `08-ROOT-CAUSE.md`'s two workstation observation points are.
+  for (const key of LIKE_FOR_LIKE_META_KEYS) {
+    if (a.meta[key] !== b.meta[key]) {
+      return fail(
+        'not-like-for-like',
+        `\`meta.${key}\` differs between the legs (${a.meta.os}=${a.meta[key]} vs ` +
+          `${b.meta.os}=${b.meta[key]}), so the two records did not measure the same ` +
+          'thing and their hashes are not comparable. Suspect a broken checkout pin ' +
+          '(the CHECKOUT REF block in ci.yml), an nx version skew between the legs, ' +
+          'or a matrix that gained a second architecture.',
+      );
+    }
   }
 
   // CORR-03(a). Iterate the EXPECTED list, NEVER `Object.keys(record.targets)`

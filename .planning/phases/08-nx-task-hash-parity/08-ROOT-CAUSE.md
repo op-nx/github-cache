@@ -2687,3 +2687,53 @@ condition written before the experiment.
 **U-01 is NOT decided here.** Task 3 is a blocking `checkpoint:decision` and the selection is the
 maintainer's. `08-RESEARCH.md`'s own instruction stands: the confirming experiment is not a licence
 to treat U-01 as auto-resolved.
+
+---
+
+## U-01 RESOLVED
+
+**Date:** 2026-07-28
+**Selected option:** `confirm-d12` -- the fix location is settled inside `nx.json`.
+**Selected by:** the maintainer, at plan 08-05's blocking `checkpoint:decision`, with both
+re-measurements in hand.
+
+### The maintainer's reasoning, recorded verbatim
+
+> The trap quadrant is HIGH-impact AND NOT-HIGH-confidence; U-01 sat in it at discuss time purely
+> for want of evidence, and no longer does. A falsifiable condition (L1-L4 / N1-N3) was committed to
+> git BEFORE the experiment, the experiment ran on real runners, L3 was checked directly on both
+> operating systems, and the outcome matched the pre-registered prediction. Auto-locking a measured
+> outcome against a pre-registered condition is categorically different from auto-locking a bare
+> default, which is the only thing the rule exists to prevent.
+
+### Did the selection match the pre-committed condition?
+
+**YES, and without departure.** The confirming condition was the conjunction C1 AND C2 AND C3 AND
+C4, written into `## U-01: the condition that would make it live` at commit `eeace53`, before
+`nx.json` had been touched by any commit in this phase. All four are MET and none of L1-L4 is; the
+row-by-row evaluation with the deciding measurement for each is in
+`### Every pre-committed condition, evaluated` above. The three things that DID occur -- `typecheck`
+differing between a built box and an unbuilt runner, the all-MISS rotation, and `integration`
+diverging cross-OS -- are each a pre-committed NON-trigger, named in advance and matching the shape
+that was named. Nothing had to be reinterpreted after the fact, which is the whole point of writing
+the condition down first.
+
+### What this closes, and what it does NOT
+
+**Closes:** D-12 is settled for this workspace. `nx.json` `targetDefaults` is a SUFFICIENT fix
+location for the divergence this phase root-caused; the three escalation options U-01 named --
+pinning the inferred target explicitly, patching plugin options, escalating upstream -- are not
+needed and are not taken. Plan 08-06 wires the gate as designed, with `lint` on D-21's PRIMARY
+branch.
+
+**Does NOT close:** the finding that `@nx/js/typescript` classifies its own project references
+differently on Windows and Linux. `nx.json` NORMALISES the symptom at the merged node; it does not
+repair the inference. `08-RESEARCH.md`'s Finding 3 mechanism plus this record's two-leg confirmation
+remain a strong basis for an upstream report, and `## U-01: the condition that would make it live`
+already records that such a report is a legitimate FOLLOW-UP filed as its own piece of work rather
+than carried in this phase's diff.
+
+`08-CONTEXT.md`'s UNRESOLVED U-01 block is left AS WRITTEN. The resolution lives here, in the
+record. Editing the context document after the fact would erase the evidence that the item was
+genuinely open when the phase started, which is the property that makes this resolution worth
+anything.

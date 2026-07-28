@@ -127,8 +127,7 @@
           "fileset": "{projectRoot}/**/*.{d.ts,d.cts,d.mts}",
           "dependencies": true
         },
-        { "externalDependencies": ["typescript", "tslib", "@types/node"] },
-        { "runtime": "node -p process.platform" }
+        { "externalDependencies": ["typescript", "tslib", "@types/node"] }
       ]
     },
     "typecheck": {

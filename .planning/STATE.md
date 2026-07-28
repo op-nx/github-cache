@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 8
 current_phase_name: Nx Task-Hash Parity
 status: executing
-last_updated: "2026-07-28T01:23:44.513Z"
+last_updated: "2026-07-28T05:13:50.098Z"
 last_activity: 2026-07-28
-last_activity_desc: "Phase 8 plan 08-02 complete (the CORR-03 comparator, its observed RED, and the tarball exclusion)"
+last_activity_desc: Phase 8 plan 08-03 complete (the anchor commit, the two-leg capture job, and all four observation points)
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 8 (Nx Task-Hash Parity) -- EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-28 -- Phase 8 plan 08-02 complete (the CORR-03 comparator, its observed RED, and the tarball exclusion)
+Last activity: 2026-07-28 -- Phase 8 plan 08-03 complete (the anchor commit, the two-leg capture job, and all four observation points)
 
 ## Performance Metrics
 
@@ -96,6 +96,7 @@ Last activity: 2026-07-28 -- Phase 8 plan 08-02 complete (the CORR-03 comparator
 | Phase 07 P04 | ~55 min | 3 tasks | 2 files |
 | Phase 08 P01 | 39min | 2 tasks tasks | 4 files files |
 | Phase 08 P02 | 26min | 2 tasks | 6 files |
+| Phase 08 P03 | 33min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,10 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 08]: 08-02: HashParityRecord models ONLY the fields shapeFault validates -- an unmodelled emitted field cannot become an unchecked assertion about a downloaded artifact
 - [Phase 08]: 08-02: a grep-verifiable ABSENCE claim must not spell the token it forbids anywhere in the file, including in the sentence explaining the rule (hit twice this plan)
 - [Phase 08]: 08-02: pack-check.cjs enumerated its excluded dist subtrees in FOUR places, not three; all three runtime sites now derive from DIST_SUBTREES, the module header is the one hand-maintained restatement
+- [Phase 08]: 08-03: Phase 8 root cause MEASURED at anchor a9a3895: exactly ONE hash node differs cross-OS, @op-nx/github-cache:ProjectConfiguration, and the field is targets.typecheck.outputs (seven entries on linux, one on win32). Zero only-in-* buckets on all five targets.
+- [Phase 08]: 08-03: PARITY-04 answered NO at the anchor: a warm-preexisting Windows box computes a different hash from cold on all five targets. Recorded as a finding; the nx reset mitigation is DOCS-07 (Phase 12) and is deliberately absent from the proof recipe.
+- [Phase 08]: 08-03: D-21 resolves to its PRIMARY branch: lint diverges cross-OS but nothing lint-specific does (all six D-35 hashed rows match on both legs, options.cwd included), so 08-06 asserts lint as a fourth IDENTICAL target.
+- [Phase 08]: 08-03: D-11 ROOT-CAUSED: typecheck's four values decompose into two binary variables -- the outputs classification and whether dist/ is populated (the dependentTasksOutputFiles node). No residue, not left OPEN.
 
 ### Pending Todos
 
@@ -298,8 +303,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-28T01:23:33.614Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-07-28T05:13:50.085Z
+Stopped at: Completed 08-03-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

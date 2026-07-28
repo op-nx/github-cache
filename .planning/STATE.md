@@ -5,8 +5,9 @@ milestone_name: framing
 current_phase: 8
 current_phase_name: Nx Task-Hash Parity
 status: executing
-last_updated: "2026-07-28T15:43:19.162Z"
+last_updated: "2026-07-28T17:11:02.208Z"
 last_activity: 2026-07-28
+last_activity_desc: Phase 9 planning complete
 progress:
   total_phases: 6
   completed_phases: 1
@@ -30,7 +31,7 @@ Phase: 8 (Nx Task-Hash Parity) -- EXECUTING
 Plan: 6 of 6
 Status: Ready to execute (08-06 is the last plan -- the gate)
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-28
+Last activity: 2026-07-28 — Phase 9 planning complete
 
 ## Performance Metrics
 

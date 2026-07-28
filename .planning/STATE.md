@@ -5,9 +5,8 @@ milestone_name: framing
 current_phase: 8
 current_phase_name: Nx Task-Hash Parity
 status: executing
-last_updated: "2026-07-28T12:28:41.462Z"
+last_updated: "2026-07-28T15:00:21.982Z"
 last_activity: 2026-07-28
-last_activity_desc: Phase 8 plan 08-05 complete (the nx.json fix landed, four invariant targets byte-identical cross-OS, U-01 resolved as confirm-d12, and the record's own D-11 consequence falsified and corrected)
 progress:
   total_phases: 6
   completed_phases: 1
@@ -31,7 +30,7 @@ Phase: 8 (Nx Task-Hash Parity) -- EXECUTING
 Plan: 6 of 6
 Status: Ready to execute (08-06 is the last plan -- the gate)
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-28 -- Phase 8 plan 08-05 complete (the nx.json fix landed, four invariant targets byte-identical cross-OS, U-01 resolved as confirm-d12, and the record's own D-11 consequence falsified and corrected)
+Last activity: 2026-07-28
 
 ## Performance Metrics
 

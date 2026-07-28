@@ -827,8 +827,121 @@ the phase-level gate scanner meets the record rather than discovering a gap.
 
 ---
 
+## ADDENDUM -- the temporary `main` push, and what it settled
+
+Everything above was written BEFORE any push to `main`. This section is the result of a
+**deliberate, maintainer-authorised TEMPORARY push to `main`**, taken to sample the two
+`human_needed` items above rather than carry them indefinitely. It does not revise the sections
+above; it resolves them.
+
+### Method, and the reversibility contract
+
+| | |
+|---|---|
+| Backup, taken first | annotated tag `backup/pre-phase09-temp-push-main` -> `fe25a3f` (tag object `5889e16`), pushed to `origin` BEFORE the push; plus local non-branch ref `refs/backup/main-pre-phase09` |
+| Pushed | `fe25a3f..9ec4739` -> `main`, a plain FAST-FORWARD (`git merge-base --is-ancestor origin/main HEAD` succeeded); no force required |
+| Restored | `git push --force-with-lease=main:9ec4739 origin fe25a3f:refs/heads/main` -- the lease proved nothing else had moved `main` in between |
+| `main` after | `fe25a3f` -- byte-identical to the pre-push state |
+| Work preserved | branch `gsd/v0.0.2-os-invariant-cross-os-sharing` pushed at `9ec4739` BEFORE the restore, so the phase's objects stay referenced and are not GC-eligible |
+| Run sampled | `30400231720`, `event: push`, `headSha 9ec4739`, duration 7m36s, conclusion **failure** (see the regression below) |
+
+**What the restore did NOT undo, and cannot:** the Actions-cache rotation and the mirrored Release
+assets are real side effects of a real run. Restoring git history does not un-rotate a cache
+version or delete a published asset. **The consequence for OBS-04 is stated below and is the most
+important sentence in this addendum.**
+
+### VER-06 -- CLOSED, live, first-hand
+
+| | |
+|---|---|
+| Status | **CLOSED.** Supersedes the `OPEN / human_needed` row above. |
+| Job | `dogfood-verify (windows-11-arm)`, job `90413113797`, conclusion **success**, image `windows-11-arm64` (`20260719.114`) |
+| The line, verbatim | `github-cache dogfood verify: cache HIT for 30400231720 on windows with bytes matching a 'linux'-produced payload.` |
+| Why this is the proof and not a presence pass | The assertion is on PROVENANCE -- the bytes equal a `'linux'`-produced `dogfoodBody` payload -- so a Windows-seeded entry could not satisfy it. `dogfood-seed` ran SINGLE-LEG on `ubuntu-24.04-arm` (job present, no matrix), exactly as the drift guard at `dogfood-cross-os.spec.ts:97` requires. |
+| Independent corroboration | `publish (windows-11-arm)` restored the SAME task hashes `publish (ubuntu-24.04-arm)` did -- `9389699383929542340`, `4203117861769514979`, `3665748317175621425`, `16744170947748766324`. A Windows runner reading ubuntu-produced entries is the milestone's property, observed outside the dogfood path. |
+
+### VER-05 and ROBUST-04 -- observed on a real runner
+
+- **VER-05**: `github-cache publish: @actions/cache resolved compression method zstd-without-long.`
+  emitted by BOTH publish legs. Plan 09-04's re-derived probe agrees with the library on real
+  runners, which is the claim it existed to support.
+- **ROBUST-04**: `action-bundle-drift` **green**. Note this job has NO `if:` gate
+  (`ci.yml:99-114`), so it also runs on `pull_request` -- see the correction recorded below.
+- **Push-gate control, now measured on the other side**: this `main` push had **0 skipped jobs**,
+  against the **5** skipped in PR run `30372679674`. The gate is real in both directions.
+
+### OBS-04 -- SAMPLED, and the prediction did NOT hold as written
+
+**Status: SAMPLED. The MECHANISM and its ATTRIBUTION are CONFIRMED. The prediction's exact
+all-or-nothing row values are NOT met. The one opportunity is now SPENT.** This supersedes the
+`OPEN / human_needed` row above.
+
+**The measured count tables**, read from the `publish` job summaries of run `30400231720` (recovered
+via an authenticated browser session; `writeCountSummary` writes to the job SUMMARY at
+`action/index.ts:171-174`, which has no REST endpoint):
+
+| metric | `ubuntu-24.04-arm` | `windows-11-arm` | predicted | verdict |
+|---|---|---|---|---|
+| `scanned` | 47 | 48 | `> 0` | **MET** |
+| `mirrored` | 6 | 7 | `== 0` | **NOT met** |
+| `skipped` | 41 | 41 | `== scanned` | **NOT met** (41 vs 47/48) |
+| `restore-MISS (of skipped)` | **41** | **41** | `== scanned` | **NOT met** (41 vs 47/48) |
+| `failed` | 0 | 0 | `== 0` | **MET** |
+| one `core.warning` `restored as a MISS` | none | none | exactly one | **NOT met** |
+
+Both legs also printed `compression method (@actions/cache): zstd-without-long` in the same table.
+
+**What IS confirmed, and it is the load-bearing half.** The signal is **SYMMETRIC**: `restore-MISS`
+is **41 on BOTH legs**, identical. Section "The diagnostic that is NOT this event" above states that
+a **WINDOWS-ONLY** miss would mean VER-03 (the flag) landed without VER-01 (the path), because
+`cacheUtils.js:166` pushes `windows-only` only when `!enableCrossOsArchive` while the path components
+(`:159`) push unconditionally. A symmetric both-legs miss is the fingerprint of the **PATH** change.
+41 == 41 is that fingerprint. **The rotation happened, and it is correctly attributed to VER-01.**
+Corroborated independently at the task layer in the same run: `test`, both `integration` legs, both
+`hash-parity` legs, `typecheck` (`0/2`), `dogfood-seed`, and both `publish` legs' own `build` all
+reported `Cache: 0/1 hit (0%)`; only `build` hit (`1/1`, `nx-cache-3665748317175621425`).
+
+**Why the exact rows were not met.** The prediction required `mirrored == 0` and
+`restore-MISS == scanned` -- i.e. that NOTHING restores. But `publish` runs LATE in the run and
+enumerates the CURRENT cache list, which by then also contains the 6-7 entries this SAME run's
+earlier jobs had already written at the NEW version. Those restore fine and get mirrored. So the
+denominator (`scanned`) includes fresh new-version entries the prediction did not model, while the
+41 genuinely-rotated old-version entries missed exactly as predicted. The framing was too strict,
+not wrong about the mechanism: the warning's branch at `publish-mirror.ts:317` requires
+`readMisses === hashes.length && mirrored === 0`, and 41 != 47/48, so no warning fired.
+
+**A correction the next such record should carry:** the observable is the `restore-MISS` COUNT and
+its SYMMETRY ACROSS LEGS, not the all-or-nothing equality `restore-MISS == scanned`. Any run whose
+own earlier jobs repopulate the cache before `publish` reads it can never satisfy the strict form.
+
+**The consequence, and it is permanent.** The rotation is now consumed. A later real merge of this
+branch will show a normal all-HIT `publish`. **A future reader comparing `09-ROTATION-SIGNAL.md`
+against the eventual merge run will see all-HIT and wrongly conclude the prediction failed.** It
+must be compared against run `30400231720` and this addendum, and nothing else.
+
+This is what the advance record bought. A prediction written afterwards would have been quietly
+reshaped around whatever the run produced; because it was committed at `e7018d0` before `47597a6`,
+the mismatch is legible as a mismatch. Recording it as a non-match is the honest outcome and is
+worth more than a claimed pass.
+
+### NEW -- a phase-caused regression this push exposed: `publish-verify (windows-11-arm)`
+
+| | |
+|---|---|
+| Status | **RED. Caused by this phase. Routed to Phase 9 gap closure by maintainer decision.** |
+| The failure, verbatim | `##[error]github-cache round-trip read-back: cache HIT for 30400231720 on win32 but the returned bytes are not what the publisher wrote -- suspect the asset-name discriminator colliding across runs, or a partial upload.` |
+| Mechanism | Cross-OS restore now WORKS. So `publish (windows-11-arm)` restored the run-scoped dogfood key and received the **linux**-produced payload, then mirrored those bytes under the **windows** asset name. `read-back.ts:68` then asserted `result.bytes.equals(dogfoodBody(hash, cachePlatform()))` -- i.e. windows bytes -- and failed. |
+| The false premise, in code | `read-back.ts:63-67` states it outright: *"the asset this leg reads is its OWN-OS asset, written by the same leg's publish seed, so producer and reader are the same OS by construction."* This phase falsified exactly that. |
+| Why DOCS-08 did not catch it | DOCS-08 enumerated **four documentation** sites asserting same-OS restore. This is a **fifth site, in executable logic**, and it was in nobody's enumeration. The lesson generalises: a same-OS invariant sweep must include code paths, not only prose. |
+| Already anticipated, elsewhere | ROADMAP Phase 10 item 4 says outright: *"Phase 9 is precisely what breaks the publisher-equals-producer identity."* Item 3's fix -- each `publish` leg seeding a **leg-DISTINGUISHABLE** hash -- is scheduled for Phase 10. Today both legs share the run-scoped key, which is what allowed the cross-leg byte collision. |
+| Why it is nevertheless a Phase 9 gap | The rotation record's own point 3 predicted `publish-verify` would have *nothing* to read back (`mirrored == 0`). It had something, and the bytes were wrong. Phase 9 would otherwise hand Phase 10 a knowingly-red guard on every `main` push. |
+| Contrast worth keeping | `dogfood-verify (windows)` PASSED by asserting the bytes match a `'linux'` payload while `publish-verify (windows)` FAILED by asserting they match a windows payload -- on the same run, for the same key. Two guards, contradictory premises. Only the first was updated for cross-OS restore. |
+
+---
+
 *Phase: 09-os-invariant-actions-cache-version*
 *Snapshot captured: 2026-07-28T20:30:55Z, at commit `72eeca3`, before the merge to `main`*
+*Addendum: temporary `main` push sampled at run `30400231720` (`9ec4739`); `main` restored to `fe25a3f`*
 
 
 

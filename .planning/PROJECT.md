@@ -80,12 +80,18 @@ Shipped and verified in **v0.0.1 Greenfield MVP Rebuild** (all 7 phases verified
       "OS-namespaced by default" branch in favour of the documented-consumer-discrimination
       alternative that the CORR-01 row in `## Key Decisions` below already sanctions
 - [ ] OS-sensitive targets stay separated by their declared Nx input, proven behaviourally (CORR-03)
-- [ ] Nx task-hash parity for `build`/`typecheck`/`test` across Windows and Linux, root-caused
-      before it is fixed (PARITY-01..05)
-- [ ] The `@actions/cache` archive path becomes a deliberate OS-invariant constant instead of an
-      inherited `os.tmpdir()` value, with `enableCrossOsArchive` hardcoded (VER-01..06)
-- [ ] ESLint adopted, with the ambient-platform-read ban enforced in unit specs and allowed in
-      integration specs (LINT-01..06, CORR-06)
+- [x] Nx task-hash parity for `build`/`typecheck`/`test` across Windows and Linux, root-caused
+      before it is fixed (PARITY-01..05) -- Phase 8, complete 2026-07-28
+- [x] The `@actions/cache` archive path becomes a deliberate OS-invariant constant instead of an
+      inherited `os.tmpdir()` value, with `enableCrossOsArchive` hardcoded (VER-01..07, plus
+      PARITY-08, ROBUST-04, OBS-04, DOCS-08) -- Phase 9, complete 2026-07-28. Closed
+      BEHAVIOURALLY: a `windows-11-arm` runner read back a Linux-produced entry and asserted the
+      bytes were `'linux'`-produced (run `30400231720`). The cache version is now OS-invariant, so
+      the publisher-equals-producer identity no longer holds -- Phase 10's OBS-05 owns the
+      consequences, and the pre-change producer attribution is preserved in
+      `phases/09-*/09-EVIDENCE.md`
+- [x] ESLint adopted, with the ambient-platform-read ban enforced in unit specs and allowed in
+      integration specs (LINT-01..06, CORR-06) -- Phase 7, complete 2026-07-27
 - [ ] Live cross-OS proofs for O1-O4 in the mandated order (XOS-01..07, TEST-08..10, OBS-02..05)
 - [ ] Consumer-facing cross-OS adoption recipe, drift-guarded (DOCS-07/08)
 
@@ -178,4 +184,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-26 at v0.0.2 milestone start (OS-invariant cross-OS sharing) - see the Current Milestone section and REQUIREMENTS.md. Prior update: 2026-07-22 after v0.0.1 milestone (Greenfield MVP Rebuild) complete. Shipped 7 phases / 33 plans: the Nx self-hosted-cache HTTP server (SRV-01..05), Actions-cache CI-RW backend + context-derived `selectBackend` (TRUST-05, ROBUST-04), authenticated GitHub Releases reader with OS-namespacing (FOUND-01/02, CORR-01), `{push,schedule}`-gated publish/cleanup + coupled retention + fail-loud observability (TRUST-02, RETAIN-01/03, ROBUST-01/02/05, OBS-01), host-detected trust-widening + server-produced-key filter + advisory PPE gate (TRUST-01/06/08), and npm package + `start-cache-server` JS action + docs/governance (DOCS-01..06, GOV-01..03). Merged via PR #3, tagged v0.0.1. Milestone audit passed (6/6 E2E flows wired, all threats closed). Later-milestone triggers: GHCR-01, PROV-01, FOUND-03 (Docker). See milestones/v0.0.1-* and THREAT-MODEL.md.*
+*Last updated: 2026-07-29 after Phase 9 (OS-Invariant Actions-Cache Version) complete -- 8 plans, all 11 requirements closed, verification/security/validation all `passed`. v0.0.2 is 3 of 6 phases done (7, 8, 9); Phase 10 (OS-Invariant Releases Mirror) is next. Two live-CI items remain `human_needed` at the real merge: `publish-verify (windows-11-arm)` green with a `'linux'` producer line, and OBS-04's rotation signal is SPENT (sampled on run `30400231720`; a later merge shows all-HIT, so read `09-EVIDENCE.md`'s ADDENDUM, not the merge run). Prior update: 2026-07-26 at v0.0.2 milestone start - see the Current Milestone section and REQUIREMENTS.md. Prior update: 2026-07-22 after v0.0.1 milestone (Greenfield MVP Rebuild) complete. Shipped 7 phases / 33 plans: the Nx self-hosted-cache HTTP server (SRV-01..05), Actions-cache CI-RW backend + context-derived `selectBackend` (TRUST-05, ROBUST-04), authenticated GitHub Releases reader with OS-namespacing (FOUND-01/02, CORR-01), `{push,schedule}`-gated publish/cleanup + coupled retention + fail-loud observability (TRUST-02, RETAIN-01/03, ROBUST-01/02/05, OBS-01), host-detected trust-widening + server-produced-key filter + advisory PPE gate (TRUST-01/06/08), and npm package + `start-cache-server` JS action + docs/governance (DOCS-01..06, GOV-01..03). Merged via PR #3, tagged v0.0.1. Milestone audit passed (6/6 E2E flows wired, all threats closed). Later-milestone triggers: GHCR-01, PROV-01, FOUND-03 (Docker). See milestones/v0.0.1-* and THREAT-MODEL.md.*

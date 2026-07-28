@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
 import type { NxJsonConfiguration } from 'nx/src/config/nx-json.js';
+import type { TargetConfiguration } from 'nx/src/config/workspace-json-project-json.js';
 import {
   extractPatternsFromFileSets,
   filterUsingGlobPatterns,
   splitInputsIntoSelfAndDependencies,
 } from 'nx/src/hasher/task-hasher.js';
+import { readTargetDefaultsForTarget } from 'nx/src/project-graph/utils/project-configuration/target-defaults.js';
+import { mergeTargetConfigurations } from 'nx/src/project-graph/utils/project-configuration/target-merging.js';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -59,6 +62,30 @@ const nxJson = JSON.parse(
   plugins: readonly (string | NxPluginRegistration)[];
   targetDefaults: Record<string, { inputs: TargetInputs; outputs?: string[] }>;
 };
+
+/**
+ * The project's OWN configuration file, read as its own layer. `nx.json`'s
+ * `targetDefaults` is only the BASE of the merge -- `project.json` sits above it
+ * and a key declared there REPLACES the default's key wholesale. The two CORR-04
+ * guards below read `nx.json` alone, so the merged-configuration guard is the one
+ * that needs this.
+ *
+ * Reading it from a spec is safe for the same reason reading `nx.json` is: it is
+ * a `test` input. Not by a `{workspaceRoot}` entry this time but by `default` ->
+ * `{projectRoot}/**\/*` (nx.json:4), which covers `packages/github-cache/project.json`
+ * because the file sits at the project root. So editing it re-runs this file
+ * instead of replaying a cached PASS.
+ */
+const projectJson = JSON.parse(
+  readFileSync(new URL('../project.json', import.meta.url), 'utf8'),
+) as { targets: Record<string, TargetConfiguration> };
+
+/** Every `{ runtime: ... }` command in an inputs list, in declaration order. */
+function runtimeInputsOf(inputs: TargetInputs | undefined): string[] {
+  return (inputs ?? []).flatMap((input) =>
+    typeof input === 'object' && 'runtime' in input ? [input.runtime] : [],
+  );
+}
 
 function registrationFor(pluginName: string): NxPluginRegistration | undefined {
   return nxJson.plugins.find(
@@ -371,6 +398,68 @@ describe('lint declares its full input set (LINT-04)', () => {
     );
 
     expect(runtimeCommands).toEqual(['node -p process.platform']);
+  });
+});
+
+describe('the discriminator survives the MERGED project configuration (CORR-04)', () => {
+  // The two guards above -- and `capture-hashes.mjs`'s `readDiscriminatorCommand`
+  // -- all read `nx.json`'s `targetDefaults`. None of the three reads the
+  // configuration Nx actually HASHES, which is `targetDefaults` merged UNDER
+  // `packages/github-cache/project.json`. That file exists and declares
+  // `integration` (with `command` and `options` only), and a target key declared
+  // there REPLACES the default's key wholesale rather than merging into it.
+  //
+  // So adding an `"inputs"` array to `project.json`'s `integration` target would
+  // drop the platform discriminator out of the effective hash while all three
+  // existing reads stayed GREEN. That is not a MISS -- it is a WRONG RESULT: with
+  // the discriminator gone `integration` becomes OS-invariant, and a
+  // Linux-computed `integration` result becomes restorable on Windows.
+  //
+  // CI does catch it (`compare.ts`'s `integration-not-divergent` clause fails on
+  // every run of `hash-parity-compare`, which carries no `continue-on-error`), so
+  // the signal arrives LATE rather than never. This guard is the same signal in
+  // the fastest feedback layer.
+  //
+  // It delegates the merge to Nx's OWN two functions -- the same
+  // `readTargetDefaultsForTarget` + `mergeTargetConfigurations` pair the real
+  // merge uses -- for the reason the header states about the glob resolver: a
+  // hand-rolled "does project.json declare inputs" check would assert the
+  // SPELLING of one particular way to break it, and would go red on a
+  // `project.json` that declared an inputs list CARRYING the discriminator, which
+  // is a legitimate configuration. `integration` is declared, never inferred, so
+  // these two layers are the whole merge for this target.
+  function mergedIntegration(
+    projectTarget: TargetConfiguration,
+  ): TargetConfiguration {
+    return mergeTargetConfigurations(
+      projectTarget,
+      readTargetDefaultsForTarget('integration', nxJson.targetDefaults) ??
+        undefined,
+    );
+  }
+
+  it('keeps the byte-identical discriminator once project.json is merged over targetDefaults', () => {
+    expect(
+      runtimeInputsOf(
+        mergedIntegration(projectJson.targets.integration).inputs,
+      ),
+    ).toEqual(['node -p process.platform']);
+  });
+
+  // NON-VACUITY control, and it has to be a negative one for the same reason the
+  // glob probes above do. If `mergeTargetConfigurations` ignored the project layer
+  // -- or if this spec merged the two arguments in the wrong order -- the
+  // assertion above would pass on a merge that never consulted `project.json`,
+  // and the hole it exists to close would be wide open behind a green test. The
+  // mutation is applied to a LOCAL copy, never to the file: this asserts what the
+  // merge does with a hostile `project.json`, so it must not require one.
+  it('DROPS the discriminator when project.json declares its own inputs, proving the merge merges', () => {
+    const hostile: TargetConfiguration = {
+      ...projectJson.targets.integration,
+      inputs: ['default'],
+    };
+
+    expect(runtimeInputsOf(mergedIntegration(hostile).inputs)).toEqual([]);
   });
 });
 

@@ -433,5 +433,439 @@ CI, because no hosted runner is a developer workstation. Losing point 2 loses Q2
 
 ## Observation points
 
-Placeholder. Plan 08-03 fills this section with D-07's four observation points, each carrying its
-full `meta` block, captured at the anchor commit.
+**The anchor commit is `a9a3895a15700956f1a98e5532da2c3f5b245efe`.** All four observation points
+carry it in `meta.commit`. It is the commit that added the `hash-parity` capture job to
+`.github/workflows/ci.yml` and touched nothing else -- `git show --stat a9a3895` lists exactly one
+file. `ci.yml` is NOT in `nx.json`'s `test` inputs (only `cleanup.yml` is, `nx.json:68`), so the
+anchor commit itself rotates no task hash; it exists to give the four readings ONE SHA to share,
+which is what PARITY-03 asks for.
+
+### Where these readings were taken, and in what order
+
+Points 1 and 2 came from the maintainer's own Windows 11 arm64 workstation, in the repository's
+MAIN checkout -- not a git worktree. Verified rather than assumed, because Pitfall 7 makes the
+distinction decisive (Nx 23.1.0's `sharedCacheDirectory()` resolves the MAIN worktree root, so a
+worktree's "cold" reading is not cold):
+
+```
+$ git rev-parse --git-dir
+.git                                     <- a DIRECTORY, not a `gitdir:` pointer file
+$ git worktree list
+D:/projects/github/op-nx/github-cache a9a3895 [gsd/v0.0.2-os-invariant-cross-os-sharing]
+                                         <- exactly ONE entry, and it is this path
+```
+
+**Point 2 was captured BEFORE point 1, deliberately.** The cold recipe is non-destructive by
+construction -- it redirects `NX_WORKSPACE_DATA_DIRECTORY` and `NX_NATIVE_FILE_CACHE_DIRECTORY`
+into a temporary directory outside the repository and never touches `.nx/` -- so either order is
+defensible. Taking the irreplaceable reading first removes even the residual risk: the long-lived,
+STALE `.nx/workspace-data` IS the measurement subject of point 2, it cannot be regenerated once
+disturbed, and nothing that runs afterwards can put it back. The cold reading, by contrast, can be
+re-taken at will from an empty directory.
+
+Before either capture, `npm ci` was run so the local install mode matches what both CI legs report
+(`meta.installMode: "ci"` on all four points). That is not housekeeping: Pitfall 6 records that the
+node map carries 400-plus external-dependency entries including platform-conditional optional
+packages, so an install-mode difference produces `only-in-A` / `only-in-B` entries that look
+exactly like an OS difference. `.nx/workspace-data` held 16 entries before `npm ci` and 16 after,
+so the clean install did not disturb the stale state.
+
+`git status --porcelain` was EMPTY immediately before and after every local capture, which is why
+both records read `workingTreeClean: true`. Each record was written with `--out` pointing INSIDE
+the temporary directory, so no capture landed in the working tree.
+
+**Build-output state at capture time, stated because it turns out to matter.** Both workstation
+captures were taken with `packages/github-cache/dist/` POPULATED by a full `npm run build`. Both CI
+legs deliberately never build. `typecheck` declares a `dependentTasksOutputFiles` input that hashes
+the CONTENT of that directory, so this is a real difference between the workstation points and the
+runner points -- and it is the third variance source D-11 asks about. It is root-caused below
+rather than left as a confound.
+
+**What is pasted here and what is not.** Each section carries its full `meta` block, the five-target
+hash table, and the discriminator's raw `stdout` and `stderr`. The node maps are NOT pasted: they
+run 428-444 entries per target and roughly a quarter of a megabyte per record. What is pasted
+instead is the DIFF, which is the part a reader needs. The full records exist as untracked local
+files and as the two downloadable CI artifacts of run `30330077185`.
+
+### Observation point 1 -- native Windows workstation, COLD
+
+```json
+{
+  "os": "win32",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.13.0",
+  "installMode": "ci",
+  "commit": "a9a3895a15700956f1a98e5532da2c3f5b245efe",
+  "workingTreeClean": true,
+  "githubSha": null,
+  "runnerOs": null,
+  "capturedAt": "2026-07-28T04:57:16.776Z",
+  "graphState": "cold",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "C:/Users/LARSGY~1/AppData/Local/Temp/claude/D--projects-github-op-nx-github-cache/ecd11393-4351-4fdb-a1bb-f555cfb148f0/scratchpad/hp/cold/wsdata",
+  "workspaceDataEntries": 0,
+  "nativeFileCacheDirectory": "C:/Users/LARSGY~1/AppData/Local/Temp/claude/D--projects-github-op-nx-github-cache/ecd11393-4351-4fdb-a1bb-f555cfb148f0/scratchpad/hp/cold/nfc",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": false
+}
+```
+
+Recipe, exactly as run:
+
+```bash
+COLD="$SP/cold"
+rm -rf "$COLD"; mkdir -p "$COLD"
+NX_DAEMON=false \
+NX_WORKSPACE_DATA_DIRECTORY="$COLD/wsdata" \
+NX_NATIVE_FILE_CACHE_DIRECTORY="$COLD/nfc" \
+  node capture-hashes.mjs --install-mode ci --out "$SP/point1-cold.json"
+```
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `4770979534943963808` | 428 |
+| `typecheck` | `8784332057851660202` | 429 |
+| `test` | `1238755096132544780` | 444 |
+| `integration` | `3844377013355031551` | 430 |
+| `lint` | `17022226934688547307` | 443 |
+
+Discriminator, raw and verbatim (`command: node -p process.platform`, `status: 0`):
+
+```json
+{ "stdout": "win32\n", "stderr": "" }
+```
+
+**Which question this reading answers: Q1, cross-OS parity.** It is the workstation's contribution
+to the three-way cold comparison, and the control that lets the same-OS pair with point 3 be read.
+
+**`nativeFileCacheEntries` is 1, not 0, and that is the CORRECT cold reading.** The plan's
+acceptance criterion asked for "both measured entry counts are zero", inheriting
+`08-RESEARCH.md`'s two-surface derivation. `## Method` above already records that derivation as
+measured-and-corrected: the native file cache is not a hash cache, it holds one version-prefixed
+copy of the `.node` addon binary, and loading `nx/src/project-graph/project-graph.js` puts it there
+before any measurement can run. Requiring both counts to be zero makes `cold` UNREACHABLE. Verified
+directly for THIS reading rather than argued from the earlier note -- the freshly-created native
+cache directory was listed after the run and holds exactly the addon copy and nothing else:
+
+```
+$ ls -1 "$COLD/nfc"
+23.1.0-nx.win32-arm64-msvc.node
+```
+
+The verdict's declared basis is `workspaceDataEntries`, and that count IS zero. The cold directory
+held 13 entries after the run, which is the run populating it -- the count in the record was read
+before the graph was built.
+
+### Observation point 2 -- native Windows workstation, WARM-PREEXISTING
+
+```json
+{
+  "os": "win32",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.13.0",
+  "installMode": "ci",
+  "commit": "a9a3895a15700956f1a98e5532da2c3f5b245efe",
+  "workingTreeClean": true,
+  "githubSha": null,
+  "runnerOs": null,
+  "capturedAt": "2026-07-28T04:56:58.057Z",
+  "graphState": "warm",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "D:\\projects\\github\\op-nx\\github-cache\\.nx\\workspace-data",
+  "workspaceDataEntries": 16,
+  "nativeFileCacheDirectory": "C:\\Users\\LARSGY~1\\AppData\\Local\\Temp\\nx-native-file-cache-b463ff1",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": true
+}
+```
+
+Recipe, exactly as run -- NO environment overrides at all:
+
+```bash
+node capture-hashes.mjs --install-mode ci --out "$SP/point2-warm-preexisting.json"
+```
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `4824412313941236224` | 428 |
+| `typecheck` | `4268438596418767705` | 429 |
+| `test` | `3399438549782114146` | 444 |
+| `integration` | `11646873861621802337` | 430 |
+| `lint` | `14919174368951396261` | 443 |
+
+Discriminator, raw and verbatim (`command: node -p process.platform`, `status: 0`):
+
+```json
+{ "stdout": "win32\n", "stderr": "" }
+```
+
+**Which question this reading answers: Q2 -- "does a warm local box compute the hash cold CI
+published".** It is the ONLY Q2 input available and no runner can produce it. `daemonEnabled: true`
+and `workspaceDataDirectory` pointing at the repository's own `.nx/workspace-data` are what make it
+`warm-preexisting` rather than `warm-fresh`: this is the state the box was already in, not a state
+manufactured for the measurement.
+
+**No `nx reset` preceded this reading, and none preceded the session.** The staleness IS the
+subject. Confirmed by the measurement itself rather than by assertion: had the long-lived graph
+healed, points 1 and 2 would agree, and they do not -- the diff below shows the same single node
+differing on all five targets.
+
+---
+
+## The local staleness diff (point 1 versus point 2)
+
+The question this section answers: both, jointly. It is what pins the staleness axis so that the
+cross-OS reading further down is admissible under the D-09 rule.
+
+`node capture-hashes.mjs --diff point1-cold.json point2-warm-preexisting.json`, A = cold,
+B = warm-preexisting:
+
+```
+=== build : 4770979534943963808 (A) vs 4824412313941236224 (B) ===
+  command: same
+  nodes: 428 / 428
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=3473609128188475433
+          B=17377863611053487263
+    same: 427
+
+=== typecheck : 8784332057851660202 (A) vs 4268438596418767705 (B) ===
+  command: same
+  nodes: 429 / 429
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=3473609128188475433
+          B=17377863611053487263
+    same: 428
+
+=== test : 1238755096132544780 (A) vs 3399438549782114146 (B) ===
+  command: same
+  nodes: 444 / 444
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=3473609128188475433
+          B=17377863611053487263
+    same: 443
+
+=== integration : 3844377013355031551 (A) vs 11646873861621802337 (B) ===
+  command: same
+  nodes: 430 / 430
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=3473609128188475433
+          B=17377863611053487263
+    same: 429
+
+=== lint : 17022226934688547307 (A) vs 14919174368951396261 (B) ===
+  command: same
+  nodes: 443 / 443
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=3473609128188475433
+          B=17377863611053487263
+    same: 442
+
+=== projectConfiguration (field level) ===
+  fields
+    only-in-A (0): -
+    only-in-B (6): targets.typecheck.outputs.1, targets.typecheck.outputs.2, targets.typecheck.outputs.3, targets.typecheck.outputs.4, targets.typecheck.outputs.5, targets.typecheck.outputs.6
+    value-changed (0):
+        -
+    same: 158
+```
+
+**Reading the `only-in` buckets first, per the prescribed order, even though they are empty.** Zero
+nodes are present on one side and absent on the other, on any of the five targets. That bucket
+cannot arise from staleness within a single machine, so an empty reading here is the expected
+result -- and recording it as empty is what makes a NON-empty reading meaningful when the cross-OS
+diff is read. It also means the external-dependency SET did not move, which is the confound
+Pitfall 6 warns about; the `npm ci` step did its job.
+
+`value-changed` is exactly ONE node, identically on all five targets:
+`@op-nx/github-cache:ProjectConfiguration`, cold `3473609128188475433` versus warm-preexisting
+`17377863611053487263`. `same` runs 427-443 depending on the target.
+
+The `projectConfiguration` field diff localises it to a single field. The warm-preexisting graph
+carries a SEVEN-entry `targets.typecheck.outputs`; the cold graph carries a ONE-entry one. 158
+fields are identical and nothing else in the merged node moves.
+
+```jsonc
+// cold (point 1)
+["{projectRoot}/tsconfig.tsbuildinfo"]
+
+// warm-preexisting (point 2)
+[
+  "{projectRoot}/tsconfig.tsbuildinfo",
+  "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}",
+  "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}.map",
+  "{projectRoot}/dist/tsconfig.lib.tsbuildinfo",
+  "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}",
+  "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}.map",
+  "{projectRoot}/out-tsc/vitest/tsconfig.spec.tsbuildinfo"
+]
+```
+
+`metadata` inside the merged node is NOT hashed, so any difference there would have been
+informational. There is none: the diff reports zero `value-changed` fields anywhere.
+
+> **Research prediction, quoted alongside -- NOT this record's numbers.** `08-RESEARCH.md`'s
+> Finding 1, measured at `c61ef40`, predicted exactly this shape: one differing node,
+> `@op-nx/github-cache:ProjectConfiguration`, identical across all five targets, with zero
+> `only-in-*` entries. Its Finding 2 predicted the differing field is `targets.typecheck.outputs`
+> and that the two forms are a seven-entry list and a one-entry list. Both predictions hold at the
+> anchor. What RESEARCH did NOT establish is WHICH state carries WHICH form; measured here, the
+> STALE long-lived graph carries the SEVEN-entry form and the COLD graph carries the ONE-entry
+> form. The research figures themselves (`15091651677672778193` / `16999170787475652362` for
+> `build`) are its numbers at its commit, not this record's.
+
+### D-10's search ordering is SUPERSEDED, and this is the correction
+
+D-10 directs the investigation to start at the external-dependency nodes and then the project
+fileset, on the reasoning that `hash_project_config` was already ruled out. That ordering was
+reasonable when written; it is wrong at this commit, and the measurement rather than an argument is
+what supersedes it.
+
+The measurement names ONE node: `@op-nx/github-cache:ProjectConfiguration`. The external-dependency
+nodes did not move at all -- zero `only-in-*` entries and zero `value-changed` entries among the
+400-plus `npm:` keys on every target. Neither did the project fileset. Starting where D-10 points
+would have searched two buckets that are provably identical.
+
+This is recorded as a correction with its evidence, not applied silently. Both of D-10's named
+suspects remain reasonable priors for a DIFFERENT workspace; they are simply not what is happening
+here.
+
+---
+
+## PARITY-04, answered as its own question
+
+The question this section answers: **Q2, and only Q2.** It is stated in full and answered on its
+own terms rather than absorbed into the cross-OS result.
+
+> **Does a warm local box compute the hash cold CI published?**
+
+**Measured answer at the anchor commit: NO, for all five targets.**
+
+Same machine, same operating system (`win32`/`arm64`), same commit
+(`a9a3895a15700956f1a98e5532da2c3f5b245efe`), same Nx (`23.1.0`), same Node (`v24.13.0`), same
+install mode (`ci`), clean working tree on both sides. The only variable is the graph state.
+
+| Target | Warm-preexisting (point 2) | Cold (point 1) | Agree? |
+|--------|----------------------------|----------------|--------|
+| `build` | `4824412313941236224` | `4770979534943963808` | NO |
+| `typecheck` | `4268438596418767705` | `8784332057851660202` | NO |
+| `test` | `3399438549782114146` | `1238755096132544780` | NO |
+| `integration` | `11646873861621802337` | `3844377013355031551` | NO |
+| `lint` | `14919174368951396261` | `17022226934688547307` | NO |
+
+A fresh CI checkout is always cold, so the cold column is the shape of what CI computes; observation
+points 3 and 4 below confirm the actual published values rather than leaving that inferred.
+
+**This is a FINDING, not a bug this phase fixes.** PARITY-04's own text permits the answer to be
+no, and the roadmap's success criterion 4 says so explicitly. The consequence is stated rather than
+left implicit: **if a warm local box does not compute the hash cold CI published, the O1 outcome is
+unreachable regardless of how perfectly the OS axis is closed.** A developer whose
+`.nx/workspace-data` carries a stale inference result misses every remote entry CI produced, and
+nothing about cross-OS parity changes that.
+
+The developer-facing mitigation is `nx reset`, and it belongs to DOCS-07 in Phase 12, not here.
+
+**This record deliberately does NOT put a `nx reset` in the proof recipe**, and the mechanism
+matters. `nx reset` clears `.nx/workspace-data`, which forces the local box COLD. A cold local box
+compared against cold CI is a clean answer to Q1 -- and it LOOKS like an answer to Q2 while having
+replaced Q2's subject. The developer whose experience Q2 is about did not run `nx reset`; that is
+the entire premise. TEST-10 mandates a reset in its recipe, which is exactly why PARITY-04 names
+that move as disqualifying and why the cold recipe here is the environment-variable one.
+
+---
+
+## What the `typecheck` command actually writes (Research A6, open question 2)
+
+The question this section answers: neither of D-08's two. It is the input plan 08-05's fix needs,
+and it had to be settled BEFORE anything is pinned.
+
+`08-RESEARCH.md` observed two forms of `targets.typecheck.outputs` in the persisted plugin cache --
+a seven-entry list and a one-entry list -- and its assumption A6 took the seven-entry one to be
+correct WITHOUT checking. If that assumption were inverted, pinning would make `typecheck` stop
+caching its declaration output: a silent correctness regression in the very cache this project
+exists to make trustworthy. So it is measured here rather than reasoned.
+
+### Method
+
+On a clean tree, `packages/github-cache/dist/`, `packages/github-cache/out-tsc/` and
+`packages/github-cache/tsconfig.tsbuildinfo` were removed, the file set under
+`packages/github-cache/` (excluding `node_modules`) was snapshotted, the target's ACTUAL command
+was run, and the file set was snapshotted again. The command is the one recorded in the merged
+project configuration, matching `nx-target-inputs.spec.ts:10-18`:
+
+```
+cwd:     packages/github-cache
+command: tsc --build tsconfig.json --emitDeclarationOnly
+exit:    0     stdout: ""     stderr: ""
+```
+
+`tsconfig.tsbuildinfo` did not exist beforehand and so was not removed -- the removal step reported
+only `dist` and `out-tsc`. 78 files were present before; 136 were written.
+
+### What it wrote, mapped onto the candidate patterns
+
+| Pattern | Files it covers |
+|---------|-----------------|
+| `{projectRoot}/tsconfig.tsbuildinfo` | **0** |
+| `{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}` | 31 |
+| `{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}.map` | 31 |
+| `{projectRoot}/dist/tsconfig.lib.tsbuildinfo` | 1 |
+| `{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}` | 36 |
+| `{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}.map` | 36 |
+| `{projectRoot}/out-tsc/vitest/tsconfig.spec.tsbuildinfo` | 1 |
+| **covered by the SEVEN-entry list** | **136 of 136** |
+| **covered by the ONE-entry list** | **0 of 136** |
+| uncovered by the seven-entry list | none |
+
+A representative slice of the 136, showing every distinct shape:
+
+```
+dist/index.d.ts                                        (212 bytes)
+dist/index.d.ts.map                                    (241 bytes)
+dist/hash-parity/compare.d.ts                          (5675 bytes)
+dist/tsconfig.lib.tsbuildinfo                          (50662 bytes)
+out-tsc/vitest/src/lib/sync-gate.spec.d.ts             (55 bytes)
+out-tsc/vitest/src/lib/sync-gate.spec.d.ts.map         (135 bytes)
+out-tsc/vitest/vitest.config.d.mts                     (141 bytes)
+out-tsc/vitest/vitest.config.d.mts.map                 (133 bytes)
+out-tsc/vitest/tsconfig.spec.tsbuildinfo               (89201 bytes)
+```
+
+Note `vitest.config.d.mts` and its map: the `.mts` alternative in the brace expansion is not
+decorative, it matches a real emitted file.
+
+### Conclusion
+
+**The SEVEN-entry list is the correct one. Assumption A6 is CONFIRMED, and the inversion it warned
+about would have been a real regression.** The seven-entry list covers 136 of 136 emitted files.
+The one-entry list covers ZERO of them: pinning it would make `typecheck` cache none of its output
+and restore nothing on a hit, while still reporting a cache hit.
+
+One honest qualification, because the goal is the correct list and not a vote between two
+candidates. Entry 1, `{projectRoot}/tsconfig.tsbuildinfo`, matches NOTHING at this configuration --
+`packages/github-cache/tsconfig.json` is a solution file with `"files": []` and `"include": []`, so
+`tsc --build` compiles only its two references and writes no buildinfo for the solution itself. The
+strictly minimal correct list is therefore the six entries that do match. The seven-entry list is
+kept whole anyway, and 08-05 should keep it whole, for two reasons: it is what `@nx/js/typescript`
+itself emits when the references are classified internal, so pinning it verbatim keeps the override
+aligned with the plugin instead of quietly diverging from it; and an output pattern matching nothing
+is inert for caching, whereas dropping an entry that a future tsconfig change WOULD populate is not.
+Recorded here so that the inert entry is a known, deliberate choice rather than something a later
+reader mistakes for an oversight.

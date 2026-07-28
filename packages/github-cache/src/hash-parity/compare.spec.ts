@@ -292,6 +292,50 @@ describe('CORR-03(b): integration DIFFERS between the legs (D-20)', () => {
   });
 });
 
+describe('the discriminator must have DISCRIMINATED on these two legs (D-20)', () => {
+  // The record collects `discriminator.stdout` per leg and `shapeFault` requires it
+  // present, on an ATTRIBUTION argument. Nothing compared it, so the comparator
+  // PASSED the one pair that refutes its own premise: two legs whose discriminator
+  // printed the same thing while `integration` diverged anyway. Clause (b) cannot
+  // catch that -- the hashes DO differ -- and clause (c) cannot, because
+  // `integration` is excluded from the invariant set by construction.
+  it('FAILS when both legs printed the SAME value but `integration` still diverged', () => {
+    const [a, b] = validPair();
+    b.discriminator.stdout = a.discriminator.stdout;
+
+    const verdict = compareHashParity([a, b]);
+
+    expect(reasonOf(verdict)).toBe('discriminator-not-platform-sensitive');
+    expect(detailOf(verdict)).toContain(DIVERGENT_TARGET);
+  });
+
+  // ORDERING CONTROL, and it is the reason this clause sits after clause (b) rather
+  // than before it. Identical streams AND identical hashes is a discriminator that
+  // is simply GONE, which is clause (b)'s named reason and the more useful blame. A
+  // clause inserted one line earlier would silently steal it, and every assertion
+  // above would still pass.
+  it('leaves integration-not-divergent to clause (b) when the hashes ALSO match', () => {
+    const [a, b] = validPair();
+    b.discriminator.stdout = a.discriminator.stdout;
+    b.targets[DIVERGENT_TARGET].hash = a.targets[DIVERGENT_TARGET].hash;
+
+    expect(reasonOf(compareHashParity([a, b]))).toBe(
+      'integration-not-divergent',
+    );
+  });
+
+  // `stderr` is required PRESENT by shapeFault and deliberately never compared: it
+  // is empty on every healthy leg, so requiring equality is vacuous and requiring
+  // difference asserts that a healthy run writes to stderr. This pins that
+  // asymmetry as a decision -- a differing stderr alone is not a verdict.
+  it('does NOT fail a healthy pair whose `stderr` differs', () => {
+    const [a, b] = validPair();
+    b.discriminator.stderr = 'a warning only one leg emitted';
+
+    expect(reasonOf(compareHashParity([a, b]))).toBe('PASS');
+  });
+});
+
 describe('CORR-03(c) + D-21: the four INVARIANT targets are IDENTICAL', () => {
   // `lint` is the FOURTH clause per D-21 and the roadmap's success criterion 6.
   // NAMED FALLBACK, recorded so a later reader can tell a downgrade from a

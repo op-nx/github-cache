@@ -111,6 +111,7 @@ export type ParityFailureReason =
   | 'not-like-for-like'
   | 'missing-target-hash'
   | 'integration-not-divergent'
+  | 'discriminator-not-platform-sensitive'
   | 'invariant-target-diverged';
 
 /**
@@ -381,6 +382,48 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
         'so the one declared platform discriminator is no longer discriminating. ' +
         'Suspect a deleted or re-spelled `{ "runtime": ... }` input on ' +
         '`targetDefaults.integration` (D-14 requires that string byte-identical).',
+    );
+  }
+
+  // The evidence the record already collects for exactly this question, turned into
+  // an assertion. `shapeFault` requires both discriminator streams present as
+  // strings and grounds that requirement in ATTRIBUTION -- a record missing one
+  // cannot explain why `integration` diverged (D-04, PARITY-06) -- and then nothing
+  // READ either value. So the record carried the one direct measurement of whether
+  // the declared discriminator actually discriminated on THESE two legs, and the
+  // comparator threw it away: a pair whose two `discriminator.stdout` values are
+  // IDENTICAL while `integration` still differs was a PASS.
+  //
+  // That is precisely the state this module's header argues is impossible -- "with
+  // every other input demonstrably shared, the only surviving explanation for a
+  // divergent `integration` is the declared discriminator". The record can REFUTE
+  // that premise directly, so it is checked rather than assumed. The gap is
+  // otherwise covered only from the other side, by
+  // `nx-target-inputs.spec.ts:329-336` pinning the command string byte-identical,
+  // which proves the input is DECLARED -- the substitution the header itself calls
+  // the tempting wrong answer.
+  //
+  // IT SITS AFTER CLAUSE (b) ON PURPOSE. Identical streams AND identical hashes is
+  // a discriminator that is simply GONE, which is clause (b)'s named reason and the
+  // better blame; this clause is for the narrower case where the hashes diverge for
+  // some reason the discriminator cannot account for.
+  //
+  // `stderr` stays shape-checked and UNCOMPARED, which is not the same oversight in
+  // a different costume: it is legitimately EMPTY on every healthy leg, so an
+  // equality check over it would reject every correct pair and an inequality check
+  // would assert that a healthy run writes to stderr. Its PRESENCE is required
+  // because Nx's `hash_runtime` hashes both streams, and its VALUE is evidence for
+  // whoever reads a red gate.
+  if (a.discriminator.stdout === b.discriminator.stdout) {
+    return fail(
+      'discriminator-not-platform-sensitive',
+      'the platform discriminator printed the SAME value on both legs ' +
+        `(${JSON.stringify(a.discriminator.stdout)} on ${a.meta.os} and on ` +
+        `${b.meta.os}), so the divergent \`${DIVERGENT_TARGET}\` hash is NOT ` +
+        'attributable to it. Some OTHER input became OS-sensitive, and clause (c) ' +
+        `cannot see it because \`${DIVERGENT_TARGET}\` is excluded from the ` +
+        'invariant set by construction (CORR-04). Localise it with ' +
+        '`node capture-hashes.mjs --diff <recordA.json> <recordB.json>`.',
     );
   }
 

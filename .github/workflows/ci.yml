@@ -1048,14 +1048,19 @@ jobs:
       # outcome and is deliberately ACCEPTED here (the Releases mirror now holds real
       # task outputs, which is the whole point of a remote cache), with two consequences:
       #
-      #   (a) Shard growth. On top of the ~3 run_id-keyed assets a push already added,
-      #       expect ~5 real ones per input-changing push: 4 from the ubuntu leg (build,
-      #       typecheck, test, integration-linux) and 1 from the windows leg
-      #       (integration-win32, which only the Windows leg can restore). So roughly
-      #       125 default-branch pushes inside ONE calendar month before that month's
-      #       shard reaches RELEASE_ASSET_CAP -- and the cap already degrades to
+      #   (a) Shard growth, and Phase 9 DOUBLED it. There are ~5 distinct real task
+      #       hashes per input-changing push (build, typecheck, test, integration-linux,
+      #       integration-win32). This estimate used to read 4 from the ubuntu leg plus 1
+      #       from the windows leg, because each leg could restore ONLY its own OS's
+      #       saves. VER-01 + VER-03 removed that partition, so EACH leg now restores all
+      #       ~5 and uploads them under its OWN `<hash>-<os>` suffix -- ~10 real assets
+      #       per push, not ~5, on top of the ~3 run_id-keyed ones. So roughly 75
+      #       default-branch pushes inside ONE calendar month before that month's shard
+      #       reaches RELEASE_ASSET_CAP, down from ~125 -- and the cap already degrades to
       #       skip-and-warn (D-11), never a hard failure, while retention prunes shards
-      #       past the window. Not a concern at this repo's push rate.
+      #       past the window. Still not a concern at this repo's push rate. The duplicate
+      #       pair per hash is the same accepted cost OBS-05 owns (a leg's asset suffix
+      #       names the PUBLISHING leg, not the producer).
       #   (b) Wall clock. Uploads are throttled to ~1/sec, so publish gains a few
       #       seconds per push.
       #

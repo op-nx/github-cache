@@ -612,6 +612,170 @@ subject. Confirmed by the measurement itself rather than by assertion: had the l
 healed, points 1 and 2 would agree, and they do not -- the diff below shows the same single node
 differing on all five targets.
 
+### Provenance of points 3 and 4, and the checkout-pin check
+
+Both came from GitHub-hosted runners on workflow run
+[`30330077185`](https://github.com/op-nx/github-cache/actions/runs/30330077185), a `pull_request`
+event on draft pull request #9, which exists solely to reach CI for this measurement. Both
+`hash-parity` legs completed `success` and both uploaded an artifact; neither needed a re-run, so
+the anchor never moved.
+
+**The plan's pin check was stated backwards, and correcting it is what actually proves the pin.**
+The plan asked to confirm `meta.commit == meta.githubSha`, reasoning that an unpinned
+`pull_request` checkout resolves a merge commit and the two fields would then disagree. That is
+inverted. `GITHUB_SHA` on a `pull_request` event is the MERGE commit, set by the runner from the
+event payload -- it does not follow what the job checked out. So equality would mean the checkout
+had landed on the merge commit, which is the pin FAILING. Disagreement in the specific direction
+"commit == PR head, githubSha == merge commit" is the pin WORKING.
+
+Measured, and cross-checked against the API rather than inferred:
+
+| Field | Both legs | What it is |
+|-------|-----------|------------|
+| `meta.commit` | `a9a3895a15700956f1a98e5532da2c3f5b245efe` | the checked-out `HEAD` |
+| `meta.githubSha` | `c6ec86ab4873c1f890526f07ce3f894c552a7ddc` | the runner-provided event SHA |
+
+```
+$ gh api repos/op-nx/github-cache/pulls/9 -q '{head:.head.sha,merge_commit:.merge_commit_sha,base:.base.sha}'
+{"base":"fe25a3f865f20f3d4f8a40e96f8cb5717608ba8a",
+ "head":"a9a3895a15700956f1a98e5532da2c3f5b245efe",
+ "merge_commit":"c6ec86ab4873c1f890526f07ce3f894c552a7ddc"}
+```
+
+`meta.commit` equals the PR head SHA equals the anchor. `meta.githubSha` equals the merge commit
+GitHub synthesised. The pin held on both legs, and the record measures the branch tree rather than
+a tree no workstation can reproduce. The `ci.yml` comment block states the divergence direction to
+watch for; it should be read as "commit must equal the anchor", with `githubSha` diverging on a
+`pull_request` event by design.
+
+**Cross-point `meta` comparison, per the D-09 admissibility rule.**
+
+| Field | Point 1 (workstation) | Point 2 (workstation) | Point 3 (`windows-11-arm`) | Point 4 (`ubuntu-24.04-arm`) |
+|-------|----------------------|----------------------|---------------------------|------------------------------|
+| `commit` | anchor | anchor | anchor | anchor |
+| `installMode` | `ci` | `ci` | `ci` | `ci` |
+| `nxVersion` | `23.1.0` | `23.1.0` | `23.1.0` | `23.1.0` |
+| `graphState` | `cold` | `warm` | `cold` | `cold` |
+| `workspaceDataEntries` | 0 | 16 | 0 | 0 |
+| `daemonEnabled` | `false` | `true` | `false` | `false` |
+| `workingTreeClean` | `true` | `true` | `true` | `true` |
+| `arch` | `arm64` | `arm64` | `arm64` | `arm64` |
+| `nodeVersion` | `v24.13.0` | `v24.13.0` | **`v24.18.0`** | **`v24.18.0`** |
+
+The three cold points agree on install mode, Nx version and graph state, so the cross-OS reading
+between points 3 and 4 is admissible. Point 2 differs on graph state by construction -- that is its
+purpose.
+
+**The Node version is a named confound, and it is measurably inert.** `.node-version` holds
+`lts/krypton`, a MOVING alias, so the runners resolved `v24.18.0` while this workstation is pinned
+by `fnm` at `v24.13.0`. PARITY-06 requires it recorded, and a difference is a confound rather than
+a footnote -- so it is checked rather than waved past. It is inert here, and the proof is in the
+data below: points 1 and 3 differ ONLY in Node version, runner identity and build-output state,
+and their `build`, `test`, `integration` and `lint` hashes are byte-identical with ZERO differing
+nodes. The Node version reaches no hashed node.
+
+### Observation point 3 -- `windows-11-arm` runner, cold
+
+```json
+{
+  "os": "win32",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.18.0",
+  "installMode": "ci",
+  "commit": "a9a3895a15700956f1a98e5532da2c3f5b245efe",
+  "workingTreeClean": true,
+  "githubSha": "c6ec86ab4873c1f890526f07ce3f894c552a7ddc",
+  "runnerOs": "Windows",
+  "capturedAt": "2026-07-28T04:58:03.064Z",
+  "graphState": "cold",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "C:\\a\\github-cache\\github-cache\\.nx\\workspace-data",
+  "workspaceDataEntries": 0,
+  "nativeFileCacheDirectory": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\nx-native-file-cache-a830eb7",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": false
+}
+```
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `4770979534943963808` | 428 |
+| `typecheck` | `14440024841214492138` | 429 |
+| `test` | `1238755096132544780` | 444 |
+| `integration` | `3844377013355031551` | 430 |
+| `lint` | `17022226934688547307` | 443 |
+
+Discriminator, raw and verbatim (`command: node -p process.platform`, `status: 0`):
+
+```json
+{ "stdout": "win32\n", "stderr": "" }
+```
+
+**Which question this reading answers: Q1, cross-OS parity.** It is also the same-OS control that
+PARITY-05 asks for, paired with point 1.
+
+### Observation point 4 -- `ubuntu-24.04-arm` runner, cold
+
+```json
+{
+  "os": "linux",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.18.0",
+  "installMode": "ci",
+  "commit": "a9a3895a15700956f1a98e5532da2c3f5b245efe",
+  "workingTreeClean": true,
+  "githubSha": "c6ec86ab4873c1f890526f07ce3f894c552a7ddc",
+  "runnerOs": "Linux",
+  "capturedAt": "2026-07-28T04:55:28.417Z",
+  "graphState": "cold",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "/home/runner/work/github-cache/github-cache/.nx/workspace-data",
+  "workspaceDataEntries": 0,
+  "nativeFileCacheDirectory": "/tmp/nx-native-file-cache-aa0ca25",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": false
+}
+```
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `4824412313941236224` | 428 |
+| `typecheck` | `12632208324451201361` | 429 |
+| `test` | `3399438549782114146` | 444 |
+| `integration` | `23244131947937181` | 430 |
+| `lint` | `14919174368951396261` | 443 |
+
+Discriminator, raw and verbatim (`command: node -p process.platform`, `status: 0`):
+
+```json
+{ "stdout": "linux\n", "stderr": "" }
+```
+
+**Which question this reading answers: Q1, cross-OS parity.** It is the leg the whole investigation
+was missing -- `08-RESEARCH.md` could not measure it from a Windows workstation, which is why its
+Finding 3 is a lead rather than a proof.
+
+### All four points side by side
+
+| Target | 1 workstation COLD | 2 workstation WARM-PRE | 3 `windows-11-arm` | 4 `ubuntu-24.04-arm` |
+|--------|--------------------|------------------------|--------------------|----------------------|
+| `build` | `4770979534943963808` | `4824412313941236224` | `4770979534943963808` | `4824412313941236224` |
+| `typecheck` | `8784332057851660202` | `4268438596418767705` | `14440024841214492138` | `12632208324451201361` |
+| `test` | `1238755096132544780` | `3399438549782114146` | `1238755096132544780` | `3399438549782114146` |
+| `integration` | `3844377013355031551` | `11646873861621802337` | `3844377013355031551` | `23244131947937181` |
+| `lint` | `17022226934688547307` | `14919174368951396261` | `17022226934688547307` | `14919174368951396261` |
+
+Two things are visible before any diff is run. Columns 1 and 3 agree on four of five targets --
+same OS, same graph state, different machines. Columns 2 and 4 agree on three of five -- a WARM
+Windows workstation and a COLD Linux runner, which is the masquerade the roadmap named, reproduced
+at this commit to the digit. `typecheck` carries FOUR distinct values, which is D-11's question.
+
+**PARITY-05, the same-OS `integration` pair, is satisfied.** Point 1 and point 3 are both
+`3844377013355031551`; point 4 is `23244131947937181`. `integration` diverges cross-OS and agrees
+same-OS, which is exactly the behaviour CORR-04's declared discriminator exists to produce.
+
 ---
 
 ## The local staleness diff (point 1 versus point 2)
@@ -869,3 +1033,391 @@ aligned with the plugin instead of quietly diverging from it; and an output patt
 is inert for caching, whereas dropping an entry that a future tsconfig change WOULD populate is not.
 Recorded here so that the inert entry is a known, deliberate choice rather than something a later
 reader mistakes for an oversight.
+
+---
+
+## The cross-OS diff: PARITY-01, answered node by node
+
+The question this section answers: **Q1, cross-OS parity.** It is admissible under the D-09 rule
+because the staleness axis is pinned on both sides -- points 3 and 4 both record `graphState: cold`
+with `workspaceDataEntries: 0`, the same `installMode`, and the same Nx version.
+
+`node capture-hashes.mjs --diff <ubuntu record> <windows record>`, A = `ubuntu-24.04-arm`,
+B = `windows-11-arm`, both cold, both at the anchor:
+
+```
+=== build : 4824412313941236224 (A) vs 4770979534943963808 (B) ===
+  command: same
+  nodes: 428 / 428
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=17377863611053487263
+          B=3473609128188475433
+    same: 427
+
+=== typecheck : 12632208324451201361 (A) vs 14440024841214492138 (B) ===
+  command: same
+  nodes: 429 / 429
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=17377863611053487263
+          B=3473609128188475433
+    same: 428
+
+=== test : 3399438549782114146 (A) vs 1238755096132544780 (B) ===
+  command: same
+  nodes: 444 / 444
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=17377863611053487263
+          B=3473609128188475433
+    same: 443
+
+=== integration : 23244131947937181 (A) vs 3844377013355031551 (B) ===
+  command: same
+  nodes: 430 / 430
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (2):
+        runtime:node -p process.platform
+          A=11970638123438591088
+          B=6694901896827773122
+        @op-nx/github-cache:ProjectConfiguration
+          A=17377863611053487263
+          B=3473609128188475433
+    same: 428
+
+=== lint : 14919174368951396261 (A) vs 17022226934688547307 (B) ===
+  command: same
+  nodes: 443 / 443
+    only-in-A (0): -
+    only-in-B (0): -
+    value-changed (1):
+        @op-nx/github-cache:ProjectConfiguration
+          A=17377863611053487263
+          B=3473609128188475433
+    same: 442
+
+=== projectConfiguration (field level) ===
+  fields
+    only-in-A (6): targets.typecheck.outputs.1, targets.typecheck.outputs.2, targets.typecheck.outputs.3, targets.typecheck.outputs.4, targets.typecheck.outputs.5, targets.typecheck.outputs.6
+    value-changed (0):
+        -
+    same: 158
+```
+
+### Reading it in the prescribed order
+
+**`only-in-A` / `only-in-B` FIRST: ZERO entries, on every one of the five targets.** This is the
+bucket that cannot arise from staleness within a single machine, so it is the cleanest OS signal
+available -- and it is empty. Recording it as empty is the point of the exercise.
+
+That is a **measured refutation of a research prediction**, and it is worth naming as one.
+`08-RESEARCH.md`'s `### How to diff two maps usefully` states that a differing external-dependency
+SET is "the likeliest shape of a genuine cross-OS difference, since optional platform-specific
+packages such as `@nx/nx-linux-arm64-gnu`, `lightningcss-win32-arm64-msvc` and `fsevents` all
+appear as nodes". They do appear as nodes -- and they appear IDENTICALLY on both legs. The external
+node set is derived from `package-lock.json`, which both legs parse identically, not from what
+`npm ci` chose to materialise on disk. So the platform-conditional optional dependencies that the
+prediction (and Pitfall 6) both flag as the likeliest confound are not a cross-OS variable here at
+all. Two independent 400-plus-entry node sets agreeing exactly is a strong non-vacuity signal for
+the diff itself.
+
+**`value-changed` second: exactly ONE node on `build`, `typecheck`, `test` and `lint`**, and it is
+the same node with the same two values on every one of them:
+
+```
+@op-nx/github-cache:ProjectConfiguration
+  linux   = 17377863611053487263
+  win32   = 3473609128188475433
+```
+
+`integration` carries TWO, and the second is `runtime:node -p process.platform` -- the declared
+CORR-04 discriminator, doing precisely the job D-14 keeps it for. That is the only target where a
+second node moves, and it is the only target that is SUPPOSED to diverge.
+
+**`same` last, as scale:** 427-443 identical nodes per target. One node out of 428 to 444 is what
+the entire cross-OS divergence amounts to.
+
+**The merged project configuration field diff localises that node to ONE field.** `targets.typecheck.outputs` has SEVEN entries on Linux and ONE on Windows; 158 other fields are
+byte-identical, with zero `value-changed` entries anywhere in the merged node. `metadata` is not
+hashed, and it did not differ either.
+
+### PARITY-01's answer, in prose
+
+**At commit `a9a3895a15700956f1a98e5532da2c3f5b245efe`, exactly one hash input differs between
+`ubuntu-24.04-arm` and `windows-11-arm`: the `@op-nx/github-cache:ProjectConfiguration` node. The
+differing field inside it is `targets.typecheck.outputs`, which `@nx/js/typescript` infers as a
+SEVEN-entry list on Linux and a ONE-entry list on Windows. Because that single node covers all five
+targets, that one field is what makes `build`, `typecheck`, `test` and `lint` diverge cross-OS.
+`integration` diverges for that reason AND for its declared `runtime:node -p process.platform`
+discriminator, which is the intended one. No external dependency, no fileset, no tsconfig node, and
+no environment node differs.**
+
+> **Research prediction, quoted beside the measurement.** `08-RESEARCH.md`'s Finding 3 names a
+> Windows separator sensitivity in `@nx/js/typescript`'s project-reference classification as the
+> strongest available lead: `isExternalProjectReference` terminates on a literal string comparison
+> of two absolute paths, TypeScript hands back forward-slash absolute paths on Windows while Nx
+> works in backslashes, so the two internal references are misclassified as EXTERNAL and
+> `getOutputs()` yields ONE output instead of SEVEN. RESEARCH states plainly that this is "**not
+> yet proven to be the cross-OS cause** -- the Linux leg was not measured", and offers it as a lead
+> only.
+>
+> **The measurement above is that missing leg, and the prediction HOLDS.** Cold Linux yields the
+> SEVEN-entry list (references classified internal); cold Windows yields the ONE-entry list
+> (references classified external), reproduced independently on two different Windows machines --
+> this workstation and a GitHub-hosted `windows-11-arm` runner. The predicted mechanism, the
+> predicted direction and the predicted node are all confirmed. What is NOT re-derived here is
+> RESEARCH's plugin-source reading itself; this record measures the OUTCOME, and the mechanism
+> remains RESEARCH's citation rather than this record's.
+>
+> One caveat that keeps the claim honest: the stale Windows graph in point 2 carries the
+> SEVEN-entry (Linux-shaped) form, so Windows is evidently capable of producing it -- RESEARCH
+> records the plugin's persisted targets cache holding BOTH forms. What is reproducible at this
+> commit is that a COLD Windows graph yields ONE and a COLD Linux graph yields SEVEN. The stale
+> entry is a historical artifact of some earlier inference on this box, not a counter-example to
+> the cold behaviour.
+
+### The two axes have the SAME root cause, and that is why one masquerades as the other
+
+This is the sharpest statement the four points support, and it was not predictable before both
+legs existed. Compare the two `ProjectConfiguration` node values:
+
+| Comparison | Value A | Value B |
+|------------|---------|---------|
+| Windows cold vs Windows warm-preexisting (the staleness axis) | `3473609128188475433` | `17377863611053487263` |
+| Windows cold vs Linux cold (the OS axis) | `3473609128188475433` | `17377863611053487263` |
+
+**The same pair of values, on both axes.** The roadmap calls the second axis one "that perfectly
+masquerades as" the first; the reason it masquerades so perfectly is that it is not an imitation at
+all -- a stale Windows graph is emitting literally the value a cold Linux graph emits, because both
+carry the SEVEN-entry form of the same field. One field, two ways to arrive at it.
+
+The direct consequence, measured rather than argued -- a WARM Windows workstation versus a COLD
+`ubuntu-24.04-arm` runner (point 2 versus point 4):
+
+```
+=== build : 4824412313941236224 (A) vs 4824412313941236224 (B) ===   IDENTICAL, 428 same, 0 changed
+=== test  : 3399438549782114146 (A) vs 3399438549782114146 (B) ===   IDENTICAL, 444 same, 0 changed
+=== lint  : 14919174368951396261 (A) vs 14919174368951396261 (B) === IDENTICAL, 443 same, 0 changed
+=== typecheck : 4268438596418767705 (A) vs 12632208324451201361 (B) ===
+    value-changed (1):
+        **/*.{d.ts,d.cts,d.mts}:packages/github-cache/dist/**/*.{js,cjs,mjs,jsx,d.ts,d.cts,d.mts}{,.map},packages/github-cache/dist/tsconfig.lib.tsbuildinfo
+          A=17231791043533793938   B=3244421341483603138
+=== integration : 11646873861621802337 (A) vs 23244131947937181 (B) ===
+    value-changed (1):
+        runtime:node -p process.platform
+          A=6694901896827773122    B=11970638123438591088
+=== projectConfiguration (field level) === only-in (0/0), value-changed (0), same: 164
+```
+
+A warm Windows workstation and a cold Linux runner are INDISTINGUISHABLE for `build`, `test` and
+`lint` -- byte-identical hashes, zero differing nodes, 164 of 164 merged-configuration fields
+identical. The only two surviving differences are both named non-OS mechanisms: the build-output
+node on `typecheck` and the declared discriminator on `integration`. This reproduces at the anchor
+what the 2026-07-26 pre-flight probe reported, and it is exactly why D-09's rule exists.
+
+**Roadmap success criterion 1, checked against the measurement.** Its first clause -- "cold-ubuntu
+differs from cold-windows for every target" -- holds: all five targets differ. Its second clause --
+"warm local Windows `build`/`test` equal cold ubuntu CI to the digit" -- holds, and `lint` joins
+them as a third. Its third clause -- "cold local Windows equals cold windows CI to the digit" --
+holds for `build`, `test`, `integration` and `lint`, and NOT for `typecheck`, for the reason the
+D-11 section below root-causes.
+
+---
+
+## `lint` cross-OS: the D-21 verdict, and Phase 7's UNVERIFIED-BY-DESIGN question settled
+
+The question this section answers: **Q1, cross-OS parity**, for the target Phase 7 handed over.
+
+**Verdict: `lint`'s HASH diverges cross-OS -- and nothing `lint`-specific diverges.**
+
+| | `lint` hash |
+|---|---|
+| point 4, `ubuntu-24.04-arm` cold | `14919174368951396261` |
+| point 3, `windows-11-arm` cold | `17022226934688547307` |
+
+The divergence is real, and it is entirely the shared `@op-nx/github-cache:ProjectConfiguration`
+node: `lint`'s cross-OS diff shows ONE changed node, that one, with the same two values every other
+target reports, and 442 of 443 nodes identical.
+
+### D-35's Windows-side baseline, quoted beside the Linux measurement
+
+`07-EVIDENCE.md:505-513` recorded the inferred `lint` target's hashed node values on Windows,
+flagged `options.cwd` as "the row most likely to diverge", and confirmed it IS hashed. Every row is
+now measured on BOTH legs:
+
+| Hashed field | D-35 baseline (Windows) | Point 4 (`linux`) | Point 3 (`win32`) | Agree? |
+|---|---|---|---|---|
+| `executor` | `nx:run-commands` | `nx:run-commands` | `nx:run-commands` | YES |
+| `outputs` | `[]` | `[]` | `[]` | YES |
+| `options.cwd` | `packages/github-cache` | `packages/github-cache` | `packages/github-cache` | **YES** |
+| `options.command` | `eslint .` | `eslint .` | `eslint .` | YES |
+| `configurations` | `{}` | `{}` | `{}` | YES |
+| `cache` (inferred) | `true` | `true` | `true` | YES |
+
+`options.cwd` -- the row D-35 singled out -- is byte-identical on both runners, forward-slashed and
+project-relative on Windows as well as Linux. The merged-node field diff independently confirms it:
+zero `value-changed` fields anywhere in the merged configuration, so no `lint` field moved at all.
+
+**Phase 7's question is therefore settled, and the answer is YES.** `STACK.md` section 7 and D-35
+left "does `@nx/eslint` infer `lint` identically on both OSes?" UNVERIFIED BY DESIGN. Measured at
+the anchor: it does. `@nx/eslint` produces an identical `lint` target node on `ubuntu-24.04-arm`
+and `windows-11-arm`.
+
+### Which branch of D-21 plan 08-06 must wire
+
+**The PRIMARY branch: `lint` is asserted as a FOURTH IDENTICAL target, alongside
+`build`/`typecheck`/`test`. The named fallback does NOT apply.**
+
+D-21's fallback is conditioned on `lint` diverging AND its fix proving out of Phase 8's scope.
+Neither half survives contact with the measurement. `lint` diverges only through the shared
+`ProjectConfiguration` node; the field responsible is `targets.typecheck.outputs`; and D-12's fix
+location -- `nx.json` `targetDefaults` -- reaches that field directly, as `targetDefaults.typecheck.inputs` already demonstrates in-repo (its merged value is identical
+in every state precisely because it is declared). So `lint`'s divergence is expected to close as a
+SIDE EFFECT of 08-05's fix, with no `lint`-specific work at all.
+
+That is a prediction this record is making, not a measurement, and it is labelled as one. If
+08-05's fix lands and `lint` still diverges, D-21's fallback becomes live again and the clause is
+DOWNGRADED to a recorded-with-a-named-finding test -- never deleted, because a deleted clause is
+indistinguishable from a clause that never existed. `compare.spec.ts`'s `INVARIANT_TARGETS` block
+already carries that instruction.
+
+### A note on U-01
+
+`08-CONTEXT.md`'s U-01 asks whether PARITY-03's goal is reachable through `nx.json` alone, and
+withholds D-12 from being treated as settled until the root cause is known. The root cause is now
+known: a single `targetDefaults`-addressable field on the merged project configuration node. That
+is inside D-12's reach on the evidence available. U-01 is not CLOSED here -- closing it requires
+08-05 to land the fix and the two legs to actually agree -- but the specific risk it named, "the
+divergence lives inside plugin inference that `targetDefaults` cannot override", is now the less
+likely branch rather than an open coin-flip.
+
+---
+
+## D-11: `typecheck`'s third variance source, ROOT-CAUSED
+
+The question this section answers: neither of D-08's two directly. It is the confound that has to
+be named before either question's `typecheck` row can be read.
+
+`typecheck` carries FOUR distinct values across the four observation points, which is exactly the
+condition D-11 was opened for. D-11 permits recording it as OPEN with its evidence and forbids it
+becoming a phase blocker. It does not need either concession: it is root-caused.
+
+**The isolating comparison is point 1 versus point 3 -- same OS, same graph state, same commit,
+same install mode, different machine:**
+
+```
+=== build       : 4770979534943963808 (A) vs 4770979534943963808 (B) ===  0 changed, 428 same
+=== test        : 1238755096132544780 (A) vs 1238755096132544780 (B) ===  0 changed, 444 same
+=== integration : 3844377013355031551 (A) vs 3844377013355031551 (B) ===  0 changed, 430 same
+=== lint        : 17022226934688547307 (A) vs 17022226934688547307 (B) === 0 changed, 443 same
+
+=== typecheck : 8784332057851660202 (A) vs 14440024841214492138 (B) ===
+  nodes: 429 / 429
+    only-in-A (0): -   only-in-B (0): -
+    value-changed (1):
+        **/*.{d.ts,d.cts,d.mts}:packages/github-cache/dist/**/*.{js,cjs,mjs,jsx,d.ts,d.cts,d.mts}{,.map},packages/github-cache/dist/tsconfig.lib.tsbuildinfo
+          A=17231791043533793938
+          B=3244421341483603138
+    same: 428
+
+=== projectConfiguration (field level) === only-in (0/0), value-changed (0), same: 158
+```
+
+Four of five targets are byte-identical across two different Windows arm64 machines, and the merged
+project configuration is identical field for field. `typecheck` differs by exactly ONE node, and
+that node is the `dependentTasksOutputFiles` entry declared at `nx.json:137`, which hashes the
+CONTENT of `packages/github-cache/dist/`.
+
+**The third source is the build-output state, exactly as `08-RESEARCH.md` predicted.** This
+workstation captured both local points with `dist/` POPULATED by a full `npm run build`; both CI
+legs deliberately skip the build step, so their `dist/` is absent and the node hashes an empty set.
+RESEARCH's `### The dependentTasksOutputFiles node is a real hazard` named this as "a live
+candidate for D-11's third variance source ... more concrete than `npm ci` vs `npm install`", and
+added that "the instrument's own reading of `typecheck` depends on whether `build` ran first in
+that job -- so the capture step's position relative to any build step must be identical on both
+legs, and the record should state it." Both statements are confirmed, and the second is why the
+`hash-parity` job has no build step on either leg.
+
+**So `typecheck`'s four values decompose cleanly into three independent variables, with no residue:**
+
+| Point | OS classification of `typecheck.outputs` | `dist/` state | Hash |
+|-------|------------------------------------------|---------------|------|
+| 1 workstation cold | one-entry (Windows) | populated | `8784332057851660202` |
+| 3 `windows-11-arm` cold | one-entry (Windows) | empty | `14440024841214492138` |
+| 2 workstation warm-preexisting | seven-entry (stale) | populated | `4268438596418767705` |
+| 4 `ubuntu-24.04-arm` cold | seven-entry (Linux) | empty | `12632208324451201361` |
+
+Two binary variables, four combinations, four values. Nothing is left unexplained.
+
+**Consequence for the gate, and it is a real one.** The build-output variable is NOT closed by
+08-05's `nx.json` fix -- it is a property of what has run in a given workspace, not of the config.
+Both `hash-parity` legs skip the build for exactly this reason, so the gate compares like with
+like. But a developer running `nx typecheck` on a box that has built will compute a different
+`typecheck` hash from CI even after the OS axis is closed. That is a DOCS-07 item for Phase 12,
+alongside the `nx reset` note, and it is recorded here so Phase 12 inherits it rather than
+rediscovering it.
+
+---
+
+## SURFACED, NOT FIXED: `AGENTS.md`'s per-worktree Nx cache claim is false at Nx 23.1.0
+
+Recorded with its citation and deliberately left unfixed -- it is a documentation defect outside
+this phase's stated boundary, and a drive-by edit would put an unrelated change in a phase whose
+whole point is a clean measure-then-fix ordering.
+
+`AGENTS.md` states, under the git-worktree strategy:
+
+> `.nx/cache` and `.nx/workspace-data` live at the *worktree* root (not in `node_modules`) and are
+> gitignored, so each worktree already gets its own -- let each regenerate its Nx cache rather than
+> sharing it
+
+That was true of older Nx. It is not true of the installed 23.1.0: `sharedCacheDirectory()`
+resolves `getMainWorktreeRoot(root)` and returns the MAIN repository's cache directory, and
+`cleanupWorkspaceData()` explicitly also cleans "the shared workspace data directory in the main
+repo where the DB actually lives". [`nx/dist/src/utils/cache-directory.js`,
+`nx/dist/src/command-line/reset/reset.js:141-158`; read by `08-RESEARCH.md` Pitfall 7 in the
+installed tree.]
+
+**Why it matters beyond tidiness:** an executor running in a git worktree reads the MAIN tree's
+graph state, so a "cold" measurement taken there is not cold. That is why this plan verified it was
+running in the main checkout rather than assuming it, and the verification is recorded above with
+its commands. Anyone repeating these measurements from a worktree will get a reading that is
+mislabelled rather than merely noisy.
+
+Fixing the sentence is a one-line documentation change and belongs to whichever phase owns
+`AGENTS.md` next. Not this one.
+
+---
+
+## Pre-recorded: this phase's fix commits are a LEGITIMATE all-MISS rotation window
+
+Phase 7's D-36 records three legitimate all-MISS hash-rotation windows in milestone v0.0.2. Phase
+8's fix commits are one of them, and it is recorded HERE, before the fix lands, so that nobody
+reads the resulting cache misses as a defect and so Phase 9's tripwire is authored correctly.
+
+**What will happen.** `08-05` edits `nx.json` to declare `targetDefaults.typecheck.outputs`.
+`{workspaceRoot}/nx.json` is a declared input of every target in this workspace, so that single
+edit rotates the task hash of `build`, `typecheck`, `test`, `integration` and `lint` at once. The
+first push after it lands will MISS on every target on every leg. That is correct behaviour, not a
+regression -- it is the same class of rotation Phase 7 recorded when registering the ESLint plugin.
+
+**What Phase 9's tripwire must therefore be.** Not "an all-miss push is a defect": that fires on
+correct work. The condition that actually distinguishes a defect is **two CONSECUTIVE all-miss
+pushes with no version-affecting change in between** -- the second miss is the one that means the
+entries are not being restored, because the first is fully explained by the rotation that caused
+it.
+
+**One additional prediction, labelled as such rather than measured.** After 08-05 lands, the fix
+normalises `targets.typecheck.outputs` through `targetDefaults`, so a WORKSTATION carrying the
+stale seven-entry inference and a cold runner should converge on the same value -- which means the
+staleness axis closes as a side effect of closing the OS axis, for the same reason `lint` should.
+That is a prediction. It is not evidence, and 08-06's gate is what turns it into either a
+confirmation or a finding.

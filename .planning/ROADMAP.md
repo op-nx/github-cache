@@ -208,14 +208,14 @@ CORR-03, CORR-04.
      export. `typecheck`'s third variance source (four distinct values across the four probe
      measurements) is either root-caused or explicitly recorded as open. (PARITY-06, PARITY-07)
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 
 Plans:
 
 - [x] 08-01-PLAN.md -- The instrument: a root-level dev-only ESM capture script proven byte-identical
       to Nx's own arithmetic, and the root-cause record opened with its method sections (wave 1)
 
-- [ ] 08-02-PLAN.md -- The comparator: a pure typed verdict over two platform records with an
+- [x] 08-02-PLAN.md -- The comparator: a pure typed verdict over two platform records with an
       observed RED per clause, its CI loader, and the tarball exclusion with its assertion (wave 2)
 
 - [ ] 08-03-PLAN.md -- Measure: the two-leg capture job, the anchor commit, and all FOUR observation
@@ -689,7 +689,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 5. Trust-Widening + PPE Gate | v0.0.1 | 4/4 | Complete | 2026-07-20 |
 | 6. Distribution + Docs + Governance | v0.0.1 | 5/5 | Complete | 2026-07-21 |
 | 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 4/4 | Complete   | 2026-07-27 |
-| 8. Nx Task-Hash Parity | v0.0.2 | 1/6 | In Progress|  |
+| 8. Nx Task-Hash Parity | v0.0.2 | 2/6 | In Progress|  |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 0/? | Not started | - |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 0/? | Not started | - |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 0/? | Not started | - |

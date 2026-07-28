@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 8
 current_phase_name: Nx Task-Hash Parity
 status: executing
-last_updated: "2026-07-28T01:00:19.801Z"
+last_updated: "2026-07-28T01:23:44.513Z"
 last_activity: 2026-07-28
-last_activity_desc: "Phase 8 plan 08-01 complete: the capture instrument and the opened root-cause record"
+last_activity_desc: "Phase 8 plan 08-02 complete (the CORR-03 comparator, its observed RED, and the tarball exclusion)"
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 8 (Nx Task-Hash Parity) -- EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-28 -- Phase 8 plan 08-01 complete (capture instrument + root-cause record opened)
+Last activity: 2026-07-28 -- Phase 8 plan 08-02 complete (the CORR-03 comparator, its observed RED, and the tarball exclusion)
 
 ## Performance Metrics
 
@@ -95,6 +95,7 @@ Last activity: 2026-07-28 -- Phase 8 plan 08-01 complete (capture instrument + r
 | Phase 07 P03 | ~20 min | 2 tasks tasks | 5 files files |
 | Phase 07 P04 | ~55 min | 3 tasks | 2 files |
 | Phase 08 P01 | 39min | 2 tasks tasks | 4 files files |
+| Phase 08 P02 | 26min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -168,6 +169,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 07]: 07-04: all nine mutations M1-M9 applied, OBSERVED and reverted first-hand; every one matched, and nothing was committed mutated. M1 and M2 produce DISJOINT red sets, which is the measured form of D-15 (neither ban rule is sufficient alone). M3 -- the one flagged most likely to be silently vacuous -- went RED, so P6 and the dynamic-import shape are genuinely covered; but VALIDATION.md's predicted count is off by one, because the shipped spec folds BOTH dynamic shapes into ONE it() row, so the observed result is 1 failing assertion covering two shapes rather than 2. M8 produces the require-description error and M9 produces BOTH the unsuppressed ban error and a severity-2 unused-directive report, which is what makes LINT-05 and LINT-06 LIVE rather than merely configured -- and is why plans 07-01 and 07-02 correctly left those two requirement boxes unticked until now. requirements.mark-complete was skipped and REQUIREMENTS.md hand-edited, since that tool corrupted the same file in both prior waves.
 - [Phase 08]: 08-01: capture-hashes.mjs is the root-level dev-only ESM instrument (D-01/D-02) -- four Nx internal-subpath imports drive createProjectGraphAsync -> createTaskGraph -> createTaskHasher().hashTask() over the five D-05 targets, emitting each target's hash/command/details.nodes map PLUS the merged projectConfiguration node. That last addition is beyond D-04's minimum and is what makes PARITY-01 answerable: the node map holds exactly ONE <project>:ProjectConfiguration entry covering all five targets, so a difference there cannot be localised to a field without the merged node. PROVEN, not asserted: in one uninterrupted session at 5a8f7c5 the instrument's build (15091651677672778193) and test (17043910507556371878) hashes were byte-identical to what nx run wrote into .nx/cache/run.json, with Pitfall 2 discipline held (each copy read before the next nx command; the nx show runs sequenced afterwards). D-01(b) is STRUCTURAL: root package.json nx.includedScripts stays [], so the capture:hashes script cannot become an Nx target and a capture can never be a replay.
 - [Phase 08]: 08-01: graphState is derived from workspaceDataEntries ALONE, correcting 08-RESEARCH.md's recommended both-counts-zero recipe. Measured: getNativeFileCacheLocation() is not a hash cache at all -- nx/dist/src/native/index.js:96-107 uses it to hold ONE version-prefixed copy of the .node addon binary, and the instrument's own static import of project-graph.js puts it there before any measurement can run (probed against a fresh empty dir: 0 entries at process entry, 0 after importing native-file-cache-location.js, 1 immediately after importing project-graph.js). The prescribed derivation would therefore have returned `warm` unconditionally forever, mislabelling every Phase 8 observation point -- the same silently-always-passes class D-04 exists to prevent. The record now carries meta.graphStateBasis so it states its own derivation. Two further verification-surface corrections in the same plan: `--inputs` is NOT a flag at Nx 23.1.0 but a SUBCOMMAND, so 08-RESEARCH.md's `nx show target <t> --inputs` exits 0 with the flag INERT (both forms captured so the D-03 evidence cannot be dismissed as the wrong command); and the acceptance check "grep the source for a --graph-state flag and find none" was initially satisfiable by a COMMENT saying no such flag exists, so the comment was reworded -- Phase 7's "a lexical guard can be satisfied by the wrong token" recurring.
+- [Phase 08]: 08-02: HashParityRecord models ONLY the fields shapeFault validates -- an unmodelled emitted field cannot become an unchecked assertion about a downloaded artifact
+- [Phase 08]: 08-02: a grep-verifiable ABSENCE claim must not spell the token it forbids anywhere in the file, including in the sentence explaining the rule (hit twice this plan)
+- [Phase 08]: 08-02: pack-check.cjs enumerated its excluded dist subtrees in FOUR places, not three; all three runtime sites now derive from DIST_SUBTREES, the module header is the one hand-maintained restatement
 
 ### Pending Todos
 
@@ -294,8 +298,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-28T01:00:19.789Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-07-28T01:23:33.614Z
+Stopped at: Completed 08-02-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

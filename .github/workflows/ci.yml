@@ -601,18 +601,6 @@ jobs:
         run: |
           set -euo pipefail
           node capture-hashes.mjs --install-mode ci --out "$RECORD"
-      # D-22 CLAUSE (a) DEMONSTRATION, DELIBERATELY WRONG, REVERTED BY THE NEXT
-      # COMMIT. Deletes the windows leg's record after the capture wrote it, so
-      # if-no-files-found: error fails THAT LEG rather than delivering silence, the
-      # compare job receives ONE record instead of two, and clause (a) must fire
-      # naming the record count. It closes RESEARCH assumption A4 on a real runner:
-      # that the compare job's if: expression still reaches the assertion when an
-      # upstream matrix leg FAILED. Without that, "fewer than two records is a
-      # FAILURE, not a skip" (D-17) is unreachable in this shape.
-      - name: D-22 demonstration -- drop the windows record before the upload
-        if: matrix.os == 'windows-11-arm'
-        shell: bash
-        run: rm -f hash-parity-${{ matrix.os }}.json
       - uses: actions/upload-artifact@v7
         with:
           name: hash-parity-${{ matrix.os }}

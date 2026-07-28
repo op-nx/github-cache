@@ -53,6 +53,19 @@ import { createProjectGraphAsync } from 'nx/src/project-graph/project-graph.js';
 import { createTaskGraph } from 'nx/src/tasks-runner/create-task-graph.js';
 import { workspaceDataDirectory } from 'nx/src/utils/cache-directory.js';
 
+// A downstream reader that stops early (`| rg -q ...`, `| head`) closes the pipe
+// while the record is still being written, and node's default is to emit an
+// unhandled EPIPE and print a stack trace. That reads as a FAILED MEASUREMENT
+// when the measurement in fact succeeded and the reader simply had enough --
+// exactly the misattribution this whole phase exists to stamp out. Swallow EPIPE
+// on stdout only; every other write error still throws. The `--out` path is
+// unaffected (writeFileSync, not this stream).
+process.stdout.on('error', (error) => {
+  if (error.code !== 'EPIPE') {
+    throw error;
+  }
+});
+
 /**
  * The five targets D-05 requires. `lint` is here because Phase 7's D-35 hands it
  * over explicitly: STACK.md section 7 left "does @nx/eslint infer `lint`

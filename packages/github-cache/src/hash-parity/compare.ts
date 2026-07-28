@@ -121,6 +121,34 @@ export type ParityVerdict =
       readonly detail: string;
     };
 
+/**
+ * Every refusal, with the detail forced onto ONE line.
+ *
+ * THE SINGLE PLACE untrusted record content is neutralised, and it is one place
+ * rather than one per interpolation deliberately. Every `detail` below
+ * interpolates values the DOWNLOADED RECORD controls -- a target key, `meta.os`,
+ * a hash -- and `assert-parity.ts` prints the result into the step log that
+ * `ci.yml`'s `grep` reads. A record carrying a target key or a `meta.os` whose
+ * text is a line break followed by the comparator's own success prefix would
+ * otherwise make the FAILURE path print a line the SUCCESS grep matches: the
+ * log-grep ci.yml presents as a second, INDEPENDENT signal would be satisfiable
+ * by content the failing path itself emitted. Escaping at each interpolation
+ * site would leave the next detail string written here free to reopen the hole;
+ * a choke point cannot be forgotten. Collapsing CR/LF is lossless because every
+ * detail here is authored as a single sentence.
+ *
+ * IT IS HALF THE FIX, and says so. Stripping line breaks stops injected text
+ * from STARTING a line; the other half is the `^` anchor on that grep, without
+ * which the same text still matches as a mid-line SUBSTRING of the failure
+ * line. Neither half suffices alone. The anchor cannot be pinned from a spec --
+ * `ci.yml` is not a declared `test` input (PARITY-08, deferred to Phase 9), so a
+ * spec asserting on its content would serve a stale cached PASS. This half is
+ * the pinnable half, and `compare.spec.ts` pins it.
+ */
+function fail(reason: ParityFailureReason, detail: string): ParityVerdict {
+  return { ok: false, reason, detail: detail.replace(/[\r\n]+/g, ' ') };
+}
+
 /** A non-null, non-array object -- what every map in the record must be. */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -168,16 +196,22 @@ function shapeFault(record: unknown): string | undefined {
     // loop type-checks whatever turned up, while COMPLETENESS is decided against
     // EXPECTED_TARGETS below. Reading this loop as the Pitfall 4 violation is the
     // easy misread; the vacuity control in the spec is what tells them apart.
+    // `JSON.stringify` on the KEY, not dot-notation on it. `name` is a key of the
+    // downloaded JSON, so the raw form puts arbitrary record bytes into a message
+    // a CI step greps. `fail` neutralises the line break that makes that
+    // exploitable; quoting it here additionally keeps the offending key READABLE
+    // -- an escaped `"\n..."` names the byte an operator has to go and find,
+    // where a key collapsed to a space by `fail` alone would not.
     if (!isPlainObject(entry)) {
-      return `\`targets.${name}\` is not an object`;
+      return `\`targets[${JSON.stringify(name)}]\` is not an object`;
     }
 
     if (typeof entry['hash'] !== 'string') {
-      return `\`targets.${name}.hash\` is missing or not a string`;
+      return `\`targets[${JSON.stringify(name)}].hash\` is missing or not a string`;
     }
 
     if (!isPlainObject(entry['nodes'])) {
-      return `\`targets.${name}.nodes\` is missing or not an object`;
+      return `\`targets[${JSON.stringify(name)}].nodes\` is missing or not an object`;
     }
   }
 
@@ -234,28 +268,22 @@ function targetFault(
  */
 export function compareHashParity(records: readonly unknown[]): ParityVerdict {
   if (records.length !== 2) {
-    return {
-      ok: false,
-      reason: 'wrong-record-count',
-      detail:
-        `expected exactly 2 platform records, one per matrix leg, but got ${records.length}. ` +
+    return fail(
+      'wrong-record-count',
+      `expected exactly 2 platform records, one per matrix leg, but got ${records.length}. ` +
         'Suspect a leg that failed before its upload step, an upload whose ' +
         '`if-no-files-found` defaulted to `warn` and so produced no artifact at all, ' +
         'or a download pattern that matched nothing. The compare job runs ' +
         '`if: !cancelled()` (D-17) precisely so a missing leg arrives here as a ' +
         'FAILURE instead of vanishing as a skipped job.',
-    };
+    );
   }
 
   for (const [index, record] of records.entries()) {
     const fault = shapeFault(record);
 
     if (fault !== undefined) {
-      return {
-        ok: false,
-        reason: 'malformed-record',
-        detail: `record ${index}: ${fault}`,
-      };
+      return fail('malformed-record', `record ${index}: ${fault}`);
     }
   }
 
@@ -264,15 +292,13 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
   const [a, b] = records as readonly [HashParityRecord, HashParityRecord];
 
   if (a.meta.os === b.meta.os) {
-    return {
-      ok: false,
-      reason: 'duplicate-platform',
-      detail:
-        `both records report \`meta.os\` = \`${a.meta.os}\`, so this is not a ` +
+    return fail(
+      'duplicate-platform',
+      `both records report \`meta.os\` = \`${a.meta.os}\`, so this is not a ` +
         'cross-OS comparison. Without this clause the pair would fail CORR-03(b) ' +
         'instead, which reads as a discriminator defect when the real defect is a ' +
         'matrix leg that ran twice on the same runner image.',
-    };
+    );
   }
 
   // CORR-03(a). Iterate the EXPECTED list, NEVER `Object.keys(record.targets)`
@@ -284,27 +310,21 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
       const fault = targetFault(record, target);
 
       if (fault !== undefined) {
-        return {
-          ok: false,
-          reason: 'missing-target-hash',
-          detail: `${record.meta.os}: ${fault}`,
-        };
+        return fail('missing-target-hash', `${record.meta.os}: ${fault}`);
       }
     }
   }
 
   // CORR-03(b).
   if (a.targets[DIVERGENT_TARGET].hash === b.targets[DIVERGENT_TARGET].hash) {
-    return {
-      ok: false,
-      reason: 'integration-not-divergent',
-      detail:
-        `\`${DIVERGENT_TARGET}\` computed the SAME hash ` +
+    return fail(
+      'integration-not-divergent',
+      `\`${DIVERGENT_TARGET}\` computed the SAME hash ` +
         `${a.targets[DIVERGENT_TARGET].hash} on ${a.meta.os} and ${b.meta.os}, ` +
         'so the one declared platform discriminator is no longer discriminating. ' +
         'Suspect a deleted or re-spelled `{ "runtime": ... }` input on ' +
         '`targetDefaults.integration` (D-14 requires that string byte-identical).',
-    };
+    );
   }
 
   // CORR-03(c), plus D-21's fourth clause.
@@ -313,16 +333,14 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
     const right = b.targets[target].hash;
 
     if (left !== right) {
-      return {
-        ok: false,
-        reason: 'invariant-target-diverged',
-        detail:
-          `\`${target}\` must be IDENTICAL across platforms but diverged: ` +
+      return fail(
+        'invariant-target-diverged',
+        `\`${target}\` must be IDENTICAL across platforms but diverged: ` +
           `${a.meta.os}=${left} vs ${b.meta.os}=${right}. Localise it with ` +
           '`node capture-hashes.mjs --diff <recordA.json> <recordB.json>`, which ' +
           'partitions the two node maps into only-in-A / only-in-B / value-changed ' +
           'and diffs the merged project configuration field by field.',
-      };
+      );
     }
   }
 

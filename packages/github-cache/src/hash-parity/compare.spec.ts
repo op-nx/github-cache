@@ -368,6 +368,89 @@ describe('a malformed downloaded record is a VERDICT, never a TypeError (ASVS V5
   });
 });
 
+describe('a record cannot FORGE the success line through the failure detail', () => {
+  // `ci.yml`'s compare step pipes BOTH streams of `assert-parity.js` into one log
+  // and greps that log for the comparator's success prefix, presented there as a
+  // SECOND, INDEPENDENT signal on top of the exit code. It is only independent if
+  // the FAILURE path cannot print a line that grep matches -- and every `detail`
+  // interpolates values the DOWNLOADED RECORD controls, so a record can try. Left
+  // unfixed, the step stayed red only because `process.exitCode = 1` under
+  // `pipefail` aborts before the grep runs, which is the exit-code-alone signal
+  // D-23 calls insufficient on its own.
+  //
+  // THE ASSERTION IS PREFIX-AGNOSTIC ON PURPOSE: "the detail contains no line
+  // break", never "the detail does not contain <prefix>". A prefix-matching
+  // assertion is satisfiable by the wrong token, which is Phase 7's lesson, and
+  // it would go stale the day the prefix is re-spelled. The payload below is only
+  // the vehicle.
+  //
+  // WHAT EACH ASSERTION BELOW WAS OBSERVED RED FOR, per D-22, stated exactly
+  // rather than as a tidier symmetry it does not have. The two code halves are
+  // `fail`'s CR/LF collapse and `shapeFault`'s `JSON.stringify` on the key, and
+  // they were mutated one at a time:
+  //   - collapse disabled -> the `meta.os` vector goes RED (that value reaches
+  //     the detail through no escape) and the target-KEY vector stays green.
+  //   - quoting reverted -> both vectors stay green on the ONE-LINE assertion,
+  //     because the collapse catches the key too. What the quoting uniquely buys
+  //     is the DIAGNOSTIC, so the third test is the one that goes red, on
+  //     `record 0: \`targets. hash-parity: PARITY OK\` is not an object` -- one
+  //     line, and no longer naming which key.
+  // So the ONE-LINE property is defended twice over for a target key and once for
+  // `meta.os`, and the escaping is defended only by the third test. A reader
+  // deleting that test is deleting the only cover the quoting has.
+  //
+  // A THIRD half is not pinnable here at all: the `^` anchor on the grep, without
+  // which the payload still matches as a MID-LINE substring of the failure line.
+  // `ci.yml` is not a declared `test` input (PARITY-08, deferred to Phase 9), so
+  // a spec asserting on its content would serve a stale cached PASS.
+  const PAYLOAD = '\nhash-parity: PARITY OK';
+
+  const VECTORS: readonly (readonly [
+    string,
+    ParityFailureReason,
+    (draft: Record<string, unknown>) => void,
+  ])[] = [
+    [
+      'a target KEY carrying the payload',
+      'malformed-record',
+      (draft) => {
+        draft['targets'] = { [PAYLOAD]: 'not-an-object' };
+      },
+    ],
+    [
+      '`meta.os` carrying the payload',
+      'missing-target-hash',
+      (draft) => {
+        child(draft, 'meta')['os'] = PAYLOAD;
+        delete child(draft, 'targets')['typecheck'];
+      },
+    ],
+  ];
+
+  for (const [label, reason, mutate] of VECTORS) {
+    it(`reports ONE line, and the named reason, for ${label}`, () => {
+      const [a, b] = validPair();
+      mutate(asDraft(a));
+
+      const verdict = compareHashParity([a, b]);
+
+      expect(reasonOf(verdict)).toBe(reason);
+      expect(detailOf(verdict)).not.toMatch(/[\r\n]/);
+    });
+  }
+
+  it('still NAMES the offending target key, escaped rather than swallowed', () => {
+    // Neutralising must not cost the diagnostic, or the fix trades a false green
+    // for an unactionable red. The CR/LF collapse alone would render the payload
+    // as a bare space and leave an operator guessing WHICH key; quoting it puts
+    // the escaped bytes in the message.
+    const [a, b] = validPair();
+    asDraft(a)['targets'] = { [PAYLOAD]: 'not-an-object' };
+
+    expect(detailOf(compareHashParity([a, b]))).toContain('\\n');
+  });
+});
+
 describe('the comparator constants are content-pinned, never snapshotted', () => {
   // Explicit deep-equality, the `sync-gate.spec.ts:208-217` pin. EXPECTED_TARGETS
   // must stay in lockstep with `capture-hashes.mjs`'s TARGETS: a drift here makes

@@ -701,6 +701,21 @@ jobs:
   # assert-parity.ts), deliberately colour-free and not Nx-formatted, so no reporter
   # change can break the match.
   #
+  # THE `^` ANCHOR IS LOAD-BEARING, not tidiness, and calling this signal
+  # INDEPENDENT is only true WITH it. Every failure detail the comparator prints
+  # interpolates values the DOWNLOADED RECORD controls (a target key, meta.os, a
+  # hash), and both streams are piped into the one log this grep reads. So a record
+  # could carry the success prefix as record CONTENT and have the FAILURE path print
+  # it: unanchored, it matches as a mid-line substring of the `PARITY FAILED` line,
+  # and with a line break in the injected value it matches as a whole line. The
+  # anchor closes the substring half -- the failure line begins `hash-parity: PARITY
+  # FAILED`, so `^hash-parity: PARITY OK` cannot match it. The line-break half is
+  # closed in code, at the single choke point `compare.ts:fail` documents, and pinned
+  # by `compare.spec.ts`. NEITHER HALF SUFFICES ALONE; do not "simplify" either away.
+  # Until both landed this signal was not independent at all -- the step was red only
+  # because a non-zero exit under pipefail aborts before the grep runs, which is
+  # exactly the exit-code-alone verdict D-23 forbids relying on.
+  #
   # NO SPEC ASSERTS ON THIS FILE, so this comment block is the only place the
   # rationale can live -- which is why it carries so much of it. ci.yml is NOT in
   # nx.json's `test` inputs (only cleanup.yml is, nx.json:68), so a spec asserting on
@@ -739,7 +754,7 @@ jobs:
         run: |
           set -euo pipefail
           node packages/github-cache/dist/hash-parity/assert-parity.js hash-parity-records 2>&1 | tee hash-parity.log
-          grep -q 'hash-parity: PARITY OK' hash-parity.log
+          grep -q '^hash-parity: PARITY OK' hash-parity.log
 
   # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
   # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the

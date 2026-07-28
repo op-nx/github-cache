@@ -458,13 +458,19 @@ same-OS claim at `ci.yml:1053-1061` (Phase 10's OBS-05), any live O1-O4 proof
   and VER-07, and both argue only from gitignore and file-map grounds; neither
   measured Nx's behaviour toward a stray file in that directory.
 
-  **Do not treat D-01 as settled until this is checked.** It is cheap to check --
-  place a `.tar` under `.nx/cache`, run `nx run-many -t build` twice, and confirm the
-  file survives, the hash does not move, and no Nx warning appears. If it does not
+  **Do not treat D-01 as settled until this is checked, and `gsd-phase-researcher`
+  OWNS the check** -- it is an empirical question with a pre-stated falsifiable
+  condition, not a maintainer preference, so it belongs in RESEARCH.md and not in a
+  checkpoint. The check: place a `.tar` under `.nx/cache`, run `nx run-many -t build`
+  twice, and confirm the file survives, the task hash does not move between runs, and
+  no Nx warning appears. Record the Nx version with the result (Phase 8's PARITY-06
+  discipline).
+
+  **If it survives, D-01 stands and U-01 closes in RESEARCH.md.** If it does NOT
   survive, the options open up to a subdirectory (`.nx/cache/github-cache/`, still
   gitignored, still `nx reset`-cleared) or another gitignored workspace-relative
-  directory -- but that is a re-pricing of a locked decision, so re-open it with the
-  maintainer rather than auto-selecting.
+  directory -- and THAT is a re-pricing of a locked decision (D2-04), so stop and
+  re-open it with the maintainer rather than auto-selecting a fallback.
 
 </decisions>
 

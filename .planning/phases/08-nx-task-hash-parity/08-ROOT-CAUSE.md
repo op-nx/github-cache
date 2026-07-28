@@ -1367,6 +1367,376 @@ rediscovering it.
 
 ---
 
+## Root cause
+
+The question this section answers: **both of D-08's two, separately.** It is the synthesis of every
+measurement above, and it is derived from what plan 08-03 measured at the anchor commit
+`a9a3895a15700956f1a98e5532da2c3f5b245efe` -- never from what `08-RESEARCH.md` predicted at `c61ef40`.
+
+### Axis 1 -- STALENESS (observation point 1 versus observation point 2)
+
+**The node:** exactly ONE moves, and it is the same one on all five targets --
+`@op-nx/github-cache:ProjectConfiguration`, cold `3473609128188475433` versus warm-preexisting
+`17377863611053487263`. `only-in-A` and `only-in-B` are EMPTY on every target; `same` runs 427-443.
+
+**The field inside it:** `targets.typecheck.outputs`. The merged-node field diff reports six
+`only-in-B` entries -- `targets.typecheck.outputs.1` through `.6` -- and 158 identical fields with
+ZERO `value-changed` entries anywhere else. The warm-preexisting graph carries the SEVEN-entry list;
+the cold graph carries the ONE-entry list. `metadata` is not hashed and did not differ either.
+
+**This axis is staleness-of-persisted-inference, not freshness-of-computation.** That is a
+CORRECTION to the wording `.planning/ROADMAP.md` SC1 and `REQUIREMENTS.md` PARITY-01 both use, and
+plan 08-01 already recorded it with the original quoted -- see `## The second axis is STALENESS, not
+freshness` above. `cold != warm` is false as a general statement: cold and warm agree when
+`.nx/workspace-data` is FRESH. What differs is a long-lived directory holding an inference result
+that no longer matches the tree.
+
+**The persisted plugin cache does not self-heal.** The stale entry is not corrected by the next run
+that reads it -- the file hash still validates, so nothing re-derives what that hash implies. This
+is why point 2 had to be captured before anything else in the session, why the cold recipe redirects
+`NX_WORKSPACE_DATA_DIRECTORY` instead of deleting anything, and why the fix landing in 08-05 will
+NOT retroactively repair a developer's box. That last consequence is Phase 12's, and it is written
+down in the hand-off section below rather than left to be rediscovered.
+
+### Axis 2 -- OPERATING SYSTEM (observation point 4 versus observation point 3, both cold)
+
+**Read the buckets in the prescribed order, because the two imply DIFFERENT fix routes:**
+
+- **`only-in-A` / `only-in-B`: ZERO entries, on every one of the five targets.** Entries here would
+  mean the two legs saw a different SET of external-dependency nodes -- the shape a
+  platform-conditional optional package set takes -- and the route would then be to NARROW the
+  affected target's declared `externalDependencies`. That bucket is empty, so that route is NOT the
+  one. The external node set is derived from `package-lock.json`, which both legs parse identically,
+  rather than from what `npm ci` materialised on disk. Two independent 400-plus-entry node sets
+  agreeing exactly is also the strongest available non-vacuity signal for the diff itself.
+
+- **`value-changed`: exactly ONE node on `build`, `typecheck`, `test` and `lint`**, and it is the
+  same node with the same two values on every one of them:
+  `@op-nx/github-cache:ProjectConfiguration`, `linux = 17377863611053487263` versus
+  `win32 = 3473609128188475433`. A `value-changed` entry on the merged project configuration means
+  inference produced a different merged node on the two operating systems, and the route is a
+  `targetDefaults` entry that normalises the differing field regardless of what inference produced.
+  **That is the only route the measurement supports, and it is the one the next section proposes.**
+
+- **`integration` carries a SECOND `value-changed` node**, `runtime:node -p process.platform`. That
+  is the declared CORR-04 discriminator doing exactly the job D-14 keeps it for. It is the only
+  target with a second changed node and the only target that is SUPPOSED to diverge.
+
+**The field inside the node, again:** `targets.typecheck.outputs` -- SEVEN entries on Linux, ONE on
+Windows, with 158 other fields byte-identical and zero `value-changed` fields anywhere in the merged
+node. The same field as the staleness axis.
+
+> **Research prediction, quoted beside the measurement -- NOT this record's numbers.**
+> `08-RESEARCH.md`'s Finding 3 named a Windows separator sensitivity in `@nx/js/typescript`'s
+> project-reference classification as "the strongest available lead": `isExternalProjectReference`
+> terminates on a literal string comparison of two absolute paths, TypeScript hands back
+> forward-slash absolute paths on Windows while Nx works in backslashes, the two internal references
+> are therefore misclassified as EXTERNAL, and `getOutputs()` yields ONE output instead of SEVEN.
+> RESEARCH stated plainly that this was "**not yet proven to be the cross-OS cause** -- the Linux leg
+> was not measured", and its assumption A1 priced the cost of the lead being wrong as "one wrong
+> first hypothesis, not a wrong design".
+>
+> **The Linux leg now exists, and the prediction HOLDS.** Cold Linux yields SEVEN, cold Windows
+> yields ONE, reproduced on two independent Windows arm64 machines. Predicted node, predicted field,
+> predicted direction, all confirmed. Two qualifications keep the claim honest: this record measures
+> the OUTCOME, so the plugin-source mechanism remains RESEARCH's citation rather than this record's;
+> and RESEARCH's own `### How to diff two maps usefully` predicted the likeliest cross-OS shape to be
+> a differing external-dependency SET, which the empty `only-in-*` buckets REFUTE. A research map
+> that was right about the node and wrong about the bucket is worth more in this record than one
+> quietly reported as uniformly correct.
+
+### What the two axes have in common, and what they do not
+
+**In common: the same node, the same field, and literally the same pair of values.**
+
+| Comparison | Value A | Value B |
+|------------|---------|---------|
+| Windows cold vs Windows warm-preexisting (staleness) | `3473609128188475433` | `17377863611053487263` |
+| Windows cold vs Linux cold (OS) | `3473609128188475433` | `17377863611053487263` |
+
+A stale Windows graph does not imitate a cold Linux graph -- it emits literally the value a cold
+Linux graph emits, because both carry the SEVEN-entry form of the same field. One field, two ways to
+arrive at it. That is the mechanical reason the roadmap could describe the second axis as one "that
+perfectly masquerades as" the first, and it is measured rather than argued: a WARM Windows
+workstation and a COLD `ubuntu-24.04-arm` runner are byte-identical on `build`, `test` AND `lint`,
+with 164 of 164 merged-configuration fields the same.
+
+**Not in common: the direction, the cure, and the reachability.** The OS axis is a property of the
+CONFIGURATION and is addressable by `nx.json`. The staleness axis is a property of a MACHINE's
+persisted state and is not -- `nx reset` is its only known cure, and a cure is not a control. The
+two coincide here only because the field they both move is the same one; closing the OS axis is
+predicted to close the staleness axis as a side effect, and that prediction is labelled as one in
+`## Pre-recorded: this phase's fix commits are a LEGITIMATE all-MISS rotation window` below.
+
+**A third variance source exists and is NEITHER axis.** `typecheck` carries FOUR distinct values
+across the four observation points, and the residue after both axes is the
+`dependentTasksOutputFiles` node hashing the CONTENT of `packages/github-cache/dist/`. It is
+root-caused in `## D-11: typecheck's third variance source, ROOT-CAUSED` above: two binary variables
+(outputs classification, `dist/` populated), four combinations, four values, no residue. It is a
+property of what has run in a workspace rather than of the config, so `nx.json` does not close it.
+
+### The D-09 gate, stated explicitly
+
+**No difference in this section is attributed to the operating system without the staleness axis
+having been pinned first.** The two readings that pinned it are observation point 1 (workstation,
+`graphState: cold`, `workspaceDataEntries: 0`) and observation point 2 (same workstation,
+`graphState: warm`, `workspaceDataEntries: 16`) -- same machine, same OS, same commit, same Nx, same
+Node, same install mode, clean tree on both sides, graph state the only variable. Having measured
+what staleness alone does, the cross-OS reading is then taken between two points that BOTH record
+`graphState: cold` with `workspaceDataEntries: 0`, the same `installMode`, and the same
+`nxVersion`. The pair in `STATE.md` attributed to "ubuntu CI" versus "windows CI" satisfied none of
+that and is disqualified in `## Every prior cross-OS measurement in this repo read a confounded
+variable (D-09)` above.
+
+**D-10's search ordering is SUPERSEDED BY MEASUREMENT, not by argument**, and the supersession is
+recorded with its evidence in `### D-10's search ordering is SUPERSEDED, and this is the correction`
+above: D-10 directs the investigation to start at `External` and then `ProjectFileSet`, and both
+buckets are provably identical at the anchor -- zero `only-in-*` and zero `value-changed` among the
+400-plus `npm:` keys on every target, and no fileset node moved either. Both remain reasonable
+priors for a different workspace; they are simply not what is happening here.
+
+---
+
+## Proposed fix
+
+**Written BEFORE the fix exists.** Plan 08-05 applies it; this section names the route so that "we
+changed X and the hashes agreed" is evidence rather than a story fitted to a result. The git-history
+listings in `## The ordering proof` below are what make that claim checkable.
+
+### The constraints this proposal is bounded by
+
+| Constraint | Source | What it forbids |
+|------------|--------|-----------------|
+| Fixes land in `nx.json` `targetDefaults` ONLY | D-12 | any other fix location, absent a U-01 escalation |
+| No `project.json` | D-12, Phase 7 D-02 | the workspace is deliberately free of them |
+| No plugin-option patching as a FIRST resort | D-12 | patching `@nx/js/typescript` internals or its options to route around inference |
+| Prefer NARROWING inputs over adding them | D-13 | widening an input list to paper over a divergence |
+| `integration`'s discriminator stays BYTE-IDENTICAL | D-14, CORR-04 | re-spelling `{ "runtime": "node -p process.platform" }` in any way |
+
+The last one is worth stating as more than a table row. After VER-03 that runtime input is the SOLE
+mechanism separating OS-sensitive targets from OS-invariant ones. Phase 8 does not re-spell it, does
+not relocate it and does not "improve" it -- it only asserts that it is the ONLY one. Touching it is
+a Core-Value regression, and `nx-target-inputs.spec.ts:241-260` already guards the "only one" half.
+
+### Route for the ONE diverging node the measurement named
+
+The diverging node is `@op-nx/github-cache:ProjectConfiguration` and the diverging field is
+`targets.typecheck.outputs`. The route, naming the key:
+
+**Add `targetDefaults.typecheck.outputs` to `nx.json`.**
+
+`nx.json` currently declares `targetDefaults.typecheck.inputs` (`nx.json:133-145`) and no `outputs`
+for that target. The shape precedent for adding one is `targetDefaults.lint` (`nx.json:147-148`),
+where `outputs` sits first, before `inputs`.
+
+**The evidence that a `targetDefaults` entry reaches this node is already in the record, in-repo and
+measured.** The merged node's `targets.typecheck.inputs` field is among the 158 fields that are
+byte-identical on BOTH axes -- identical cold versus warm-preexisting, and identical Linux versus
+Windows -- while `targets.typecheck.outputs`, the field with no `targetDefaults` entry, is the one
+that moves. `targetDefaults` inputs REPLACE rather than merge (recorded in PARITY-08's own text), so
+the declared list is what lands in the merged node regardless of what the plugin inferred. That is a
+live demonstration that a `targetDefaults` entry normalises ITS field of the merged node.
+
+Corroborating but weaker: `targetDefaults.lint.outputs` is declared as `[]` (`nx.json:148`) and the
+merged node's `lint` outputs measure `[]` identically on both legs (the D-35 table above). It is
+weaker because `@nx/eslint` may infer `[]` anyway, so it cannot separate "declared" from "inferred"
+-- it is consistent with the hypothesis rather than independent proof of it.
+
+**This is a HYPOTHESIS with a named, cheap confirming experiment, not a conclusion.** The experiment
+is one `nx.json` line plus one re-measurement, in both local graph states and on both CI legs. Its
+pass and fail conditions are pre-committed in the U-01 section immediately below, before it is run.
+`08-RESEARCH.md`'s assumption A2 states the same claim and the same escalation path.
+
+### The VALUE that entry must carry
+
+**The SEVEN-entry list, verbatim:**
+
+```jsonc
+[
+  "{projectRoot}/tsconfig.tsbuildinfo",
+  "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}",
+  "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}.map",
+  "{projectRoot}/dist/tsconfig.lib.tsbuildinfo",
+  "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}",
+  "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}.map",
+  "{projectRoot}/out-tsc/vitest/tsconfig.spec.tsbuildinfo"
+]
+```
+
+**The source of that value is the enumeration in `## What the typecheck command actually writes
+(Research A6, open question 2)` above, not either candidate list's entry count.** The target's actual
+command, `tsc --build tsconfig.json --emitDeclarationOnly` at `cwd packages/github-cache`, was run
+on a cleaned tree and wrote 136 files. The seven-entry list covers **136 of 136**. The one-entry list
+covers **0 of 136**. Entry 1 covers zero at this configuration and is kept anyway, deliberately, for
+the two reasons recorded there -- it is what the plugin itself emits, and an output pattern matching
+nothing is inert while a dropped entry that a future tsconfig WOULD populate is not.
+
+**Why choosing by measurement rather than by stability matters here.** `outputs` is load-bearing
+beyond the hash: it is what Nx CACHES and RESTORES. Pinning a list that is merely STABLE rather than
+CORRECT -- the one-entry list is perfectly stable -- would make `typecheck` cache none of its
+declaration output and restore nothing on a hit, while still reporting a cache hit. That is a
+correctness regression in the very cache this project exists to make trustworthy, and it is exactly
+the inversion `08-RESEARCH.md`'s assumption A6 warned about without checking.
+
+### The external-dependency route: named, and NOT taken
+
+For completeness, because the two buckets imply different routes and a reader must be able to see
+which one was ruled out by measurement rather than by preference: had the cross-OS diff produced
+`only-in-A` / `only-in-B` entries among the `npm:` nodes, the route would have been to NARROW the
+affected target's declared `externalDependencies`, naming the target and the packages. All five
+targets already declare an `externalDependencies` entry (`nx.json:77-84`, `:99`, `:130`, `:144`,
+`:154-161`), so that route would have been an EDIT rather than an addition. **It is not taken,
+because those buckets are empty on all five targets.** The route is recorded so that a future
+divergence of that shape has a written starting point.
+
+### Where the rationale lives, since `nx.json` cannot hold it
+
+`nx.json` is strict JSON and carries no comments, so per D-13 each fix's rationale lock lives in the
+guard spec that pins it. **That spec is `packages/github-cache/src/nx-target-inputs.spec.ts`, and
+the pin must EXTEND that file rather than being re-authored elsewhere** -- re-authoring creates a
+second copy to drift, which is the failure mode `CONVENTIONS.md`'s single-source-plus-drift-guard
+pattern exists to prevent.
+
+That file already carries this exact pattern, twice over:
+
+- `:229-234` pins `targetDefaults.lint.outputs` to `[]` with the comment above it explaining WHY
+  that value -- the value in `nx.json`, the reason in the spec. A `targetDefaults.typecheck.outputs`
+  pin is the same shape with a longer list and a longer reason.
+- `:269-273` asserts that `{workspaceRoot}/nx.json` is a declared `test` input, which is what stops
+  the whole file serving a stale cached PASS after an `nx.json` edit. The new pin inherits that
+  protection for free by living in the same file.
+
+The reason text the new pin must carry, so 08-05 does not have to re-derive it: the list is the
+plugin's own seven-entry emission; it covers 136 of 136 files the target actually writes; entry 1 is
+inert at this configuration and is kept deliberately; and the entry exists to make the merged node's
+`typecheck.outputs` field OS-invariant, which is the entire cross-OS divergence.
+
+---
+
+## U-01: the condition that would make it live
+
+**Written BEFORE the experiment is run, so the result cannot be reinterpreted after it is known.**
+
+### U-01, restated in full
+
+> **U-01: Whether PARITY-03's byte-identical goal is reachable through `nx.json` alone.** The root
+> cause is unknown by design -- that is what D-06 exists to establish. If the divergence turns out to
+> live inside plugin inference that `targetDefaults` cannot override, then D-12's "fixes land in
+> `nx.json` only" is not a sufficient fix location, and the options open up to: pinning the inferred
+> target explicitly, patching plugin options, or escalating upstream. IMPACT is HIGH -- O1 and O4
+> both depend on PARITY-03, and the choice would freeze how this workspace configures targets.
+> CONFIDENCE is NOT HIGH -- there is no evidence yet either way. **Do not treat D-12 as settled if
+> the root-cause record lands outside its reach.** Re-open this with the maintainer at that point
+> rather than auto-selecting a fix location.
+
+The measurement has moved the odds and has NOT closed it. The divergence does live inside plugin
+inference -- U-01's literal trigger condition -- but it lands on a field a `targetDefaults` entry
+addresses directly, which is why D-12 is still the proposed route. That is a reasoned prior, not a
+result. The conditions below are what turn it into one.
+
+### What would CONFIRM the proposal (all four must hold)
+
+Measured after `targetDefaults.typecheck.outputs` lands and with nothing else changed:
+
+- **C1 -- local, both graph states, one commit.** The `@op-nx/github-cache:ProjectConfiguration`
+  node hash is IDENTICAL between a cold capture and a warm-preexisting capture on the workstation.
+- **C2 -- both CI legs, both cold, one commit.** That same node hash is IDENTICAL between
+  `ubuntu-24.04-arm` and `windows-11-arm`.
+- **C3 -- the consequence.** The cross-OS diff for `build`, `test` and `lint` shows ZERO
+  `value-changed` nodes and ZERO `only-in-*` entries, so those three hashes are byte-identical
+  across the legs.
+- **C4 -- the control still works.** `integration` still DIVERGES cross-OS, and its diff still shows
+  `runtime:node -p process.platform` as a changed node. A fix that accidentally silenced the
+  discriminator would satisfy C1-C3 and be a CORR-04 regression.
+
+### What would make U-01 LIVE (any ONE is sufficient)
+
+- **L1.** The `ProjectConfiguration` node still differs between cold and warm-preexisting locally,
+  at one commit, after the entry lands.
+- **L2.** The node still differs between the two cold CI legs, at one commit, after the entry lands.
+- **L3.** The merged node's `targets.typecheck.outputs` does not take the declared value on at least
+  one of the two operating systems -- that is `targetDefaults` demonstrably failing to reach the
+  field, which is A2 being false.
+- **L4.** The node converges, but a DIFFERENT node or field starts diverging cross-OS in something
+  `targetDefaults` cannot reach: inference internals, a plugin option, or the plugin's own path
+  handling.
+
+### What is explicitly NOT a trigger
+
+Pre-committed here so that a known, already-root-caused difference cannot be re-labelled as U-01
+going live, and equally so that U-01 cannot be waved away by pointing at one of these:
+
+- **N1.** `typecheck` differing between a workstation that has BUILT and a runner that has not. That
+  is D-11's build-output variable, root-caused above, orthogonal to both axes, and explicitly NOT
+  closed by this fix. It is a DOCS-07 item, not a U-01 trigger.
+- **N2.** An all-MISS push immediately after the fix commit. That is the pre-recorded legitimate
+  rotation window; `{workspaceRoot}/nx.json` is a declared input of every target, so one edit rotates
+  all five hashes at once by design.
+- **N3.** `integration` diverging cross-OS. That is C4, the intended behaviour.
+
+### The commitment, if U-01 goes live
+
+**Plan 08-05 STOPS.** It does not improvise a second fix location, does not reach for a plugin
+option because it is nearby, and does not widen an input list to make the symptom disappear. It
+records the failing condition with its measurement and re-opens the fix location with the
+maintainer. The options that open up are the ones U-01 itself names: pinning the inferred target
+explicitly, patching plugin options, or escalating upstream. Which of those is taken is a
+maintainer decision with HIGH impact on how this workspace configures targets, and D-12 is not
+settled enough to make it automatically.
+
+**Upstream reporting is a legitimate FOLLOW-UP and does not belong in this phase's diff.** If the
+measurement supports a report of the `@nx/js/typescript` path-comparison behaviour -- and Finding 3's
+mechanism plus this record's two-leg confirmation is a strong basis for one -- it is filed as its own
+piece of work, because a phase whose entire premise is a clean measure-then-fix ordering does not
+also carry an unrelated upstream patch.
+
+---
+
+## Hand-off to Phase 12 (DOCS-07)
+
+DOCS-07's portability checklist is deferred to Phase 12 and its items are DERIVED from this record.
+They are written out here explicitly so Phase 12 inherits a list rather than a re-read.
+
+1. **A warm local box does NOT compute the hash cold CI published.** Measured at the anchor: NO on
+   all five targets, same machine, same OS, same commit, same Nx, same Node, same install mode --
+   graph state the only variable. The developer-facing consequence is that a box carrying a stale
+   persisted inference misses every remote entry CI produced, and no amount of cross-OS parity
+   changes that. **The mitigation is a full `nx reset`.**
+
+2. **The reset is needed AFTER the fix commit, not only before.** The persisted plugin cache on
+   every existing developer machine holds an inference result that will NOT self-heal when 08-05's
+   `nx.json` change lands -- the file hash still validates, so nothing re-derives what it implies. A
+   developer who does nothing after pulling the fix keeps computing the pre-fix value. This is the
+   single most likely way for the fix to look broken while being correct.
+
+3. **Deleting the repository's `.nx/` directory does NOT produce a cold state.** The native file
+   cache resolves under the OS temp directory, OUTSIDE the repository
+   (`nx-native-file-cache-<hash>`), so a recipe built on `rm -rf .nx/` is measuring something it
+   cannot name. Related and equally load-bearing for anyone working in a git worktree: at Nx 23.1.0
+   `sharedCacheDirectory()` resolves the MAIN worktree root, so a worktree's "cold" reading is not
+   cold. See `## SURFACED, NOT FIXED` below.
+
+4. **Document the FULL `nx reset`, not `nx reset --onlyWorkspaceData`.** The narrow form can fail on
+   Windows with `EPERM, Permission denied` because it does not stop the daemon (only `--onlyDaemon`
+   and a full `nx reset` call `killDaemon()`) and the daemon holds the workspace-data SQLite file
+   open. A recipe that runs the narrow reset and carries on leaves a WARM graph behind a claim of
+   cold.
+
+5. **For anyone reproducing the measurement rather than repairing a box, use the two environment
+   variables instead of destroying state.** `NX_WORKSPACE_DATA_DIRECTORY` and
+   `NX_NATIVE_FILE_CACHE_DIRECTORY`, pointed at a temporary directory, produce a cold state by
+   construction -- an empty directory is cold and its emptiness is readable BEFORE the measurement,
+   whereas `nx reset` is an operation that can fail. It is also non-destructive, which matters
+   because the stale graph is itself a measurement subject and cannot be regenerated once cleared.
+
+6. **A developer who has BUILT computes a different `typecheck` hash from CI, and 08-05's fix does
+   NOT close it.** `typecheck` declares a `dependentTasksOutputFiles` input (`nx.json:137`) that
+   hashes the CONTENT of `packages/github-cache/dist/`; both CI legs deliberately skip the build, so
+   their `dist/` is absent. This is a property of what has run in a workspace, not of the config, so
+   no `nx.json` change reaches it. Documented alongside the reset note, not instead of it.
+
+---
+
 ## SURFACED, NOT FIXED: `AGENTS.md`'s per-worktree Nx cache claim is false at Nx 23.1.0
 
 Recorded with its citation and deliberately left unfixed -- it is a documentation defect outside

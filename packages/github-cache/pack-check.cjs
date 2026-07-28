@@ -178,6 +178,20 @@ function main() {
     }
   }
 
+  // `process.exitCode` plus a return, NEVER `process.exit()`. On POSIX both
+  // std streams are ASYNCHRONOUS when they are PIPES, and `process.exit()` is
+  // documented to discard pending writes -- so the failure path could lose exactly
+  // the enumerated LEAK: / MISSING: list that makes a red job actionable. This
+  // guard runs as `npm run pack:check` on ubuntu-24.04-arm, where the runner
+  // captures step output through a pipe, so that is the live configuration and not
+  // a hypothetical. `assert-parity.ts:34-38` reasons about the same hazard and
+  // avoids it the same way; this file predates that reasoning.
+  //
+  // The exit code is still the gate: `main()` is straight-line, so setting
+  // `exitCode` and returning is equivalent to exiting, minus the truncation. The
+  // failure path was re-verified as exit 1 with the message intact after this
+  // change -- an unproven `exitCode` assignment would be a guard that goes green
+  // forever, which is worse than the truncation it replaces.
   if (problems.length > 0) {
     process.stderr.write(
       `pack-check: the ${PACKAGE_NAME} tarball file list is WRONG:\n` +
@@ -188,7 +202,9 @@ function main() {
         '(dogfood-stays-local applies inside dist/, not just at the repo ' +
         'root).\n',
     );
-    process.exit(1);
+    process.exitCode = 1;
+
+    return;
   }
 
   process.stdout.write(
@@ -196,7 +212,6 @@ function main() {
       'the consumer subset of dist/ + LICENSE + README.md + package.json only; ' +
       `no internals leaked (${DIST_SUBTREE_LIST} excluded).\n`,
   );
-  process.exit(0);
 }
 
 main();

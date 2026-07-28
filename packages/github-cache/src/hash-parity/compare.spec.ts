@@ -149,8 +149,15 @@ describe('CORR-03(a): exactly two platform records (D-20)', () => {
   // Zero is the "download pattern matched nothing" case, one is the "a leg
   // failed before upload" case, three is a merge-multiple collision. All three
   // are the SAME defect from the reader's point of view: the comparison did not
-  // have two legs to compare, and `if: always()` (D-17) is what makes them
-  // reachable here at all instead of arriving as a skipped job.
+  // have two legs to compare, and the compare job's `if:` expression (D-17) is
+  // what makes them reachable here at all instead of arriving as a skipped job.
+  //
+  // That expression is `!cancelled()`, NOT the `always()` D-17 names -- see the
+  // job's rationale block in ci.yml for why the narrower form was chosen. The
+  // one-record case has been observed on a REAL runner (run 30357290164, with the
+  // windows leg at conclusion `failure`), so the reachability is measured rather
+  // than assumed. Naming the wrong expression here would send whoever debugs a red
+  // gate looking for a string the workflow does not contain.
   for (const count of [0, 1, 3]) {
     it(`FAILS with wrong-record-count for ${count} record(s)`, () => {
       const [a, b] = validPair();

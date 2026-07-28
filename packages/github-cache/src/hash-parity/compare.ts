@@ -242,8 +242,8 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
         'Suspect a leg that failed before its upload step, an upload whose ' +
         '`if-no-files-found` defaulted to `warn` and so produced no artifact at all, ' +
         'or a download pattern that matched nothing. The compare job runs ' +
-        '`if: always()` (D-17) precisely so a missing leg arrives here as a FAILURE ' +
-        'instead of vanishing as a skipped job.',
+        '`if: !cancelled()` (D-17) precisely so a missing leg arrives here as a ' +
+        'FAILURE instead of vanishing as a skipped job.',
     };
   }
 

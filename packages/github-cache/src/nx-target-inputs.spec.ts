@@ -159,6 +159,44 @@ describe('typecheck declares the outputs its command actually writes (PARITY-01,
   // pattern matching nothing is inert while dropping an entry a future tsconfig
   // WOULD populate is not.
   //
+  // THREE OF THESE SEVEN ENTRIES ARE ALSO `build`'s OUTPUTS, and that overlap is
+  // ACCEPTED rather than unnoticed. Measured on this tree, not inferred: Nx
+  // resolves `build.outputs` to
+  // `["{projectRoot}/dist/**/*.{js,cjs,mjs,jsx,d.ts,d.cts,d.mts}{,.map}",
+  // "{projectRoot}/dist/tsconfig.lib.tsbuildinfo"]`, so entries 2, 3 and 4 above
+  // are subsets of it -- 31 `.d.ts` + 31 `.d.ts.map` + 1 buildinfo = 63 of
+  // `typecheck`'s 136 output files declared as outputs of TWO cached targets in
+  // one project, on a `dependsOn` edge (`typecheck` dependsOn `build`).
+  //
+  // The sharp end is the shared `dist/tsconfig.lib.tsbuildinfo`. `build` runs
+  // `tsc --build tsconfig.lib.json` and writes it with `emitDeclarationOnly:
+  // false`; `typecheck` runs `tsc --build tsconfig.json --emitDeclarationOnly` and
+  // writes the same path with `true`. Two cached targets own one incremental-state
+  // file and write mutually inconsistent contents, and because `typecheck` depends
+  // on `build` its restore is always LAST -- leaving a buildinfo asserting "no JS
+  // emitted" beside the 31 `.js` files `build` emitted.
+  //
+  // WHY THAT IS NOT DATA LOSS: `tsc` fingerprints its options INTO the buildinfo,
+  // so a later `build` cache MISS detects the mismatch and rebuilds, and a `build`
+  // cache HIT restores build's own consistent copy. The residual cost is a
+  // declaration re-emit plus 63 files duplicated across two cache entries.
+  //
+  // WHY THE ENTRY IS NOT DROPPED, which is the obvious fix and is worse:
+  //   1. `build.outputs` is PLUGIN-INFERRED -- nx.json declares no
+  //      `targetDefaults.build.outputs` -- so the overlap is `@nx/js/typescript`'s
+  //      OWN inference on both targets, not something this override introduced.
+  //      Keeping the seven verbatim REPRODUCES the plugin; dropping one makes this
+  //      pin diverge from it, which is precisely what the paragraph above says the
+  //      verbatim list exists to avoid.
+  //   2. It would not fix the stated cost. Dropping only the buildinfo leaves 62 of
+  //      the 63 files still shared, so the duplication is untouched.
+  //   3. It would leave `typecheck` declaring 135 of the 136 files it writes -- an
+  //      output the target produces and does not cache, the same incompleteness the
+  //      enumeration above was run to avoid.
+  // The real fix is upstream, in how the plugin infers these two targets' outputs;
+  // it is recorded as an accepted residual here, alongside the OS-dependent
+  // classification `08-ROOT-CAUSE.md` hands to the same possible upstream report.
+  //
   // WHY THE ENTRY EXISTS AT ALL: this one field is the entire cross-OS
   // divergence. `@nx/js/typescript` infers the seven-entry list on Linux and the
   // one-entry list on Windows, so the merged

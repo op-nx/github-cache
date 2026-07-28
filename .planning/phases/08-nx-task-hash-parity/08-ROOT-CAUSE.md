@@ -1034,6 +1034,67 @@ is inert for caching, whereas dropping an entry that a future tsconfig change WO
 Recorded here so that the inert entry is a known, deliberate choice rather than something a later
 reader mistakes for an oversight.
 
+### CORRECTION (code review WR-02): this rationale was SILENT on the `build` overlap
+
+The section above qualifies entry 1 and nothing else. It never mentions that **three of the seven
+entries are also `build`'s declared outputs**, which is the one substantive gap the code review found
+in the whole `outputs` argument. Recorded as a correction with its measurement rather than edited in
+silently, per this record's convention.
+
+**Measured on this tree, at the review-fix commit.** Nx resolves `build.outputs` to:
+
+```jsonc
+[
+  "{projectRoot}/dist/**/*.{js,cjs,mjs,jsx,d.ts,d.cts,d.mts}{,.map}",
+  "{projectRoot}/dist/tsconfig.lib.tsbuildinfo"
+]
+```
+
+Three of `typecheck`'s seven entries are subsets of that:
+
+| Entry | Files here | Also `build`'s? |
+|-------|-----------|-----------------|
+| `{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}` | 31 | YES |
+| `{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}.map` | 31 | YES |
+| `{projectRoot}/dist/tsconfig.lib.tsbuildinfo` | 1 | YES |
+| **overlap** | **63 of 136** | |
+
+So 63 of `typecheck`'s 136 output files are declared as outputs of TWO cached targets in one
+project, on a `dependsOn` edge (`typecheck` dependsOn `build`, inferred -- see the D-11 correction
+below).
+
+**The sharp end is the shared `dist/tsconfig.lib.tsbuildinfo`, and it is real.** `build` runs
+`tsc --build tsconfig.lib.json` and writes it with `"emitDeclarationOnly": false`; `typecheck` runs
+`tsc --build tsconfig.json --emitDeclarationOnly` and writes the SAME path with `true`. Two cached
+targets own one incremental-state file and write mutually inconsistent contents into it. Read
+directly on this tree after a `build`: the on-disk copy records `emitDeclarationOnly: false` beside
+31 emitted `.js` files. Because `typecheck` depends on `build`, its restore is always LAST in a
+`typecheck` run, so its copy wins -- a buildinfo asserting "no JS emitted" sitting beside the JS.
+
+**It is not data loss.** `tsc` fingerprints its options INTO the buildinfo, so a later `build` cache
+MISS detects the mismatch and rebuilds, and a `build` cache HIT restores build's own consistent copy.
+
+**Residual cost, accepted and named:** a declaration re-emit, and 63 files duplicated across two
+cache entries -- which `ci.yml`'s `publish` job mirrors to a public Release.
+
+**Why the entry is NOT dropped, which is the obvious fix and is worse.** Three reasons, in order of
+weight:
+
+1. **`build.outputs` is PLUGIN-INFERRED.** `nx.json` declares no `targetDefaults.build.outputs`
+   (that absence is IN-06's subject), so the overlap is `@nx/js/typescript`'s OWN inference on BOTH
+   targets, not something this override introduced. Keeping the seven verbatim REPRODUCES the
+   plugin; dropping one makes the pin DIVERGE from it -- precisely what `### The VALUE that entry
+   must carry` says the verbatim list exists to prevent.
+2. **It would not fix the stated cost.** Dropping only the buildinfo leaves 62 of the 63 files still
+   shared, so the duplication -- the expensive half -- is untouched.
+3. **It would make the list incomplete.** `typecheck` would declare 135 of the 136 files it writes:
+   an output the target produces and does not cache, which is the exact incompleteness the
+   enumeration above was run to rule out.
+
+**Where the real fix belongs:** upstream, in how the plugin infers these two targets' outputs. Filed
+here as an accepted residual alongside the OS-dependent project-reference classification under
+`## Live-CI closures`, which is a candidate for the same upstream report.
+
 ---
 
 ## The cross-OS diff: PARITY-01, answered node by node
@@ -1584,6 +1645,13 @@ on a cleaned tree and wrote 136 files. The seven-entry list covers **136 of 136*
 covers **0 of 136**. Entry 1 covers zero at this configuration and is kept anyway, deliberately, for
 the two reasons recorded there -- it is what the plugin itself emits, and an output pattern matching
 nothing is inert while a dropped entry that a future tsconfig WOULD populate is not.
+
+> **Read the overlap correction with this.** Three of these seven entries are ALSO `build`'s declared
+> outputs -- 63 of the 136 files, including `dist/tsconfig.lib.tsbuildinfo`, which the two targets
+> write with contradictory compiler options. That is measured, accepted, and argued in
+> `### CORRECTION (code review WR-02): this rationale was SILENT on the build overlap` above. This
+> section's argument for keeping the list verbatim is one of the reasons the overlap is not "fixed"
+> by dropping an entry.
 
 **Why choosing by measurement rather than by stability matters here.** `outputs` is load-bearing
 beyond the hash: it is what Nx CACHES and RESTORES. Pinning a list that is merely STABLE rather than

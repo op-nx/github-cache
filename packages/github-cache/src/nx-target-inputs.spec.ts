@@ -134,6 +134,54 @@ describe('typecheck hashes everything its command compiles', () => {
   });
 });
 
+describe('typecheck declares the outputs its command actually writes (PARITY-01, PARITY-03)', () => {
+  // The value is chosen by MEASUREMENT, not by picking between two candidates.
+  // `08-ROOT-CAUSE.md` ran the target's real command -- `tsc --build
+  // tsconfig.json --emitDeclarationOnly` at cwd `packages/github-cache` -- on a
+  // cleaned tree and enumerated what it wrote: 136 files. This seven-entry list
+  // covers 136 of 136. The one-entry list `['{projectRoot}/tsconfig.tsbuildinfo']`
+  // -- the other form `@nx/js/typescript` infers -- covers 0 of 136.
+  //
+  // Choosing by measurement rather than by stability is the whole point.
+  // `outputs` is what Nx CACHES and RESTORES, not merely a hash input, so
+  // pinning the one-entry list would be perfectly STABLE and would make
+  // `typecheck` cache none of its declaration output and restore nothing on a
+  // hit, while still reporting a cache hit -- a silent correctness regression in
+  // the very cache this project exists to make trustworthy.
+  //
+  // Entry 1, `{projectRoot}/tsconfig.tsbuildinfo`, matches NOTHING at this
+  // configuration: `packages/github-cache/tsconfig.json` is a solution file with
+  // `"files": []` and `"include": []`, so `tsc --build` compiles only its two
+  // references and writes no buildinfo for the solution itself. It is kept
+  // DELIBERATELY, not by oversight -- it is what the plugin itself emits when the
+  // references classify as internal, so keeping it verbatim keeps this override
+  // aligned with the plugin instead of quietly diverging from it, and an output
+  // pattern matching nothing is inert while dropping an entry a future tsconfig
+  // WOULD populate is not.
+  //
+  // WHY THE ENTRY EXISTS AT ALL: this one field is the entire cross-OS
+  // divergence. `@nx/js/typescript` infers the seven-entry list on Linux and the
+  // one-entry list on Windows, so the merged
+  // `@op-nx/github-cache:ProjectConfiguration` node -- which covers ALL FIVE
+  // targets -- differs cross-OS, and that single node is what makes `build`,
+  // `typecheck`, `test` and `lint` diverge. A `targetDefaults` entry normalises
+  // ITS field of the merged node regardless of what inference produced, which is
+  // what makes the field OS-invariant. `nx.json` is strict JSON and holds no
+  // comments, so this is where that rationale lives (D-13), in the same shape as
+  // the `lint.outputs` pin below.
+  it('declares the seven-entry outputs list the enumeration confirmed', () => {
+    expect(nxJson.targetDefaults.typecheck.outputs).toEqual([
+      '{projectRoot}/tsconfig.tsbuildinfo',
+      '{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}',
+      '{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}.map',
+      '{projectRoot}/dist/tsconfig.lib.tsbuildinfo',
+      '{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}',
+      '{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}.map',
+      '{projectRoot}/out-tsc/vitest/tsconfig.spec.tsbuildinfo',
+    ]);
+  });
+});
+
 describe('the lint target EXISTS, not merely has defaults (LINT-01)', () => {
   // Everything else in this file asserts what `lint` does ONCE THERE IS ONE.
   // `targetDefaults.lint` is a default APPLIED to a target if one exists; it is
@@ -257,6 +305,34 @@ describe('lint declares its full input set (LINT-04)', () => {
       .map(([name]) => name);
 
     expect(targetsWithRuntimeInput).toEqual(['integration']);
+  });
+
+  // The guard above proves exactly one target HAS a runtime input. It does NOT
+  // prove the string was not RE-SPELLED, and two independent things break if it
+  // is (D-14 requires it byte-identical for both):
+  //
+  //   1. After VER-03 this runtime input is the SOLE mechanism separating
+  //      OS-sensitive targets from OS-invariant ones. Re-spelling it is a
+  //      Core-Value regression even when the replacement reads equivalently --
+  //      `node -e "console.log(process.platform)"` prints the same thing and
+  //      hashes to a different node, and this phase's whole result is stated in
+  //      terms of that node's identity.
+  //   2. `capture-hashes.mjs` READS this string out of nx.json rather than
+  //      re-spelling it (its `readDiscriminatorCommand`), precisely so the record
+  //      cannot drift from the config. That means a re-spelling silently changes
+  //      what the INSTRUMENT captures too, so the measurement and the thing being
+  //      measured would move together and the change would leave no trace.
+  //
+  // Exact equality on the whole extracted list, not `toContain`: a second runtime
+  // entry appearing on `integration` is as much a CORR-04 event as the string
+  // changing, and a containment assertion would pass through it.
+  it('integration declares exactly the byte-identical discriminator command', () => {
+    const runtimeCommands = nxJson.targetDefaults.integration.inputs.flatMap(
+      (input) =>
+        typeof input === 'object' && 'runtime' in input ? [input.runtime] : [],
+    );
+
+    expect(runtimeCommands).toEqual(['node -p process.platform']);
   });
 });
 

@@ -385,8 +385,10 @@ jobs:
   # so their Nx hash carries a `{ runtime: "node -p process.platform" }`
   # discriminator (see nx.json's integration inputs): the Linux and Windows hashes
   # differ, so both matrix legs run and a Linux cache never satisfies a Windows
-  # run, while a local Windows `nx integration` computes the same "win32" hash and
-  # hits that cache. process.platform is compiled into node, so it is stable across
+  # run -- and from VER-01/VER-03 that Nx hash is the ONLY thing separating them,
+  # because the cache STORAGE no longer partitions by OS. A local Windows
+  # `nx integration` computes the same "win32" hash and hits that cache.
+  # process.platform is compiled into node, so it is stable across
   # shell (PowerShell/Git-Bash/cmd) and across x64-vs-arm64 or arm64 emulation --
   # unlike `env:RUNNER_OS` (unset off-CI) or a plain `env` var (whose key MSYS
   # uppercases while Nx's env hasher is case-sensitive). fail-fast off so a
@@ -404,7 +406,10 @@ jobs:
   # and Git Bash themselves are both present on the Windows runner). Cross-OS is
   # safe as-is: the OS discriminator above means the Linux and Windows legs compute
   # DIFFERENT Nx task hashes, so neither leg can ever restore the other's entry --
-  # exactly the CORR-01 namespacing the store already relies on. port 3000 on both
+  # and from VER-01/VER-03 that hash is the SOLE separation, because the STORE no
+  # longer partitions by OS. XOS-03 is explicit that this divergence is a statement
+  # about Nx HASHES and not about cache storage: a storage-level probe for the Linux
+  # key from a Windows runner would now HIT. port 3000 on both
   # legs is fine; each matrix leg is its own isolated runner.
   integration:
     strategy:
@@ -977,12 +982,17 @@ jobs:
 
   # The per-OS publish matrix is this phase's LIVE mirror path (D-03, TRUST-02): on a
   # default-branch push each leg enumerates the default-branch Actions-cache entries via
-  # getActionsCacheList, restores the nx-cache-* ones IT CAN restore on ITS OWN OS, and
-  # uploads them to the current month-shard GitHub Release. The matrix is LOAD-BEARING and
-  # self-enforcing: @actions/cache folds the per-OS tmpdir path + a windows-only salt + the
-  # compression method into the cache version hash, so an ubuntu leg can NEVER restore a
-  # Windows-saved entry (restoreCache returns undefined and the engine skips it). Collapsing
-  # this to one OS SILENTLY drops the other OS's entries (D-03) -- keep BOTH legs; fail-fast
+  # getActionsCacheList, restores the nx-cache-* ones, and uploads them to the current
+  # month-shard GitHub Release. The matrix is LOAD-BEARING but it
+  # is no longer SELF-ENFORCING at the storage layer: @actions/cache still folds the
+  # compression method into the cache version hash unconditionally (cacheUtils.js:162-163),
+  # but from VER-01/VER-03 the archive path is workspace-relative and enableCrossOsArchive
+  # suppresses the windows-only salt, so an ubuntu leg CAN now restore a Windows-saved entry.
+  # The reason to keep both legs is now the Nx HASH, not the store: the Windows leg is still
+  # the ONLY leg that produces Windows-hash entries at all, because the integration and
+  # hash-parity platform discriminator keeps those task hashes distinct. So collapsing this to
+  # one OS STILL SILENTLY drops the other OS's entries (D-03) -- now because those tasks never
+  # RUN there, rather than because the store partitions -- keep BOTH legs; fail-fast
   # off so a Windows-only failure never hides the ubuntu result. It runs as `operation: publish`
   # on the node24 JS action, NOT a `run: node` step, because @actions/cache restoreCache needs
   # the JS-action-only ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL runtime (a plain run: step

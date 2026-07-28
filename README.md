@@ -122,7 +122,11 @@ there is `pwsh`, which does not understand `$GITHUB_ENV` or `$(...)`.
   the writable Actions-cache backend; everything else is read-only. See
   [Trust and security](docs/trust-and-security.md).
 - **Correct over clever.** Every read fault degrades to a cache MISS (a rebuild),
-  never a wrong result or a broken build.
+  never a wrong result or a broken build. That covers read **faults**, and it
+  assumes a cached task's outputs do not depend on which OS produced them: the
+  store does not partition by runner OS, so a task whose output genuinely differs
+  per OS must declare that difference as an Nx input. See
+  [Advanced usage](docs/advanced.md).
 - **`cancel:` is mandatory.** The server runs until torn down, so the `cancel:`
   step is required -- without it the job hangs at the implicit `wait-all` before
   post-job cleanup.

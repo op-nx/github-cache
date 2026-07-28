@@ -1,7 +1,12 @@
+import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import * as cache from '@actions/cache';
 import * as core from '@actions/core';
-import { cacheArchivePath } from '../lib/cache-archive-path.js';
+import {
+  CACHE_ARCHIVE_DIR,
+  cacheArchivePath,
+} from '../lib/cache-archive-path.js';
 import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
 import { withHashLock } from '../lib/with-hash-lock.js';
 import type { CacheBackend, GetResult, PutResult } from './types.js';
@@ -39,11 +44,107 @@ import type { CacheBackend, GetResult, PutResult } from './types.js';
  * temp path, so there was never anything to protect there.
  */
 export function createActionsCacheBackend(): CacheBackend {
+  // VER-04. ONE assertion, ONCE, at construction -- and BEFORE the mkdirSync below, so a
+  // wrong cwd fails loud instead of the mkdir silently creating a `.nx/cache` in the wrong
+  // tree.
+  //
+  // WHY CONJUNCT 2 IS THE ONE THAT MATTERS. @actions/cache reads GITHUB_WORKSPACE for the
+  // tar manifest and for `tar -C`, while glob expansion and our own readFile/writeFile use
+  // process.cwd(). When the two DIVERGE the restore reports a HIT, extraction lands under
+  // $GITHUB_WORKSPACE, our readFile throws ENOENT under $CWD, and server.ts's handleGet
+  // converts that to a 404 -- a permanent, silent all-MISS while @actions/cache cheerfully
+  // logs `Cache hit for:`. Nothing errors and nothing is slow; the cache just stops working.
+  //
+  // WHY AT CONSTRUCTION AND NOT PER REQUEST. A per-request check fires inside get() and is
+  // eaten by the SAME catch that produces the 404 -- it would be swallowed by the exact
+  // mechanism it exists to expose.
+  //
+  // THE ASYMMETRY, and it is the reason a green CI run is not evidence. The identical fault
+  // is LOUD in publishMirror (which propagates) and SILENT in serve() (where handleGet
+  // converts the ENOENT to a 404). So a green publish job says nothing about the health of
+  // the serve path, and the only place to catch the divergence for BOTH is here.
+  //
+  // `resolve` here is a LEGITIMATE node:path use. It compares two anchors; VER-01's ban is
+  // on BUILDING the archive path, which lives in cache-archive-path.ts and imports nothing.
+  // Without this sentence a later reader applying VER-01 literally deletes the comparison.
+  //
+  // DO NOT anchor off import.meta.url. esbuild.action.mjs rewrites it to a shim pointing at
+  // a NEVER-EMITTED sibling start-cache-server/index.mjs -- deliberately wrong, because
+  // serve.ts's isEntrypoint guard depends on the wrongness. It therefore points at the
+  // bundle directory inside the bundle and the source directory outside it, neither of which
+  // is the workspace root. process.cwd() is the only sound anchor.
+  //
+  // Dependency-free on purpose: this module is inlined into the committed
+  // start-cache-server/index.js, which external repos resolve via `uses:` with NO npm ci,
+  // and `nx` is a devDependency. An upward walk for nx.json was considered and rejected --
+  // it reaches no verdict the cwd probe does not already reach (a subdirectory cwd fails
+  // both) and buys only a better message.
+  //
+  // MEASURED 2026-07-26 (research/v0.0.2/PROBE-RESULTS.md Q2): the cwd/GITHUB_WORKSPACE
+  // identity HOLDS on both runners today. This is a DRIFT GUARD, not a fix for a live
+  // break -- and nothing else in the system defends it.
+  const cwd = process.cwd();
+
+  if (!existsSync(join(cwd, 'nx.json'))) {
+    throw new Error(
+      `createActionsCacheBackend: the process cwd must be the Nx workspace root, but no nx.json exists at ${cwd}. The archive path is workspace-relative (VER-01), so a cwd anywhere else writes and reads a different file than @actions/cache extracts (VER-04).`,
+    );
+  }
+
+  // ONE condition, not two, and the simplification is deliberate: `resolve('')` IS
+  // `resolve(cwd)`, so an UNSET or BLANK GITHUB_WORKSPACE passes this comparison naturally
+  // and needs no special case.
+  //
+  // Case-fold ceiling, recorded rather than left to be discovered: lowercasing both sides is
+  // what VER-04 specifies, and on a case-SENSITIVE filesystem two genuinely different paths
+  // differing only in case would compare equal. Accepted -- the false-negative is a
+  // pathological workspace layout, while the false-positive it prevents (Windows' own
+  // inconsistent drive-letter and path casing) is routine.
+  const githubWorkspace = process.env.GITHUB_WORKSPACE ?? '';
+
+  if (resolve(githubWorkspace).toLowerCase() !== resolve(cwd).toLowerCase()) {
+    throw new Error(
+      `createActionsCacheBackend: GITHUB_WORKSPACE (${githubWorkspace}) and the process cwd (${cwd}) must be the same directory. They are not, so @actions/cache would extract under one and this backend would read under the other -- a reported HIT whose bytes are unreachable, which handleGet then converts to a silent 404 (VER-04).`,
+    );
+  }
+
+  // VER-07. mkdirSync, NOT the async form: select-backend.ts comment-locks that
+  // selectBackend stays SYNCHRONOUS (Function.length === 0, synchronous serve.ts call site,
+  // TRUST-05), so this factory must not become async or parameterised. The directory literal
+  // comes from CACHE_ARCHIVE_DIR rather than a second authored copy -- one authored `.nx/cache`
+  // in the whole repo.
+  //
+  // Without it, put()'s writeFile ENOENTs on a fresh runner or after `nx reset` and RETHROWS
+  // (it is not a ReserveCacheError) into a 500, because writes are fail-closed by design. The
+  // read path self-heals through extractTar's io.mkdirP, which is exactly why the write path
+  // is the one that needs this and why the bug would look intermittent.
+  mkdirSync(CACHE_ARCHIVE_DIR, { recursive: true });
+
   return {
     get(hash: Hash): Promise<GetResult> {
       return withHashLock(hash, async () => {
         const path = cacheArchivePath(hash);
-        const matched = await cache.restoreCache([path], cacheKeyFor(hash));
+        // VER-03. `true` is enableCrossOsArchive and it is the 5TH POSITIONAL argument of
+        // restoreCache -- (paths, primaryKey, restoreKeys?, options?, enableCrossOsArchive?),
+        // verified against the exact-pinned @actions/cache@6.2.0 lib/cache.d.ts:58. Positions
+        // 2 and 3 are FILLED with undefined on purpose: the flag is not an appended argument,
+        // and shortening the call moves the flag into restoreKeys' slot.
+        //
+        // On LINUX this flag is a NO-OP on the cache version: cacheUtils.js:166 pushes the
+        // `windows-only` component only when `process.platform === 'win32' &&
+        // !enableCrossOsArchive`, so off win32 the component was never pushed at all. The flag
+        // ALONE therefore rotates only WINDOWS entries. The both-legs all-MISS this commit
+        // produces comes from VER-01's PATH change, whose components are pushed
+        // unconditionally (cacheUtils.js:159). See
+        // .planning/phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md -- an
+        // ASYMMETRIC (Windows-only) signal would mean the flag landed WITHOUT the path.
+        const matched = await cache.restoreCache(
+          [path],
+          cacheKeyFor(hash),
+          undefined,
+          undefined,
+          true,
+        );
 
         if (matched === undefined) {
           return { kind: 'miss' };
@@ -98,12 +199,40 @@ export function createActionsCacheBackend(): CacheBackend {
           // The warning exists because a scope denial and a genuine cache-service
           // outage are indistinguishable at this layer BY DESIGN -- @actions/cache
           // collapses both to -1. Warn, never fail the build.
-          const cacheId = await cache.saveCache([path], cacheKeyFor(hash));
+          //
+          // VER-03. `true` is enableCrossOsArchive and it is the 4TH POSITIONAL argument of
+          // saveCache -- (paths, key, options?, enableCrossOsArchive?) -- NOT the 5th, and
+          // NOT the 3rd. Position 2 (options) must be filled with undefined.
+          //
+          // UPSTREAM'S JSDoc IS WRONG, and it is wrong in the direction that breaks this
+          // silently. Verified against the exact-pinned @actions/cache@6.2.0
+          // lib/cache.d.ts: the JSDoc at :64-65 documents `enableCrossOsArchive` BEFORE
+          // `options`, while the real signature at :68 is the reverse. A reader who trusts
+          // the JSDoc writes `saveCache([path], key, true)` -- the boolean lands in the
+          // options slot, TypeScript rejects it if you are lucky and coerces it if the type
+          // ever widens, and the flag is simply never passed. restoreCache's JSDoc
+          // (:53-55) happens to match its signature; only saveCache's is inverted.
+          const cacheId = await cache.saveCache(
+            [path],
+            cacheKeyFor(hash),
+            undefined,
+            true,
+          );
 
           if (cacheId > 0) {
             return 'stored';
           }
 
+          // VER-03 / D-10. `true` is enableCrossOsArchive at the 5TH POSITIONAL, same as the
+          // read above. Here it IS a pure append, which makes this the site most likely to be
+          // the only one done right -- and the one most likely to be forgotten, because it
+          // looks like an internal detail rather than a cache operation.
+          //
+          // It MUST carry the flag. This probe exists to disambiguate saveCache's ambiguous
+          // -1, and the probe reads at whatever cache VERSION its own arguments imply.
+          // Probing at a DIFFERENT version from the save reports "absent" for an entry that
+          // is PRESENT -- so on Windows every write would take the not-stored branch and
+          // answer a spurious 409, and the warning below would fire on healthy writes.
           const present = await cache.restoreCache(
             [path],
             cacheKeyFor(hash),
@@ -111,6 +240,7 @@ export function createActionsCacheBackend(): CacheBackend {
             {
               lookupOnly: true,
             },
+            true,
           );
 
           if (present !== undefined) {

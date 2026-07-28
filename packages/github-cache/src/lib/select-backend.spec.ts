@@ -1,12 +1,22 @@
 import { rm } from 'node:fs/promises';
 import * as cache from '@actions/cache';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
 import { resolveLocalReadToken, resolveRepoIdentity } from './local-context.js';
 import type { Hash } from './cache-key.js';
 import { resolveGitHubToken } from './github-identity.js';
 import { releaseAssetName } from './release-asset-name.js';
 import { isWritableBackend } from '../backend/types.js';
+import { enterWorkspaceRootCwd } from '../test/workspace-root-cwd.js';
 import { selectBackend } from './select-backend.js';
 
 // @actions/cache only actually works inside a JS action on real CI, so the
@@ -31,6 +41,29 @@ const saveCache = vi.mocked(cache.saveCache);
 // hash (e.g. actions-cache-backend.spec.ts's 'abc123') would race on the same
 // temp file. Keep this value distinct from every other spec's hash.
 const HASH = 'selectbackendfixture' as Hash;
+
+// VER-04's spec accommodation, the same three lines as actions-cache-backend.spec.ts and
+// serve.spec.ts. This file is CONFIRMED to need it, not "probably" (09-RESEARCH.md's
+// per-spec table hedges): it mocks @actions/cache but NOT the backend module, so its four
+// write-trusted call sites (:58, :64, :156, :170 -- five runtime invocations, the last an
+// it.each of two) reach the REAL createActionsCacheBackend() and hit VER-04's guard, whose
+// first conjunct is false under `nx test`.
+//
+// NOT the contradiction it looks like. This is also the file whose "never mutates
+// process.env" test below asserts process-global hygiene, and this repo has zero other
+// `process.chdir` in any spec. A chdir touches the cwd, NOT `process.env`, so the two do
+// not conflict and that assertion stays exactly as strong as it was. The reconciliation is
+// stated here because an ASYMMETRICAL hook in THIS file -- or a missing one -- would be the
+// most visible possible inconsistency in the package.
+let restoreCwd: () => void;
+
+beforeAll(() => {
+  restoreCwd = enterWorkspaceRootCwd();
+});
+
+afterAll(() => {
+  restoreCwd();
+});
 
 // A well-formed trusted CI context: Actions on, a trusted event, a valid
 // owner/name repo, and a resolvable token. Individual tests spread over this to

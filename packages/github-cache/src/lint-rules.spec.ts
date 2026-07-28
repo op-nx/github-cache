@@ -40,7 +40,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
  * "Successfully ran target lint" rather than merely exiting 0.
  *
  * LINT-02 (the ambient-platform ban) and LINT-03 (its RED-before-GREEN proof over
- * the evasion shapes and the four extant CORR-05 sites) are the second half,
+ * the evasion shapes and the extant CORR-05 sites) are the second half,
  * added by plan 07-02 below the opt-out assertions. Both halves share the
  * constructor and the non-vacuity control declared here.
  */
@@ -263,9 +263,9 @@ describe('an opt-out must say why (LINT-05)', () => {
 });
 
 describe('a stale opt-out fails the build (LINT-06)', () => {
-  // The mechanism that will force each of the four CORR-05 disables out TOGETHER
-  // with its violation in Phases 9 and 10: delete the code but leave the disable
-  // and the build goes red.
+  // The mechanism that forces each CORR-05 disable out TOGETHER with its violation
+  // in Phases 9 and 10: delete the code but leave the disable and the build goes red.
+  // Phase 9 exercised it for real on cache-archive-path.spec.ts's site.
   //
   // This one cannot assert on a rule id, because there is none to assert on --
   // an unused-directive report is emitted by the linter itself rather than by a
@@ -340,9 +340,9 @@ function banRuleIdsOf(messages: Linter.LintMessage[]): (string | null)[] {
 }
 
 /**
- * D-21: the ban is proven against the EVASION shapes, not only against the four
- * shapes that happen to exist in the tree today. A rule proven only against the
- * cases that already exist is proven against the easy half.
+ * D-21: the ban is proven against the EVASION shapes, not only against the shapes
+ * that happen to exist in the tree today. A rule proven only against the cases that
+ * already exist is proven against the easy half.
  *
  * Explicit-assertion-list style (the `public-surface.spec.ts:18-23` house rule):
  * each row carries its expected verdict as literal rule ids in report order --
@@ -686,9 +686,9 @@ describe('the exemption is exactly the integration suite, not everything named i
 });
 
 /**
- * D-22: each of the FOUR extant CORR-05 violations is proven CAUGHT while it
- * still exists. Phases 9 and 10 remove the violations themselves; Phase 7 must
- * NOT, or LINT-03 has nothing to catch and the evidence is destroyed early.
+ * D-22: each extant CORR-05 violation is proven CAUGHT while it still exists.
+ * Phases 9 and 10 remove the violations themselves; Phase 7 must NOT, or LINT-03 has
+ * nothing to catch and the evidence is destroyed early.
  *
  * Keyed on FILE + EXPRESSION TEXT, never on a line number. That is not style:
  * inserting the four described disables shifts every later line in the very
@@ -702,23 +702,31 @@ describe('the exemption is exactly the integration suite, not everything named i
  * `lineIndexOf` below; a site whose disable is gone fails through
  * `reportUnusedDisableDirectives`. Neither can rot silently.
  *
- * There are FOUR sites and FOUR error positions. There is NO fifth.
- * `cache-archive-path.spec.ts`'s bare `tmpdir()` CALL is not an error position
- * and must never carry a disable: in strict ESM that binding cannot exist
- * without the import, the import is already the error, and an unused directive
- * over the call would fail the build through the phase's own opt-out discipline.
- * CONTEXT.md D-22 and REQUIREMENTS.md CORR-05 both list that call alongside the
- * import -- correct as a SITE (both lines leave together in Phase 9), wrong as
- * an error position. ROADMAP SC3's "three CORR-05 violations" is likewise a
- * miscount; REQUIREMENTS, CONTEXT and RESEARCH all say FOUR.
+ * There are now THREE sites and THREE error positions. There is NO fourth.
+ *
+ * HISTORICAL, and preserved rather than deleted, because a removed miscount lock is
+ * indistinguishable from a miscount that never existed. Phase 7 authored this block with
+ * FOUR sites and FOUR error positions, the fourth being
+ * `cache-archive-path.spec.ts`'s `import { tmpdir } from 'node:os';`. Phase 9 removed it
+ * under VER-02: the archive path became a workspace-relative literal, so there was no
+ * ambient temp-directory read left to opt out of, and the import plus its
+ * `eslint-disable-next-line` directive left together in ONE commit with this row --
+ * exactly what `lineIndexOf`'s failure message below instructs, and what
+ * `reportUnusedDisableDirectives: 'error'` (LINT-06) requires.
+ *
+ * The two miscounts Phase 7 recorded, both still worth knowing:
+ * 1. That spec's bare `tmpdir()` CALL was never an error POSITION, only part of the
+ *    SITE. In strict ESM the binding cannot exist without the import, the import is
+ *    already the error, and a disable over the call would itself fail the build through
+ *    the phase's own opt-out discipline. CONTEXT.md D-22 and REQUIREMENTS.md CORR-05
+ *    both list the call alongside the import -- correct as a SITE (both lines did leave
+ *    together, in Phase 9), wrong as an error position.
+ * 2. ROADMAP SC3 says "three CORR-05 violations" where REQUIREMENTS, CONTEXT and
+ *    RESEARCH all said FOUR. SC3 was a miscount AT THE TIME OF WRITING. It now happens
+ *    to name the right number for the wrong reason -- do not read the coincidence as
+ *    the document having been correct.
  */
 const CORR_05_SITES = [
-  {
-    /** Removed by VER-02, Phase 9. */
-    file: 'packages/github-cache/src/lib/cache-archive-path.spec.ts',
-    expression: "import { tmpdir } from 'node:os';",
-    rule: 'no-restricted-imports',
-  },
   {
     /** Removed by CORR-02, Phase 10. */
     file: 'packages/github-cache/src/backend/releases-backend.spec.ts',
@@ -774,7 +782,7 @@ describe('every extant CORR-05 violation is caught while it still exists (LINT-0
 
         // BLANK, never splice. Deleting the directive line would shift every
         // later line by one and the position assertion below would then be
-        // asserting the wrong number for three of the four sites.
+        // asserting the wrong number for every site whose disable precedes it.
         if (stripped[index - 1]?.includes('eslint-disable-next-line')) {
           stripped[index - 1] = '';
         }

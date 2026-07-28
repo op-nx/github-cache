@@ -492,14 +492,35 @@ jobs:
   # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
   # covers checkout plus an artifact upload, and this job requests no secret.
   #
-  # NO BUILD STEP, and that is load-bearing rather than a missing line. typecheck
-  # declares a dependentTasksOutputFiles input (nx.json:137), which hashes the
-  # CONTENT of packages/github-cache/dist/ -- so a leg that built first hashes a
-  # populated directory while a leg that did not hashes an empty one. Both legs must
+  # BUILD STEP, added by plan 08-05 and REPLACING a documented no-build design. The
+  # original rationale is re-stated here rather than quietly reversed, because it was
+  # half right and the half that was right still constrains this job.
+  #
+  # It read: typecheck declares a dependentTasksOutputFiles input (nx.json:137) which
+  # hashes the CONTENT of packages/github-cache/dist/, so a leg that built hashes a
+  # populated directory while a leg that did not hashes an empty one; both legs must
   # be IDENTICAL in that respect, and "neither builds" is the identical option that
-  # is also the fastest. A reader comparing against pack-check and publish-verify
-  # (both of which DO build first) should read this paragraph instead of going
-  # looking: those jobs RUN a dist/ bin, they do not measure a hash.
+  # is also the fastest.
+  #
+  # The symmetry requirement is CORRECT and is preserved -- see the note on the step
+  # itself. The resolution was wrong: "both build" is equally symmetric, and it is
+  # the only one of the two that measures a number any machine actually computes.
+  #
+  # What the original missed: typecheck carries an INFERRED dependsOn of
+  # ["build", "^typecheck"], produced by @nx/js/typescript and absent from nx.json,
+  # so Nx defers typecheck's hash until build has produced its outputs. A real
+  # `nx typecheck` therefore computes the SAME hash whether or not dist/ was
+  # populated beforehand -- measured both ways at 8949082127832201885 on the
+  # maintainer's workstation, recorded in 08-ROOT-CAUSE.md under "CORRECTION: D-11's
+  # consequence is FALSIFIED". Without a build step this job hashed typecheck OUTSIDE
+  # that dependency chain and recorded 1284533355439392975 on both legs: internally
+  # consistent, cross-OS identical, and computed by nothing. The cross-OS COMPARISON
+  # was still valid (both legs were wrong the same way); the absolute value was not,
+  # and 08-06 gates on these records.
+  #
+  # A reader comparing against pack-check and publish-verify (both of which also
+  # build first) should read this paragraph rather than going looking: those jobs RUN
+  # a dist/ bin, they do not measure a hash, so they build for an unrelated reason.
   #
   # CHECKOUT REF -- the one deliberate deviation from every other job in this file.
   # On a pull_request event actions/checkout resolves the MERGE commit by default: a
@@ -548,6 +569,21 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
+      # Hash typecheck INSIDE its dependency chain. typecheck's inferred dependsOn
+      # is ["build", "^typecheck"], and the instrument calls hashTask directly, so
+      # without this step the recorded typecheck value is one no real run produces
+      # -- see the BUILD STEP paragraph above.
+      #
+      # This is ONE step in a matrix job, so both legs get byte-identical treatment
+      # by construction rather than by two copies staying in step. That symmetry is
+      # the half of the original no-build rationale that survives: whatever this job
+      # does about dist/, it must do the same on ubuntu-24.04-arm and on
+      # windows-11-arm, or the leg-to-leg comparison stops comparing like with like.
+      #
+      # Still no sidecar block: `npm run build` here resolves through Nx's LOCAL
+      # cache only, because the cache client is env-driven and this job sets none of
+      # those variables. A fresh runner therefore always really builds.
+      - run: npm run build
       # The instrument is invoked as a plain node script, never through `nx run`
       # (D-01b): an Nx-CACHED instrument would REPLAY a stale record instead of
       # measuring. --install-mode is REQUIRED and has no default, and `ci` is the

@@ -1,9 +1,15 @@
 ---
 phase: 09-os-invariant-actions-cache-version
 verified: 2026-07-28T23:55:00Z
-status: gaps_found
-score: 11/11 requirements code-verified; 1 phase-level gap outside the requirement list
+reverified: 2026-07-29T00:50:00Z
+status: passed
+score: >-
+  11/11 requirements code-verified. The one phase-level gap found on the first pass
+  (`publish-verify` regression, outside the 11-ID list) is now CLOSED at the code/fixture/
+  mutation level. One standard live-CI confirmation remains open, same class as VER-06's and
+  OBS-04's own live closures -- not a new gap.
 verified_at_commit: f77f7e7b648eb6c20a2bc046b788b56949298dc8
+reverified_at_commit: 3d127b2d46432af8791ec61c64dbe3c754cd23f5
 verification_method: >-
   Independent re-derivation, not a replay of the phase's own SUMMARY claims. Every
   requirement's implementation was read directly from the working tree (not quoted from a
@@ -13,23 +19,38 @@ verification_method: >-
   REQUIREMENTS.md's own text. The two `human_needed` live-CI items were checked against the
   temporary-main-push evidence in `09-EVIDENCE.md`'s ADDENDUM, which is itself a real,
   maintainer-authorised run (`30400231720`), not a projection.
+reverification_method: >-
+  Re-ran independently at `3d127b2`, not taken on the team lead's word: full test suite
+  (671/671, 38 files) and all nine battery commands re-executed by me in this session,
+  `read-back.ts`'s fix and `read-back.spec.ts` read in full, the specific measured-failure
+  scenario (Windows leg receiving a linux-produced payload) traced by hand through the new
+  code to confirm it now resolves on a passing branch naming `'linux'` as producer,
+  `dogfood-cross-os.spec.ts` confirmed absent from the `376dbff..HEAD` diff by direct
+  `git diff --stat`, the two `docs-same-os-claims.spec.ts` `ci.yml` rows read to confirm
+  neither keys on `publish-verify`, both reworded grep criteria
+  (`process.platform|process.arch` in the spec, `cachePlatform` in the bin) independently
+  re-run with `rg` and confirmed zero matches, and `09-CONTEXT.md:794` read to confirm it was
+  left unedited (the override lives in the code comment lock and the SUMMARY, per house
+  style, not by rewriting the original deferral).
 human_verification:
   - test: >-
       Merge this branch to `main` for real and observe the FIRST post-merge push's
       `publish-verify (windows-11-arm)` job.
     expected: >-
-      RED, with the exact message already recorded in `09-EVIDENCE.md`'s ADDENDUM:
-      `github-cache round-trip read-back: cache HIT for <run_id> on win32 but the returned
-      bytes are not what the publisher wrote`. This is not a hypothetical -- it was already
-      observed on the temporary sample push (`30400231720`) and is guaranteed to recur,
-      because the underlying code (`roundtrip/read-back.ts:68`) is UNCHANGED.
+      GREEN, with a log line matching `github-cache round-trip read-back: cache HIT for
+      <run_id> on win32 with bytes matching a '<producerOs>'-produced payload`. A `'linux'`
+      producer named on the Windows leg is the POSITIVE observation -- it is the exact
+      cross-OS mirror that produced the originally-measured failure (run `30400231720`), now
+      correctly accepted and recorded instead of rejected.
     why_human: >-
-      This is not a question the phase left open for verification -- it is a KNOWN,
-      MEASURED, UNFIXED regression this phase caused. It is listed here because the
-      maintainer must decide, before merge, whether to (a) fix it now under a gap-closure
-      plan for Phase 9, (b) accept a known-red job for one push and fix it in Phase 10
-      (OBS-05), or (c) mute/skip the job until Phase 10 lands. All three are legitimate
-      choices; none of them is this verifier's to make.
+      The standard "Live-CI first-push close" pattern already established elsewhere in this
+      phase (VER-06's `dogfood-verify`, OBS-04's rotation signal) -- `publish-verify` is
+      push-gated to `main` (`ci.yml:3-7`, job `if: github.event_name == 'push'`), so no
+      pre-merge run can produce it. This is NOT a new gap and NOT a decision point: the fix
+      is code-verified, fixture-tested (RED -> GREEN, 8 tests), and mutation-tested (4/4
+      predictions held exactly, re-traced below). It is the same category of open item VER-06
+      and OBS-04 already carried before their own live closure, and unlike OBS-04's one-shot
+      signal it is re-samplable on every push.
 ---
 
 # Phase 9: OS-Invariant Actions-Cache Version Verification Report
@@ -38,18 +59,22 @@ human_verification:
 hardcoded forward-slash path literal and `enableCrossOsArchive: true` at every call site --
 proven by a Windows runner reading back an entry a Linux runner wrote.
 
-**Verified:** 2026-07-28T23:55:00Z
-**Status:** gaps_found -- **the stated phase goal IS achieved and IS proven live** (see VER-06
-below). The `gaps_found` verdict is driven by one thing outside the 11 requirement IDs: this
-phase's own changes provably break an existing CI guard (`publish-verify` on
-`windows-11-arm`), the break was already observed on a real run, and nothing in this phase's
-seven plans fixes it. See `## The one gap` below before reading this as "phase failed" --
-it is not; it is "phase succeeded and, in doing so, surfaced a real defect that is still
-open."
-**Re-verification:** No -- initial verification
-**HEAD at verification:** `f77f7e7`, working tree has only a pre-existing unrelated
-modification to `.planning/config.json` (present before this phase's work began) and an
-untracked `.playwright-cli/` directory; nothing from this phase's scope is uncommitted.
+**Verified:** 2026-07-28T23:55:00Z (initial pass); **re-verified:** 2026-07-29T00:50:00Z (after
+gap-closure plan 09-08)
+**Status:** passed -- **the stated phase goal IS achieved and IS proven live** (see VER-06
+below), and the one gap found on the initial pass is now closed. See
+`## The one gap -- CLOSED by plan 09-08` below for the full re-verification.
+**Re-verification:** Yes. First pass (2026-07-28) found `gaps_found`: this phase's own
+changes provably broke an existing CI guard (`publish-verify` on `windows-11-arm`), observed
+failing on a real temporary sample push, with nothing in the original seven plans fixing it.
+Plan 09-08 (gap closure) landed three commits (`acd37d0` test, `fc37f0f` fix, `11a1e4c` docs)
+that fix it. I re-verified the fix independently rather than taking the team lead's summary
+of it on faith -- see `reverification_method` above and `## The one gap -- CLOSED by plan
+09-08` below.
+**HEAD at initial verification:** `f77f7e7`.
+**HEAD at re-verification:** `3d127b2`, working tree has only a pre-existing unrelated
+modification to `.planning/config.json` (present before this phase's work began); nothing
+from this phase's scope is uncommitted.
 
 ---
 
@@ -229,7 +254,12 @@ paraphrased:
 
 ---
 
-## The one gap: `publish-verify (windows-11-arm)` is a known, measured, unfixed regression
+## The one gap -- CLOSED by plan 09-08 (re-verified 2026-07-29)
+
+**Original finding (2026-07-28), preserved verbatim below for the record, followed by the
+closure verification.**
+
+### Original finding: `publish-verify (windows-11-arm)` is a known, measured, unfixed regression
 
 This is **not** one of the 11 requirement IDs, and I want to be explicit that its existence
 does not mean any of the 11 failed -- every one of them is verified above, several with live
@@ -281,9 +311,149 @@ milestone's requirement list owned, and recorded that fact plainly rather than p
 it. That intellectual honesty is exactly why I can classify this confidently as a real,
 already-measured gap rather than a speculative one.
 
-**What I did not find:** no plan, no commit, and no `09-08` artifact addressing it. The
-maintainer decision to route it to "Phase 9 gap closure" is recorded but not yet acted on in
-code.
+**What I did not find (at the time of the first pass):** no plan, no commit, and no `09-08`
+artifact addressing it. The maintainer decision to route it to "Phase 9 gap closure" was
+recorded but not yet acted on in code.
+
+### Closure verification (2026-07-29), independently re-derived
+
+Plan 09-08 landed three commits (`acd37d0` test-RED, `fc37f0f` fix-GREEN, `11a1e4c` docs) on
+top of `f77f7e7`, merged to this branch at `3d127b2`. I did not take the SUMMARY's word for
+any of the following -- each line below is something I read or ran myself this session.
+
+**1. The fix, read directly.** `roundtrip/read-back.ts:138-140` now reads:
+```ts
+const producerOs = CACHE_OS_VALUES.find((os) =>
+  result.bytes.equals(dogfoodBody(hash, os)),
+);
+```
+replacing the old `result.bytes.equals(dogfoodBody(hash, cachePlatform()))`. `cachePlatform`
+no longer appears anywhere in the file (confirmed: `rg -n "cachePlatform"` over
+`read-back.ts` returns zero matches). `CACHE_OS_VALUES` is `['windows', 'macos', 'linux']`
+(`release-asset-name.ts:8`) -- the SAME single-source enum the rest of the phase already
+uses, not a new vocabulary.
+
+**2. Non-vacuity -- confirmed, this is the check that matters most.** I read
+`read-back.spec.ts` in full and re-ran the whole suite myself (below). Four rejection cases
+still throw, unchanged in effect: garbage bytes (`'not a dogfood payload at all'`), a
+truncated/partial upload (`dogfoodBody(HASH, 'linux').subarray(0, 12)` -- `Buffer.equals`
+compares length first, so a byte-shorter prefix cannot match any of the three candidates), an
+asset for a DIFFERENT hash (a same-length neighbouring run id, so the fixture cannot be
+satisfied by a length-only comparator either), and a cache MISS. All four are asserted with
+`.rejects.toThrow(...)`, and all four passed in my own test run. **The relaxation is exactly
+what the SUMMARY claims: two additional accepted byte strings per hash** (the delta between
+1 producer -- the reader's own OS, previously the only accepted value -- and 3 -- the full
+`CACHE_OS_VALUES` set now accepted), nothing looser: no presence check, no length check, no
+HIT-only check anywhere in the replacement. I additionally hand-traced the mutation table in
+the SUMMARY (M1-M4) against the actual code and found no discrepancy between the claimed and
+the structurally-implied behaviour of each mutation.
+
+**3. Would the originally measured failure now pass? Yes, traced by hand.** On the sampled
+run, `publish (windows-11-arm)` restored the shared run-scoped dogfood key and received the
+linux-produced payload (`dogfoodBody(hash, 'linux')`), then mirrored those bytes under its
+own (`windows`) asset name. Feeding those exact bytes through the NEW comparison:
+`CACHE_OS_VALUES.find((os) => bytes.equals(dogfoodBody(hash, os)))` finds a match at
+`os === 'linux'` (the second candidate in `['windows', 'macos', 'linux']` order is checked
+after `windows` fails, `macos` fails, `linux` matches). `producerOs` is defined, so the
+`throw` branch is skipped and the success line at `:152-155` renders
+`` `github-cache round-trip read-back: cache HIT for ${hash} on ${process.platform} with bytes
+matching a '${producerOs}'-produced payload; ...` `` -- i.e. it names **`linux`** as the
+producer on the Windows leg. This exactly matches `read-back.spec.ts`'s
+`it.each(CACHE_OS_VALUES)('accepts a mirrored payload produced on %s and names that producer
+in the log', ...)` case for `os = 'linux'`, which I confirmed passes in my own test run.
+
+**4. 09-05 not contradicted -- confirmed by diff, not by claim.**
+`git diff --stat 376dbff..HEAD -- packages/github-cache/src/dogfood-cross-os.spec.ts`
+(`376dbff` is plan 09-08's own base commit) returns **empty** -- the file is byte-unchanged
+by the gap-closure plan. `git diff --stat f77f7e7..HEAD` (the full gap-closure diff) touches
+exactly two source files (`read-back.ts`, `read-back.spec.ts`, new) plus planning/tracking
+docs -- confirmed by direct read of the diffstat. The `dogfood-verify` two-leg matrix in
+`ci.yml` is untouched (also absent from the diffstat). The comment lock in `read-back.ts`
+(`:110-120`) explains the asymmetry in both directions: `dogfood-verify`'s
+`expectedProducerOs` stays a hard-coded single value because `dogfood-seed` is single-leg
+ubuntu BY CONSTRUCTION (pinned by `dogfood-cross-os.spec.ts`'s no-matrix clause, unchanged),
+so unifying downward (asserting one producer in `read-back.ts` too) would reintroduce this
+exact regression the moment the ubuntu publish leg loses its `max-parallel: 1` race; unifying
+upward (letting `dogfood-verify` accept any producer) would destroy VER-06's provenance
+proof, the phase's own headline live closure. I find this reasoning sound and specific to the
+two guards' actually-different preconditions (one leg's producer is fixed by design, the
+other's is genuinely variable), not a hand-wave.
+
+**5. Two executor deviations, assessed rather than assumed fine.**
+   - *The module doc block correction.* The SUMMARY reports the executor also corrected a
+     SECOND same-OS claim in the file's top-of-file doc comment
+     ("`producer and reader are the same OS by construction`" and a same-OS "publish->reader
+     contract" claim), beyond the plan's scoped correction at the comparison site. I read the
+     current doc block (`read-back.ts:11-39`) and it is accurate: it now says the asset
+     **NAME** is same-OS while the **PAYLOAD** behind it is not, and points at the
+     comparison-site comment for the full reasoning. I agree with the executor's stated
+     rationale (a header that contradicts the code it heads is exactly the same defect class
+     this plan exists to fix) -- correcting it was the right call, not scope creep.
+   - *The two reworded grep criteria.* I independently re-ran both: `rg -n
+     "process\.platform|process\.arch"` over `read-back.spec.ts` and `rg -n "cachePlatform"`
+     over `read-back.ts` -- **both return zero matches.** The SUMMARY's account (both
+     criteria initially matched once each, in explanatory prose inside a comment rather than
+     as a code read, and were reworded to convey the same fact without the literal token) is
+     consistent with what I see in the current files: the surviving prose describes "an
+     ambient platform read" and "the ambient platform-mapping helper in
+     `release-asset-name.ts`" without ever spelling the banned identifiers. No assertion was
+     weakened -- the criteria are satisfied literally, and lint's own no-restricted-syntax
+     ban is what actually enforces the underlying rule, which is unchanged.
+
+**6. The deliberate, known inconsistency -- `ci.yml`'s `publish-verify` job comment.** I read
+the job comment at `ci.yml:1100-1110` directly: it still says "Each OS leg reads back ONLY
+its own-OS asset ... so this proves the same-OS publisher->reader contract" -- **flatly false**
+about what `read-back.ts` now asserts. This is deliberate and contained, not an oversight:
+`docs-same-os-claims.spec.ts`'s two `ci.yml` rows key on the `publish` job's matrix comment
+(required phrases: "the ONLY leg that produces Windows-hash entries", "keep BOTH legs") and
+the `integration` job's comment (required phrase: "that Nx hash is the ONLY thing separating
+them") -- I read both rows directly and **neither keys on `publish-verify`**, so nothing
+reddens. The code comment lock in `read-back.ts` (`:128-137`) names the `publish-verify` job
+comment BY JOB NAME and states plainly that Phase 10's TRUST-11 must not be closed on the
+strength of `read-back.ts` having already changed. **I judge this containment adequate as
+is.** A test pin now would only assert that a known-stale sentence is known-stale, which adds
+no safety beyond what the comment lock already documents more precisely (it explains WHY the
+sentence is wrong and WHAT still needs to happen); pinning it would just be a second place for
+the same fact to rot. Phase 10 is the right place to either correct the prose or fold a docs
+guard over it, once OBS-05 gives the fix somewhere real to land.
+
+**7. The `09-CONTEXT.md:794` override -- recorded in both required places, not silently
+reversed.** I read `09-CONTEXT.md:794-795` directly: the original deferral text ("Phase 10
+(TRUST-11 / OBS-05), explicitly NOT this phase's DOCS-08 work") is **UNCHANGED** -- the
+override was not applied by silently rewriting the prior decision record, which is the
+correct house pattern (record corrections, don't retroactively edit prior artifacts). The
+override is instead recorded in two places I independently confirmed: the code comment lock
+in `read-back.ts` (`:129-137`, naming `09-CONTEXT.md` and `09-EVIDENCE.md`'s ADDENDUM as the
+basis) and `09-08-SUMMARY.md`'s `## The CONTEXT override` section (quoting the deferral
+verbatim and stating the override rests on the maintainer's routing decision after the
+failure was measured, not on a re-reading of the context). This is exactly the traceable
+record a later reader needs and cannot mistake for undocumented drift.
+
+**8. Regression check, re-run myself at `3d127b2`, not taken on faith:**
+
+| Command | Result (independently re-run) |
+|---|---|
+| `npm run format:check` | exit 0 |
+| `npm run build` | exit 0 (Nx cache hit) |
+| `npm run typecheck` | exit 0 (Nx cache hit) |
+| `npm run typecheck:action` | exit 0 |
+| `npm run test` | **671 passed, 38 files** (cache-bypassed run) |
+| `npm run lint` | exit 0 (Nx cache hit) |
+| `npm run fallow:ci` | exit 0, "No issues found", 57 entry points |
+| `npm run check:action` | exit 0, **empty diff** -- `read-back.ts` is not `serve()`-reachable (the bundle's one entry is `start-cache-server/entry.ts`), so `start-cache-server/index.js` is untouched, confirmed |
+| `npm run pack:check` | exit 0, 55 files, no internals leaked |
+
+`git status --short` after all of the above shows only the pre-existing unrelated
+`.planning/config.json` modification -- nothing from this run's `check:action` rebuild
+persisted, confirming the empty-diff claim rather than merely printing it.
+
+**Verdict on the gap: CLOSED.** The fix is narrowly scoped (exactly the comparison site plus
+its own doc block), preserves every existing rejection path, is proven by a real fixture
+RED->GREEN transition and four independently-verified mutations, and correctly resolves the
+exact byte sequence that produced the original measured failure. The only thing left is
+observing it green on a real push to `main`, which is the same kind of standing item VER-06
+and OBS-04 already carried (and already had closed once, via the temporary sample push) --
+not a new decision point.
 
 ---
 
@@ -303,21 +473,29 @@ code.
 | OBS-04 | Verified (mechanism); sampled with an honestly-recorded partial mismatch | symmetric 41==41 restore-MISS confirms PATH attribution |
 | DOCS-08 | Verified | all six sites (3 correction + 3 additive) read directly |
 
-**All 11 requirement IDs: verified.** The `gaps_found` status is driven entirely by the
-`publish-verify` regression above, which sits outside this list.
+**All 11 requirement IDs: verified.** The gap that drove the initial `gaps_found` verdict
+sat entirely outside this list (`publish-verify`'s same-OS assumption in `read-back.ts`, not
+one of the 11) and is now closed by plan 09-08 -- see `## The one gap -- CLOSED by plan
+09-08` above.
 
 ---
 
 ## Regression check against prior phases
 
-Ran the full suite at HEAD myself: **663 passed, 37 files**, matching every plan's claimed
-count. `npm run typecheck` and `npm run typecheck:action` both exit 0 (typecheck served from
-Nx cache; typecheck:action run fresh). No LSP-only findings were treated as authoritative, per
-this project's own standing instruction -- the compiler and test runner are the gate.
+**Initial pass (2026-07-28):** ran the full suite at HEAD (`f77f7e7`) myself: **663 passed,
+37 files**, matching every plan's claimed count. `npm run typecheck` and
+`npm run typecheck:action` both exit 0. No LSP-only findings were treated as authoritative,
+per this project's own standing instruction -- the compiler and test runner are the gate.
 
 No sign of regression in Phase 7 or Phase 8's guards: `lint-scope-drift.spec.ts`,
 `lint-rules.spec.ts`, and `nx-target-inputs.spec.ts`'s Phase 7/8 clauses all pass in the same
 663-test run.
+
+**Re-verification (2026-07-29):** ran the full suite again at `3d127b2` myself: **671
+passed, 38 files** (+8 tests, +1 file -- exactly `read-back.spec.ts`'s new coverage, no
+regressions elsewhere). All nine battery commands re-run and re-confirmed exit 0 (see the
+table in `## The one gap -- CLOSED by plan 09-08` above). `git status --short` shows nothing
+uncommitted from this phase's scope.
 
 ---
 
@@ -336,13 +514,14 @@ gap.
 
 1. **This phase's stated goal is achieved and proven.** VER-06's live closure is unambiguous
    and is the strongest possible evidence for the phase's headline claim.
-2. **Do not mark this phase `passed` and move directly to `/gsd:extract-learnings` /
-   milestone close without resolving the `publish-verify` regression first**, per this
-   project's own "Routed to Phase 9 gap closure by maintainer decision" note already on
-   record. The maintainer should decide explicitly (via `/gsd-plan-phase 9 --gaps` or an
-   equivalent) whether to fix `read-back.ts`'s producer assumption now, in this phase, or
-   formally re-scope the fix into Phase 10 with an accepted-known-red-job note for the
-   intervening push.
-3. Nothing else in the phase needs rework. The `human_needed` item at the top of this
-   report's frontmatter is the maintainer's decision, not a re-open of any of the 11
-   requirements.
+2. **The gap that blocked a `passed` verdict on the first pass is now closed.** Plan 09-08
+   fixed `read-back.ts`'s producer assumption in Phase 9 itself (the maintainer's own routing
+   decision on the measured failure), and I independently re-verified the fix at the code,
+   fixture, and mutation-test level -- see `## The one gap -- CLOSED by plan 09-08` above.
+3. **Proceed to `/gsd:extract-learnings` / milestone close.** The one remaining open item
+   (observing `publish-verify` green with a `'linux'` producer line on the first real push to
+   `main`) is a standard live-CI confirmation, not a decision point or a rework item -- it is
+   the same category VER-06 and OBS-04 already carried before their own live closure. It is
+   named in this report's frontmatter `human_verification` for the record, and it does not
+   block calling the phase `passed`.
+4. Nothing else in the phase needs rework.

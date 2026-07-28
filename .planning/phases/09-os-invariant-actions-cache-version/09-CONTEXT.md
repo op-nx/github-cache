@@ -472,6 +472,104 @@ same-OS claim at `ci.yml:1053-1061` (Phase 10's OBS-05), any live O1-O4 proof
   directory -- and THAT is a re-pricing of a locked decision (D2-04), so stop and
   re-open it with the maintainer rather than auto-selecting a fallback.
 
+### CORRECTIONS FROM RESEARCH (2026-07-28, `09-RESEARCH.md` at `565f48f`)
+
+Recorded rather than silently edited, so the verifier does not read a research-driven
+change as drift (Phase 8 precedent). **`09-RESEARCH.md` wins over this file wherever they
+disagree** -- it measured, this file reasoned.
+
+- **U-01 is CLOSED. D-01 STANDS.** Nx 23.1.0 tolerates the archive: the `build` hash was
+  byte-identical across four runs with a 5 MB `.tar` present, `getCacheSize()` excluded it
+  (2,974,242 bytes counted, so it cannot drive eviction), the CI-only
+  `assertCacheIsValid` warning did not fire, and `nx reset` still clears it. A positive
+  control (`zz-stray-probe.txt`) DID move the hash, so the instrument fires. Record Nx
+  23.1.0 beside the literal's comment lock.
+
+- **C-01 -- D-19 is NOT implementable as written.** `action/index.ts` has **ONE**
+  `dogfoodBody` call, at `:224`, and it sits BEFORE the seed/verify branch. `:276` is
+  `received.equals(body)` -- a reuse of that buffer, not a second call. The
+  `<canonical_refs>` line citing "(`:224`, `:276`)" is WRONG. Restructure: **move the
+  call into each branch** so the two legs' arguments stay physically apart. Computing a
+  conditional above the branch reintroduces the one-expression coupling that makes the
+  vacuity trap reachable. Third call site to update: `roundtrip/read-back.ts:62`, which
+  passes `cachePlatform()` (its own-OS asset; a legitimate ambient read in a bin).
+
+- **C-02 -- D-14 uses `spawnSync`, not `spawn`.** D-14's load-bearing content (do NOT
+  reuse `runHelper`; borrow `shell: false` + `windowsHide: true`) is preserved. `spawnSync`
+  is strictly better: the exit code is STRUCTURALLY never consulted rather than
+  deliberately ignored, ENOENT yields `''` -> gzip with no listener wiring, and there is no
+  promise to leave unsettled. `promisify(execFile)` is ACTIVELY WRONG here -- it rejects on
+  non-zero exit, so the idiomatic `.catch(() => '')` reports gzip for a broken-but-present
+  zstd, the exact inversion VER-05 forbids.
+
+- **C-03 -- VER-04's guard breaks 16 existing spec constructions (Hazard A).** Under
+  `nx test` the cwd is the PROJECT root (`options.cwd: "packages/github-cache"` in the
+  MERGED config; `existsSync(cwd/nx.json)` is FALSE), so the guard throws in
+  `actions-cache-backend.spec.ts` (15 constructions) and `serve.spec.ts:401`, and probably
+  `select-backend.spec.ts`. **The guard and its spec accommodation must be ONE commit.**
+  Fix: a symmetrical `beforeAll`/`afterAll` `process.chdir()` to the workspace root
+  (measured to work in the vitest pool). That one hook also lands the archive in the ROOT
+  `.nx/cache`, which is the gitignored one -- `packages/github-cache/.nx/cache/` is NOT
+  gitignored (`git check-ignore` exits 1), though it provably does not perturb hashes.
+
+- **C-04 -- D-35 must merge steps 3 and 4 into ONE commit (Hazards B and D).** Land
+  **VER-07 + VER-01 + VER-03 + VER-04 together**. Two reasons: a VER-07-only commit creates
+  a `mkdirSync` for a path nothing writes yet (dead code plus a stray directory); and
+  VER-01 and VER-03 EACH change `getCacheVersion`'s input, so splitting them gives the
+  milestone FOUR rotation windows where D-30 says three and D-29 says "expected once". If
+  a split is ever forced, D-29's note must enumerate every version-affecting commit rather
+  than leave "once" standing. Note a VER-03-only commit would rotate only WINDOWS entries
+  (`cacheUtils.js:166`), producing an asymmetric signal that reads as a Windows breakage.
+
+- **C-05 -- D-34's gate is over-tight (Hazard C).** The mirror only changes on a
+  DEFAULT-BRANCH push: `ci.yml:3-7` filters pushes to `main` and `publish` is
+  `github.event_name == 'push'`. So the snapshot must precede **the merge to `main`**, not
+  the phase's first code commit. Keep it before the merge (`CACHE_MIRROR_MAX_AGE_DAYS` is
+  30, so waiting also ages the record out).
+
+- **C-06 -- VER-06 and OBS-04 CANNOT be observed pre-merge.** Same `main`-only push
+  filter: `dogfood-seed`, `dogfood-verify`, `publish` and `publish-verify` are all
+  push-gated, so none runs on this branch or on a PR. **The phase closes with two
+  `human_needed` items.** Do NOT author an acceptance check either could satisfy pre-merge
+  -- that is a guard passing for the wrong reason. Phase 8's D-22 "prove it RED on a real
+  leg" is only half-available here; the fixture RED is, the live RED is not.
+  `action-bundle-drift` carries no `if:`, so ROBUST-04's guard IS available on PRs.
+
+- **C-07 -- D-04 is CONFIRMED as a spec, and an ESLint rule is ruled OUT.**
+  `tools/eslint-rules/` does not exist, and a second `no-restricted-syntax` config object
+  would REDDEN the shipped Phase 7 guard at `lint-scope-drift.spec.ts:149-164`, which
+  asserts exactly ONE such object. Technique for D-05's needles: single-character character
+  classes in the regex source (`/\bj[o]in\b/`), plus **strip comments before scanning** --
+  the repo already does this three times (`lint-scope-drift.spec.ts:233-238`,
+  `cleanup-workflow.spec.ts:16-20`, `ppe-action.spec.ts:20-25`). Add clause 2b: assert the
+  module's import list is EXACTLY the type-only `{ Hash }`, so a builder reached through an
+  unanticipated module also fails.
+
+- **C-08 -- two more requirement miscounts, both comment-locked not silently fixed.**
+  (a) ROBUST-04 (`REQUIREMENTS.md:335`) and ROADMAP SC1d (`:286`) say "four `ci.yml`
+  sidecar jobs"; there are **FIVE** (`ci.yml:236`, `:310`, `:357`, `:432`, `:895`), and
+  `integration` is a two-leg matrix so six job-legs. CONTEXT.md fact #10 and D-25 are
+  right. (b) The `@actions/cache` **bump checklist VER-05/D-13 names DOES NOT EXIST**
+  (zero hits repo-wide). Put the "re-read `getCompressionMethod`; VER-05 duplicates it"
+  note in `pinned-deps.spec.ts`'s `@actions/cache` doc block (`:4-13`) -- already the
+  de-facto home for why the specifier is pinned and what a bump risks.
+
+- **C-09 -- D-31's table needs three refinements** (Q10 re-derived every site by phrase):
+  site 2 is `ci.yml:947-948` (not 943-950); site 3 is **TWO separate sentences** at
+  `ci.yml:387` and `ci.yml:406` needing different edits, not one block; site 5's sentence
+  starts at `README.md:124`. **D-32's reclassification is CONFIRMED.** Site 3 must be
+  corrected NARROWLY -- "a Linux cache never satisfies a Windows run" stays TRUE but its
+  REASON becomes the hash rather than the storage; the false clause is `:406`'s "exactly
+  the CORR-01 namespacing the store already relies on". Site 2's replacement must supply a
+  NEW reason the publish matrix stays two-legged, or a later reader will collapse it to one
+  OS on the strength of the corrected text.
+
+- **C-10 -- OBS-04's reworded message must name the AXIS (Hazard E).** The three rotation
+  windows are three DIFFERENT mechanisms (Nx task hash / `@actions/cache` version / Release
+  asset name), so a message that says only "rotation" lets a reader misdiagnose window 1 or
+  3. Also: `publish-mirror.spec.ts` asserts the message at `:426`, `:438`, `:486` via
+  `stringContaining('restored as a MISS')` -- **keep that substring** or all three break.
+
 </decisions>
 
 <canonical_refs>

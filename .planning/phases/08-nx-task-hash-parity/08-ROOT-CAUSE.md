@@ -1791,3 +1791,199 @@ stale seven-entry inference and a cold runner should converge on the same value 
 staleness axis closes as a side effect of closing the OS axis, for the same reason `lint` should.
 That is a prediction. It is not evidence, and 08-06's gate is what turns it into either a
 confirmation or a finding.
+
+---
+
+## The ordering proof: this record is complete, and no fix has been applied
+
+D-06 names git history as the proof that the record predates the fix, and rules out a programmatic
+mtime guard by name. This section is that proof. There is deliberately no timestamp assertion, no
+mtime check and no spec asserting on commit ordering anywhere in this phase's changed files -- a
+guard over git metadata would be a guard over something the history already states more legibly, and
+it would be one more thing to keep correct.
+
+The phase's commits are the range `7bfe64f..HEAD`. `7bfe64f docs(07): extract phase learnings` is
+the last Phase 7 commit and therefore the phase boundary; 22 commits follow it up to and including
+the commit immediately before this section landed.
+
+### Listing 1 -- every commit in this phase that touched `nx.json`
+
+```
+$ git log --oneline 7bfe64f..HEAD -- nx.json
+(exit 0; lines: 0)
+```
+
+**NONE.** Zero commits. The three commits that last touched `nx.json` --
+`331a60c fix(07): LO-01 declare tools/eslint-rules as a test input too (D-25)`,
+`b3fdf6d feat(07-03): infer a cacheable lint target and declare its full input set`, and
+`db577db feat(07-01): adopt the ESLint 9 flat-config toolchain` -- are all Phase 7 commits and all
+precede the boundary. Nothing in plans 08-01, 08-02, 08-03 or 08-04 edited the file the fix will
+edit.
+
+### Listing 2 -- every commit that touched this record
+
+```
+$ git log --format="%h  %ad  %s" --date=short 7bfe64f..HEAD -- .planning/phases/08-nx-task-hash-parity/08-ROOT-CAUSE.md
+eeace53  2026-07-28  docs(08-04): name the root cause and write the fix route down before taking it
+0f64781  2026-07-28  docs(08-03): record observation points 3 and 4, and answer PARITY-01 node by node
+2a062a0  2026-07-28  docs(08-03): record observation points 1 and 2, PARITY-04, and what typecheck emits
+a8c7e7c  2026-07-28  docs(08-01): open the root-cause record with its method and anti-requirements
+```
+
+### What the two listings prove together
+
+The record was opened at `a8c7e7c`, filled with all four observation points and both diffs at
+`2a062a0` and `0f64781`, and closed with the root cause, the fix route and U-01's trigger condition
+at `eeace53`. Across every one of those commits and every other commit in the phase, `nx.json` is
+untouched. **The record is complete at the commit carrying this section, and no fix has been applied
+at any point up to and including it.**
+
+The commit that follows this one in the phase is plan 08-05's `nx.json` edit -- the FIRST fix
+commit. This plan's last commit is therefore the last commit in Phase 8 for which listing 1 can be
+empty, which is precisely what makes PARITY-01's "RECORDED before any fix is applied" checkable
+rather than asserted. Anyone auditing it re-runs listing 1 with `HEAD` replaced by this commit's
+SHA.
+
+---
+
+## Requirement coverage
+
+One row per requirement this record is responsible for, audited against each requirement's OWN text
+in `.planning/REQUIREMENTS.md` rather than against the roadmap's paraphrase. Per D-08 each row
+states which of the two questions its section addresses: **Q1** (cross-OS parity), **Q2** (does a
+warm local box compute the hash cold CI published), or **neither, it is method**.
+
+| Requirement | Answered by | D-08 question | Satisfied by this record? |
+|---|---|---|---|
+| **PARITY-01** -- root-cause node-by-node, RECORDED before any fix, controlling for BOTH axes | `## Root cause`, built on `## The local staleness diff (point 1 versus point 2)` and `## The cross-OS diff: PARITY-01, answered node by node`; ordering proven by `## The ordering proof` | **both, separately** -- the staleness sub-section is Q2's precondition, the OS sub-section is Q1's | **YES.** One node, one field, both axes separated, D-09 gate stated, D-10 supersession recorded, and the ordering proven by git history with no programmatic guard |
+| **PARITY-02** -- the instrument emits the per-NODE `details` map; `nx show target inputs` recorded INSUFFICIENT | `## The instrument computes Nx's number` and `## Why nx show target inputs is not evidence (D-03, PARITY-02)` | **neither, it is method** -- both sections say so in their first line | **YES.** The instrument is validated byte-identical against `.nx/cache/run.json` on two targets, and the CLI surface is disqualified by its own API doc plus an executed run |
+| **PARITY-03** -- byte-identical `build`/`typecheck`/`test` at three observation points, workstation in BOTH graph states; four values per target | `## Observation points` and `## All four points side by side` | **Q1** | **NO -- and this record does not claim it.** Four values per target ARE recorded at one commit, which is the MEASUREMENT half. They are not identical. The outcome is satisfied by **plan 08-05's fix** and enforced continuously by **plan 08-06's compare job**, per the requirement's own closing clause "Enforced continuously by CORR-03(c), not measured once" |
+| **PARITY-04** -- "warm local box computes the cold-CI hash" as a SEPARATE named question, not resolved by `nx reset` | `## PARITY-04, answered as its own question` | **Q2, and only Q2** | **YES.** Measured answer NO on all five targets, stated as a finding the requirement's own text permits, with no `nx reset` anywhere in the recipe |
+| **PARITY-05** -- `integration` byte-identical between the WORKSTATION and `windows-11-arm` | `## All four points side by side`, and the zero-node diff in `## D-11: typecheck's third variance source, ROOT-CAUSED` | **Q1**, in its same-OS form | **YES.** Point 1 (workstation, `win32`) and point 3 (`windows-11-arm`) both report `3844377013355031551`, with a zero-node diff across all 430 nodes. Presented as a same-OS PAIR, which is what the requirement asks for -- see the note below |
+| **PARITY-06** -- every measurement records Nx version, Node version, install mode AND graph state | `## Observation points`, the four verbatim `meta` blocks, and the cross-point `meta` comparison table | **neither, it is method** | **YES.** All four fields present on all FOUR observation points, not a sample -- checked individually below |
+
+### PARITY-03: what this record's job actually was
+
+The requirement asks for byte-identical hashes at three observation points with the workstation
+measured in BOTH graph states -- four values per target. All four values exist, at one commit, each
+carrying its full `meta` block. They are not identical, and reporting the row as covered because the
+measurement was taken would be exactly the failure mode this audit exists to catch. **This record's
+job for PARITY-03 is the measurement; the outcome belongs to 08-05, and the continuous enforcement
+belongs to 08-06.** Note also that only THREE of the four values can ever be brought into agreement
+by an `nx.json` change: the workstation's `typecheck` carries the build-output variable that
+`nx.json` cannot reach (D-11, item 6 of the Phase 12 hand-off).
+
+### PARITY-05: confirmed as a PAIR, not accidentally
+
+The requirement names a same-OS pair -- native Windows workstation versus `windows-11-arm` -- not a
+cross-OS one, and it is easy to satisfy accidentally and easier to report accidentally. It is
+presented as a pair here: point 1 and point 3 are the two halves, both `win32`/`arm64`, both cold,
+both at the anchor, and their `integration` diff is zero nodes changed out of 430. The cross-OS
+value (`23244131947937181` on point 4) is recorded beside it so the same-OS agreement is visibly an
+agreement rather than the absence of a reading. One consequence worth recording: **no CI job can
+enforce PARITY-05 continuously**, because no hosted runner is a developer workstation. Unlike
+PARITY-03, this row is closed by measurement or not at all.
+
+### PARITY-06: all four points checked, not a sample
+
+| Field | Point 1 | Point 2 | Point 3 | Point 4 |
+|---|---|---|---|---|
+| `nxVersion` | `23.1.0` | `23.1.0` | `23.1.0` | `23.1.0` |
+| `nodeVersion` | `v24.13.0` | `v24.13.0` | `v24.18.0` | `v24.18.0` |
+| `installMode` | `ci` | `ci` | `ci` | `ci` |
+| `graphState` | `cold` | `warm` | `cold` | `cold` |
+
+Four for four on every point. `nodeVersion` differs between the workstation and the runners because
+`.node-version` holds the moving alias `lts/krypton`; PARITY-06 anticipates exactly that, and the
+difference is measured inert above rather than waved past. The `meta` block in `## The instrument
+computes Nx's number` carries the same four fields for the earlier validation run at `5a8f7c5`.
+
+### Where the requirements' own words disagree with a paraphrase or with the measurement
+
+Recorded rather than smoothed. None of these is edited in place; this record is the attributable
+correction, matching how plan 08-01 handled the first of them.
+
+1. **FRESHNESS versus STALENESS.** `ROADMAP.md` SC1 and `REQUIREMENTS.md` PARITY-01 both call the
+   second axis a FRESHNESS axis. The measurement says staleness-of-persisted-inference: cold and
+   warm AGREE when `.nx/workspace-data` is fresh. Already recorded by plan 08-01 in `## The second
+   axis is STALENESS, not freshness`, and restated here because it is the one wording error that
+   changes what closes the axis.
+
+2. **PARITY-01's leading hypothesis names two plugins; the measurement names one.** The requirement
+   says "the `@nx/vitest` / `@nx/js/typescript` OS-dependent `ProjectConfiguration` class". The
+   CLASS is right and the node is right. The plugin is `@nx/js/typescript` specifically -- the
+   diverging field is `targets.typecheck.outputs`, which `@nx/js/typescript` infers. `@nx/vitest`'s
+   inferred `test` target contributes no differing field: zero `value-changed` fields anywhere in
+   the merged node. A narrowing, not a contradiction.
+
+3. **PARITY-01(b)'s parenthetical enumeration is incomplete at the anchor.** It says "warm-local-
+   Windows `build`/`test` equal cold-ubuntu-CI to the digit". Measured here, `lint` joins them as a
+   third: point 2 versus point 4 is byte-identical on `build`, `test` AND `lint`, with 164 of 164
+   merged-configuration fields the same. Incomplete rather than wrong.
+
+4. **PARITY-06's guess at `typecheck`'s third variance source is the right node and the wrong
+   variable.** The requirement says "plausibly install mode reaching it via
+   `dependentTasksOutputFiles` or `externalDependencies`". It IS the `dependentTasksOutputFiles`
+   node -- but install mode is `ci` on all four observation points, so install mode is not the
+   variable at all. The variable is whether `packages/github-cache/dist/` is POPULATED. Right node,
+   wrong cause, and the difference matters because the requirement's version would have been closed
+   by standardising the install command, which would not have closed anything.
+
+5. **`ROADMAP.md`'s traceability table carries a stale PARITY numbering.** Rows `:530-534` read as
+   an off-by-N shift against `REQUIREMENTS.md`: the `PARITY-02` row states PARITY-03's text
+   ("byte-identical `build`/`typecheck`/`test` at all THREE observation points"), the `PARITY-03`
+   row states PARITY-05's, the `PARITY-04` row states PARITY-06's, and the `PARITY-05` row states
+   PARITY-07's. The coverage line at `:574` says "Phase 8: 7 (PARITY-01..05, CORR-03, CORR-04)",
+   while the ROADMAP's OWN Phase 8 section at `:164-165` and `REQUIREMENTS.md`'s traceability rows
+   at `:619-627` both list PARITY-01 through PARITY-07 plus CORR-03 and CORR-04 -- nine. **This
+   audit reads `REQUIREMENTS.md`, which is why the shift is visible at all**; an audit against the
+   table would have reported PARITY-02 covered by the observation points, which is PARITY-03's job
+   and is exactly the row this record does NOT satisfy. Surfaced, not fixed: `ROADMAP.md` is outside
+   this plan's file scope and a drive-by renumber in the phase whose whole point is a clean
+   measure-then-fix ordering is the wrong trade.
+
+---
+
+## Anti-requirements: what does NOT count as evidence
+
+This phase's success criteria are unusually prescriptive about what is not evidence, and each item
+is easy to satisfy by accident in a later plan. Recorded as constraints on plans 08-05 and 08-06,
+not as notes.
+
+1. **A "no difference" result from `nx show target inputs` is NOT evidence.** The surface SKIPS
+   `ProjectConfiguration` by its own API documentation -- which is the ONLY node that differs
+   cross-OS in this workspace -- and reports file PATHS rather than content hashes. The programmatic
+   `HashPlanInspector` form carries the same limitation; it is the same inspector with a different
+   wrapper. Both the trailing-`--inputs` form and the real `inputs` subcommand were run so neither
+   reading can be dismissed as the wrong command. Citations are in `## Why nx show target inputs is
+   not evidence (D-03, PARITY-02)`. **Constraint: no plan may close a parity claim on that surface.**
+
+2. **A textual assertion that `nx.json` CONTAINS the discriminator does NOT satisfy CORR-03.** It
+   proves the input is DECLARED; it does not prove the input DISCRIMINATES. CORR-03's own text says
+   so. The satisfying evidence is clause (b) -- `integration`'s hash differing between two real legs
+   -- with clause (c) as its non-vacuity control. **Constraint on 08-06: the gate asserts over two
+   downloaded runner records, never over `nx.json` text.** `nx-target-inputs.spec.ts:241-260` is a
+   CORR-04 guard ("`integration` is the only target with a runtime input") and is not, and must not
+   be presented as, CORR-03 evidence.
+
+3. **A `nx reset` in a PARITY-04 proof recipe silently converts PARITY-04's question into
+   PARITY-03's.** The reset clears `.nx/workspace-data` and forces the local box COLD; a cold local
+   box compared against cold CI is a clean answer to Q1 that LOOKS like an answer to Q2 while having
+   replaced Q2's subject. The developer Q2 is about did not run `nx reset` -- that is the entire
+   premise. This record's PARITY-04 section deliberately contains none, and `nx reset` appears in
+   this document only in prose explaining why it is excluded and in the Phase 12 hand-off where it
+   is the developer-facing MITIGATION rather than a measurement step. **Constraint on 08-05: the
+   post-fix re-measurement keeps the environment-variable cold recipe and keeps a
+   warm-preexisting reading, or U-01's condition C1 is unmeasurable.**
+
+4. **No Phase 8 spec may assert on `.github/workflows/ci.yml` content.** `nx.json`'s `test` inputs
+   list `{workspaceRoot}/.github/workflows/cleanup.yml` (`nx.json:68`) and NOT `ci.yml`, so a spec
+   reading `ci.yml` serves a stale cached PASS -- it re-runs only when some unrelated input busts
+   the `test` hash. Registering `ci.yml` is **PARITY-08 and is deferred to Phase 9**, so its hash
+   rotation collapses into VER-01's existing window. **This is a constraint on plans 08-05 and
+   08-06, not a note:** 08-06 wires a CI job and the temptation to guard it with a spec that reads
+   the workflow file is real. The rationale for that job lives in its own comment block in `ci.yml`
+   -- which is why 08-03's job carries roughly 70 lines of comment -- and its behaviour is gated by
+   the job failing, not by a spec asserting the job exists. This repo has shipped the
+   stale-cached-PASS class three times (`governance-email.spec.ts`, `typecheck`'s own inputs, and
+   the D-25 `tools/eslint-rules` hole), so the constraint is recorded rather than assumed.

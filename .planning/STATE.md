@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 8
 current_phase_name: Nx Task-Hash Parity
 status: executing
-last_updated: "2026-07-28T05:13:50.098Z"
+last_updated: "2026-07-28T06:20:37.700Z"
 last_activity: 2026-07-28
-last_activity_desc: Phase 8 plan 08-03 complete (the anchor commit, the two-leg capture job, and all four observation points)
+last_activity_desc: Phase 8 plan 08-04 complete (the root cause named, the fix route written down before it is taken, and the ordering proven by git history)
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 8 (Nx Task-Hash Parity) -- EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-28 -- Phase 8 plan 08-03 complete (the anchor commit, the two-leg capture job, and all four observation points)
+Last activity: 2026-07-28 -- Phase 8 plan 08-04 complete (the root cause named, the fix route written down before it is taken, and the ordering proven by git history)
 
 ## Performance Metrics
 
@@ -97,6 +97,7 @@ Last activity: 2026-07-28 -- Phase 8 plan 08-03 complete (the anchor commit, the
 | Phase 08 P01 | 39min | 2 tasks tasks | 4 files files |
 | Phase 08 P02 | 26min | 2 tasks | 6 files |
 | Phase 08 P03 | 33min | 3 tasks | 2 files |
+| Phase 08 P04 | 28min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -177,6 +178,8 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 08]: 08-03: PARITY-04 answered NO at the anchor: a warm-preexisting Windows box computes a different hash from cold on all five targets. Recorded as a finding; the nx reset mitigation is DOCS-07 (Phase 12) and is deliberately absent from the proof recipe.
 - [Phase 08]: 08-03: D-21 resolves to its PRIMARY branch: lint diverges cross-OS but nothing lint-specific does (all six D-35 hashed rows match on both legs, options.cwd included), so 08-06 asserts lint as a fourth IDENTICAL target.
 - [Phase 08]: 08-03: D-11 ROOT-CAUSED: typecheck's four values decompose into two binary variables -- the outputs classification and whether dist/ is populated (the dependentTasksOutputFiles node). No residue, not left OPEN.
+- [Phase 08]: 08-04: U-01's trigger condition is pre-committed as C1-C4 (confirm) / L1-L4 (escalate) / N1-N3 (explicitly NOT triggers). N1 -- typecheck differing between a built workstation and an unbuilt runner -- is D-11's residue, orthogonal to both axes and provably not closed by the fix; without pre-declaring it, the first post-fix comparison would read as U-01 going live.
+- [Phase 08]: 08-04: coverage audited against REQUIREMENTS.md's own words, never ROADMAP.md's paraphrase -- which is how ROADMAP.md:530-534's stale PARITY numbering was caught (its PARITY-02 row states PARITY-03's text, and an audit against it would have closed the one row this record does NOT satisfy). Surfaced, not fixed.
 
 ### Pending Todos
 
@@ -303,8 +306,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-28T05:13:50.085Z
-Stopped at: Completed 08-03-PLAN.md
+Last session: 2026-07-28T06:20:25.553Z
+Stopped at: Completed 08-04-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

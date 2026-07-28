@@ -208,7 +208,7 @@ CORR-03, CORR-04.
      export. `typecheck`'s third variance source (four distinct values across the four probe
      measurements) is either root-caused or explicitly recorded as open. (PARITY-06, PARITY-07)
 
-**Plans**: 3/6 plans executed
+**Plans**: 4/6 plans executed
 
 Plans:
 
@@ -221,7 +221,7 @@ Plans:
 - [x] 08-03-PLAN.md -- Measure: the two-leg capture job, the anchor commit, and all FOUR observation
       points at that one commit plus the `typecheck` outputs enumeration (wave 3)
 
-- [ ] 08-04-PLAN.md -- Record: the root cause named node by node and the fix route written down
+- [x] 08-04-PLAN.md -- Record: the root cause named node by node and the fix route written down
       BEFORE it is taken, in commits that provably predate every `nx.json` edit (wave 4)
 
 - [ ] 08-05-PLAN.md -- Fix: the `nx.json` `targetDefaults` change with its rationale pinned in the
@@ -689,7 +689,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 5. Trust-Widening + PPE Gate | v0.0.1 | 4/4 | Complete | 2026-07-20 |
 | 6. Distribution + Docs + Governance | v0.0.1 | 5/5 | Complete | 2026-07-21 |
 | 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 4/4 | Complete   | 2026-07-27 |
-| 8. Nx Task-Hash Parity | v0.0.2 | 3/6 | In Progress|  |
+| 8. Nx Task-Hash Parity | v0.0.2 | 4/6 | In Progress|  |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 0/? | Not started | - |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 0/? | Not started | - |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 0/? | Not started | - |

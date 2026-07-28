@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
-current_phase: 8
-current_phase_name: Nx Task-Hash Parity
+current_phase: 09
+current_phase_name: os-invariant-actions-cache-version
 status: executing
-last_updated: "2026-07-28T17:11:02.208Z"
+last_updated: "2026-07-28T18:26:55.118Z"
 last_activity: 2026-07-28
-last_activity_desc: Phase 9 planning complete
+last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 11
+  total_plans: 19
   completed_plans: 10
   percent: 17
 ---
@@ -23,15 +23,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 8 -- Nx Task-Hash Parity
+**Current focus:** Phase 09 -- os-invariant-actions-cache-version
 
 ## Current Position
 
-Phase: 8 (Nx Task-Hash Parity) -- EXECUTING
-Plan: 6 of 6
-Status: Ready to execute (08-06 is the last plan -- the gate)
+Phase: 09 (os-invariant-actions-cache-version) -- EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 09
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-28 — Phase 9 planning complete
+Last activity: 2026-07-28 -- Phase 09 execution started
 
 ## Performance Metrics
 

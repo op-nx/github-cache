@@ -13,6 +13,7 @@
     "fallow": "fallow dead-code",
     "fallow:ci": "fallow dead-code --fail-on-issues",
     "build:action": "node esbuild.action.mjs",
+    "capture:hashes": "node capture-hashes.mjs",
     "check:action": "npm run build:action && git diff --exit-code -- start-cache-server/index.js",
     "typecheck:action": "tsc -p tsconfig.action.json",
     "pack:check": "node packages/github-cache/pack-check.cjs",

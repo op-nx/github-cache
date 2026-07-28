@@ -487,7 +487,7 @@ jobs:
   # block out removes an entire class of flake from a measurement that has to be
   # trusted.
   #
-  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full at :658-661: such a
+  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full at :943-946: such a
   # block REPLACES the workflow grant WHOLESALE rather than merging it, so adding one
   # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
   # covers checkout plus an artifact upload, and this job requests no secret.
@@ -606,6 +606,140 @@ jobs:
           name: hash-parity-${{ matrix.os }}
           path: hash-parity-${{ matrix.os }}.json
           if-no-files-found: error
+
+  # The BUILD-GATING hash-parity comparison (CORR-03, D-15's fourth and last step,
+  # D-17's compare half, D-18, D-20, D-21, D-23). It downloads both capture legs'
+  # records and runs the unit-proven comparator over them, so PARITY-03 is ENFORCED
+  # on every run rather than measured once in 08-ROOT-CAUSE.md and then trusted.
+  #
+  # WHAT IT ASSERTS, via packages/github-cache/src/hash-parity/compare.ts: exactly
+  # two platform records with a non-empty hash and a non-empty node map for all five
+  # targets; DIFFERENT meta.os on the two; `integration` DIVERGENT between them; and
+  # `build`, `typecheck`, `test` and `lint` IDENTICAL between them. Note the sign on
+  # `integration`: a MATCHING integration hash is a discriminator FAILURE, not a
+  # parity success, because that target is the only one declaring a platform runtime
+  # input (nx.json:101, D-14). `lint` is the FOURTH invariant target rather than a
+  # recorded observation -- D-21's PRIMARY branch, taken because plan 08-05 measured
+  # `lint` byte-identical across both legs (6930879416208693542 on each). D-21's
+  # named fallback (downgrade the clause to a recorded finding) therefore does NOT
+  # apply, and either way the clause is never DELETED: a deleted clause is
+  # indistinguishable from one that never existed.
+  #
+  # NO continue-on-error AND NO ADVISORY PERIOD (D-18). This job is build-gating from
+  # its first commit. A later addition of continue-on-error would be invisible in a
+  # green run, which is why the observed-RED record in 08-ROOT-CAUSE.md's
+  # "The gate can fail" section carries run references as the reference point.
+  #
+  # if: !cancelled() -- CHOSEN DELIBERATELY, not by reflex. D-17 names `always()`,
+  # and what D-17 actually REQUIRES is that a FAILED or SKIPPED capture leg still
+  # arrives at the assertion: "fewer than two records is a FAILURE, not a skip" is
+  # unreachable if the compare job simply skips alongside its dead upstream. The two
+  # forms differ on exactly one case -- cancellation -- and a cancelled run producing
+  # a red gate is noise, not signal. `!cancelled()` covers failure and skip, and it
+  # is ALREADY this file's house form for a dependent job (`publish` at :926 uses
+  # exactly it). So the narrower expression satisfies D-17's intent and matches
+  # precedent at the same time.
+  #
+  # The if: expression governs whether this job RUNS. NOTHING in it may govern
+  # whether this job PASSES (D-23): the verdict comes from record CONTENT only, never
+  # from needs.*.result. A leg can succeed and still have uploaded a truncated
+  # record, and a leg can fail AFTER a valid upload -- deriving the verdict from job
+  # status inverts both cases. There is deliberately no needs.*.result reference
+  # anywhere below.
+  #
+  # A SINGLE ubuntu runner, not a matrix. This job compares two records; it is not
+  # per-OS. It is also the FIRST job in this file that collapses a matrix's legs into
+  # ONE downstream job that sees both -- every other `needs` here either fans in from
+  # a single job (`dogfood-verify` needs `dogfood-seed`, `consumer-smoke` needs
+  # `action-bundle-drift`) or is itself a matrix pairing up leg-by-leg
+  # (`publish-verify` needs `publish`). A reader looking for an in-repo precedent for
+  # the fan-in shape should read this sentence rather than go looking: there is none.
+  #
+  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full at :943-946: such a
+  # block REPLACES the workflow grant WHOLESALE rather than merging it, so adding one
+  # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
+  # covers checkout plus an artifact download, and this job requests no secret.
+  #
+  # NO EVENT GATE. Every job in this file carrying `if: github.event_name == 'push'`
+  # does so because it WRITES (seeds a cache entry, publishes a release asset). This
+  # one only reads and asserts -- same rule the read-side jobs state at :170-172. A
+  # gate that only runs on the default branch is not a gate on a pull request.
+  #
+  # CHECKOUT REF pinned to the PR head SHA, as in the capture job (see its CHECKOUT
+  # REF paragraph at :525-535 for the full reasoning). The narrower reason HERE: the
+  # records were captured from the branch tree, so the comparator that judges them
+  # must be the branch's comparator. On a default merge-commit checkout, a clause
+  # WEAKENED on the default branch would silently judge this branch's records -- a
+  # false-green channel, since the merge tree can carry a removal the branch never
+  # made.
+  #
+  # THE BUILD STEP IS MANDATORY and easy to forget: the comparator is TypeScript, so
+  # dist/hash-parity/assert-parity.js does not exist until `npm run build` has run,
+  # and without it the step fails for the wrong reason. pack-check (:121-131, reason
+  # spelled out at :119-120) and publish-verify (:1043-1050) carry the same
+  # build-then-run ordering.
+  #
+  # RECORDS DIRECTORY CREATED BEFORE THE DOWNLOAD, so the loader always has a
+  # directory to read rather than an ENOENT, even when nothing arrived. RESIDUAL
+  # LIMITATION, accepted and recorded rather than papered over: if the download
+  # action ITSELF errors on a zero-match pattern, this job is still RED but the blame
+  # lands one step earlier than the comparator's named `wrong-record-count` reason.
+  # The fixture case for that clause is unit-proven regardless (08-02: a one-record
+  # directory exits 1 naming `wrong-record-count` plus its three suspects), so the
+  # clause is covered; only the blame location shifts.
+  #
+  # THE GREP IS REQUIRED ON TOP OF THE EXIT CODE (D-23), and it is not optional. The
+  # pipeline's failure mode is the FIRST half -- a non-zero exit from the bin fails
+  # the step under pipefail. The grep is the SECOND: it asserts the comparison
+  # actually RAN and PRINTED its verdict, rather than the step succeeding because the
+  # bin was absent, the directory was empty in a way the loader tolerated, or a future
+  # refactor turned the assertion into a no-op. The `lint` job at :66-72 is the exact
+  # precedent and its comment is this file's statement of the rule; Phase 7's
+  # measurement that `nx run-many -t <missing>` prints "No tasks were run" and exits 0
+  # is why the precedent exists. Unlike that job this one needs NO NO_COLOR: the
+  # asserted prefix is the comparator's own literal (`SUCCESS_PREFIX` in
+  # assert-parity.ts), deliberately colour-free and not Nx-formatted, so no reporter
+  # change can break the match.
+  #
+  # NO SPEC ASSERTS ON THIS FILE, so this comment block is the only place the
+  # rationale can live -- which is why it carries so much of it. ci.yml is NOT in
+  # nx.json's `test` inputs (only cleanup.yml is, nx.json:68), so a spec asserting on
+  # this file's content would serve a stale cached PASS; registering it is PARITY-08,
+  # deferred to Phase 9.
+  hash-parity-compare:
+    needs: hash-parity
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job. Matches the non-matrix siblings at
+    # 15 rather than the capture matrix's 20: this job installs, builds, downloads two
+    # small JSON files and runs one node script.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - name: Create the records directory before the download
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p hash-parity-records
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: hash-parity-*
+          merge-multiple: true
+          path: hash-parity-records
+      - name: Compare the two records, and prove the comparison actually ran
+        shell: bash
+        run: |
+          set -euo pipefail
+          node packages/github-cache/dist/hash-parity/assert-parity.js hash-parity-records 2>&1 | tee hash-parity.log
+          grep -q 'hash-parity: PARITY OK' hash-parity.log
 
   # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
   # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the

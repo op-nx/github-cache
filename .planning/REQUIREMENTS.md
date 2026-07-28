@@ -245,7 +245,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 - [ ] **PARITY-07**: The public-surface guard passes unchanged -- no new env knob, no new action
   input, no new package export (D2-02).
 
-- [ ] **PARITY-08**: `{workspaceRoot}/.github/workflows/ci.yml` is registered as a `test` input and
+- [x] **PARITY-08**: `{workspaceRoot}/.github/workflows/ci.yml` is registered as a `test` input and
   `nx.json`'s explicit input list is comment-locked. `nx.json` lists `cleanup.yml` and NOT `ci.yml`,
   so any spec asserting on `ci.yml` serves a stale cached PASS -- the same false-pass class the
   `typecheck` target already shipped once. Consumers: DOCS-08, OBS-05, XOS-06, XOS-07, DOCS-07's
@@ -257,27 +257,27 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 ### Cache-version hardening (VER)
 
-- [ ] **VER-01**: The path string passed to `@actions/cache` is byte-identical on Windows and
+- [x] **VER-01**: The path string passed to `@actions/cache` is byte-identical on Windows and
   Linux for a given hash: a hardcoded forward-slash, workspace-relative literal under `.nx/cache/`.
   It MUST NOT be built with `node:path` (`join`/`resolve`/`sep`/`normalize`), MUST NOT be
   absolutized, and MUST NOT derive from `os.tmpdir()`, `RUNNER_TEMP`, or `~`. `@actions/cache`
   sha256s the raw path strings into the cache version, so any separator difference is a silent
   cross-OS MISS.
 
-- [ ] **VER-02**: The two version-determining inputs are pinned by spec -- the archive-path
+- [x] **VER-02**: The two version-determining inputs are pinned by spec -- the archive-path
   literal is byte-identical for `win32` and `linux`, and `enableCrossOsArchive` is `true` at every
   call site. The derived version itself is NOT assertable: `getCacheVersion` is not on
   `@actions/cache`'s exported surface (verified: `ERR_PACKAGE_PATH_NOT_EXPORTED`).
   `cache-archive-path.spec.ts:25-26` is REPLACED, not relaxed -- it currently pins
   `dirname === tmpdir()`.
 
-- [ ] **VER-03**: `enableCrossOsArchive: true` is hardcoded at ALL THREE `@actions/cache` call
+- [x] **VER-03**: `enableCrossOsArchive: true` is hardcoded at ALL THREE `@actions/cache` call
   sites -- `restoreCache` (read, `:46`), `saveCache` (write, `:101`), and the `lookupOnly`
   existence probe (`:107`). It is a POSITIONAL argument at a different index in each function, and
   upstream's JSDoc documents the wrong order. A spec asserts the argument list of each call and
   the call count, so a fourth site added later fails.
 
-- [ ] **VER-04**: The process asserts, ONCE at `createActionsCacheBackend()` construction, the
+- [x] **VER-04**: The process asserts, ONCE at `createActionsCacheBackend()` construction, the
   CONJUNCTION: cwd is the Nx workspace root AND (`GITHUB_WORKSPACE` is unset OR
   `resolve(GITHUB_WORKSPACE) === resolve(cwd)`), compared case-normalised. "The Nx workspace root"
   alone is the WRONG variable -- `@actions/cache` never reads it. A relative path is resolved
@@ -292,7 +292,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   nothing currently defends it. Record the asymmetry: the same fault is LOUD in `publishMirror` and
   SILENT in `serve`, so a green publish job is not evidence the serve path is healthy.
 
-- [ ] **VER-05**: The resolved `@actions/cache` compression method is surfaced in the publish
+- [x] **VER-05**: The resolved `@actions/cache` compression method is surfaced in the publish
   summary. It is a third version component, pushed into the version UNCONDITIONALLY -- before and
   independent of the `enableCrossOsArchive` branch -- so the flag cannot rescue a mismatch. The
   value is NOT readable from the library: the exports map is `{".": ...}` only and
@@ -307,7 +307,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   NOT bundled by Git for Windows as the debug report claimed, which makes its presence a runner-image
   provisioning choice and MORE likely to move than assumed.
 
-- [ ] **VER-06**: The cross-OS behavioural close is a `dogfood-verify` leg on windows-11-arm that
+- [x] **VER-06**: The cross-OS behavioural close is a `dogfood-verify` leg on windows-11-arm that
   reads back the entry `dogfood-seed` wrote on ubuntu-24.04-arm. A MISS fails the job. This, not a
   unit spec, is the load-bearing control: a spec runs in one process on one OS and cannot observe
   a two-OS property. It asserts PROVENANCE, not presence -- the seed key is
@@ -318,7 +318,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   This is the Actions-cache mirror image of the Releases-side trap OBS-05 closes; the asymmetry was
   an omission, not a decision.
 
-- [ ] **VER-07**: The archive directory exists and the literal stays gitignored. `put()` calls
+- [x] **VER-07**: The archive directory exists and the literal stays gitignored. `put()` calls
   `writeFile` before anything creates `.nx/cache`, so on a fresh runner or after `nx reset` that is
   ENOENT, which rethrows (not a `ReserveCacheError`) into a 500 and fails the build -- writes are
   fail-closed by design. One `mkdir` with `{ recursive: true }` at construction covers it. The read
@@ -329,7 +329,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   not merely because it is workspace-relative. `nx reset` deletes `.nx/cache`, and TEST-10 mandates
   a reset, so the Phase 11 proof order is reset FIRST, then start the sidecar.
 
-- [ ] **ROBUST-04**: `npm run build:action` runs in the SAME COMMIT as any edit to a
+- [x] **ROBUST-04**: `npm run build:action` runs in the SAME COMMIT as any edit to a
   `serve()`-reachable source. The committed `start-cache-server/index.js` INLINES both
   comment-locked helpers and `getCacheVersion`'s `windows-only` branch, and four `ci.yml` sidecar
   jobs run that committed bundle from the git ref rather than a build output. Drift means the
@@ -626,9 +626,9 @@ honour table: `.planning/ROADMAP.md`.
 | CORR-03 | Phase 8 | Pending |
 | CORR-04 | Phase 8 | Pending |
 | PARITY-08 | Phase 9 | Pending (must land before any spec asserts on `ci.yml`) |
-| VER-01 | Phase 9 | Pending |
-| VER-02 | Phase 9 | Pending |
-| VER-03 | Phase 9 | Pending |
+| VER-01 | Phase 9 | Complete |
+| VER-02 | Phase 9 | Complete |
+| VER-03 | Phase 9 | Complete |
 | VER-04 | Phase 9 | Pending (drift guard -- identity MEASURED to hold today) |
 | VER-05 | Phase 9 | Pending (zstd MEASURED present; O4 not blocked) |
 | VER-06 | Phase 9 | Pending (asserts provenance, not presence) |

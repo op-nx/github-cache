@@ -6,6 +6,13 @@ import { isSyncTrusted } from '../lib/sync-gate.js';
 import { createResilientOctokit } from '../lib/resilient-octokit.js';
 import { dogfoodBody } from '../lib/dogfood-body.js';
 import { writeCountSummary } from '../lib/summary.js';
+// The ONLY import site of compression-method.js in the repo, and it must stay that
+// way (D-17). The committed sidecar bundle has a single entry,
+// start-cache-server/entry.ts, which does not reach this module -- so importing the
+// probe from runPublish keeps a child-process spawn out of the bundle every consumer
+// resolves via `uses:`, and out of ROBUST-04's rebuild obligation. `npm run
+// check:action` returning an EMPTY diff is what proves it stayed out.
+import { resolveCompressionMethod } from '../lib/compression-method.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
@@ -166,6 +173,40 @@ export async function runPublish(): Promise<void> {
     ['restore-MISS (of skipped)', result.readMisses],
     ['failed', result.failed],
   ]);
+
+  // VER-05: the compression method is a THIRD cache-version component, pushed into
+  // the version unconditionally by @actions/cache's getCacheVersion
+  // (cacheUtils.js:162-163) BEFORE and independent of the enableCrossOsArchive
+  // branch at :166 -- so the flag plan 09-03 hardcoded cannot rescue a mismatch on
+  // this axis. Reporting it is how a reader of a cross-OS MISS can tell which of the
+  // three components moved.
+  const compressionMethod = resolveCompressionMethod();
+
+  core.info(
+    `github-cache publish: @actions/cache resolved compression method ${compressionMethod}.`,
+  );
+
+  // Three things are load-bearing about the two lines below.
+  //
+  // 1. core.summary.write() APPENDS by default -- @actions/core/lib/summary.js:69-77
+  //    picks appendFile unless options.overwrite is truthy -- and write() empties the
+  //    buffer. So a SECOND write() after writeCountSummary's adds to the rendered
+  //    summary rather than clobbering the table. The leading newline is what puts a
+  //    blank line after the table's closing HTML so this line renders as markdown
+  //    instead of being absorbed into the HTML block.
+  // 2. writeCountSummary cannot carry this value. It takes [string, number] pairs and
+  //    renders a column headed `count`, and `zstd-without-long` under a `count`
+  //    header is wrong. summary.ts's own doc block already states the shared renderer
+  //    is not widened for one caller, and the writeCountSummary call above repeats it
+  //    -- cited rather than restated a third time.
+  // 3. SURFACED, NEVER GATED. No branch anywhere reads this value; it reaches the log
+  //    and the job summary and stops (T-09-31). If some future requirement wants to
+  //    gate on it, that is a new decision and not an extension of this one.
+  core.summary.addRaw(
+    `\ncompression method (@actions/cache): ${compressionMethod}`,
+    true,
+  );
+  await core.summary.write();
 }
 
 /**

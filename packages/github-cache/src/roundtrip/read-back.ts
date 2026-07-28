@@ -31,7 +31,7 @@ import { cachePlatform } from '../lib/release-asset-name.js';
  * which only OS A's publish leg wrote), so this proves the same-OS publish->reader
  * contract live; the wrong-OS MISS is unit-proven (releases-backend.spec.ts, spike 005).
  */
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   // The publish seed keyed its entry on the workflow run id (the dogfood hash
   // convention: unique per run and already all-decimal, so it satisfies the server's
   // ^[a-f0-9]{1,512}$ validator without massaging).
@@ -83,6 +83,12 @@ async function run(): Promise<void> {
 // dist/roundtrip/read-back.js invoked by ci.yml's publish-verify job), never when
 // imported. isEntrypoint owns the Windows Pitfall-6 idiom. A whole-run fault reaches
 // core.setFailed (non-zero exit) so the round-trip fails loud (OBS-01/D-15).
+//
+// run() is EXPORTED so the co-located read-back.spec.ts can drive it directly, matching
+// cleanup/index.ts and action/index.ts -- both bins export run() behind this same guard
+// and are driven by their own spec. This guard is what makes the import inert, so
+// exporting costs nothing at runtime. It is an internal module export, NOT a barrel
+// export: the DOCS-05 consumer surface is unchanged.
 if (isEntrypoint(import.meta.url)) {
   run().catch((error: unknown) => {
     core.setFailed(error instanceof Error ? error.message : String(error));

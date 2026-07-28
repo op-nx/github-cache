@@ -2395,3 +2395,295 @@ the fix landed in `nx.json` `targetDefaults`, no `project.json` was created or e
 `plugins` array is unchanged. Correcting D-12's and D-02's parenthetical is a planning-document edit
 outside this plan's file scope, and the phase whose whole point is a clean measure-then-fix ordering
 is the wrong place for a drive-by.
+
+---
+
+## Post-fix re-measurement (CI)
+
+Appended by plan 08-05 task 2. A **LIVE-CI CLOSURE**: the cross-OS half of this re-measurement
+exists only on real runners and cannot be closed locally without faking the thing under test.
+
+Both records come from workflow run
+[`30335453685`](https://github.com/op-nx/github-cache/actions/runs/30335453685), a `pull_request`
+event on the same draft pull request #9. The whole run was `success`, including both `hash-parity`
+legs; neither needed a re-run, so the fix commit never moved.
+
+### Validated BEFORE the values were read
+
+Same discipline plan 08-03 task 3 used. A record that fails these checks is not comparable with the
+others, and checking after reading the hashes is checking with the answer already in hand.
+
+| Check | `ubuntu-24.04-arm` | `windows-11-arm` | Verdict |
+|-------|--------------------|------------------|---------|
+| `meta.commit` equals the fix commit `163e6b9...` | yes | yes | PASS |
+| `meta.commit` equals `meta.githubSha` | **no** | **no** | PASS -- see below |
+| `meta.githubSha` | `42bee743f3551de4caba268cbd169bd0028bb10a` | same | the merge commit |
+| `meta.installMode` | `ci` | `ci` | matches all three local readings |
+| `meta.nxVersion` | `23.1.0` | `23.1.0` | matches all three local readings |
+| `meta.graphState` / `workspaceDataEntries` | `cold` / 0 | `cold` / 0 | admissible under D-09 |
+| `meta.workingTreeClean` | `true` | `true` | PASS |
+| `meta.nodeVersion` | `v24.18.0` | `v24.18.0` | **differs from local `v24.13.0`** -- named confound |
+
+**The `commit != githubSha` row is the pin WORKING, not failing**, and the record already carries the
+correction that makes that readable: `GITHUB_SHA` on a `pull_request` event is the MERGE commit the
+runner takes from the event payload, and it does not follow what the job checked out. Equality would
+mean the checkout had landed on the merge commit. Cross-checked against the API rather than inferred:
+
+```
+$ gh api repos/op-nx/github-cache/pulls/9 -q '{head:.head.sha,merge_commit:.merge_commit_sha,base:.base.sha,draft:.draft}'
+{"base":"fe25a3f865f20f3d4f8a40e96f8cb5717608ba8a",
+ "head":"163e6b9e3af819ae3ad9b54ea17c870b737531b5",
+ "merge_commit":"42bee743f3551de4caba268cbd169bd0028bb10a",
+ "draft":true}
+```
+
+`meta.commit` equals the PR head equals the fix commit. `meta.githubSha` equals the merge commit
+GitHub synthesised. The checkout pin held on both legs.
+
+**The Node version difference is recorded as a named confound, not skipped, and it is measurably
+inert again.** `.node-version` holds the moving alias `lts/krypton`, so the runners resolved
+`v24.18.0` while this workstation is pinned by `fnm` at `v24.13.0` -- the same difference the anchor
+carried. The proof it reaches no hashed node is in the data below: the workstation's cold reading and
+the `windows-11-arm` reading differ ONLY in Node version, runner identity and build-output state, and
+their `build`, `test`, `integration` and `lint` hashes are byte-identical with ZERO differing nodes.
+
+### `ubuntu-24.04-arm`, cold
+
+```json
+{
+  "os": "linux",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.18.0",
+  "installMode": "ci",
+  "commit": "163e6b9e3af819ae3ad9b54ea17c870b737531b5",
+  "workingTreeClean": true,
+  "githubSha": "42bee743f3551de4caba268cbd169bd0028bb10a",
+  "runnerOs": "Linux",
+  "capturedAt": "2026-07-28T06:38:13.894Z",
+  "graphState": "cold",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "/home/runner/work/github-cache/github-cache/.nx/workspace-data",
+  "workspaceDataEntries": 0,
+  "nativeFileCacheDirectory": "/tmp/nx-native-file-cache-aa0ca25",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": false
+}
+```
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `17197827372395989528` | 428 |
+| `typecheck` | `1284533355439392975` | 429 |
+| `test` | `1367622961810189968` | 444 |
+| `integration` | `11946835023040710407` | 430 |
+| `lint` | `6930879416208693542` | 443 |
+
+Discriminator, raw and verbatim (`command: node -p process.platform`, `status: 0`):
+
+```json
+{ "stdout": "linux\n", "stderr": "" }
+```
+
+### `windows-11-arm`, cold
+
+```json
+{
+  "os": "win32",
+  "arch": "arm64",
+  "nxVersion": "23.1.0",
+  "nodeVersion": "v24.18.0",
+  "installMode": "ci",
+  "commit": "163e6b9e3af819ae3ad9b54ea17c870b737531b5",
+  "workingTreeClean": true,
+  "githubSha": "42bee743f3551de4caba268cbd169bd0028bb10a",
+  "runnerOs": "Windows",
+  "capturedAt": "2026-07-28T06:40:58.579Z",
+  "graphState": "cold",
+  "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataDirectory": "C:\\a\\github-cache\\github-cache\\.nx\\workspace-data",
+  "workspaceDataEntries": 0,
+  "nativeFileCacheDirectory": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\nx-native-file-cache-a830eb7",
+  "nativeFileCacheEntries": 1,
+  "daemonEnabled": false
+}
+```
+
+| Target | Hash | Nodes |
+|--------|------|-------|
+| `build` | `17197827372395989528` | 428 |
+| `typecheck` | `1284533355439392975` | 429 |
+| `test` | `1367622961810189968` | 444 |
+| `integration` | `1193647465557986036` | 430 |
+| `lint` | `6930879416208693542` | 443 |
+
+Discriminator, raw and verbatim (`command: node -p process.platform`, `status: 0`):
+
+```json
+{ "stdout": "win32\n", "stderr": "" }
+```
+
+### The cross-OS diff at the fix commit
+
+`node capture-hashes.mjs --diff <ubuntu record> <windows record>`, A = `ubuntu-24.04-arm`,
+B = `windows-11-arm`, both cold, both at `163e6b9`:
+
+```
+=== build : 17197827372395989528 (A) vs 17197827372395989528 (B) ===
+  command: same
+  nodes: 428 / 428
+    only-in-A (0): -    only-in-B (0): -    value-changed (0): -    same: 428
+
+=== typecheck : 1284533355439392975 (A) vs 1284533355439392975 (B) ===
+  command: same
+  nodes: 429 / 429
+    only-in-A (0): -    only-in-B (0): -    value-changed (0): -    same: 429
+
+=== test : 1367622961810189968 (A) vs 1367622961810189968 (B) ===
+  command: same
+  nodes: 444 / 444
+    only-in-A (0): -    only-in-B (0): -    value-changed (0): -    same: 444
+
+=== integration : 11946835023040710407 (A) vs 1193647465557986036 (B) ===
+  command: same
+  nodes: 430 / 430
+    only-in-A (0): -    only-in-B (0): -
+    value-changed (1):
+        runtime:node -p process.platform
+          A=11970638123438591088
+          B=6694901896827773122
+    same: 429
+
+=== lint : 6930879416208693542 (A) vs 6930879416208693542 (B) ===
+  command: same
+  nodes: 443 / 443
+    only-in-A (0): -    only-in-B (0): -    value-changed (0): -    same: 443
+
+=== projectConfiguration (field level) ===
+  fields
+    only-in-A (0): -    only-in-B (0): -    value-changed (0): -    same: 164
+```
+
+Read in the prescribed order: `only-in-A` / `only-in-B` are ZERO on all five targets, as they were at
+the anchor -- the external node set is still identical, so the diff is still non-vacuous.
+`value-changed` is now ZERO on four targets and exactly ONE on `integration`, and that one is the
+declared discriminator. The merged project configuration is identical field for field, 164 of 164,
+where at the anchor it carried six `only-in-A` entries.
+
+**The `@op-nx/github-cache:ProjectConfiguration` node reads `17377863611053487263` on BOTH legs.** At
+the anchor it read `17377863611053487263` on Linux and `3473609128188475433` on Windows. It has
+converged, and it converged onto the Linux value, which is the one the enumeration says is correct.
+
+**L3 checked directly rather than inferred from the node hash.** The merged node's
+`targets.typecheck.outputs` was compared against the value declared in `nx.json` on each leg
+independently: it is byte-equal to the declared seven-entry list on `linux` AND on `win32`. A
+`targetDefaults` entry demonstrably reaches this field on both operating systems, which is
+assumption A2 holding.
+
+### The four verdicts
+
+Stated plainly, one line each, because these are the phase's outcome and must not be buried in a
+diff dump. Each carries its bearing on plan 08-04's PRE-COMMITTED U-01 condition, which was written
+before the experiment ran and is not reinterpreted here.
+
+**VERDICT 1 -- `build`, `typecheck` and `test` cross-OS: IDENTICAL.** All three are byte-identical
+between `ubuntu-24.04-arm` and `windows-11-arm` (`17197827372395989528`, `1284533355439392975`,
+`1367622961810189968`), each with zero `value-changed` nodes and zero `only-in-*` entries. This is
+PARITY-03's cross-OS half. *U-01 bearing: CONFIRMS. It satisfies C2 (the node is identical between
+the two cold legs) and exceeds C3, which asked only for `build`, `test` and `lint` -- `typecheck`
+converged too, because both legs skip the build so the D-11 variable is held equal between them.*
+
+**VERDICT 2 -- `integration` cross-OS: DIFFERS**, `11946835023040710407` on Linux against
+`1193647465557986036` on Windows, and its diff shows exactly ONE changed node,
+`runtime:node -p process.platform`, with the other 429 identical. **A MATCHING hash on this row
+would be a FAILURE of the discriminator and NOT a success of parity** -- it would mean the one target
+that is supposed to be OS-sensitive had stopped being so, which is a CORR-04 regression that would
+otherwise hide inside three clean-looking rows. *U-01 bearing: CONFIRMS. This is C4, and it is now
+the ONLY surviving cross-OS difference in the workspace, which is exactly the state D-14 keeps that
+input for.*
+
+**VERDICT 3 -- `integration`, the SAME-OS pair: IDENTICAL.** This is PARITY-05 and it is a DIFFERENT
+comparison from verdict 2, presented as its own row so it cannot be reported by accident. The
+workstation's cold reading and the `windows-11-arm` reading are both `1193647465557986036`, with a
+zero-node diff across all 430 nodes. *U-01 bearing: CONFIRMS -- no pre-committed condition names it,
+because PARITY-05 was already satisfied at the anchor and the requirement is that the fix not break
+it. It did not.*
+
+**VERDICT 4 -- `lint` cross-OS: IDENTICAL**, `6930879416208693542` on both legs, zero changed nodes
+out of 443. At the anchor it diverged (`14919174368951396261` against `17022226934688547307`), and
+the divergence was entirely the shared `ProjectConfiguration` node. *U-01 bearing: CONFIRMS. It is
+C3's third target, and it closed as a SIDE EFFECT of the `typecheck.outputs` fix with no
+`lint`-specific work, which is what the record predicted and labelled as a prediction.*
+
+### D-35's Windows-side baseline, now measured on both legs post-fix
+
+`07-EVIDENCE.md:505-513` flagged `options.cwd` as "the row most likely to diverge" and confirmed it
+IS hashed. Re-measured at the fix commit on both runners:
+
+| Hashed field | D-35 baseline (Windows) | `ubuntu-24.04-arm` | `windows-11-arm` | Agree? |
+|---|---|---|---|---|
+| `executor` | `nx:run-commands` | `nx:run-commands` | `nx:run-commands` | YES |
+| `outputs` | `[]` | `[]` | `[]` | YES |
+| `options.cwd` | `packages/github-cache` | `packages/github-cache` | `packages/github-cache` | **YES** |
+| `options.command` | `eslint .` | `eslint .` | `eslint .` | YES |
+| `configurations` | `{}` | `{}` | `{}` | YES |
+| `cache` (inferred) | `true` | `true` | `true` | YES |
+
+`options.cwd` is byte-identical, forward-slashed and project-relative on Windows as well as Linux.
+The merged-node field diff confirms it independently: zero `value-changed` fields anywhere, so **the
+merged project configuration diff does NOT touch the `lint` target at all**. Phase 7's
+UNVERIFIED-BY-DESIGN question stays settled: `@nx/eslint` infers `lint` identically on both
+operating systems, and the anchor's `lint` divergence was never `lint`'s own.
+
+### Which branch of D-21 plan 08-06 must wire
+
+**The PRIMARY branch. `lint` is asserted as a FOURTH IDENTICAL target, alongside
+`build`/`typecheck`/`test`. The named fallback does NOT apply and its clause is NOT downgraded.**
+
+D-21's fallback is conditioned on `lint` diverging AND its fix proving out of Phase 8's scope.
+Neither half survives the measurement: `lint` is byte-identical across the legs at the fix commit,
+and no `lint`-specific work was needed to get there. The prediction the record made in
+`### Which branch of D-21 plan 08-06 must wire` above is CONFIRMED, and `compare.spec.ts`'s
+`INVARIANT_TARGETS` block keeps its four-target form.
+
+### No `nx.json` edit was made in this task
+
+```
+$ git show --stat <this commit>
+ .planning/phases/08-nx-task-hash-parity/08-ROOT-CAUSE.md
+```
+
+One file. The `nx.json` hunk landed once, at `163e6b9`, and nothing since has touched it -- which is
+what makes "we changed X and the hashes agreed" attributable to X rather than to an undirected search.
+`npm run format:check` exits 0.
+
+### Every pre-committed condition, evaluated
+
+The four confirming conditions, the four live-triggers and the three non-triggers were all written
+into `## U-01: the condition that would make it live` BEFORE the fix existed. Evaluated against the
+measurement, quoted, one row each:
+
+| ID | Pre-committed text (abbreviated) | Measurement that decides it | Verdict |
+|----|----------------------------------|------------------------------|---------|
+| **C1** | "the `ProjectConfiguration` node hash is IDENTICAL between a cold capture and a warm-preexisting capture on the workstation" | both `17377863611053487263`; the cold-vs-warm diff is 0 changed nodes on all five targets and 164/164 fields | **MET** |
+| **C2** | "that same node hash is IDENTICAL between `ubuntu-24.04-arm` and `windows-11-arm`" | both `17377863611053487263` | **MET** |
+| **C3** | "the cross-OS diff for `build`, `test` and `lint` shows ZERO `value-changed` nodes and ZERO `only-in-*` entries" | 0/0 on `build` (428 same), `test` (444 same), `lint` (443 same) -- and on `typecheck` too | **MET, exceeded** |
+| **C4** | "`integration` still DIVERGES cross-OS, and its diff still shows `runtime:node -p process.platform` as a changed node" | differs; exactly one changed node and it is that one | **MET** |
+| **L1** | "The node still differs between cold and warm-preexisting locally, after the entry lands" | identical; 0 changed nodes | **NOT met** |
+| **L2** | "The node still differs between the two cold CI legs, after the entry lands" | identical on both legs | **NOT met** |
+| **L3** | "The merged node's `targets.typecheck.outputs` does not take the declared value on at least one of the two operating systems" | merged value is byte-equal to the declared seven-entry list on BOTH legs, checked directly | **NOT met** |
+| **L4** | "The node converges, but a DIFFERENT node or field starts diverging cross-OS in something `targetDefaults` cannot reach" | cross-OS `value-changed` is zero on four targets and exactly one on `integration` -- the DECLARED discriminator, which `targetDefaults` not only reaches but owns; zero `only-in-*`; 164/164 fields | **NOT met** |
+| **N1** | "`typecheck` differing between a workstation that has BUILT and a runner that has not ... NOT a U-01 trigger" | workstation `8949082127832201885` vs runner `1284533355439392975`; the same-OS diff isolates it to ONE node, the `dependentTasksOutputFiles` entry over `dist/` | **occurred; correctly NOT a trigger** |
+| **N2** | "An all-MISS push immediately after the fix commit ... the pre-recorded legitimate rotation window" | all five hashes rotated at `163e6b9`; every moving node accounted for in diff 1 | **occurred; correctly NOT a trigger** |
+| **N3** | "`integration` diverging cross-OS. That is C4, the intended behaviour" | it diverges | **occurred; correctly NOT a trigger** |
+
+**All four confirming conditions MET. No live-trigger met.** The three things that did occur are each
+a pre-committed non-trigger, named in advance and matching the shape that was named.
+
+**Which way the evidence points, in one line and no more:** all four pre-committed confirming
+conditions are met and none of the four live-triggers is, so the measurement matches the confirming
+condition written before the experiment.
+
+**U-01 is NOT decided here.** Task 3 is a blocking `checkpoint:decision` and the selection is the
+maintainer's. `08-RESEARCH.md`'s own instruction stands: the confirming experiment is not a licence
+to treat U-01 as auto-resolved.

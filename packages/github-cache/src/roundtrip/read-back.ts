@@ -6,6 +6,7 @@ import {
 import { parseHash } from '../lib/cache-key.js';
 import { dogfoodBody } from '../lib/dogfood-body.js';
 import { isEntrypoint } from '../lib/is-entrypoint.js';
+import { cachePlatform } from '../lib/release-asset-name.js';
 
 /**
  * Live cross-OS publish/read-back round-trip (the leg deferred from Phase 3). The
@@ -59,7 +60,12 @@ async function run(): Promise<void> {
   // A HIT alone only proves an asset resolved; assert the BYTES are what the publisher
   // wrote (dogfoodBody(hash)), so a mirrored asset with the wrong contents fails the
   // round-trip instead of passing it.
-  if (!result.bytes.equals(dogfoodBody(hash))) {
+  // cachePlatform() is the correct producer argument here, NOT the literal the dogfood
+  // verify leg uses: the asset this leg reads is its OWN-OS asset, written by the same
+  // leg's publish seed, so producer and reader are the same OS by construction. An
+  // ambient read, consistent with the three sibling process.platform reads in this bin
+  // (LINT-02's ban is scoped to spec files).
+  if (!result.bytes.equals(dogfoodBody(hash, cachePlatform()))) {
     throw new Error(
       `github-cache round-trip read-back: cache HIT for ${hash} on ${process.platform} ` +
         'but the returned bytes are not what the publisher wrote -- suspect the ' +

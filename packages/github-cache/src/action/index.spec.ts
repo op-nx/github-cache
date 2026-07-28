@@ -217,8 +217,13 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
       name === 'operation' ? 'verify' : 'run-1',
     );
     serveMock.mockResolvedValue(fakeServer());
+    // HAND-AUTHORED on purpose (the pinned-literal discipline, A1b): kept as a literal
+    // rather than reconstructed via dogfoodBody(...), which would survive a template
+    // rename and stop pinning anything. The literal now encodes the PRODUCER OS as well
+    // as the hash, matching the verify branch's expected `'linux'` producer -- so a
+    // template change is intentionally a two-file edit, here and in dogfood-body.spec.ts.
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(Buffer.from('nx-github-cache-dogfood:run-1'), {
+      new Response(Buffer.from('nx-github-cache-dogfood:linux:run-1'), {
         status: 200,
       }),
     );
@@ -226,6 +231,16 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
     await run();
 
     expect(core.setSecret).toHaveBeenCalledWith('server-bearer-token');
+    // Also assert the verify branch ACCEPTED that literal. Without this the literal
+    // above is decorative: it documents the payload template but gates nothing, because
+    // this test's only other assertion is about setSecret. Measured -- an M1 mutation
+    // dropping producerOs from the payload left this file entirely green. With these two
+    // lines the literal genuinely pins the template, which is what makes
+    // dogfood-body.ts's "pinned in two files" claim true rather than aspirational.
+    expect(core.setFailed).not.toHaveBeenCalled();
+    expect(core.info).toHaveBeenCalledWith(
+      expect.stringContaining('cache HIT'),
+    );
   });
 
   it('fails the job loud on a verify cache MISS (GET 404) -- a silent pass is the exact failure this canary catches (T-2-20)', async () => {

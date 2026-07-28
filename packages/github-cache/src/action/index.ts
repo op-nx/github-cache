@@ -5,6 +5,7 @@ import { isEntrypoint } from '../lib/is-entrypoint.js';
 import { isSyncTrusted } from '../lib/sync-gate.js';
 import { createResilientOctokit } from '../lib/resilient-octokit.js';
 import { dogfoodBody } from '../lib/dogfood-body.js';
+import { cachePlatform } from '../lib/release-asset-name.js';
 import { writeCountSummary } from '../lib/summary.js';
 // The ONLY import site of compression-method.js in the repo, and it must stay that
 // way (D-17). The committed sidecar bundle has a single entry,
@@ -262,8 +263,14 @@ export async function run(): Promise<void> {
 
   const authorization = `Bearer ${running.token}`;
   const url = `${running.url}/v1/cache/${hash}`;
-  const body = dogfoodBody(hash);
 
+  // The dogfoodBody call is deliberately NOT here. It lives INSIDE each branch below,
+  // one per leg, because the two legs pass DIFFERENT producer-OS arguments and those
+  // arguments must stay physically apart (C-01, T-09-37). Computing a conditional
+  // `producerOs` above the branch -- or hoisting a shared `body` back to this line --
+  // reintroduces the one-expression coupling that makes VER-06's vacuity trap
+  // reachable, and it hides the asymmetry at the point where it matters. Do not
+  // "simplify" the two calls back together.
   try {
     // `operation` selects ONLY which HTTP verb this dogfood drives. It has no
     // influence whatsoever on read-versus-write capability -- that is derived from
@@ -272,6 +279,12 @@ export async function run(): Promise<void> {
     // fails the job explicitly: a silent pass on a miss is precisely the failure mode
     // this dogfood exists to catch (T-2-20).
     if (operation === 'seed') {
+      // cachePlatform() -- an ambient read, legitimate here because this is a bin and
+      // LINT-02's ban on deriving an expectation from the running machine is scoped to
+      // spec files (eslint.config.mjs:263). The seed leg is the PRODUCER, so its own
+      // platform IS the correct provenance stamp.
+      const body = dogfoodBody(hash, cachePlatform());
+
       const put = await fetch(url, {
         method: 'PUT',
         headers: { authorization },
@@ -292,13 +305,40 @@ export async function run(): Promise<void> {
     }
 
     if (operation === 'verify') {
+      // THE LITERAL 'linux', and the VACUITY CONDITION it encodes (D-19, D-20, D-21).
+      //
+      // dogfood-seed is ubuntu-ONLY BY DESIGN, so the expected producer is Linux, and
+      // asserting that literal is what makes this job a PROVENANCE check rather than a
+      // presence check: on the windows-11-arm matrix leg, matching these bytes proves
+      // the restored body was produced on LINUX and crossed an OS boundary. On the
+      // ubuntu leg the same claim is trivially true, and the leg is kept anyway because
+      // it preserves the v0.0.1 same-OS round-trip close.
+      //
+      // IF A WINDOWS dogfood-seed LEG IS EVER ADDED, THIS LITERAL IS WHAT MUST CHANGE.
+      // Until it does, the assertion silently weakens to "the body came from whichever
+      // OS seeded it" -- which is what a presence-only check already gives for free,
+      // with cross-OS restore possibly completely dead. The seed key is
+      // nx-cache-<GITHUB_RUN_ID>: ONE key per RUN, not per OS. dogfood-cross-os.spec.ts
+      // asserts dogfood-seed declares no matrix so this cannot happen unnoticed.
+      //
+      // NO ACTION INPUT carries this value on purpose: an input would be a SECOND place
+      // for the two legs to disagree, and the seed leg's OS is a property of the
+      // workflow rather than of the run. Nothing about `operation` or any other input
+      // may steer read-versus-write capability either (TRUST-05).
+      const expectedProducerOs = 'linux';
+      const body = dogfoodBody(hash, expectedProducerOs);
+
       const get = await fetch(url, { headers: { authorization } });
 
       if (get.status === 404) {
         core.setFailed(
           `github-cache dogfood verify: cache MISS for ${hash} (GET 404). The round-trip ` +
             "did not reach GitHub's cache service -- suspect the cacheArchivePath archive-path " +
-            'derivation or a pinned @actions/cache upgrade that changed the archive version hash.',
+            'derivation or a pinned @actions/cache upgrade that changed the archive version hash. ' +
+            `This runner is ${cachePlatform()} and the seed leg is ${expectedProducerOs}: on a ` +
+            'NON-LINUX runner a MISS additionally suggests the archive VERSION still differs ' +
+            'across OSes -- the enableCrossOsArchive flag or the archive path literal -- rather ' +
+            'than cross-OS extraction itself failing. Those are different repairs.',
         );
 
         return;
@@ -315,16 +355,24 @@ export async function run(): Promise<void> {
       const received = Buffer.from(await get.arrayBuffer());
 
       if (!received.equals(body)) {
+        // Names the EXPECTED producer OS so a mismatch reads as a PROVENANCE failure
+        // rather than as generic corruption. The received buffer is deliberately NOT
+        // interpolated: it is restored cache content and this log is public. Phase 8's
+        // WR-01 lesson is that a log line used as a signal must be both escaped and
+        // anchored; naming our own expectation is sufficient here, so the restored
+        // bytes never reach the log at all (T-09-38).
         core.setFailed(
           'github-cache dogfood verify: cache HIT but the returned bytes did not match ' +
-            'the seeded payload -- the round-trip crossed the cache service but returned wrong data.',
+            `the payload seeded by a '${expectedProducerOs}' producer -- the round-trip crossed ` +
+            'the cache service but returned a body this leg cannot attribute to the seed job.',
         );
 
         return;
       }
 
       core.info(
-        `github-cache dogfood verify: cache HIT for ${hash} with matching bytes.`,
+        `github-cache dogfood verify: cache HIT for ${hash} on ${cachePlatform()} with bytes ` +
+          `matching a '${expectedProducerOs}'-produced payload.`,
       );
 
       return;

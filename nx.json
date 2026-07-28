@@ -66,6 +66,7 @@
         "{workspaceRoot}/docs/examples/minimal-ci.yml",
         "{workspaceRoot}/docs/examples/README.md",
         "{workspaceRoot}/.github/workflows/cleanup.yml",
+        "{workspaceRoot}/.github/workflows/ci.yml",
         "{workspaceRoot}/.gitattributes",
         "{workspaceRoot}/ppe/action.yml",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },

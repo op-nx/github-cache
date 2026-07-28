@@ -485,7 +485,12 @@ describe('the guard cannot replay a stale pass', () => {
   // activity the LINT-03 proof consists of, the false PASS would surface DURING
   // that proof and read as "the rule does not fire". This repo has shipped that
   // defect twice already (governance-email.spec.ts, and `typecheck`'s
-  // spec-excluding inputs); this assertion is what stops a third.
+  // spec-excluding inputs); this assertion is what stops a third, and the
+  // PARITY-08 block at the end of this file stops a fourth -- `ci.yml` was
+  // likewise a file that `test`-target specs assert on and that no `test` input
+  // covered. Those two shipped incidents are the enumeration every literal pin in
+  // this file refers back to; they are listed HERE and nowhere else, so a reader
+  // who arrives at a later pin is pointed at one record rather than a copy.
   it('eslint.config.mjs is a test input, so editing a rule re-runs the lint guard', () => {
     expect(nxJson.targetDefaults.test.inputs).toContain(
       '{workspaceRoot}/eslint.config.mjs',
@@ -526,5 +531,156 @@ describe('the guard cannot replay a stale pass', () => {
     expect(nxJson.targetDefaults.test.inputs).toContain(
       '{workspaceRoot}/tools/eslint-rules/**/*',
     );
+  });
+});
+
+describe('ci.yml is a test input, so no spec can assert on a replayed ci.yml (PARITY-08)', () => {
+  // WHY THIS EXISTS, and why it landed FIRST in its phase rather than as a
+  // tidy-up at the end. `test.inputs` listed `.github/workflows/cleanup.yml` and
+  // NOT `ci.yml`, so a spec asserting on `ci.yml` CONTENT had no input covering
+  // its own subject: editing `ci.yml` never moved the `test` hash, and Nx served
+  // the verdict computed BEFORE the assertion's subject existed. Two specs in the
+  // same phase as this entry do exactly that (`dogfood-cross-os.spec.ts`,
+  // `docs-same-os-claims.spec.ts`), which is why the registration had to precede
+  // them rather than follow them. Same class as the two incidents this repo has
+  // already shipped -- enumerated once at the `eslint.config.mjs` pin above, not
+  // re-listed here.
+  //
+  // The entry is effective on its OWN commit. `{workspaceRoot}/nx.json` is
+  // already a `test` input (pinned above), so adding the line rotates the `test`
+  // hash on the very run that introduces it -- there is no window in which a
+  // later spec could still replay a pre-registration pass, and no ordering
+  // instruction anyone has to remember.
+  //
+  // THE COMMENT LOCK (Phase 8 D-13's displacement). `nx.json` is strict JSON and
+  // holds no comments, so the four facts that make the entry load-bearing live
+  // here, in the guard that pins it -- the same displacement the
+  // `typecheck.outputs` and `lint.outputs` pins above already use.
+  //
+  // 1. `targetDefaults.<target>.inputs` REPLACES the inferred list rather than
+  //    merging into it (stated for `lint` above; it holds identically for
+  //    `test`). The consequence for a reader editing this list: nothing
+  //    `@nx/vitest` infers survives beside it, so every input `test` needs must
+  //    be named here or it is not hashed at all. That is what makes the 25-entry
+  //    list long, and what makes an omission from it silent.
+  //
+  // 2. That replacement is also the ONLY reason O1 is reachable for `test`, and
+  //    nothing in this repo recorded it before this comment. `@nx/vitest`'s
+  //    inferred `test` target carries `{ env: 'CI' }`
+  //    (`node_modules/@nx/vitest/dist/src/plugins/plugin.js:246`, measured at
+  //    `nx` and `@nx/vitest` 23.1.0 -- a version worth re-measuring on an Nx
+  //    major rather than carrying forward as an assumption). `CI` is set on every
+  //    GitHub runner and unset on a workstation, so an env-sensitive `test` hash
+  //    cannot match across those two environments at all: O1 -- a local Windows
+  //    dev getting `test` HITs produced by Linux CI -- would be STRUCTURALLY
+  //    IMPOSSIBLE, not merely unlikely. The explicit list is what drops that
+  //    input, so the milestone's headline outcome currently holds BY ACCIDENT of
+  //    a decision taken for another reason. Written down here, beside the guard
+  //    that keeps the list explicit, because a future "let the plugin infer the
+  //    inputs, the override is redundant" cleanup is otherwise entirely
+  //    reasonable-looking.
+  //
+  // 3. The entry is an explicit file path, NOT
+  //    `{workspaceRoot}/.github/workflows/**`. Same call `start-cache-server/`
+  //    already got in this list: its two entries name `action.yml` and `entry.ts`
+  //    individually rather than globbing the directory, because that directory
+  //    also holds the generated `index.js` bundle, which churns on every rebuild
+  //    and would re-run `test` for no behavioural change. `.github/workflows/`
+  //    holds only `ci.yml` and `cleanup.yml` today, so a glob would be equivalent
+  //    NOW -- and would silently adopt whatever lands there next, which is the
+  //    part that is not equivalent.
+  //
+  // 4. `packages/github-cache/project.json` EXISTS -- tracked since `7413363`,
+  //    declaring `integration` -- which is why clause 2 below reads the MERGED
+  //    configuration rather than trusting clause 1. Phase 8's D-12 ("No
+  //    `project.json` (the workspace is deliberately free of them)") is FALSE,
+  //    and is corrected here rather than repeated; Phase 8's own NF-02 finding is
+  //    what caught it. ONE locked decision is falsified, not two: the plan for
+  //    this work paired D-12 with Phase 7's D-02, but that attribution is wrong
+  //    -- Phase 7's D-02 is about the five exact-pinned devDependencies, and the
+  //    Phase 7 decision that does mention this file (D-01) describes it
+  //    CORRECTLY.
+
+  // Clause 1 -- the literal pin, with the same honest limit as the four pins
+  // above: `filterUsingGlobPatterns` substitutes `{projectRoot}` ONLY, so a
+  // `{workspaceRoot}` pattern survives literally and matches no probe path. There
+  // is no resolver to delegate to here -- the entry IS the invariant -- so a
+  // literal is the honest form rather than a weaker assertion dressed up as
+  // delegation.
+  it('nx.json declares ci.yml as a test input', () => {
+    expect(nxJson.targetDefaults.test.inputs).toContain(
+      '{workspaceRoot}/.github/workflows/ci.yml',
+    );
+  });
+
+  // Clause 2 -- the configuration Nx actually HASHES (Phase 8 NF-02). Clause 1
+  // reads `nx.json` alone, and `targetDefaults` is only the BASE of the merge: a
+  // `targets.test.inputs` array in `project.json` REPLACES the whole list
+  // wholesale, dropping this entry out of the effective hash while clause 1 stays
+  // green. Phase 8 MEASURED that asymmetry -- the `project.json` mutation reddens
+  // only the merged-configuration guard, and every `nx.json`-reading guard keeps
+  // passing.
+  //
+  // Delegated to Nx's own `readTargetDefaultsForTarget` +
+  // `mergeTargetConfigurations` pair for the reason this file's header gives about
+  // the glob resolver: a hand-rolled "does project.json declare inputs" check
+  // would pin the SPELLING of one particular way to break it, and would redden on
+  // a `project.json` declaring an inputs list that CARRIES this entry, which is a
+  // legitimate configuration.
+  //
+  // Two things differ from the `integration` merge above and neither is cosmetic.
+  //
+  // `projectJson.targets.test` is ABSENT -- `project.json` declares only
+  // `integration` -- so `?? {}` is not defensive noise, it IS the shape of the
+  // project layer today. A reader will otherwise assume the key exists, because
+  // the `integration` version passes a key that does.
+  //
+  // And `test` has THREE merge layers, not two: `@nx/vitest` infers the base. The
+  // two functions below are still the whole merge that MATTERS, but the reason is
+  // PRECEDENCE, not absence -- `targetDefaults` REPLACES `inputs` (lock fact 1),
+  // so the inferred layer is dominated and cannot be the hole. `project.json` is
+  // the hole. The `integration` block's closing sentence ("declared, never
+  // inferred, so these two layers are the whole merge") is FALSE here and is
+  // deliberately not reused.
+  function mergedTest(projectTarget: TargetConfiguration): TargetConfiguration {
+    return mergeTargetConfigurations(
+      projectTarget,
+      readTargetDefaultsForTarget('test', nxJson.targetDefaults) ?? undefined,
+    );
+  }
+
+  it('keeps the ci.yml entry once project.json is merged over targetDefaults', () => {
+    expect(mergedTest(projectJson.targets.test ?? {}).inputs).toContain(
+      '{workspaceRoot}/.github/workflows/ci.yml',
+    );
+  });
+
+  // NON-VACUITY control, and it has to be a NEGATIVE one for the same reason the
+  // `integration` one does: if `mergeTargetConfigurations` ignored the project
+  // layer -- or if this spec merged its two arguments in the wrong order -- clause
+  // 2 would pass on a merge that never consulted `project.json`, and the hole it
+  // exists to close would be wide open behind a green test. That failure mode is
+  // EASIER to hit here than for `integration`, because with `targets.test` absent
+  // the higher-priority argument is `{}` and a broken merge looks exactly like a
+  // plain read of `targetDefaults`. The mutation is applied to a LOCAL object,
+  // never to the file: this asserts what the merge does with a hostile project
+  // layer, so it must not require one to exist.
+  //
+  // The second assertion is what makes this control itself non-vacuous. A
+  // `not.toContain` alone would also pass if `inputs` came back empty or absent
+  // for some unrelated reason -- the same "passes because nothing was resolved"
+  // shape the glob probes above guard against. Exact equality states the actual
+  // mechanism: the project layer REPLACED the list, it did not filter one entry
+  // out of it.
+  it('DROPS the ci.yml entry when project.json declares its own test inputs, proving the merge merges', () => {
+    const hostile: TargetConfiguration = {
+      ...(projectJson.targets.test ?? {}),
+      inputs: ['default'],
+    };
+
+    expect(mergedTest(hostile).inputs).not.toContain(
+      '{workspaceRoot}/.github/workflows/ci.yml',
+    );
+    expect(mergedTest(hostile).inputs).toEqual(['default']);
   });
 });

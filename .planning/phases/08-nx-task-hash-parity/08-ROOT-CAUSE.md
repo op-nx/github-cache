@@ -1881,7 +1881,7 @@ warm local box compute the hash cold CI published), or **neither, it is method**
 |---|---|---|---|
 | **PARITY-01** -- root-cause node-by-node, RECORDED before any fix, controlling for BOTH axes | `## Root cause`, built on `## The local staleness diff (point 1 versus point 2)` and `## The cross-OS diff: PARITY-01, answered node by node`; ordering proven by `## The ordering proof` | **both, separately** -- the staleness sub-section is Q2's precondition, the OS sub-section is Q1's | **YES.** One node, one field, both axes separated, D-09 gate stated, D-10 supersession recorded, and the ordering proven by git history with no programmatic guard |
 | **PARITY-02** -- the instrument emits the per-NODE `details` map; `nx show target inputs` recorded INSUFFICIENT | `## The instrument computes Nx's number` and `## Why nx show target inputs is not evidence (D-03, PARITY-02)` | **neither, it is method** -- both sections say so in their first line | **YES.** The instrument is validated byte-identical against `.nx/cache/run.json` on two targets, and the CLI surface is disqualified by its own API doc plus an executed run |
-| **PARITY-03** -- byte-identical `build`/`typecheck`/`test` at three observation points, workstation in BOTH graph states; four values per target | `## Observation points` and `## All four points side by side` | **Q1** | **NO -- and this record does not claim it.** Four values per target ARE recorded at one commit, which is the MEASUREMENT half. They are not identical. The outcome is satisfied by **plan 08-05's fix** and enforced continuously by **plan 08-06's compare job**, per the requirement's own closing clause "Enforced continuously by CORR-03(c), not measured once" |
+| **PARITY-03** -- byte-identical `build`/`typecheck`/`test` at three observation points, workstation in BOTH graph states; four values per target | `## Observation points` and `## All four points side by side` for the MEASUREMENT half; `### PARITY-03's verdict, UPDATED` for the outcome | **Q1** | **YES, as of plan 08-05 -- and for FOUR targets, not three.** As this section was first written the answer was NO and the record did not claim otherwise: four values per target were recorded at one commit, which was the measurement half, and they were not identical. The OUTCOME is now measured: `build`, `typecheck`, `test` and `lint` are byte-identical across the workstation in both graph states, `ubuntu-24.04-arm` and `windows-11-arm`, after 08-05's `nx.json` fix (`163e6b9`) and its `hash-parity` build step (`56bb11d`). Continuous enforcement still belongs to **plan 08-06's compare job**, per the requirement's own closing clause "Enforced continuously by CORR-03(c), not measured once" |
 | **PARITY-04** -- "warm local box computes the cold-CI hash" as a SEPARATE named question, not resolved by `nx reset` | `## PARITY-04, answered as its own question` | **Q2, and only Q2** | **YES.** Measured answer NO on all five targets, stated as a finding the requirement's own text permits, with no `nx reset` anywhere in the recipe |
 | **PARITY-05** -- `integration` byte-identical between the WORKSTATION and `windows-11-arm` | `## All four points side by side`, and the zero-node diff in `## D-11: typecheck's third variance source, ROOT-CAUSED` | **Q1**, in its same-OS form | **YES.** Point 1 (workstation, `win32`) and point 3 (`windows-11-arm`) both report `3844377013355031551`, with a zero-node diff across all 430 nodes. Presented as a same-OS PAIR, which is what the requirement asks for -- see the note below |
 | **PARITY-06** -- every measurement records Nx version, Node version, install mode AND graph state | `## Observation points`, the four verbatim `meta` blocks, and the cross-point `meta` comparison table | **neither, it is method** | **YES.** All four fields present on all FOUR observation points, not a sample -- checked individually below |
@@ -2874,3 +2874,196 @@ without counting it. **U-01's resolution stands as recorded.**
 
 The `hash-parity` job's no-build design is replaced in the section below, with its original
 rationale re-stated rather than quietly reversed.
+
+---
+
+## The hash-parity job now builds before capturing
+
+**The change, at commit `56bb11d2a480695ccb30c60a661d327ae2669c11`:** one `- run: npm run build`
+step in `.github/workflows/ci.yml`'s `hash-parity` job, placed after `npm ci` and before the capture.
+`nx.json` is NOT touched -- the fix commit remains the single clean one.
+
+**Symmetry is guaranteed by construction, not by discipline.** `hash-parity` is a MATRIX job, so
+that one step definition is the step both legs run. There are no two copies to drift.
+
+### The replaced decision, re-stated rather than reversed
+
+The no-build design was DOCUMENTED in `ci.yml`'s own comment block and called "load-bearing rather
+than a missing line". Its argument: `typecheck` declares a `dependentTasksOutputFiles` input
+(`nx.json:137`) hashing the CONTENT of `packages/github-cache/dist/`, so a leg that built hashes a
+populated directory while a leg that did not hashes an empty one; both legs must be IDENTICAL in that
+respect, and "neither builds" is the identical option that is also the fastest.
+
+**The symmetry requirement was RIGHT and is preserved verbatim.** The resolution was wrong. "Both
+build" is equally symmetric, and it is the only one of the two options that measures a number any
+machine actually computes. What the original missed is the INFERRED
+`dependsOn: ["build", "^typecheck"]`, which appears nowhere in `nx.json` -- so the no-build leg was
+not merely hashing an empty `dist/`, it was hashing `typecheck` OUTSIDE its dependency chain, which
+is a state no real run passes through.
+
+The comment block in `ci.yml` now carries both halves: the original rationale, what it missed, and
+the measurement that settled it. It is the only place that rationale can live -- `ci.yml` is not a
+`test` input, so a spec reading it would serve a stale cached PASS (PARITY-08, Phase 9).
+
+### Both legs, re-measured at the job-fix commit
+
+Workflow run [`30354448537`](https://github.com/op-nx/github-cache/actions/runs/30354448537),
+`pull_request` on the same draft PR #9, whole run `success`, both legs `success`, no re-run.
+
+Validated before reading, as before: `meta.commit` equals `56bb11d...` on both legs; `meta.commit`
+does NOT equal `meta.githubSha` (`6def44fdc1ed033543515052887ecc04fcf49093`, the merge commit), which
+is the checkout pin working; `installMode` is `ci` and `nxVersion` `23.1.0` on both;
+`workingTreeClean` true on both.
+
+```json
+// ubuntu-24.04-arm                          // windows-11-arm
+{ "os": "linux",                             { "os": "win32",
+  "arch": "arm64",                             "arch": "arm64",
+  "nxVersion": "23.1.0",                       "nxVersion": "23.1.0",
+  "nodeVersion": "v24.18.0",                   "nodeVersion": "v24.18.0",
+  "installMode": "ci",                         "installMode": "ci",
+  "commit": "56bb11d...",                      "commit": "56bb11d...",
+  "workingTreeClean": true,                    "workingTreeClean": true,
+  "githubSha": "6def44f...",                   "githubSha": "6def44f...",
+  "runnerOs": "Linux",                         "runnerOs": "Windows",
+  "graphState": "warm",                        "graphState": "warm",
+  "graphStateBasis": "workspaceDataEntries",   "graphStateBasis": "workspaceDataEntries",
+  "workspaceDataEntries": 15,                  "workspaceDataEntries": 15,
+  "nativeFileCacheEntries": 1,                 "nativeFileCacheEntries": 1,
+  "daemonEnabled": false }                     "daemonEnabled": false }
+```
+
+| Target | `ubuntu-24.04-arm` | `windows-11-arm` | Identical? |
+|--------|--------------------|------------------|------------|
+| `build` | `17197827372395989528` | `17197827372395989528` | YES |
+| `typecheck` | `8949082127832201885` | `8949082127832201885` | **YES -- new** |
+| `test` | `1367622961810189968` | `1367622961810189968` | YES |
+| `integration` | `11946835023040710407` | `1193647465557986036` | NO, by design |
+| `lint` | `6930879416208693542` | `6930879416208693542` | YES |
+
+Discriminators, raw and verbatim, `status: 0` on both:
+`{ "stdout": "linux\n", "stderr": "" }` and `{ "stdout": "win32\n", "stderr": "" }`.
+
+`ProjectConfiguration` node: `17377863611053487263` on both, unchanged.
+
+### `graphState` changed from cold to warm, and that is named rather than glossed
+
+The build step populates `.nx/workspace-data` before the capture runs, so both legs now record
+`warm` with 15 entries where they recorded `cold` with 0. **Stated because D-04 exists to stop a
+graph-state change being silently reclassified.**
+
+It is admissible under the D-09 rule, which requires both legs to RECORD `graphState`,
+`workspaceDataEntries` and `installMode` and to AGREE on all three: they agree exactly, `warm` / 15 /
+`ci`. And it is `warm-FRESH`, not `warm-preexisting` -- the directory starts empty on a fresh runner
+and is populated by this job's own build, which is the distinction `## The second axis is STALENESS,
+not freshness` draws and the state that section measured to AGREE with cold.
+
+**Proven inert rather than argued inert, by the control below.**
+
+### The control: `ci.yml` is not an input, so only `typecheck` was allowed to move
+
+`nx.json`'s `test` inputs list `{workspaceRoot}/.github/workflows/cleanup.yml` and NOT `ci.yml`
+(`nx.json:68`), so the job-fix commit rotates no task hash. That makes this a clean experiment with a
+built-in control, and both halves hold:
+
+| Target | At `163e6b9` (cold, no build) | At `56bb11d` (warm, build) | Expected | Result |
+|--------|-------------------------------|----------------------------|----------|--------|
+| `build` | `17197827372395989528` | `17197827372395989528` | unchanged | PASS |
+| `test` | `1367622961810189968` | `1367622961810189968` | unchanged | PASS |
+| `lint` | `6930879416208693542` | `6930879416208693542` | unchanged | PASS |
+| `integration` | `11946835023040710407` / `1193647465557986036` | same pair | unchanged | PASS |
+| `typecheck` | `1284533355439392975` | `8949082127832201885` | MOVED | PASS |
+
+Four targets byte-identical across a cold-to-warm graph-state change on both operating systems is a
+direct, in-situ re-confirmation that a FRESH warm graph agrees with a cold one. Exactly one target
+moved, and it is the one the build step was added for.
+
+### The cross-OS diff at the job-fix commit
+
+`node capture-hashes.mjs --diff <ubuntu> <windows>`, A = `ubuntu-24.04-arm`, B = `windows-11-arm`:
+
+```
+=== build       : 17197827372395989528 (A) vs 17197827372395989528 (B) === 0/0, 0 changed, 428 same
+=== typecheck   : 8949082127832201885  (A) vs 8949082127832201885  (B) === 0/0, 0 changed, 429 same
+=== test        : 1367622961810189968  (A) vs 1367622961810189968  (B) === 0/0, 0 changed, 444 same
+=== lint        : 6930879416208693542  (A) vs 6930879416208693542  (B) === 0/0, 0 changed, 443 same
+
+=== integration : 11946835023040710407 (A) vs 1193647465557986036 (B) ===
+  nodes: 430 / 430    only-in-A (0): -    only-in-B (0): -
+    value-changed (1):
+        runtime:node -p process.platform
+          A=11970638123438591088
+          B=6694901896827773122
+    same: 429
+
+=== projectConfiguration (field level) ===
+    only-in-A (0): -    only-in-B (0): -    value-changed (0): -    same: 164
+```
+
+**Four invariant targets, zero differing nodes each. `integration` differs by exactly one node and
+it is the declared discriminator.** The four verdicts in `## Post-fix re-measurement (CI)` are
+re-confirmed at the job-fix commit, with `typecheck` now carrying the real-run value.
+
+### PARITY-05, re-checked and now stronger
+
+`node capture-hashes.mjs --diff <workstation cold> <windows-11-arm>`:
+
+```
+=== build       : 0 changed, 428 same
+=== typecheck   : 0 changed, 429 same      <- was 1 changed at 163e6b9
+=== test        : 0 changed, 444 same
+=== integration : 0 changed, 430 same
+=== lint        : 0 changed, 443 same
+=== projectConfiguration : 0 changed, 164 same
+```
+
+**Zero differing nodes on all FIVE targets between the native Windows workstation and
+`windows-11-arm`.** At `163e6b9` this pair still differed on `typecheck` by the
+`dependentTasksOutputFiles` node -- the N1 artefact. With `typecheck` hashed inside its dependency
+chain on both sides, the two machines are now indistinguishable on every target. PARITY-05 was
+already satisfied for `integration` alone; it is now satisfied trivially and with room to spare.
+
+### `typecheck` converges FOUR ways, on the value a real run computes
+
+| Observation point | `typecheck` |
+|---|---|
+| workstation, warm-preexisting | `8949082127832201885` |
+| workstation, cold | `8949082127832201885` |
+| workstation, warm-after-reset | `8949082127832201885` |
+| `ubuntu-24.04-arm`, warm-fresh | `8949082127832201885` |
+| `windows-11-arm`, warm-fresh | `8949082127832201885` |
+| **a real `nx typecheck` run, both `dist/` states** | **`8949082127832201885`** |
+
+The last row is the one that matters: the number the instrument now reports is the number Nx's own
+runner writes into `.nx/cache/run.json`. That was not true before this change.
+
+### PARITY-03's verdict, UPDATED
+
+**PARITY-03 is SATISFIED, for all FOUR invariant targets rather than three.** The row in
+`## Requirement coverage` is updated in place with a pointer here.
+
+At one commit, `build`, `typecheck` and `test` -- and `lint` as D-21's fourth -- are byte-identical
+across the native Windows workstation in BOTH graph states, `ubuntu-24.04-arm`, and
+`windows-11-arm`. Four values per target, all four identical, on four targets:
+
+| Target | workstation cold | workstation warm-pre | `ubuntu-24.04-arm` | `windows-11-arm` |
+|--------|------------------|----------------------|--------------------|------------------|
+| `build` | `17197827372395989528` | `17197827372395989528` | `17197827372395989528` | `17197827372395989528` |
+| `typecheck` | `8949082127832201885` | `8949082127832201885` | `8949082127832201885` | `8949082127832201885` |
+| `test` | `1367622961810189968` | `1367622961810189968` | `1367622961810189968` | `1367622961810189968` |
+| `lint` | `6930879416208693542` | `6930879416208693542` | `6930879416208693542` | `6930879416208693542` |
+| `integration` | `1193647465557986036` | `1193647465557986036` | `11946835023040710407` | `1193647465557986036` |
+
+**One honest qualification on the commit spread.** The workstation columns were captured at
+`163e6b9` and the runner columns at `56bb11d`. That is admissible for exactly the reason the control
+above establishes: the intervening commits touch only `.planning/` and `ci.yml`, neither of which is
+a declared input of any target, and the four targets that carry no build-output dependency are
+measured byte-identical at both commits. The claim is not "all four columns share a SHA" -- it is
+"all four columns share a TREE as far as every task hash is concerned", and that is measured rather
+than asserted. A single-SHA capture of all four is available any time the workstation readings are
+re-taken; nothing about the values would change.
+
+**The record's earlier claim that "only THREE of the four values can ever be brought into agreement
+by an `nx.json` change" is superseded.** It was right that `nx.json` cannot reach the build-output
+variable. It was wrong that the variable had to remain -- the variable was an artefact of measuring
+outside the dependency chain, and it was closed by fixing the MEASUREMENT rather than the config.

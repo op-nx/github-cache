@@ -458,7 +458,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   arm64). The documented discriminator command must be stderr-immune, since `hash_runtime` hashes
   stdout AND stderr. Registered in `nx.json`'s `test` inputs and guarded against drift.
 
-- [ ] **DOCS-08**: Every location asserting same-OS restore as a load-bearing invariant is
+- [x] **DOCS-08**: Every location asserting same-OS restore as a load-bearing invariant is
   corrected, since VER-03 inverts it. The list is FOUR, not two: `docs/advanced.md:54-57`,
   `docs/advanced.md:45`, `ci.yml:577-583`, and `ci.yml:356-360` (the integration job's comment makes
   the same now-false claim and is easy to miss). `ci.yml:693` and `read-back.ts:10-31,52-56` assert
@@ -546,7 +546,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   bytes)` gains a `label` parameter, plumbed through `action/index.ts` and every fake in
   `publish-mirror.spec.ts`.
 
-- [ ] **OBS-04**: The all-restore-MISS warning's message drops the now-false "different OS"
+- [x] **OBS-04**: The all-restore-MISS warning's message drops the now-false "different OS"
   explanation and names cache-version rotation as a candidate cause. The expected signal of the
   first post-change push is recorded IN ADVANCE (all-miss on both publish legs, `mirrored == 0`).
   The tripwire is gated on **two consecutive all-miss pushes with NO version-affecting change in
@@ -625,17 +625,17 @@ honour table: `.planning/ROADMAP.md`.
 | PARITY-07 | Phase 8 | Pending |
 | CORR-03 | Phase 8 | Pending |
 | CORR-04 | Phase 8 | Pending |
-| PARITY-08 | Phase 9 | Pending (must land before any spec asserts on `ci.yml`) |
+| PARITY-08 | Phase 9 | Complete (`nx.json:69`; landed FIRST, before any spec asserted on `ci.yml`) |
 | VER-01 | Phase 9 | Complete |
 | VER-02 | Phase 9 | Complete |
 | VER-03 | Phase 9 | Complete |
-| VER-04 | Phase 9 | Pending (drift guard -- identity MEASURED to hold today) |
-| VER-05 | Phase 9 | Pending (zstd MEASURED present; O4 not blocked) |
-| VER-06 | Phase 9 | Pending (asserts provenance, not presence) |
-| VER-07 | Phase 9 | Pending (before VER-01's first write) |
-| ROBUST-04 | Phase 9 | Pending (also Phase 10; Phase 7 if autofix touches those files) |
-| OBS-04 | Phase 9 | Pending |
-| DOCS-08 | Phase 9 | Pending (four locations, not two) |
+| VER-04 | Phase 9 | Complete (construction-time conjunction guard; identity MEASURED to hold) |
+| VER-05 | Phase 9 | Complete (surfaced, never gated; `zstd-without-long` OBSERVED on both real runners) |
+| VER-06 | Phase 9 | Complete (closed LIVE on windows-11-arm, run `30400231720`; asserts provenance, not presence) |
+| VER-07 | Phase 9 | Complete (before VER-01's first write) |
+| ROBUST-04 | Phase 9 | Complete for Phase 9; RECURS in Phase 10 (and Phase 7 if autofix touches those files) |
+| OBS-04 | Phase 9 | Complete (reworded message + two-push tripwire + advance record `e7018d0`; signal SAMPLED, prediction rows not met -- see `09-EVIDENCE.md` ADDENDUM) |
+| DOCS-08 | Phase 9 | Complete (four corrections + two additive, phrase-pinned; `read-back.ts` and `ci.yml:693` were always Phase 10 scope) |
 | CORR-02 | Phase 10 | Pending |
 | RETAIN-04 | Phase 10 | Pending (same commit as CORR-02) |
 | RETAIN-05 | Phase 10 | Pending (same commit as CORR-02) |

@@ -295,10 +295,12 @@ jobs:
       # the final `npm run <target>` line may differ, and only build's copy carries
       # extra comments. Keep it that way, so the windows-11-arm integration leg
       # never drifts from the others. This is an unguarded invariant: nothing fails
-      # if it drifts. cleanup-workflow.spec.ts is the precedent for asserting on a
-      # workflow from a spec if that ever becomes worth enforcing -- note ci.yml is
-      # NOT in nx.json's test inputs (only cleanup.yml is), so such a guard would
-      # need ci.yml added there or it goes stale behind a cache hit.
+      # if it drifts. CORRECTED, and the replacement fact rather than a bare deletion:
+      # this note used to say ci.yml was NOT in nx.json's test inputs, so such a guard
+      # would first need it registered there. PARITY-08 registered it (nx.json:69), and
+      # dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts now both assert on this
+      # file, so the precondition is already met -- only the drift guard itself would be
+      # new work. cleanup-workflow.spec.ts remains the precedent for the shape.
       - name: Pre-set the Nx cache client vars for the sidecar
         shell: bash
         run: |
@@ -586,6 +588,180 @@ jobs:
           fi
       - cancel: cache-server
 
+  # The O3 EXISTENCE WITNESS (XOS-03, TEST-09, D-17). It asserts, post hoc and from the
+  # cache service's OWN metadata, that the `nx-cache-<H_linux>` entry already existed a
+  # stated margin BEFORE the Windows `integration` step started. That is what makes the
+  # Windows leg's remote-cache MISS attributable to the Nx hash divergence rather than to
+  # an entry that simply had not been written yet. Two authed read-only REST GETs, `curl`
+  # plus `jq`, both runner-provided on ubuntu. No `gh`, of which this file contains zero
+  # invocations (D-17 sub-lock 4), and keeping every REST call on this ubuntu job removes
+  # the windows-11-arm availability question entirely.
+  #
+  # THIS IS NOT AN ORDERING DEPENDENCY, and that distinction is the whole design. The
+  # proof is an ASSERTION evaluated on recorded metadata, so if the margin ever collapses
+  # the witness fails LOUD and no O3 proof is recorded for that run -- which is the
+  # correct failure mode. An ordering dependency would instead let a reordered run
+  # produce a WRONG verdict silently. Leg order is therefore NOT a correctness control,
+  # and XOS-06 and PROJECT.md's platform-agnosticism row are untouched by this job.
+  # MEASURED ubuntu-first 11 of 11 runs, 182 s max on run 30471772954
+  # -- floor 109 s, and the cause is structural rather than lucky: `npm ci` costs about
+  # 19 s on ubuntu against about 180 s on windows-11-arm, so the ubuntu leg's whole job
+  # finishes before the Windows leg's install is halfway done. A measurement is not a
+  # documented guarantee, which is exactly why the comparison below demands a STATED
+  # 30-second minimum margin -- roughly four times headroom against that floor -- rather
+  # than a bare `<` that a timestamp-truncation artefact could satisfy.
+  #
+  # WHAT THIS JOB DELIBERATELY DOES NOT ASSERT: the absence of the remote-cache label.
+  # RECORDED and never GATED: a zero count is CORRECT on the windows leg
+  # and equally correct on any re-run at the same commit, where a LOCAL hit precedes any
+  # remote read -- so gating on it would redden the workflow for being right, and a
+  # tripwire that fires on correct work gets disabled (OBS-04 is this repo's own record
+  # of that happening). The integration job RECORDS that count; nothing anywhere gates on
+  # it. The structured cacheStatus value read-integration-hash.mjs prints is the
+  # remote-vs-local discrimination the count cannot make (D-24).
+  #
+  # needs: integration and NOT hash-parity, which is D-17 sub-lock 1. On a pull_request
+  # event hash-parity pins the pull request's HEAD sha while integration takes
+  # actions/checkout's default MERGE commit, so those two jobs measure DIFFERENT TREES and
+  # their task hashes are not commensurable. H_linux must come from the integration leg's
+  # own record. For the same reason inverted, this job does NOT copy
+  # hash-parity-compare's `ref:` checkout pin.
+  #
+  # EXACT KEY EQUALITY, never a count, and this is the clause whose loss would be least
+  # visible:
+  # ?key= is a PREFIX match, so total_count > 0 is NOT an existence test
+  # -- measured: `?key=nx-cache-1` returns 40 entries, and a full key minus its last
+  # character still returns 2, so a shorter hash that happens to be a prefix of a longer
+  # one satisfies any count-based test. Therefore
+  # the witness compares .key for EXACT string equality, never a count
+  # and it filters on `ref` as well, because ONE hash holds TWO entries on TWO DIFFERENT
+  # refs (measured: the same key under refs/heads/main and under refs/pull/N/merge), so a
+  # key-only match can return an entry from the wrong ref. The extraction is also
+  # TERMINATED with `// empty`, so an absent match yields a definitively EMPTY string
+  # rather than the literal four-character null a raw jq output would print -- an
+  # emptiness test against `null` is false, so without the terminator the guard would PASS
+  # on absence. Both omissions ship the same way: a count-based or null-blind check passes
+  # on the happy path and is wrong only in the case this job exists to detect, so nothing
+  # about a green run would reveal the regression.
+  #
+  # NO continue-on-error AND NO ADVISORY PERIOD. This job is build-gating from its first
+  # commit. Nothing in its `if:` may govern whether it PASSES: the verdict comes from the
+  # recorded cache-service and run metadata only, and there is deliberately no
+  # needs.*.result reference anywhere below. It is also ungated by event -- integration is
+  # not push-gated either, so the witness runs on pull requests too, which is useful
+  # rehearsal signal because it is read-only and fails loud. The O3 proof itself is
+  # recorded ONLY from the push run (D-20, plan 11-07).
+  o3-witness:
+    needs: integration
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job. Matches the non-matrix siblings at 15
+    # rather than the matrix jobs' 20: this job downloads one small text file and issues
+    # two authed REST GETs. No npm ci, no build, no checkout.
+    timeout-minutes: 15
+    # A job-level permissions block REPLACES the workflow grant (contents: read)
+    # WHOLESALE -- it does NOT merge -- so every scope this job still needs has to be
+    # named here or it is silently dropped rather than reported. Hence:
+    # o3-witness restates contents: read because a job-level block REPLACES
+    # the workflow-level grant, and actions/download-artifact loses its grant without it.
+    # And:
+    # o3-witness does NOT request actions: write, the cache DELETE verb
+    # -- both REST endpoints this job reads are satisfied by actions: read, and a reader
+    # who "fixed" a 404 by widening to write would hand a read-only witness the ability to
+    # delete cache entries. Least privilege: exactly these two, nothing more.
+    #
+    # THE JOB DOES NOT CHECK OUT THE REPOSITORY, and contents: read is restated anyway.
+    # It needs no repo file -- it is curl plus jq against two endpoints, with no
+    # comparator to build, unlike hash-parity-compare whose comparator is TypeScript in
+    # dist/. The restatement is what keeps this block from silently narrowing the
+    # workflow's grant, and actions/download-artifact does need it.
+    permissions:
+      contents: read # RESTATED, not redundant -- see the block comment above
+      actions: read # /actions/caches and /actions/runs/{id}/jobs
+    steps:
+      # mkdir -p BEFORE the download, following hash-parity-compare's precedent, so the
+      # reader below never ENOENTs even when nothing arrived.
+      - name: Create the record directory before the download
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p integration-hash-records
+      - uses: actions/download-artifact@v8
+        with:
+          name: integration-hash-ubuntu-24.04-arm
+          path: integration-hash-records
+      # An EMPTY hash must fail the job rather than compose a cache key ending in
+      # nothing. if-no-files-found: error on the upload side covers only the
+      # missing-file half of that.
+      - name: Read H_linux from the ubuntu integration leg's record
+        shell: bash
+        run: |
+          set -euo pipefail
+          h_linux="$(cat integration-hash-records/integration-hash.txt)"
+          if [ -z "${h_linux}" ]; then
+            echo "o3-witness: the downloaded integration-hash record is EMPTY -- refusing to compose a cache key ending in nothing" >&2
+            exit 1
+          fi
+          echo "H_LINUX=${h_linux}" >> "$GITHUB_ENV"
+          echo "o3-witness: H_linux=${h_linux}"
+      # GITHUB_TOKEN through the step env:. No PAT and no new secret, so the THREAT-MODEL
+      # ledger is unchanged.
+      #
+      # THE GREP IS REQUIRED ON TOP OF THE EXIT CODE, the same double signal
+      # hash-parity-compare records: the exit code is the first verdict, and the anchored
+      # content assertion is the second, proving the verdict was actually PRINTED rather
+      # than the step succeeding through an early exit. The `^` anchor is load-bearing
+      # rather than tidy, because both streams merge into the one log this grep reads and
+      # the failure detail interpolates values the downloaded record controls, so an
+      # unanchored match could hit a mid-line substring of a failure line.
+      - name: Assert the H_linux cache entry existed before the Windows integration step started
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          {
+            auth="Authorization: Bearer ${GITHUB_TOKEN}"
+            accept='Accept: application/vnd.github+json'
+            api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+            key="nx-cache-${H_LINUX}"
+            # $GITHUB_REF is the correct filter value on BOTH events: refs/heads/main on
+            # a push, refs/pull/N/merge on a pull request. Filter rather than paginate --
+            # the repository holds ~142 entries against a per_page max of 100, and key
+            # plus ref reduces that to one or two.
+            created=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
+              "${api}/actions/caches?key=${key}&ref=${GITHUB_REF}&per_page=100" \
+              | jq -r --arg key "${key}" --arg ref "${GITHUB_REF}" \
+                'first(.actions_caches[] | select(.key == $key and .ref == $ref) | .created_at) // empty')
+            if [ -z "${created}" ]; then
+              echo "o3-witness: FAIL -- no cache entry whose key is EXACTLY ${key} on ref ${GITHUB_REF}. The Windows MISS is therefore NOT attributable: the entry may never have existed." >&2
+              exit 1
+            fi
+            # Both selectors are literals that must match the integration job's step name
+            # and the rendered matrix job name character for character. Asserting the
+            # result is NON-EMPTY is what makes a rename fail loud instead of comparing
+            # against an empty string.
+            started=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
+              "${api}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
+              | jq -r 'first(.jobs[] | select(.name == "integration (windows-11-arm)") | .steps[] | select(.name == "Run the integration target and tee its output") | .started_at) // empty')
+            if [ -z "${started}" ]; then
+              echo "o3-witness: FAIL -- no started_at for step 'Run the integration target and tee its output' in job 'integration (windows-11-arm)'. Both are literal selectors; a rename in the integration job must land in the SAME commit as the change here." >&2
+              exit 1
+            fi
+            # The cache side carries sub-second precision and the step side is
+            # whole-second, so parsing both to epoch SECONDS is itself the floor.
+            created_epoch=$(date -u -d "${created}" +%s)
+            started_epoch=$(date -u -d "${started}" +%s)
+            delta=$(( started_epoch - created_epoch ))
+            echo "o3-witness: key=${key} created_at=${created} started_at=${started} delta=${delta}s margin=30s"
+            if [ "${delta}" -lt 30 ]; then
+              echo "o3-witness: FAIL -- observed delta ${delta}s, wanted at least 30s. The H_linux entry was not demonstrably present before the Windows integration step started, so no O3 proof is recorded for this run." >&2
+              exit 1
+            fi
+            echo "o3-witness: EXISTENCE OK key=${key} created_at=${created} started_at=${started} delta=${delta}s margin=30s"
+          } 2>&1 | tee o3-witness.log
+          grep -q '^o3-witness: EXISTENCE OK' o3-witness.log
+
   # The two-leg hash-parity CAPTURE job (PARITY-03, PARITY-06; the capture half of
   # D-17). It runs capture-hashes.mjs on both runner OSes and uploads one record per
   # leg, so 08-ROOT-CAUSE.md can hold FOUR observation points -- two hand-captured on
@@ -696,10 +872,23 @@ jobs:
   # blame, one job further from the cause than necessary. A leg that measured nothing
   # must fail ITS OWN leg.
   #
-  # This comment block is the ONLY place that rationale can live. ci.yml is NOT in
-  # nx.json's `test` inputs (only cleanup.yml is, nx.json:68), so a spec asserting on
-  # this file's content would serve a stale cached PASS; registering it is PARITY-08,
-  # deferred to Phase 9 so its hash rotation collapses into VER-01's window.
+  # CORRECTED, and supplying the REPLACEMENT FACT is the point rather than retracting the
+  # old one. This block used to claim it was the ONLY place that rationale could live, on
+  # the ground that ci.yml was not an nx.json `test` input, so a spec asserting on this
+  # file's content would serve a stale cached PASS. Both halves are now false. A bare
+  # DELETION would have left a future reader holding a documented case for REMOVING the
+  # registration -- and removing it would turn every ci.yml content guard into a replay of
+  # a pass computed before its subject existed, which is exactly how Phase 9 shipped a
+  # regression. So, read from the config rather than from a comment:
+  # ci.yml IS in nx.json's test inputs (nx.json:69, PARITY-08, Phase 9)
+  # -- so an edit to this file rotates the `test` hash and no ci.yml guard can go stale
+  # behind a cache hit. This file's job shape and its comment prose are now
+  # asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts
+  # respectively: the first reads it comment-STRIPPED, so it sees the YAML but
+  # structurally cannot see a comment, and the second reads it RAW, so it is the only
+  # guard in the repo that can. Two harnesses, one question each. This block is therefore
+  # no longer the only place the rationale CAN live -- it is simply where a reader looks
+  # first, so it keeps carrying it.
   hash-parity:
     strategy:
       fail-fast: false
@@ -864,11 +1053,20 @@ jobs:
   # because a non-zero exit under pipefail aborts before the grep runs, which is
   # exactly the exit-code-alone verdict D-23 forbids relying on.
   #
-  # NO SPEC ASSERTS ON THIS FILE, so this comment block is the only place the
-  # rationale can live -- which is why it carries so much of it. ci.yml is NOT in
-  # nx.json's `test` inputs (only cleanup.yml is, nx.json:68), so a spec asserting on
-  # this file's content would serve a stale cached PASS; registering it is PARITY-08,
-  # deferred to Phase 9.
+  # CORRECTED. This block used to open NO SPEC ASSERTS ON THIS FILE and gave that as the
+  # reason it carries so much rationale, on the further ground that ci.yml was not an
+  # nx.json `test` input, so a content guard would serve a stale cached PASS. Two specs
+  # assert on this file now, and the inputs claim was already false when it was written
+  # here. The replacement fact rather than a bare deletion, because a deletion would leave
+  # the case for REMOVING the registration standing unopposed -- which is how Phase 9
+  # shipped a regression:
+  # ci.yml IS in nx.json's test inputs (nx.json:69, PARITY-08, Phase 9)
+  # -- so an edit here rotates the `test` hash, and this job's own shape and the prose
+  # below are
+  # asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts
+  # -- the comment-STRIPPED reader for the YAML, the RAW reader for the comments. The
+  # rationale still lives here because this is where a reader looks, not because nothing
+  # else can see it.
   hash-parity-compare:
     needs: hash-parity
     if: ${{ !cancelled() }}

@@ -3,6 +3,8 @@ import type { Octokit } from '@octokit/rest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSyncTrusted } from '../lib/sync-gate.js';
 import { resolveGitHubToken } from '../lib/github-identity.js';
+import { dogfoodBody } from '../lib/dogfood-body.js';
+import { mirrorSeedHash } from '../lib/mirror-seed.js';
 import { publishMirror } from '../publish/publish-mirror.js';
 import {
   CACHE_OS_VALUES,
@@ -401,4 +403,91 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
       );
     },
   );
+
+  // No spec asserted this string before OBS-05, which is precisely why it sat stale
+  // naming only two of the operations. Asserted per NAME rather than on the whole
+  // sentence so a reworded message stays green while a DROPPED operation reddens.
+  it('names every valid operation when the operation input is unrecognised', async () => {
+    getInputMock.mockImplementation((name: string) =>
+      name === 'operation' ? 'not-an-operation' : 'run-1',
+    );
+    serveMock.mockResolvedValue(fakeServer());
+
+    await run();
+
+    expect(core.setFailed).toHaveBeenCalledOnce();
+    const [message] = vi.mocked(core.setFailed).mock.calls[0];
+
+    expect(message).toContain("unknown operation 'not-an-operation'");
+
+    for (const operation of ['seed', 'mirror-seed', 'verify']) {
+      // Quoted on BOTH sides deliberately: bare `seed` is a substring of
+      // `mirror-seed`, so an unquoted check would pass with 'seed' itself deleted.
+      expect(message).toContain(`'${operation}'`);
+    }
+  });
+
+  /**
+   * OBS-05's url-reuse trap, closed by a test rather than by a comment. `url` is built
+   * from the RAW `hash` input ABOVE the operation branches, so a mirror-seed branch
+   * that reused it would PUT at nx-cache-<run_id> -- and the PUT still returns 200, so
+   * nothing fails here and read-back.ts MISSES silently instead.
+   *
+   * The assertion is on the WHOLE url and on the final PATH SEGMENT, never
+   * toContain(RUN_ID): the derived seed CONTAINS the run id, so a substring check is
+   * vacuous by construction. That is the one detail that makes this case worth having.
+   */
+  describe('the mirror-seed operation (OBS-05, D-12/D-13)', () => {
+    const RUN_ID = '30401077417';
+
+    function driveMirrorSeed(status: number) {
+      getInputMock.mockImplementation((name: string) =>
+        name === 'operation' ? 'mirror-seed' : RUN_ID,
+      );
+      serveMock.mockResolvedValue(fakeServer());
+
+      return vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status }));
+    }
+
+    it.each(CACHE_OS_VALUES)(
+      'PUTs at the DERIVED seed on a %s leg, never at the raw run id, and stamps the same leg into the body',
+      async (producerOs) => {
+        cachePlatformMock.mockReturnValue(producerOs);
+        const fetchSpy = driveMirrorSeed(200);
+
+        await run();
+
+        // Asserted BEFORE the call is read, so an absent branch reports a call-count
+        // mismatch rather than throwing on an undefined tuple.
+        expect(fetchSpy).toHaveBeenCalledOnce();
+
+        const [requestedUrl, init] = fetchSpy.mock.calls[0];
+        const seedHash = mirrorSeedHash(RUN_ID, producerOs);
+
+        expect(String(requestedUrl)).toBe(
+          `http://127.0.0.1:1234/v1/cache/${seedHash}`,
+        );
+        expect(String(requestedUrl).split('/').at(-1)).not.toBe(RUN_ID);
+        expect(init?.method).toBe('PUT');
+        // DERIVED rather than hand-authored, and the exception is deliberate: the claim
+        // under test is which ARGUMENTS reach the body, not the template. The template
+        // itself is pinned by dogfood-body.spec.ts and by the two hand-authored literals
+        // in the verify cases above.
+        expect(init?.body).toEqual(dogfoodBody(seedHash, producerOs));
+      },
+    );
+
+    it('fails the job loud on a non-200 PUT, without throwing', async () => {
+      const fetchSpy = driveMirrorSeed(500);
+
+      await expect(run()).resolves.toBeUndefined();
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(core.setFailed).toHaveBeenCalledWith(
+        expect.stringContaining('expected PUT 200, got 500'),
+      );
+    });
+  });
 });

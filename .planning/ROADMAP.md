@@ -419,7 +419,16 @@ must be proven to CATCH the three CORR-05 violations before this phase removes t
      mirrored under both `-linux` and `-windows` until the rename lands: bounded, NOT a correctness
      bug, and the existing "~5 assets per push" estimate in `ci.yml` reads about double during it.
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+- [ ] `10-01-PLAN.md` - capture the two perishable pre-rename measurements (D-25 XOS-02 baseline, D-08 census)
+- [ ] `10-02-PLAN.md` - the `mirrored-by` label seam, engine through real Octokit adapter (OBS-03)
+- [ ] `10-03-PLAN.md` - widen `publish`'s `needs:`, add the repo's first `needs:` value guard (XOS-07)
+- [ ] `10-04-PLAN.md` - the per-leg seed helper and the `mirror-seed` operation branch (OBS-05)
+- [ ] `10-05-PLAN.md` - flip the seed and reader atomically, add the `mirrored-by` read-back control, lock `max-parallel: 1` (OBS-05, XOS-06)
+- [ ] `10-06-PLAN.md` - the ADD-only assertion-level RED for the rename wave (CORR-02, CORR-05, RETAIN-04/05)
+- [ ] `10-07-PLAN.md` - THE ONE COMMIT: OS-free name, two-branch filter, prose sweep, rebuilt bundle (CORR-02, CORR-05, RETAIN-04/05)
+- [ ] `10-08-PLAN.md` - pin the `ref` scoping, hand TRUST-11/12 to the auditor, record SC6 (TRUST-10..13)
 
 **Live-CI close**: a default-branch push must republish the mirror under the new name before the
 Phase 11 proofs can run. Expect the first such push to publish nothing if it coincides with

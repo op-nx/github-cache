@@ -442,7 +442,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   and mirror every OS's entries, so the captured terminal output of every CI job on every OS
   crosses into the anonymously-readable Releases mirror.
 
-- [ ] **TRUST-13**: TRUST-11 and TRUST-12 are classified by gsd-security-auditor in SECURITY.md,
+- [x] **TRUST-13**: TRUST-11 and TRUST-12 are classified by gsd-security-auditor in SECURITY.md,
   not self-certified. The proposed classification (neither crosses a trust boundary, because the
   Actions cache's boundary is ref scope, not OS) is offered as INPUT to that audit, not as its
   conclusion.
@@ -647,7 +647,7 @@ honour table: `.planning/ROADMAP.md`.
 | TRUST-10 | Phase 10 | Complete |
 | TRUST-11 | Phase 10 | Complete |
 | TRUST-12 | Phase 10 | Complete |
-| TRUST-13 | Phase 10 | Pending |
+| TRUST-13 | Phase 10 | Complete (10-SECURITY.md section 1; auditor adopted B2 and refined both legs) |
 | XOS-01 | Phase 11 | Pending (live-CI/live-workstation only) |
 | XOS-02 | Phase 11 | Pending (baseline captured in Phase 10, before CORR-02) |
 | XOS-03 | Phase 11 | Pending (live-CI only) |

@@ -65,6 +65,21 @@ const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
  * arbitrarily clipped: each was checked against a single comment line before being
  * committed, not written to read well in isolation.
  *
+ * XOS-03, TEST-09 and D-17 (Phase 11) add FIVE more `ci.yml` rows, all ADDITIVE, and they
+ * are authored RED -- one commit AHEAD of the `ci.yml` prose they lock. Plan 11-06 writes
+ * that prose as the single GREEN commit and takes the literals from `11-05-SUMMARY.md`
+ * character for character. Same split as XOS-07 and XOS-06 for the same structural reason:
+ * `dogfood-cross-os.spec.ts` asserts the `o3-witness` job's PRESENCE and SHAPE, because its
+ * `jobBlock` helper throws on an absent job key, and every claim ABOUT that job's design is
+ * locked here, because a comment is invisible to a reader that strips `#` lines.
+ *
+ * `EDITED_FILES` is deliberately UNCHANGED by those five rows. `.github/workflows/ci.yml` is
+ * already in the list, and the two files Phase 11 creates -- `read-integration-hash.mjs` and
+ * `capture-hashes.mjs`'s new mode -- are workspace-ROOT dev instruments. `capture-hashes.mjs`
+ * is edited by this milestone and is likewise absent, so the established scope of this list is
+ * docs, `ci.yml` and files under `packages/github-cache/src/`. Read the omission as that
+ * scope holding, not as the same-commit rule being skipped.
+ *
  * HOME. Neither existing docs guard fits: `docs-trust.spec.ts` reads only
  * `docs/trust-and-security.md` and `docs/versioning.md`, and `docs-adoption.spec.ts`
  * reads the README, `docs/configuration.md`, `docs/advanced.md` and the examples.
@@ -364,6 +379,160 @@ const DOCS_08_SITES = [
     required: [
       'Every read fault degrades to a MISS -- never a wrong result and never a broken',
       'carries one precondition',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * ADDITIVE, Phase 11 row A -- the CORRECTED `test`-inputs fact, and the row that is
+     * additive in bucket while correcting a claim in substance. Two comment blocks in
+     * `ci.yml`, above `hash-parity` and above `hash-parity-compare`, currently assert that
+     * this file is NOT in `nx.json`'s `test` inputs and that a spec asserting on its content
+     * would therefore serve a stale cached PASS. Both are STALE and assert the OPPOSITE of
+     * current fact: `nx.json:69` is `{workspaceRoot}/.github/workflows/ci.yml`, registered by
+     * PARITY-08 in Phase 9.
+     *
+     * WHAT THIS ROW LOCKS IS THE REPLACEMENT REASON, not the absence of the wrong one. A bare
+     * deletion of the stale claim would leave a future reader holding a documented argument
+     * for REMOVING the registration -- and removing it would silently turn every `ci.yml`
+     * content guard in this file and in `dogfood-cross-os.spec.ts` into a replay of a pass
+     * computed before its subject existed. That is exactly how Phase 9 shipped a regression,
+     * and it is why the correction must SUPPLY a fact rather than merely retract one.
+     *
+     * Independently deletable: the two blocks can be reworded without touching any other
+     * `ci.yml` prose, and the specs would stay green while the argument for breaking them sat
+     * in the file. `forbidden` is EMPTY for the reason every row below shares, and here it is
+     * sharpest: an absence check on the stale wording is SATISFIED BY DELETING THE WHOLE
+     * COMMENT, which is the failure this row exists to prevent.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'additive',
+    required: [
+      "ci.yml IS in nx.json's test inputs (nx.json:69, PARITY-08, Phase 9)",
+      'asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * ADDITIVE, Phase 11 row B -- the `o3-witness` job's `permissions` RESTATEMENT (D-17
+     * sub-lock 3). The hazard this records is not that the block is missing: `dogfood-cross-os
+     * .spec.ts` asserts both scopes now, in two separate cases. It is that the REASON the
+     * block restates `contents: read` goes unrecorded, and a reader who does not know that a
+     * job-level block REPLACES the workflow grant wholesale rather than merging it will read
+     * the restatement as redundant and tidy it away -- silently dropping the grant that
+     * `actions/download-artifact` needs.
+     *
+     * BOTH PHRASES ARE KEYED ON `o3-witness` BY NAME, and that is load-bearing rather than
+     * decorative. The generic wholesale-replacement sentence ALREADY appears in this file,
+     * above the `publish` job's own block, so a phrase reusing that wording would pass from
+     * the pre-existing occurrence and lock nothing at all. Naming the job is what makes each
+     * phrase unique to the new comment.
+     *
+     * Independently deletable: the restatement reason and the `actions: write`-is-DELETE
+     * carve-out are two sentences that survive or fall separately -- the first prevents a
+     * silent scope drop, the second prevents a reader from "fixing" a 404 by widening to
+     * write. `forbidden` is EMPTY: this is prose that did not exist before.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'additive',
+    required: [
+      'o3-witness restates contents: read because a job-level block REPLACES',
+      'o3-witness does NOT request actions: write, the cache DELETE verb',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * ADDITIVE, Phase 11 row C -- D-17 sub-lock 2, the RECORDED-never-GATED clause, and the
+     * subtlest row of the five. The remote-cache label's ABSENCE is recorded as an
+     * observation and must never become a gate, because the absence is FALSE on a correct
+     * re-run at the same commit: a local cache hit precedes any remote read, and a zero count
+     * on the windows leg is the EXPECTED outcome rather than a defect. A tripwire that fires
+     * on correct work gets disabled, and OBS-04 is this repo's own record of that happening.
+     *
+     * TWO PHRASES, SPLIT SO THE REASON AND THE MEASUREMENT CANNOT DRIFT APART. Phase 10's
+     * recorded content-pin lesson is that one phrase covering both a claim and its cause lets
+     * them separate silently, so the RECORDED-never-GATED reason is pinned by one phrase and
+     * the measurement D-17 rests on by another. The measurement is the ubuntu-first margin,
+     * n = 11, floor 109 s, max 182 s on run 30471772954, which is what makes the witness's
+     * stated 30-second minimum a headroom choice rather than a guess.
+     *
+     * The house form for a measurement also requires the clause that a measurement is not a
+     * documented guarantee. That sentence is REQUIRED IN THE PROSE but is deliberately NOT
+     * pinned as a phrase here: the literal already appears in this file, in the `publish`
+     * job's XOS-06 block, so a row asserting it would pass from the pre-existing occurrence
+     * and lock nothing -- the same trap row B avoids by naming its job.
+     *
+     * Independently deletable: deleting the RECORDED-never-GATED reason must redden something
+     * distinguishable from deleting the acceptance-set reason row D locks, or a failure report
+     * cannot tell a promoted tripwire apart from a collapsed probe. `forbidden` is EMPTY: new
+     * prose, and an absence check would be satisfied by deleting the whole comment.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'additive',
+    required: [
+      'RECORDED and never GATED: a zero count is CORRECT on the windows leg',
+      'MEASURED ubuntu-first 11 of 11 runs, 182 s max on run 30471772954',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * ADDITIVE, Phase 11 row D -- the positive control's ACCEPTANCE SET (D-16), and the only
+     * one of the five whose prose lands in the `integration` job rather than in the witness's
+     * own block. Two `curl` probes now run in that job against the same sidecar with two
+     * DIFFERENT acceptance sets, and the whole value of the second one is the difference: the
+     * readiness poll accepts 404 or 200 because it proves REACHABILITY, while the positive
+     * control on the leg's own just-saved key accepts 200 ALONE, because a 404 there means a
+     * dead sidecar masqueraded as a cache MISS.
+     *
+     * WHY THE PROSE IS WORTH LOCKING AND NOT MERELY WRITING. Two probes that differ only in
+     * their acceptance set look like duplication, and the natural tidy-up is to collapse them
+     * into one helper with the looser set -- which destroys the control while leaving both
+     * steps green. The comment is the only thing standing between a reader and that edit, so
+     * a phrase pins each half: what the control accepts, and why the poll above accepts more.
+     *
+     * Independently deletable: the acceptance-set sentence and the do-not-collapse sentence
+     * are separate claims -- the first can survive a rewrite that still merges the probes.
+     * `forbidden` is EMPTY: new prose. Note that `wanted 404 or 200` already appears in the
+     * readiness step's own failure message, which is why this row's phrase says `accepts 404
+     * or 200 on purpose` instead -- a phrase matching the existing message would lock nothing.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'additive',
+    required: [
+      'the acceptance set is 200 ALONE -- a 404 here is a control FAILURE',
+      'the readiness poll accepts 404 or 200 on purpose; do not collapse them',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * ADDITIVE, Phase 11 row E -- the EXACT-KEY-EQUALITY reason, and the clause whose loss
+     * would be least visible. The caches endpoint's `?key=` parameter is a PREFIX match,
+     * measured: `?key=nx-cache-1` returns 40 entries, and a full key minus its last character
+     * returns 2. So `total_count > 0` is NOT an existence test -- a shorter hash that happens
+     * to be a prefix of a longer one satisfies it. The witness therefore compares the
+     * returned `.key` for exact string equality.
+     *
+     * THIS IS THE ONE THAT SHIPS SUBTLY BROKEN IF THE REASON IS LOST. A count-based check
+     * PASSES on the happy path and is wrong only in the case the witness exists to detect, so
+     * nothing about a green run would reveal the regression. The same applies to the
+     * terminator that makes an absent match yield an EMPTY string rather than the literal
+     * four-character null -- an emptiness test against `null` is false, so without it the
+     * guard passes on absence.
+     *
+     * Independently deletable: the prefix-match fact and the exact-equality mechanism are two
+     * sentences, and a reader can delete the first while keeping a `jq` filter they no longer
+     * understand -- at which point the next simplification removes the filter too.
+     * `forbidden` is EMPTY: new prose.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'additive',
+    required: [
+      '?key= is a PREFIX match, so total_count > 0 is NOT an existence test',
+      'the witness compares .key for EXACT string equality, never a count',
     ],
     forbidden: [],
   },

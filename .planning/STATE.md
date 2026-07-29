@@ -2,17 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
-current_phase: 10
-current_phase_name: OS-Invariant Releases Mirror
-status: complete
-last_updated: "2026-07-29T18:13:08.452Z"
+current_phase: 11
+current_phase_name: Live Proofs -- O1, O2, O3
+status: planned
+last_updated: "2026-07-29T20:32:23.293Z"
 last_activity: 2026-07-29
+last_activity_desc: Phase 11 planning complete -- 7 plans, plan-checker passed
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 30
+  completed_phases: 4
+  total_plans: 33
   completed_plans: 26
-  percent: 17
+  percent: 67
 ---
 
 # Project State
@@ -22,15 +23,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 10 — OS-Invariant Releases Mirror
+**Current focus:** Phase 11 -- Live Proofs -- O1, O2, O3
 
 ## Current Position
 
-Phase: 10 (OS-Invariant Releases Mirror) -- COMPLETE
-Plan: 8 of 8
-Status: All four gates closed -- verification passed, threats_open 0, nyquist_compliant true, learnings extracted. 12/12 requirements closed: the two live-CI items (OBS-05 per-leg read-back, XOS-07 full-task-set census) were observed on run 30471772954 via a temporary push to main, since restored to fe25a3f. See 10-EVIDENCE-LIVE-CI.md.
+Phase: 11 (Live Proofs -- O1, O2, O3) -- PLANNED, ready to execute
+Plan: 0 of 7
+Status: 7 plans in 7 sequential waves. Research resolved U-01 empirically -- the O3 existence inequality IS establishable post-hoc (ubuntu-first by a 109-182s structural margin across 11 of 11 runs), so the dedicated-job fallback is deliberately NOT built. Plan-checker passed: 0 blockers, 5 warnings. Requirements 7/7 covered, decisions 23/23 covered.
 Progress: 4/6 phases complete [####--] 67%
-Last activity: 2026-07-29
+Last activity: 2026-07-29 -- Phase 11 planning complete
+
+**PERISHABLE, and it gates plans 11-02 and 11-03.** The warm Releases mirror holding the four hashes
+this workstation computes was published 2026-07-29T16:44Z, and cleanup prunes past 30 days, so the
+O1/O2 measurement window closes around 2026-08-28. The workstation graph is WARM right now, so 11-02's
+warm `capture:hashes` reading must be taken BEFORE its `nx reset` or that number is unrecoverable.
+Plans 11-05 and 11-06 rotate three of the four hashes, so neither may run before 11-03 is captured.
+
+Prior phase, unchanged: Phase 10 (OS-Invariant Releases Mirror) is COMPLETE, 8 of 8 plans, all four
+gates closed -- verification passed, threats_open 0, nyquist_compliant true, learnings extracted.
+12/12 requirements closed; the two live-CI items (OBS-05 per-leg read-back, XOS-07 full-task-set
+census) were observed on run 30471772954 via a temporary push to main, since restored to fe25a3f.
+See 10-EVIDENCE-LIVE-CI.md.
 
 ## Performance Metrics
 

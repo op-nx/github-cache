@@ -491,7 +491,15 @@ discriminator).
      `Cache: n/m hit` line is explicitly marked NON-DISCRIMINATING in both directions. (TEST-08,
      TEST-10, OBS-02)
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+- [ ] `11-01-PLAN.md` - hash-neutral instruments: the `capture-hashes.mjs` graph-premise mode and the `run.json` reader (TEST-08)
+- [ ] `11-02-PLAN.md` - D-06 pre-flight: warm capture, the authorised `nx reset`, cold capture (XOS-01, XOS-02, TEST-10)
+- [ ] `11-03-PLAN.md` - the O1/O2 local proof: soundness probe, the cold run, the per-target counts, `11-EVIDENCE.md` (XOS-01, XOS-02, TEST-10, OBS-02)
+- [ ] `11-04-PLAN.md` - producer attribution per hit hash, and the pre-rotation sign-off (TEST-08)
+- [ ] `11-05-PLAN.md` - RED: the `o3-witness` presence guard and the `ci.yml` comment lock (XOS-03, TEST-09)
+- [ ] `11-06-PLAN.md` - GREEN: the `integration` probe steps and the `o3-witness` job (XOS-03, TEST-09)
+- [ ] `11-07-PLAN.md` - the O3 proving run and the O3 evidence (XOS-03, TEST-09, TEST-08, OBS-02)
 
 **Live-CI close**: the whole phase. Nothing here closes locally except the `nx reset`
 precondition; O1/O2 need a warm mirror and a real workstation, O3 needs a real Windows runner.

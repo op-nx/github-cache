@@ -67,7 +67,7 @@ cache, and the public-repo exposure surface, are not deferred.
 
 ### Cross-OS correctness (CORR)
 
-- [ ] **CORR-02**: The Releases mirror asset name is `nx-cache-<hash>` -- a distinguishing prefix
+- [x] **CORR-02**: The Releases mirror asset name is `nx-cache-<hash>` -- a distinguishing prefix
   with no OS component -- derived by both reader and publisher from the single `releaseAssetName`
   helper, and recognisable to the cleanup filter. Supersedes CORR-01's "OS-namespaced by default"
   branch.
@@ -85,7 +85,7 @@ cache, and the public-repo exposure surface, are not deferred.
   ONLY target that does. After VER-03 this is the SOLE mechanism separating OS-sensitive targets;
   removing it is a Core-Value regression.
 
-- [ ] **CORR-05**: Every target shared cross-OS (`build`, `typecheck`, `test`) is
+- [x] **CORR-05**: Every target shared cross-OS (`build`, `typecheck`, `test`) is
   platform-agnostic -- its RESULT does not depend on the OS, architecture, or filesystem semantics
   of the machine that produced it. This is what makes first-write-wins safe in EITHER direction,
   and is why no ordering control is needed. Assertions that read live platform state belong in
@@ -388,7 +388,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 ### Retention and cleanup (RETAIN)
 
-- [ ] **RETAIN-04**: The cleanup asset filter admits BOTH the new `nx-cache-<hash>` name and the
+- [x] **RETAIN-04**: The cleanup asset filter admits BOTH the new `nx-cache-<hash>` name and the
   legacy `<hash>-<os>` names, so legacy assets age out through the existing
   `CACHE_MIRROR_MAX_AGE_DAYS` window instead of accumulating. MUST land in the SAME COMMIT as
   CORR-02 -- a publisher writing the new name against an unextended filter silently stops pruning.
@@ -396,7 +396,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   dead-code analysis does not prune it. Proven by specs over both name families plus a cleanup
   dry-run over a mixed shard.
 
-- [ ] **RETAIN-05**: Three things RETAIN-04 does not cover. (a) The shard already holds ~50 PoC-era
+- [x] **RETAIN-05**: Three things RETAIN-04 does not cover. (a) The shard already holds ~50 PoC-era
   `<hash>.tar.gz` assets that match NO filter, before or after RETAIN-04 -- they have never been
   prunable and are permanent occupants of the 1000-asset per-release cap, whose overflow degrades to
   skip-and-warn rather than an error. Decide explicitly: prune once by hand, add a third accept
@@ -636,7 +636,7 @@ honour table: `.planning/ROADMAP.md`.
 | ROBUST-04 | Phase 9 | Complete for Phase 9; RECURS in Phase 10 (and Phase 7 if autofix touches those files) |
 | OBS-04 | Phase 9 | Complete (reworded message + two-push tripwire + advance record `e7018d0`; signal SAMPLED, prediction rows not met -- see `09-EVIDENCE.md` ADDENDUM) |
 | DOCS-08 | Phase 9 | Complete (four corrections + two additive, phrase-pinned; `read-back.ts` and `ci.yml:693` were always Phase 10 scope) |
-| CORR-02 | Phase 10 | Pending |
+| CORR-02 | Phase 10 | Complete |
 | RETAIN-04 | Phase 10 | Pending (same commit as CORR-02) |
 | RETAIN-05 | Phase 10 | Pending (same commit as CORR-02) |
 | CORR-05 | Phase 10 | Pending (4 sites; 1 removed in Phase 9 with VER-02; site 4 needs an explicit Phase 10 call) |

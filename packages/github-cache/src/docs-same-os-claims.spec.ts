@@ -39,6 +39,15 @@ const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
  * edit to `ci.yml` replays a pass computed before the edit existed. The three docs
  * files were already `test` inputs.
  *
+ * XOS-07 (Phase 10) adds a SEVENTH row that is NOT a DOCS-08 site. The six-site
+ * arithmetic above is about DOCS-08 and is unchanged by it. The extra row locks the
+ * `publish` job's rewritten `needs:` justification, and it belongs here for the same
+ * reason the two DOCS-08 `ci.yml` rows do: this is the only guard in the repo that reads
+ * `ci.yml` RAW. `dogfood-cross-os.spec.ts` strips every `#` line before matching, so it
+ * can assert the `needs:` VALUE -- it does, since this phase -- but structurally cannot
+ * see the comment that explains the value. Two harnesses, one question each; there is
+ * deliberately no third.
+ *
  * HOME. Neither existing docs guard fits: `docs-trust.spec.ts` reads only
  * `docs/trust-and-security.md` and `docs/versioning.md`, and `docs-adoption.spec.ts`
  * reads the README, `docs/configuration.md`, `docs/advanced.md` and the examples.
@@ -104,6 +113,35 @@ const DOCS_08_SITES = [
   },
   {
     /**
+     * CORRECTION, and the one row in this table that is NOT a DOCS-08 site -- it is
+     * XOS-07's comment lock (see the XOS-07 paragraph in the header). The `publish` job's
+     * leading comment used to argue for `needs: build (NOT test)` on the ground that a
+     * failing test leg must never skip the mirror and drop already-built entries.
+     * Widening `needs:` does not make that concern go away; it moves it onto a DIFFERENT
+     * mechanism. So a bare DELETION of the old argument would leave a future reader
+     * holding a documented case for narrowing `needs:` straight back -- which is exactly
+     * how Phase 9 shipped a regression. This row therefore requires the REPLACEMENT
+     * REASON to be PRESENT: the mechanism, the bounded failure mode if that mechanism is
+     * ever wrong, and the run id the widening is justified by.
+     *
+     * `forbidden` is EMPTY on purpose, and this is the one place where an absence check
+     * would be actively harmful rather than merely redundant: an absence check on the old
+     * narrow-`needs:` phrase is SATISFIED BY DELETING THE WHOLE COMMENT, which is the
+     * failure this row exists to prevent. The row asserts on surviving CONTENT only. It
+     * is also why nothing here needs the single-character character-class contortion the
+     * `forbidden` rows above carry -- there is no forbidden phrase to avoid spelling.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'correction',
+    required: [
+      'MECHANISM: !cancelled() runs this job even when a needs: dependency FAILED.',
+      'BOUNDED FAILURE MODE: a skipped mirror, never a wrong artifact.',
+      'MEASURED on run 30400231720',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
      * ADDITIVE, and this is the row whose CLASSIFICATION changed -- see D-32 in the
      * doc block above. DOCS-08 names this site for correction; it is textually the
      * same fault-degradation claim as the README's and the trust doc's, so the
@@ -150,19 +188,39 @@ const DOCS_08_SITES = [
   },
 ] as const;
 
-/** The four files the six rows span -- the scope of the retraction guard below. */
+/**
+ * The scope of the retraction guard below: the four files the DOCS_08_SITES rows span, PLUS
+ * every source file this phase has already edited. The four came from Phase 9's sweep. The
+ * six source files are Phase 10's, added so the producer-attribution retraction actually
+ * reaches the CODE that now carries the `mirrored-by` label instead of only the prose about
+ * it -- Phase 9's hardest-won sweep lesson is that a documentation-scoped scan missed
+ * `read-back.ts` and a `ci.yml` capacity comment, and both were found only after the sweep
+ * had declared itself complete.
+ *
+ * Deliberately NOT here yet: `packages/github-cache/src/lib/mirror-seed.ts` and
+ * `packages/github-cache/src/lib/release-asset-name.integration.spec.ts`. Neither exists at
+ * this commit; `read()` is a `readFileSync` and THROWS on a missing path, so an early entry
+ * would blow up rather than guard. The later plans in this phase that CREATE those files
+ * extend this list in the same commit. The omission is sequencing, not an oversight.
+ */
 const EDITED_FILES = [
   'docs/advanced.md',
   'README.md',
   'docs/trust-and-security.md',
   '.github/workflows/ci.yml',
+  'packages/github-cache/src/publish/publish-mirror.ts',
+  'packages/github-cache/src/action/index.ts',
+  'packages/github-cache/src/roundtrip/read-back.ts',
+  'packages/github-cache/src/lib/release-asset-name.ts',
+  'packages/github-cache/src/lib/cache-key.ts',
+  'packages/github-cache/src/cleanup/cleanup.ts',
 ] as const;
 
 function read(file: string): string {
   return readFileSync(new URL(file, WORKSPACE_ROOT_URL), 'utf8');
 }
 
-describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS-04, D-31, D-32)', () => {
+describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS-04, XOS-07, D-31, D-32)', () => {
   for (const { file, bucket, required, forbidden } of DOCS_08_SITES) {
     describe(`${file} -- ${bucket}: ${required[0]}`, () => {
       for (const phrase of required) {

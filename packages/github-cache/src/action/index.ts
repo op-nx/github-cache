@@ -86,15 +86,25 @@ export function createPublishClient(
       return assets.map((asset) => asset.name);
     },
 
-    async uploadReleaseAsset(releaseId, name, bytes) {
+    async uploadReleaseAsset(releaseId, name, bytes, label) {
       // Explicit content-length: uploads.github.com mishandles a missing/streamed
       // length on large assets (Pitfall 5). The Buffer is passed as data as-is
       // (Octokit accepts it); the ~2 GiB pre-upload guard lives in the engine (D-12).
+      //
+      // `label` (OBS-03) is a SEPARATE optional query param on
+      // repos/upload-release-asset -- read from the installed Octokit types, not from
+      // prose: the route is `...assets{?name,label}` and the schema declares
+      // `query: { name: string; label?: string }`. Two consequences worth keeping,
+      // because they are what make stamping it safe: it can influence neither the asset
+      // filename nor the download URL (both are their own fields), and the 422
+      // already-exists response is documented as keyed on FILENAME -- so a label can
+      // never alter the first-write-wins arbitration the mirror depends on (D-05).
       await octokit.rest.repos.uploadReleaseAsset({
         owner,
         repo,
         release_id: releaseId,
         name,
+        label,
         data: bytes as unknown as string,
         headers: {
           'content-type': 'application/octet-stream',

@@ -420,6 +420,31 @@ jobs:
     # Generic hang insurance -- see the build job.
     timeout-minutes: 20
     steps:
+      # D-21's in-run observation of step debug logging, and it is ECHO-ONLY BY
+      # DECISION rather than the fatal gate 11-RESEARCH.md recommended. A step that
+      # exits 1 when runner.debug is not 1 becomes a PERMANENT tripwire the moment the
+      # ACTIONS_STEP_DEBUG repository variable is unset after the proving run, and this
+      # file already records the rule on the publish job: a tripwire that fires on
+      # correct work gets disabled, with OBS-04 as this repo's own record of it
+      # happening. The reason RESEARCH wanted a gate -- failing DURING the run, so a run
+      # is not wasted -- is recovered instead by plan 11-07's two read-only pre-flight
+      # commands, which run BEFORE the push and so verify the configuration before a run
+      # is spent. The echo keeps RESEARCH's other two reasons in full: it prints a line
+      # that goes straight into 11-EVIDENCE.md as a recorded fact, and it observes the
+      # EFFECT rather than the configuration, so it is immune to the documented trap
+      # that an ACTIONS_STEP_DEBUG SECRET takes precedence over the variable.
+      #
+      # First step in the job, before the checkout, because it needs no repo content and
+      # the recorded fact belongs at the top of each leg's log. The context value
+      # reaches the script through env: rather than being interpolated into the run:
+      # body -- the same rule the hash-parity capture step records for its matrix value.
+      - name: Record whether step debug logging is active
+        shell: bash
+        env:
+          RUNNER_DEBUG_OBSERVED: ${{ runner.debug }}
+        run: |
+          set -euo pipefail
+          echo "runner.debug=${RUNNER_DEBUG_OBSERVED:-<unset>} -- RECORDED, never gated"
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
@@ -458,7 +483,107 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
-      - run: npm run integration
+      # Explicit `name:`, and the name is a CONTRACT rather than decoration: the
+      # o3-witness job selects this step out of the runs/{id}/jobs REST payload by its
+      # RENDERED name, and the bare `- run: npm run integration` form renders as
+      # `Run npm run integration`, which adding a tee would silently change. If this
+      # name is ever edited, the witness's jq selector must be edited in the SAME
+      # commit. Under set -euo pipefail the tee preserves a failing Nx exit code, so the
+      # step still fails loud; the log exists so the steps below can count a literal in
+      # it instead of re-running Nx to observe the same run twice.
+      - name: Run the integration target and tee its output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run integration 2>&1 | tee integration-nx.log
+      # THE IMMEDIATELY NEXT STEP, with no step of any kind in between, and that
+      # immediacy is load-bearing: every nx invocation OVERWRITES .nx/cache/run.json, so
+      # one convenience nx call here would upload the wrong hash with nothing going red.
+      # read-integration-hash.mjs's own run.command guard is the second line of defence,
+      # never the first. It also THROWS rather than writing an empty hash, because
+      # if-no-files-found: error below only checks that a file EXISTS. Invoked with no
+      # arguments so it uses its two defaults (.nx/cache/run.json, integration-hash.txt),
+      # and it prints the structured per-task cacheStatus on the same line.
+      - name: Read this leg's integration hash from run.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          node read-integration-hash.mjs
+      # ONE step in a matrix job, so both legs get byte-identical treatment by
+      # construction rather than by two conditioned copies staying in step -- the reason
+      # this file already states on the hash-parity build step, and the reason nothing
+      # added to this job carries an `if: matrix.os` expression. The artifact NAME must
+      # be unique per leg: v4-onward names are immutable, so two legs uploading to one
+      # name is an error rather than a merge, and the matrix OS value is the natural
+      # discriminator. if-no-files-found: error is not tidiness -- the default is warn,
+      # so without it a leg whose instrument produced nothing uploads an EMPTY artifact
+      # and the failure surfaces inside o3-witness, one job further from its cause.
+      # upload-artifact@v7 pairs with download-artifact@v8 throughout this repo.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: integration-hash-${{ matrix.os }}
+          path: integration-hash.txt
+          if-no-files-found: error
+      # D-17 step (a), and D-17 sub-lock 2 governs what may be done with the number: it
+      # is RECORDED and never GATED (the o3-witness block carries the full reason). A
+      # zero is the EXPECTED windows outcome, and it is equally correct on a re-run at
+      # the same commit, where a LOCAL hit precedes any remote read -- so a gate here
+      # would fire on correct work, and a tripwire that fires on correct work gets
+      # disabled. The reader above prints the structured cacheStatus value, which is the
+      # remote-vs-local discrimination this count cannot make (D-24).
+      #
+      # Four mechanics. The matrix value reaches the script through env: and is never
+      # interpolated into the run: body, so it never lands on a command line the shell
+      # re-parses. The label is matched as a FIXED string, because square brackets are a
+      # regex character class. OCCURRENCES are counted with an -o match piped into
+      # wc -l, never with a line-count flag, because two labels can share one line. And
+      # grep exits 1 on no match, which under pipefail would abort the leg on the very
+      # outcome that is expected here -- hence the tolerant brace group INSIDE the
+      # pipeline, so a legitimate zero prints 0 instead of reddening the leg.
+      - name: Record the remote-cache label occurrence count for this leg
+        shell: bash
+        env:
+          LEG_OS: ${{ matrix.os }}
+        run: |
+          set -euo pipefail
+          count=$({ grep -o -F '[remote cache]' integration-nx.log || true; } | wc -l | tr -d '[:space:]')
+          echo "remote-cache label occurrences on ${LEG_OS}: ${count} -- RECORDED, never gated"
+      # D-16's positive control, and it asks a DIFFERENT question from the readiness poll
+      # above, with a DIFFERENT acceptance set:
+      # the acceptance set is 200 ALONE -- a 404 here is a control FAILURE
+      # the readiness poll accepts 404 or 200 on purpose; do not collapse them
+      # The poll proves REACHABILITY against a hash nothing creates; this probe proves
+      # the service really round-tripped the entry this leg's own task just saved. A 404
+      # here would therefore mean a dead sidecar had masqueraded as a cache MISS, which
+      # would make the whole MISS observation inadmissible. Two probes, two acceptance
+      # sets, two questions -- collapsing them into one helper with the looser set would
+      # leave both steps green while destroying the control, so do not reuse the poll's
+      # deadbeef hash here either.
+      #
+      # No retry loop, deliberately: the key is known-present after the task's own save,
+      # so a retry could only paper over a real failure. And a 200 can only have come
+      # from a real cache-service hit -- the backend calls restoreCache BEFORE any local
+      # read and returns a miss when the service does not match, and server.ts degrades
+      # any backend fault to a 404 -- so this control is strictly conservative: it can
+      # false-negative, never false-positive.
+      #
+      # Placement: AFTER the Nx run, because it is that task's own save that makes the
+      # key present, and BEFORE `cancel: cache-server`, because the probe goes through
+      # the sidecar. The bearer token is built in a shell variable from the env var the
+      # pre-set step already ::add-mask::ed, never interpolated, and only the HTTP code
+      # is echoed.
+      - name: Positive control on this leg's own key, which must return 200
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          own_hash="$(cat integration-hash.txt)"
+          code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/${own_hash}")
+          echo "positive control: GET /v1/cache/${own_hash} -> ${code} (wanted 200)"
+          if [ "${code}" != "200" ]; then
+            echo "positive control FAILED on ${own_hash}: observed ${code}, wanted 200 -- the sidecar and backend were not proven alive, so this leg's MISS observation is not evidence" >&2
+            exit 1
+          fi
       - cancel: cache-server
 
   # The two-leg hash-parity CAPTURE job (PARITY-03, PARITY-06; the capture half of

@@ -19,15 +19,20 @@ inputs:
   hash:
     description: >-
       Cache hash to seed or verify (the workflow run id in CI). Required by the
-      'seed' and 'verify' operations; unused by 'publish', so it is optional here
-      and each operation enforces its own requirement at runtime.
+      'seed', 'mirror-seed' and 'verify' operations; unused by 'publish', so it
+      is optional here and each operation enforces its own requirement at
+      runtime. 'mirror-seed' does not use it as the key -- it DERIVES one from it.
     required: false
   operation:
     description: >-
       Which operation to run. 'seed' (PUT) and 'verify' (GET) drive the dogfood
-      cache round-trip; 'publish' mirrors this OS's server-produced Actions-cache
-      entries to the current month-shard GitHub Release, gated FIRST on
-      isSyncTrusted (default-branch {push,schedule} only, D-01). None of these
+      cache round-trip; 'mirror-seed' (PUT) writes the publish leg's own seed,
+      whose key is DERIVED from the run id and this leg's OS rather than being the
+      raw run id, so each matrix leg produces a key only that leg can produce and
+      a dead publish path on either leg stays detectable once the asset name loses
+      its OS suffix (OBS-05); 'publish' mirrors this OS's server-produced
+      Actions-cache entries to the current month-shard GitHub Release, gated FIRST
+      on isSyncTrusted (default-branch {push,schedule} only, D-01). None of these
       affect read-vs-write capability, which is derived from runtime context.
     required: true
 runs:

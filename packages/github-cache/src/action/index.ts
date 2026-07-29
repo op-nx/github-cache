@@ -5,6 +5,7 @@ import { isEntrypoint } from '../lib/is-entrypoint.js';
 import { isSyncTrusted } from '../lib/sync-gate.js';
 import { createResilientOctokit } from '../lib/resilient-octokit.js';
 import { dogfoodBody } from '../lib/dogfood-body.js';
+import { mirrorSeedHash } from '../lib/mirror-seed.js';
 import { cachePlatform } from '../lib/release-asset-name.js';
 import { writeCountSummary } from '../lib/summary.js';
 // The ONLY import site of compression-method.js in the repo, and it must stay that
@@ -314,6 +315,57 @@ export async function run(): Promise<void> {
       return;
     }
 
+    if (operation === 'mirror-seed') {
+      // A THIRD SIBLING of the two branches around it, never a variant of `seed`:
+      // dogfood-seed/dogfood-verify REQUIRE one shared key per RUN, and seeding that
+      // key per OS is exactly the vacuity trap VER-06 closed (D-13). This operation
+      // seeds the OPPOSITE thing -- a key only THIS publish leg can produce (OBS-05).
+      //
+      // THE URL IS BUILT LOCALLY, AND THAT IS THE WHOLE GUARD. The `url` binding above
+      // these branches is composed from the RAW `hash` input, so reusing it here would
+      // PUT at nx-cache-<run_id> while read-back.ts looks under nx-cache-<derived
+      // seed>. The PUT would still return 200, so nothing would fail on this side and
+      // the break would surface only as a publish-verify MISS. Nothing is hoisted above
+      // the branches either -- see the no-hoist lock above, which exists for the same
+      // class of coupling. action/index.spec.ts asserts the requested PATH rather than a
+      // substring, because the derived seed CONTAINS the run id.
+      //
+      // cachePlatform() -- an ambient read, legitimate here for the same reason the
+      // seed branch's is: this is a bin, LINT-02's ban on deriving an expectation from
+      // the running machine is scoped to spec files, and THIS leg is the producer, so
+      // its own platform IS the correct provenance stamp. The local is inside the
+      // branch, which is what the lock above requires; it is the conditional-above-the-
+      // branch shape that is banned, not a branch-local binding.
+      //
+      // `operation` still selects only a verb and now a key derivation with it. It
+      // cannot influence read-versus-write capability -- that is derived from runtime
+      // context inside selectBackend and no action input may steer it (TRUST-05).
+      const producerOs = cachePlatform();
+      const seedHash = mirrorSeedHash(hash, producerOs);
+      const seedUrl = `${running.url}/v1/cache/${seedHash}`;
+      const body = dogfoodBody(seedHash, producerOs);
+
+      const put = await fetch(seedUrl, {
+        method: 'PUT',
+        headers: { authorization },
+        body,
+      });
+
+      if (put.status !== 200) {
+        core.setFailed(
+          `github-cache mirror-seed: expected PUT 200, got ${put.status}.`,
+        );
+
+        return;
+      }
+
+      core.info(
+        `github-cache mirror-seed: stored ${seedHash} for this ${producerOs} publish leg (PUT 200).`,
+      );
+
+      return;
+    }
+
     if (operation === 'verify') {
       // THE LITERAL 'linux', and the VACUITY CONDITION it encodes (D-19, D-20, D-21).
       //
@@ -389,7 +441,7 @@ export async function run(): Promise<void> {
     }
 
     core.setFailed(
-      `github-cache dogfood: unknown operation '${operation}' (expected 'seed' or 'verify').`,
+      `github-cache dogfood: unknown operation '${operation}' (expected 'seed', 'mirror-seed' or 'verify').`,
     );
   } finally {
     // Drain and close on EVERY path -- success and failure alike -- so the process

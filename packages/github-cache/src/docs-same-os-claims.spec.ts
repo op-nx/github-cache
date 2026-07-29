@@ -197,11 +197,13 @@ const DOCS_08_SITES = [
  * `read-back.ts` and a `ci.yml` capacity comment, and both were found only after the sweep
  * had declared itself complete.
  *
- * Deliberately NOT here yet: `packages/github-cache/src/lib/mirror-seed.ts` and
- * `packages/github-cache/src/lib/release-asset-name.integration.spec.ts`. Neither exists at
- * this commit; `read()` is a `readFileSync` and THROWS on a missing path, so an early entry
- * would blow up rather than guard. The later plans in this phase that CREATE those files
- * extend this list in the same commit. The omission is sequencing, not an oversight.
+ * `packages/github-cache/src/lib/mirror-seed.ts` joined the list in the SAME commit that
+ * created it (OBS-05), which is what the previous revision of this comment asked for.
+ * Deliberately NOT here yet: `packages/github-cache/src/lib/release-asset-name.integration.spec.ts`.
+ * It does not exist at this commit; `read()` is a `readFileSync` and THROWS on a missing
+ * path, so an early entry would blow up rather than guard. The later plan in this phase
+ * that CREATES it extends this list in the same commit. The omission is sequencing, not an
+ * oversight.
  */
 const EDITED_FILES = [
   'docs/advanced.md',
@@ -212,6 +214,7 @@ const EDITED_FILES = [
   'packages/github-cache/src/action/index.ts',
   'packages/github-cache/src/roundtrip/read-back.ts',
   'packages/github-cache/src/lib/release-asset-name.ts',
+  'packages/github-cache/src/lib/mirror-seed.ts',
   'packages/github-cache/src/lib/cache-key.ts',
   'packages/github-cache/src/cleanup/cleanup.ts',
 ] as const;

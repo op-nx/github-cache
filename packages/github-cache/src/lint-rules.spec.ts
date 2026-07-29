@@ -773,6 +773,28 @@ function lineIndexOf(
 }
 
 describe('every extant CORR-05 violation is caught while it still exists (LINT-03, D-22)', () => {
+  // CORR-05 stated as a POSITIVE claim. RED today with three rows, deliberately: it
+  // goes GREEN in plan 10-07, the single commit that deletes all three rows together
+  // with their sites and their directives.
+  //
+  // Why the positive claim is needed at all. The enumeration below is
+  // `for (const ... of CORR_05_SITES)`, and an enumeration over an EMPTY array emits
+  // ZERO tests, SILENTLY. So at the exact moment CORR-05 becomes true, everything this
+  // describe contributes drops to nothing with no signal whatsoever -- a passing suite
+  // that has stopped asserting. This one assertion converts that silent zero into a
+  // stated, checkable fact, and it is authored HERE, one commit BEFORE the table
+  // empties, so the cliff is closed before it is reached rather than after.
+  //
+  // The RULE's non-vacuity does NOT live in this table, which is what makes emptying it
+  // acceptable rather than a coverage loss: `EVASION_SHAPES` above proves the ban fires
+  // on every evasion shape at a unit-spec path and is exempt at an integration path, and
+  // that survives untouched. Nor is this table's HISTORICAL doc block deleted when its
+  // rows go -- a removed miscount lock is indistinguishable from a miscount that never
+  // existed.
+  it('CORR-05 is now TRUE: zero extant ambient-platform reads remain in unit specs', () => {
+    expect(CORR_05_SITES).toEqual([]);
+  });
+
   for (const { file, expression, rule } of CORR_05_SITES) {
     describe(`${file} -- ${expression}`, () => {
       it('is CAUGHT by the ban once its described disable is stripped', async () => {

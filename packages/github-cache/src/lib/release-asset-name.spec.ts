@@ -42,6 +42,42 @@ describe('releaseAssetName (CORR-01)', () => {
   });
 });
 
+// CORR-02, the RED half -- authored one commit BEFORE the rename it pins, so the
+// irreversible one-commit rename wave carries as little unrecoverable work as
+// possible. These three cases are RED on purpose against today's implementation,
+// which still folds the OS discriminator into the name.
+//
+// The expectations are spelled out as literals for exactly the reason the doc block
+// at the top of this file gives, and that reasoning is not paraphrased away here:
+// rebuilding the expectation as `${CACHE_KEY_PREFIX}${hash}` would survive a
+// cosmetic edit to the separator or the slot ordering -- which is precisely the
+// change that silently MISSes every cross-OS Release read, because the publisher
+// derives its names from this SAME helper. Pinning the literal is the only
+// assertion that fails on that drift instead of failing silently against live
+// GitHub.
+describe('releaseAssetName post-rename OS-free name (CORR-02)', () => {
+  it('produces exactly nx-cache-abc123 for hash abc123, on every OS (CORR-02)', () => {
+    expect(releaseAssetName('abc123' as Hash)).toBe('nx-cache-abc123');
+  });
+
+  it('produces exactly nx-cache-0 for the minimum-length hash 0 (CORR-02)', () => {
+    // The same minimum-length hash the cleanup filter's accept set pins, so the
+    // producer and the accepter are pinned against one shared boundary case.
+    expect(releaseAssetName('0' as Hash)).toBe('nx-cache-0');
+  });
+
+  it('folds NO member of CACHE_OS_VALUES into the name (CORR-02)', () => {
+    const name = releaseAssetName('abc123' as Hash);
+
+    // The WHOLE tuple, never "the OS this machine is not". A machine-relative
+    // expectation is banned by LINT-02 at this path and would sample at a rate of
+    // ZERO under the ubuntu-only `test` target anyway.
+    for (const os of CACHE_OS_VALUES) {
+      expect(name).not.toContain(os);
+    }
+  });
+});
+
 describe('cachePlatform (CORR-01)', () => {
   // G4, non-vacuous: all three mapped branches PLUS the default fall-through are
   // asserted with literal expectations. The injectable platform parameter is what

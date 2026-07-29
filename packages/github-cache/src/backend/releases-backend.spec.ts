@@ -5,6 +5,11 @@ import {
 } from '../lib/local-context.js';
 import type { Hash } from '../lib/cache-key.js';
 import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
+// A SECOND import statement from the same module rather than a widened one above:
+// plan 10-06 is ADD-only by contract (`git diff --numstat` must show zero deletions
+// on this file), and editing the existing specifier list would register as a
+// deletion. Plan 10-07, which already rewrites the line above, folds the two.
+import { CACHE_OS_VALUES } from '../lib/release-asset-name.js';
 import {
   createReleasesReadBackend,
   createReleasesReadClient,
@@ -132,6 +137,24 @@ describe('createReleasesReadBackend name derivation (TEST-05)', () => {
     await backend.get('abc123' as Hash);
 
     expect(client.requested).toEqual([releaseAssetName('abc123' as Hash)]);
+
+    // D-18, and it is the NAMED REPLACEMENT for the cross-OS MISS proof CORR-02
+    // destroys on purpose -- the `MISSES an OS-sensitive hash present ONLY under
+    // another platform` case above. That case is CORR-01's documented non-vacuity
+    // proof, and once the asset name carries no OS there is no wrong-OS asset left to
+    // miss, so the proof cannot survive the rename. What survives is this: the
+    // requested name carries NO platform token. Authored HERE, one commit BEFORE the
+    // proof it replaces is deleted, so the invariant is never left with zero guards
+    // and a reader sees the TRADE rather than inferring it from a later deletion.
+    //
+    // Checked against the WHOLE CACHE_OS_VALUES tuple -- never against "the OS this
+    // machine is not", which LINT-02 bans at this path and which samples at a rate of
+    // ZERO under the ubuntu-only `test` target. Deliberately NOT paired with a fourth
+    // "exactly one" guard: the array equality above already pins the length, and three
+    // guards for one invariant can share one blind spot (Phase 8's learning).
+    for (const os of CACHE_OS_VALUES) {
+      expect(client.requested[0]).not.toContain(os);
+    }
   });
 });
 

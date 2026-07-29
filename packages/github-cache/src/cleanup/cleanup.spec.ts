@@ -204,6 +204,141 @@ describe('cleanupMirror DELETE phase prune/retain by created_at (TEST-06)', () =
   });
 });
 
+// The MEASURED census of shard `cache-mirror-202607` -- release id 354838660, read live
+// 2026-07-29 and recorded in 10-EVIDENCE-PRE-RENAME.md. 122 assets total: 50 PoC-era
+// `<hash>.tar.gz`, 46 `<hash>-linux`, 26 `<hash>-windows`, ZERO `<hash>-macos`, ZERO
+// anything else. The shard tag is named here on purpose -- it rolls over 2026-08-01 and a
+// bare count is unattributable afterwards.
+//
+// These are real numbers, so the fixture below models a shard that actually exists rather
+// than one invented to suit the filter, and the three counts are locked against the
+// measured total inside the test so a later edit cannot quietly reshape it.
+const CENSUS_TAR_GZ = 50;
+const CENSUS_LINUX = 46;
+const CENSUS_WINDOWS = 26;
+const CENSUS_TOTAL = 122;
+
+// Absent from the census by construction: the shard predates CORR-02, so no
+// `nx-cache-<hash>` asset has ever been written to it. Four is enough to be a FAMILY
+// rather than a single case.
+const NEW_FORM_EXPIRED = 4;
+
+// `feed` + a hex index, so every hash half is lowercase hex and HASH_PATTERN admits it.
+function censusHash(index: number): string {
+  return `feed${index.toString(16)}`;
+}
+
+interface MixedShard {
+  readonly assets: readonly CleanupAsset[];
+  /** Names an aged-out run MUST delete. */
+  readonly prunable: readonly string[];
+  /** Names an aged-out run must NEVER delete. */
+  readonly retained: readonly string[];
+}
+
+function mixedShard(): MixedShard {
+  const assets: CleanupAsset[] = [];
+  const prunable: string[] = [];
+  const retained: string[] = [];
+  let id = 0;
+
+  function seed(name: string, createdAt: string, prunes: boolean): void {
+    id++;
+    assets.push({ id, name, created_at: createdAt });
+    (prunes ? prunable : retained).push(name);
+  }
+
+  // The PoC-era family. Matched by NO branch of the filter, before or after RETAIN-04,
+  // so it is permanent ACCEPTED dead weight with a measured count (D-08) -- bounded at
+  // 122 of a per-shard 1000 cap on a shard that stops taking writes. Retained: widening
+  // the filter to reach it would widen a DELETE filter to a shape indistinguishable from
+  // a foreign asset.
+  for (let index = 0; index < CENSUS_TAR_GZ; index++) {
+    seed(`${censusHash(index)}.tar.gz`, EXPIRED, false);
+  }
+
+  // RETAIN-04's legacy branch: today's `<hash>-<os>` shape. CORR-02 stops PRODUCING it
+  // but cleanup must keep PRUNING it, or these 72 aged assets become immortal.
+  for (let index = 0; index < CENSUS_LINUX; index++) {
+    seed(`${censusHash(index)}-linux`, EXPIRED, true);
+  }
+
+  for (let index = 0; index < CENSUS_WINDOWS; index++) {
+    seed(`${censusHash(index)}-windows`, EXPIRED, true);
+  }
+
+  // RETAIN-04's new branch, and the RED. Today's single-branch filter splits on the LAST
+  // `-`, so the hash half of `nx-cache-feed0` is the literal string `nx-cache` -- which
+  // holds a `-` and can never be hex -- and the asset is skipped, never pruned however
+  // old. Post-rename these are the ONLY shape the publisher writes, so a filter that
+  // cannot see them retains the entire live mirror forever.
+  for (let index = 0; index < NEW_FORM_EXPIRED; index++) {
+    seed(`nx-cache-${censusHash(index)}`, EXPIRED, true);
+  }
+
+  // A new-form asset INSIDE the age window, and it is the control that keeps the row
+  // above honest: it is retained both before and after RETAIN-04, separating "the filter
+  // widened" from "the filter widened and stopped honouring the created_at cutoff". The
+  // second is data loss wearing a passing test.
+  seed(`nx-cache-${censusHash(NEW_FORM_EXPIRED)}`, WITHIN_WINDOW, false);
+
+  // Two foreign assets, and NEITHER may ever be deleted -- that is the entire reason an
+  // accept filter guards this DELETE path. The first is unmistakably third-party. The
+  // second is the adversarial one: it wears the real prefix, so it must be rejected by
+  // the NEW branch on its non-hex remainder, not merely by the old one.
+  seed('sbom.spdx.json', EXPIRED, false);
+  seed('nx-cache-release-notes.md', EXPIRED, false);
+
+  return { assets, prunable, retained };
+}
+
+describe('cleanupMirror over a MIXED shard (RETAIN-04, RETAIN-05, T-10-01)', () => {
+  it('prunes both name families and deletes neither the PoC-era family nor a foreign asset', async () => {
+    const { assets, prunable, retained } = mixedShard();
+    const byId = new Map(assets.map((asset) => [asset.id, asset.name]));
+    const deleted: string[] = [];
+    const shardClient = client({
+      listAllAssets: vi.fn(async () => [...assets]),
+      deleteAsset: vi.fn(async (assetId: number) => {
+        deleted.push(byId.get(assetId) ?? `UNKNOWN-ID-${assetId}`);
+      }),
+    });
+
+    // Fixture-shape locks, asserted BEFORE the act: the three family counts must still
+    // sum to the measured 122, and the two expectation sets must still have the sizes
+    // the families above imply. Without these a mis-flagged family would silently
+    // rewrite the expectation instead of failing.
+    expect(CENSUS_TAR_GZ + CENSUS_LINUX + CENSUS_WINDOWS).toBe(CENSUS_TOTAL);
+    expect(prunable).toHaveLength(
+      CENSUS_LINUX + CENSUS_WINDOWS + NEW_FORM_EXPIRED,
+    );
+    expect(retained).toHaveLength(CENSUS_TAR_GZ + 3);
+
+    const result = await cleanupMirror(shardClient, 30);
+
+    // BOTH directions in one assertion: nothing expected is missing AND nothing
+    // unexpected was deleted. "Deleted everything prunable" alone would still pass if
+    // the filter had also eaten the PoC-era family.
+    expect([...deleted].sort()).toEqual([...prunable].sort());
+
+    // Then per retained NAME, because this is a delete path and the set equality above
+    // is one careless edit away from being weakened into a subset check.
+    for (const name of retained) {
+      expect(deleted).not.toContain(name);
+    }
+
+    // `scanned` counts assets the filter ADMITTED, pruned or not -- so it is the prunable
+    // set plus the one within-window new-form asset. It is the count that distinguishes
+    // "the filter admitted it and the age gate held it" from "the filter never saw it".
+    expect(result).toEqual({
+      pruned: prunable.length,
+      failed: 0,
+      scanned: prunable.length + 1,
+    });
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+});
+
 describe('cleanupMirror DELETE phase isolation + fail-loud (TEST-04, OBS-01)', () => {
   it('isolates a per-item failure, deletes the rest, and fails loud on aggregate (TEST-04)', async () => {
     const deleteAsset = vi

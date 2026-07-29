@@ -109,6 +109,22 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
     // Now that the backend and publish path route through the leaf, the authored
     // prefix literal must exist in exactly one production place -- cache-key.ts --
     // and nowhere else. A second authored copy re-opens the drift T-05-08-02 guards.
+    //
+    // `release-asset-name.ts` joins the map at an expected count of ZERO (D-05). It is
+    // green TODAY because that module authors no prefix at all, and it must STAY zero
+    // after CORR-02 gives the Release asset name the same prefix -- because the rename
+    // IMPORTS the literal from this leaf rather than re-authoring it, which is the
+    // property this entry pins. A NONZERO count there means two authored copies of one
+    // literal that governs FOUR distinct consumers (the Actions-cache key, the
+    // Actions-cache enumeration filter, the Release asset name, and the cleanup accept
+    // filter's new branch -- RETAIN-05c), so a change applied to one copy would orphan
+    // the entire mirror silently.
+    //
+    // Spec files are deliberately ABSENT from this map, and must stay absent. The
+    // post-rename pinned expectation in `release-asset-name.spec.ts` MUST author the
+    // literal -- that is the pinned-literal discipline, and spelling it out is what
+    // catches a separator change -- so counting a spec here would push the total off
+    // its pinned value for entirely the wrong reason.
     const files = {
       'cache-key.ts': new URL('./cache-key.ts', import.meta.url),
       'actions-cache-backend.ts': new URL(
@@ -117,6 +133,10 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
       ),
       'publish-mirror.ts': new URL(
         '../publish/publish-mirror.ts',
+        import.meta.url,
+      ),
+      'release-asset-name.ts': new URL(
+        './release-asset-name.ts',
         import.meta.url,
       ),
     };
@@ -134,5 +154,6 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
     expect(perFile['cache-key.ts']).toBe(1);
     expect(perFile['actions-cache-backend.ts']).toBe(0);
     expect(perFile['publish-mirror.ts']).toBe(0);
+    expect(perFile['release-asset-name.ts']).toBe(0);
   });
 });

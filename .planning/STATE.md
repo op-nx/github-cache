@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 10
 current_phase_name: OS-Invariant Releases Mirror
 status: executing
-last_updated: "2026-07-29T11:14:43.753Z"
+last_updated: "2026-07-29T11:39:49.132Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 21
+  completed_plans: 22
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 10 (OS-Invariant Releases Mirror) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
 Last activity: 2026-07-29 — Phase 10 execution started
@@ -104,6 +104,7 @@ Last activity: 2026-07-29 — Phase 10 execution started
 | Phase 10 P01 | 50m | 2 tasks | 1 files |
 | Phase 10 P02 | 13min | 2 tasks | 4 files |
 | Phase 10 P03 | 15min | 3 tasks tasks | 3 files files |
+| Phase 10 P04 | 16min | 1 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -203,6 +204,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase ?]: [Phase 10]: 10-03: XOS-07 widened publish to needs: [build, typecheck, test, integration] -- the race is MEASURED (run 30400231720: the ubuntu publish leg enumerated the Actions cache ~122s BEFORE integration (windows-11-arm) finished; task hash 8059758544828235640 reached the shard only as -windows). No cycle: all four deps declare no needs: of their own, verified by reading every needs: line.
 - [Phase ?]: [Phase 10]: 10-03: the old needs: build (NOT test) argument is RESTATED and then replaced, not deleted -- !cancelled() is the mechanism that keeps a red test leg from skipping the mirror, and it is recorded as CITED (never reproduced here) with the bounded downside named: a SKIPPED mirror, never a wrong artifact. publish-verify has no !cancelled(), so the widening also makes it run on red-test pushes, changing which pushes sample OBS-05.
 - [Phase ?]: [Phase 10]: 10-03: the repo's FIRST needs: VALUE guard is superset-proof three ways -- four independent per-producer cases (a toMatch on a list is satisfied by any SUPERSET), an observed 3-of-4 revert split with build staying green, and anchoring at ^ {4}needs: (unanchored, build is satisfied by the job's own - run: npm run build step, making that case a tautology). forbidden: [] on the new drift row is deliberate: an absence check there is satisfied by deleting the whole comment.
+- [Phase ?]: [Phase 10]: 10-04: mirror seed encoding is feed<CACHE_OS_VALUES index><run_id> -- a hex-word marker following ci.yml consumer-smoke's shipped cafe<run_id> precedent with a DIFFERENT word, so the two families stay distinguishable in a shard listing
+- [Phase ?]: [Phase 10]: 10-04: mirrorSeedHash lives in its own lib/mirror-seed.ts leaf, NOT folded into release-asset-name.ts -- unreachable from serve(), so the bundle delta is ZERO and ROBUST-04 stays whole on plan 10-07
+- [Phase ?]: [Phase 10]: 10-04: OBS-05 NOT marked complete -- only its first half (the mechanism) landed; ci.yml still runs operation: seed and plan 10-05 flips the workflow and read-back.ts together
 
 ### Pending Todos
 
@@ -329,7 +333,7 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T11:14:43.740Z
+Last session: 2026-07-29T11:39:34.748Z
 Stopped at: Completed 10-03-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.

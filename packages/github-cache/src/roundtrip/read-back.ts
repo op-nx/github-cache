@@ -364,14 +364,20 @@ export async function run(): Promise<void> {
   // justified, and no requirement among that milestone's eleven owned it. That is why the
   // regression shipped.
   //
-  // THE REMAINING HALF IS `ci.yml`'s `publish-verify` JOB COMMENT, AND THIS PLAN OWNS IT.
-  // 09-CONTEXT.md deferred that half to Phase 10 (D-21) and plan 09-08 flagged it here by
-  // JOB NAME. AT THIS COMMIT it still says each OS leg reads back ONLY its own-OS asset
-  // and that this proves the same-OS publisher-to-reader contract -- the first half is
-  // true again for a DIFFERENT reason (the seed, not the name) and the second half is
-  // FLATLY FALSE. The warning stands and is the reusable half: TRUST-11 must NOT be closed
-  // on the strength of read-back.ts having already changed. Named by JOB, not by line:
-  // this phase measured ci.yml drifting ~220 lines inside one milestone.
+  // `ci.yml`'s `publish-verify` JOB COMMENT: CLOSED (D-21), and this is the record rather
+  // than an outstanding instruction. 09-CONTEXT.md deferred that half to Phase 10 and plan
+  // 09-08 flagged it here by JOB NAME. It said each OS leg reads back ONLY its own-OS asset
+  // and that this proved the same-OS publisher-to-reader contract: the first half is true
+  // again for a DIFFERENT reason (the seed, not the name) and the second half was flatly
+  // false, so it now names the per-leg seed derivation and the publisher-not-producer
+  // distinction instead. The REUSABLE half of the old warning is what a reader should take
+  // from this paragraph: TRUST-11 was not closable on the strength of read-back.ts having
+  // changed, because a code change does not correct a prose claim in another file. Named by
+  // JOB, not by line: this phase measured ci.yml drifting ~220 lines inside one milestone.
+  // The paired locks -- the `max-parallel: 1` rationale and the `publish-verify` comment --
+  // are pinned by docs-same-os-claims.spec.ts, whose read is RAW; dogfood-cross-os.spec.ts
+  // strips `#` lines and so guards the max-parallel VALUE but structurally cannot see any
+  // of that prose.
   if (!result.bytes.equals(dogfoodBody(hash, readerOs))) {
     throw new Error(
       `github-cache round-trip read-back: cache HIT for ${hash} on ${readerOs} but the ` +

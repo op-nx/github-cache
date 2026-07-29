@@ -1046,6 +1046,41 @@ jobs:
       # mirrors only the entries IT can restore); the only cost is a little wall-clock on
       # this push-only background mirror job. fail-fast stays off so a Windows-only
       # failure never hides the ubuntu result.
+      #
+      # THIS KNOB IS NOT a correctness control (XOS-06). No requirement may depend on
+      # which OS leg wins the first-write-wins race, and the reason is mechanical rather
+      # than a policy preference: for a given hash both legs restore the SAME single
+      # Actions-cache entry and upload it VERBATIM without re-executing the task
+      # (TRUST-11), so whichever leg wins, every reader receives identical bytes. What a
+      # served artifact's correctness DOES rest on is CORR-05's target platform-agnosticism.
+      #
+      # REJECTED ARGUMENT: ubuntu-first ordering makes the stricter Linux verdict win.
+      # Named so a future reader does not reconstruct it and quietly promote this knob into
+      # a correctness control. It is rejected because it would rest a WRONG-RESULT
+      # guarantee on CI job scheduling -- read PROJECT.md's Key Decisions row (cross-OS
+      # sharing rests on target platform-agnosticism, NEVER on publish-leg ordering) and
+      # XOS-06 in REQUIREMENTS.md rather than this loose restatement of them.
+      #
+      # THE ONE THING THAT DOES DEPEND ON THIS KNOB is publish-verify's ability to DETECT a
+      # dead publish leg -- see read-back.ts, which reads the mirrored-by label of the
+      # asset its own leg seeded. That check needs the two legs NOT TO OVERLAP: run them
+      # concurrently and the other leg can win the upload race for this leg's seed asset,
+      # so removing max-parallel: 1 would redden publish-verify on a CORRECT
+      # implementation. That is guard sensitivity, not a wrong-result guarantee, and the
+      # two must never be conflated -- a lost guard means a real defect goes unnoticed, not
+      # that a wrong artifact reaches a developer. Naming the coupling is deliberate: a
+      # tripwire that fires on correct work gets disabled, and OBS-04 is this repo's own
+      # record of that. The distinction is written in BOTH places so neither comment reads
+      # as contradicting the other.
+      #   The leg ORDER, by contrast, is relied on NOWHERE, and that is the point of the
+      #   label assertion. It was MEASURED 5/5 across the default-branch push runs on
+      #   record, margins 150-190 seconds (run 30401077417: publish (ubuntu-24.04-arm)
+      #   step 7 ends 2026-07-28T21:33:39Z, publish (windows-11-arm) step 6 starts
+      #   21:36:32Z). A measurement is not a documented guarantee: GitHub documents matrix
+      #   CREATION order only, names runner availability as a scheduling input, and these
+      #   two legs draw from DIFFERENT hosted runner pools, so per-leg availability is an
+      #   independent variable. read-back.ts's label assertion is what replaced that
+      #   ordering dependency with the non-overlap one above.
       max-parallel: 1
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
@@ -1148,19 +1183,35 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # The live cross-OS publish/read-back round-trip (the leg deferred from Phase 3). It
-  # runs after the WHOLE publish matrix and, per OS, resolves the run-id entry that
-  # matrix mirrored THROUGH THE REAL GitHub Releases reader -- invoked DIRECTLY
+  # runs after the WHOLE publish matrix and, per OS, resolves the entry that leg itself
+  # seeded THROUGH THE REAL GitHub Releases reader -- invoked DIRECTLY
   # (createReleasesReadBackend(createReleasesReadClient(process.env)) in read-back.ts),
   # NOT selectBackend, which in a push (write-trusted) context returns the writable
-  # Actions-cache backend rather than the reader (TRUST-05). Each OS leg reads back ONLY
-  # its own-OS asset (<run_id>-<os> via releaseAssetName), so this proves the same-OS
-  # publisher->reader contract against REAL published assets and exercises the 04-02
-  # shard-window walk live; the wrong-OS MISS stays unit-proven. The reader is native
-  # fetch (no ACTIONS_RUNTIME_TOKEN), so this is a plain `node` step, not a JS action.
-  # It needs only the workflow-default contents: read to fetch a release asset, so it
-  # adds NO job-level permissions block and never touches the write gate. Mirrors the
-  # dogfood-verify shape: push-gated, needs the producer, a MISS fails the job loud
-  # (the reader swallows faults to a MISS, so any MISS is a round-trip failure).
+  # Actions-cache backend rather than the reader (TRUST-05).
+  #   WHAT IT PROVES, AND WHY THE OLD REASON IS GONE (D-21). Each OS leg still reads back
+  #   ONLY the asset its own leg seeded -- but the mechanism is a per-leg SEED derivation,
+  #   NOT a per-leg asset name. The key is mirrorSeedHash(github.run_id, that leg's OS) and
+  #   the asset is releaseAssetName(mirrorSeedHash(...)), so the separation lives in the KEY
+  #   and survives CORR-02 collapsing the OS out of the name. The old justification was the
+  #   name's own -os suffix, which that rename deletes outright.
+  #   IT DOES NOT PROVE A SAME-OS PUBLISHER-TO-READER CONTRACT. That claim stood here until
+  #   Phase 10 and was flatly false by then: VER-01 + VER-03 made cross-OS restore work, so
+  #   a leg can mirror bytes produced on another OS entirely. What this job proves instead
+  #   is that each leg's OWN publish path uploaded the asset that leg reads back, evidenced
+  #   by the mirrored-by label read-back.ts asserts -- a PUBLISHER identity, never a
+  #   producer identity. Different axes; only the label carries the second, which is why
+  #   the byte comparison alone cannot detect a dead publish leg.
+  #   WHY THE STALE CLAIM SURVIVED: Phase 9's same-OS sweep was scoped to DOCUMENTATION and
+  #   missed read-back.ts's own comment plus a ci.yml capacity comment, both found only
+  #   after that sweep had declared itself complete. A same-OS-invariant sweep must
+  #   enumerate EXECUTABLE CODE and CI PROSE, not only docs.
+  # It exercises the 04-02 shard-window walk live. The reader is native fetch (no
+  # ACTIONS_RUNTIME_TOKEN), so this is a plain `node` step, not a JS action. It needs only
+  # the workflow-default contents: read -- for the asset download and for the release and
+  # asset-listing reads the label check makes -- so it adds NO job-level permissions block
+  # and never touches the write gate. Mirrors the dogfood-verify shape: push-gated, needs
+  # the producer, a MISS fails the job loud (the reader swallows faults to a MISS, so any
+  # MISS is a round-trip failure).
   publish-verify:
     if: github.event_name == 'push'
     needs: publish

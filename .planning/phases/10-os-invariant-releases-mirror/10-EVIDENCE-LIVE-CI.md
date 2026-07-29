@@ -33,6 +33,13 @@ same way. It runs PRE-CORR-02 code, so anything it mirrors lands under the LEGAC
 already mirrored by run `30401077417`. Read the census below as the CORR-02 delta; a later count
 that includes the restore run's own dogfood seeds is not a contradiction of it.
 
+**Measured after the restore run finished** (run `30473116345`, conclusion `success`): total 141,
+`nx-cache-*` still **16**, legacy `<hash>-<os>` 72 -> **75**, PoC-era 50, labels unchanged at 15
+linux + 1 windows. Exactly the predicted shape -- the restore run added three legacy-named,
+unlabelled assets and could not add a single new-form one, because `fe25a3f` predates CORR-02.
+That the new-form count did not move is itself a small confirmation that the 16 came from the
+phase branch and nothing else.
+
 ---
 
 ## The shard census, before and after

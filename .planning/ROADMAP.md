@@ -491,14 +491,14 @@ discriminator).
      `Cache: n/m hit` line is explicitly marked NON-DISCRIMINATING in both directions. (TEST-08,
      TEST-10, OBS-02)
 
-**Plans**: 5/7 plans executed
+**Plans**: 6/7 plans executed
 
 - [x] 11-01-PLAN.md
 - [x] 11-02-PLAN.md
 - [x] 11-03-PLAN.md
 - [x] 11-04-PLAN.md
 - [x] 11-05-PLAN.md
-- [ ] 11-06-PLAN.md
+- [x] 11-06-PLAN.md
 - [ ] 11-07-PLAN.md
 
 - [ ] `11-01-PLAN.md` - hash-neutral instruments: the `capture-hashes.mjs` graph-premise mode and the `run.json` reader (TEST-08)
@@ -738,7 +738,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 8. Nx Task-Hash Parity | v0.0.2 | 6/6 | Complete   | 2026-07-28 |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 8/8 | Complete    | 2026-07-28 |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
-| 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 5/7 | In Progress|  |
+| 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 6/7 | In Progress|  |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 0/? | Not started | - |
 
 ---

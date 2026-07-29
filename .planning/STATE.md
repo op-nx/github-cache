@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 11
 current_phase_name: live-proofs-o1-o2-o3
 status: executing
-last_updated: "2026-07-29T22:45:36.902Z"
+last_updated: "2026-07-29T23:09:02.263Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 38
-  completed_plans: 31
+  completed_plans: 32
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 11 (live-proofs-o1-o2-o3) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Progress: 4/6 phases complete [####--] 67%
 Last activity: 2026-07-29 — Phase 11 execution started
@@ -126,6 +126,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 11 P03 | 18min | 3 tasks | 1 files |
 | Phase 11 P04 | 23min | 2 tasks | 2 files |
 | Phase 11 P05 | 15m | 2 tasks | 2 files |
+| Phase 11 P06 | 25m | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -247,6 +248,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 11]: 11-04: producer attribution is established by four independent means with each hash naming which carried it AND that means' limit; mirrored-by is a PUBLISHER label and is not a means — The job-window cross-reference resolves a UNIQUE runner OS for all four hashes, which is what carries build and typecheck where no in-artifact fingerprint exists. D-14's retraction now ships arithmetic: integration was produced on windows-11-arm and published from ubuntu-24.04-arm 55.16s later, which is exactly why its label reads mirrored-by: linux
 - [Phase 11]: D-19 is TWO spec edits, not one — Presence and shape go to dogfood-cross-os.spec.ts, whose jobBlock throws on an absent job key -- that throw IS the anti-silent-deletion mechanism. Comment prose goes to docs-same-os-claims.spec.ts, the only guard that reads ci.yml raw; the other strips every # line, so a comment lock there is vacuous by construction.
 - [Phase 11]: Row C's not-a-guarantee clause is required in prose but NOT pinned as a phrase — The literal 'A measurement is not a documented guarantee' already exists in ci.yml's publish block, so a row asserting it would pass from the pre-existing occurrence and lock nothing. Same trap row B avoids by keying both phrases on o3-witness by name. Row C pins run 30471772954 rather than run 30401077417 for the same reason.
+- [Phase 11]: 11-06: the ci.yml runner.debug recorder is ECHO-ONLY, never a fatal gate. A gate becomes a permanent tripwire once ACTIONS_STEP_DEBUG is unset, and plan 11-07's read-only pre-flight recovers the fail-during-the-run benefit without a second coupled ci.yml edit
+- [Phase 11]: 11-06: o3-witness does NOT check out the repository (it is curl plus jq with no comparator to build), yet contents: read is RESTATED, because a job-level permissions block REPLACES the workflow grant wholesale rather than merging it
+- [Phase 11]: 11-06: a THIRD stale ci.yml test-inputs comment block was found in the typecheck job beyond the two the plan, RESEARCH and PATTERNS all enumerated, and corrected with the replacement fact. Correcting two of three would meet the letter of the must_have and not its purpose
 
 ### Pending Todos
 
@@ -373,8 +377,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T22:45:36.871Z
-Stopped at: Completed 11-05-PLAN.md (RED half; HEAD deliberately red until 11-06 lands the GREEN)
+Last session: 2026-07-29T23:09:02.248Z
+Stopped at: Completed 11-06-PLAN.md (GREEN half landed; suite 840 passed / 0 failed)
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

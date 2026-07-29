@@ -376,7 +376,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   PARITY-08 lands, the very commit that ADDS the Windows legs invalidates the `test` hash, so
   proving it on a later push would need a second no-op push.
 
-- [ ] **XOS-06**: `max-parallel: 1` is RETAINED for its existing reasons (serialised legs, no
+- [x] **XOS-06**: `max-parallel: 1` is RETAINED for its existing reasons (serialised legs, no
   concurrent shard-creation or delete races) but MUST NOT become a correctness control. No
   requirement may depend on which OS leg wins the first-write-wins race -- cross-OS sharing is made
   safe by CORR-05's platform-agnosticism, not by ordering. A comment records this explicitly so a
@@ -642,7 +642,7 @@ honour table: `.planning/ROADMAP.md`.
 | CORR-05 | Phase 10 | Pending (4 sites; 1 removed in Phase 9 with VER-02; site 4 needs an explicit Phase 10 call) |
 | OBS-03 | Phase 10 | Complete |
 | OBS-05 | Phase 10 | Pending (must land before CORR-02) |
-| XOS-06 | Phase 10 | Pending |
+| XOS-06 | Phase 10 | Complete |
 | XOS-07 | Phase 10 | Complete (live full-task-set census is a post-merge push observation) |
 | TRUST-10 | Phase 10 | Pending |
 | TRUST-11 | Phase 10 | Pending |

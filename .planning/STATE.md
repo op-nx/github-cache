@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 10
 current_phase_name: OS-Invariant Releases Mirror
 status: executing
-last_updated: "2026-07-29T11:39:49.132Z"
+last_updated: "2026-07-29T12:15:58.386Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 22
+  completed_plans: 23
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 10 (OS-Invariant Releases Mirror) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
 Last activity: 2026-07-29 — Phase 10 execution started
@@ -105,6 +105,7 @@ Last activity: 2026-07-29 — Phase 10 execution started
 | Phase 10 P02 | 13min | 2 tasks | 4 files |
 | Phase 10 P03 | 15min | 3 tasks tasks | 3 files files |
 | Phase 10 P04 | 16min | 1 tasks | 6 files |
+| Phase 10 P05 | 62min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -333,7 +334,7 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T11:39:34.748Z
+Last session: 2026-07-29T12:15:37.960Z
 Stopped at: Completed 10-03-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.

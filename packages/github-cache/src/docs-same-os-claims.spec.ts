@@ -48,6 +48,23 @@ const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
  * see the comment that explains the value. Two harnesses, one question each; there is
  * deliberately no third.
  *
+ * XOS-06 and D-21 (Phase 10) add FOUR more `ci.yml` rows on the same footing -- three
+ * additive locks on the `max-parallel: 1` rationale (its status, the rejected ordering
+ * argument, and the guard-sensitivity clause) plus one CORRECTION to the `publish-verify`
+ * job comment. Same split as XOS-07: `dogfood-cross-os.spec.ts` now asserts the
+ * `max-parallel` VALUE, and every claim ABOUT that value is locked here, because a comment
+ * is invisible to a reader that strips `#` lines. The clauses are three separate rows
+ * rather than one because each survives or falls independently -- deleting the
+ * guard-sensitivity clause must redden something distinguishable from deleting the
+ * rejected argument, and one row with nine phrases would not tell those two apart in a
+ * failure report.
+ *
+ * EVERY PHRASE IN THIS TABLE MUST FIT ON ONE LINE OF ITS FILE. `read()` returns the raw
+ * text, so a phrase spanning a hard wrap matches NOTHING and the row would be a silent
+ * false PASS in the additive direction. That is why the `ci.yml` phrases below look
+ * arbitrarily clipped: each was checked against a single comment line before being
+ * committed, not written to read well in isolation.
+ *
  * HOME. Neither existing docs guard fits: `docs-trust.spec.ts` reads only
  * `docs/trust-and-security.md` and `docs/versioning.md`, and `docs-adoption.spec.ts`
  * reads the README, `docs/configuration.md`, `docs/advanced.md` and the examples.
@@ -137,6 +154,118 @@ const DOCS_08_SITES = [
       'MECHANISM: !cancelled() runs this job even when a needs: dependency FAILED.',
       'BOUNDED FAILURE MODE: a skipped mirror, never a wrong artifact.',
       'MEASURED on run 30400231720',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * ADDITIVE, XOS-06 clause (a). `max-parallel: 1` is RETAINED, so the risk is not that
+     * the knob disappears -- `dogfood-cross-os.spec.ts` guards its VALUE now -- but that
+     * its STATUS drifts. A future reader who finds a serialisation knob with no recorded
+     * status is one step from treating it as a correctness control, which is exactly what
+     * XOS-06 forbids. So the lock requires the status AND the mechanical reason for it:
+     * both legs restore the SAME single Actions-cache entry and upload it verbatim, which
+     * is WHY the race winner cannot matter. A bare "not a correctness control" with no
+     * reason is an assertion a reader can argue with; with the mechanism it is a fact.
+     *
+     * `forbidden` is EMPTY, and every XOS-06 row below shares that: these are ADDITIVE
+     * locks on prose that did not exist before, so there is no old phrase to forbid -- and
+     * consequently none of them needs the single-character character-class contortion the
+     * `forbidden` rows further up carry. Do not "tidy" that contortion out of those rows:
+     * it exists because spelling a forbidden phrase plants it in the file that proves it
+     * is gone.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'additive',
+    required: [
+      'NOT a correctness control (XOS-06)',
+      'which OS leg wins the first-write-wins race',
+      'Actions-cache entry and upload it VERBATIM',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * ADDITIVE, XOS-06 clause (b) -- the REJECTED ARGUMENT, named. This row is the one
+     * whose deletion costs the most and shows the least: an unnamed rejected argument is
+     * indistinguishable from an argument nobody thought of, so the next reader reconstructs
+     * it from first principles and promotes the knob. Recording the argument AND why it was
+     * rejected (it would rest a WRONG-RESULT guarantee on CI job scheduling) is what makes
+     * the rejection re-checkable instead of folklore.
+     *
+     * The argument is required VERBATIM including its trailing period, because the sentence
+     * is the whole artifact -- a paraphrase would not be the argument a future reader
+     * recognises as their own.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'additive',
+    required: [
+      'REJECTED ARGUMENT: ubuntu-first ordering makes the stricter Linux verdict win.',
+      'rest a WRONG-RESULT',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * ADDITIVE, XOS-06 clause (c) -- the GUARD-SENSITIVITY clause, and the subtlest row in
+     * this table. It records the one thing that genuinely DOES depend on `max-parallel: 1`
+     * (publish-verify's ability to detect a dead publish leg, via `read-back.ts`), while
+     * insisting that this is guard sensitivity and NOT a wrong-result guarantee. Deleting
+     * it costs two different things at once: a reader who removes the knob loses a guard
+     * without knowing it, AND the two comments that draw this distinction -- here and at
+     * the label assertion in `read-back.ts` -- stop agreeing, so one of them starts reading
+     * as though it contradicts the other.
+     *
+     * It also requires the ORDERING measurement to be recorded as a MEASUREMENT: 5/5 with a
+     * cited run id, explicitly not a documented guarantee. That pairing is the point. A
+     * comment claiming the ordering is guaranteed would be false; one omitting the
+     * measurement entirely would leave a future reader unable to tell whether the ordering
+     * was checked or assumed.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'additive',
+    required: [
+      'see read-back.ts, which reads the mirrored-by label of the',
+      'would redden publish-verify on a CORRECT',
+      'guard sensitivity, not a wrong-result guarantee',
+      'MEASURED 5/5 across the default-branch push runs on',
+      'run 30401077417',
+      'A measurement is not a documented guarantee',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
+     * CORRECTION, D-21 -- the half Phase 9 explicitly deferred to Phase 10, and the row
+     * this table's whole technique was built for. The `publish-verify` job comment said
+     * each OS leg reads back ONLY its own-OS asset and that this proves the same-OS
+     * publisher-to-reader contract. The first half is TRUE AGAIN but for a DIFFERENT reason
+     * (a per-leg seed derivation, not a per-leg asset name); the second half was flatly
+     * false and is replaced by what the job actually proves -- that each leg's own publish
+     * path uploaded the asset it reads back, a PUBLISHER identity rather than a producer
+     * identity.
+     *
+     * `forbidden` is EMPTY and here that is LOAD-BEARING rather than incidental, for the
+     * same reason the XOS-07 row above spells out: an absence check on a phrase from the
+     * old claim is SATISFIED BY DELETING THE WHOLE COMMENT, and a bare deletion is the
+     * precise failure mode D-21 exists to prevent -- it would leave the corrected claim
+     * standing with no reason, which is how Phase 9 shipped a regression. This row asserts
+     * on SURVIVING CONTENT only: the replacement mechanism, the publisher-not-producer
+     * distinction, and the sweep-scope lesson that explains why the stale claim lasted.
+     *
+     * The asset name is required as `releaseAssetName(mirrorSeedHash(...))` rather than as
+     * a literal shape, so this row does not have to be re-authored when CORR-02 collapses
+     * that name.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'correction',
+    required: [
+      'per-leg SEED derivation,',
+      'NOT a per-leg asset name',
+      'releaseAssetName(mirrorSeedHash(...))',
+      'a PUBLISHER identity, never a',
+      'producer identity',
+      'EXECUTABLE CODE and CI PROSE, not only docs',
     ],
     forbidden: [],
   },

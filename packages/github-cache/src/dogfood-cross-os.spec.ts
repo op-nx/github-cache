@@ -140,6 +140,15 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
  * NO comment-phrase assertion belongs here. `codeLines` strips every `#` line, so a comment
  * lock placed in this file is vacuous by construction; XOS-07's comment lock lives in
  * `docs-same-os-claims.spec.ts`, whose read is raw.
+ *
+ * XOS-06's `max-parallel: 1` VALUE guard SHARES this describe, and shares its positive
+ * control above. The describe's TITLE names XOS-07 only, which is a deliberate trade: the
+ * title is cited by 10-03-SUMMARY's coverage refs, so renaming it would rot those
+ * references, and the alternative -- a second describe with a second copy of the same
+ * `jobBlock('publish')` control -- would duplicate a mechanism for one assertion. Both
+ * guards ask the same kind of question about the same job block, so they share the one
+ * control. XOS-06's own clauses are named in its `it()` title and its comment lock lives,
+ * like XOS-07's, in `docs-same-os-claims.spec.ts`.
  */
 describe('ci.yml publish waits on every job that produces a mirrored entry (XOS-07)', () => {
   const reason =
@@ -177,6 +186,23 @@ describe('ci.yml publish waits on every job that produces a mirrored entry (XOS-
     expect(jobBlock('publish'), reason).toMatch(
       /^ {4}needs:.*\bintegration\b/m,
     );
+  });
+
+  it('serializes the OS legs with max-parallel: 1 (XOS-06) -- publish-verify loses a guard without it', () => {
+    expect(
+      jobBlock('publish'),
+      'The publish job must keep max-parallel: 1. Two things rest on it and NEITHER is a ' +
+        'correctness control (XOS-06): the soft asset-cap check needs the later leg to see ' +
+        "the earlier leg's uploads (WR-01), and publish-verify's dead-publish-leg DETECTION " +
+        'needs the two legs NOT TO OVERLAP -- read-back.ts asserts the mirrored-by label of ' +
+        'the asset its own leg seeded, and concurrent legs would let the other leg win that ' +
+        "upload race, reddening publish-verify on a CORRECT implementation. That is a guard's " +
+        'SENSITIVITY, never a wrong-result guarantee: no reader can receive wrong bytes, ' +
+        'because both legs upload the SAME single Actions-cache entry verbatim. Nothing here ' +
+        'depends on which leg goes FIRST. If this knob is genuinely being removed, price the ' +
+        'lost detection first and update the comment lock in docs-same-os-claims.spec.ts in ' +
+        'the SAME commit.',
+    ).toMatch(/^ {6}max-parallel:\s*1$/m);
   });
 });
 

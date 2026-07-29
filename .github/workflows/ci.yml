@@ -1153,17 +1153,30 @@ jobs:
       #         degrades to skip-and-warn (D-11), never a hard failure, and retention prunes
       #         shards past the window, so this was never a concern at this repo's push rate
       #         and is now half as much of one.
-      #         THE WINDOWS LEG STILL MIRRORS EXACTLY ONE REAL ASSET, and that carve-out is
-      #         why the per-leg counts are still NOT equal. `max-parallel: 1` runs ubuntu
-      #         first, so ubuntu mirrors every name it can restore and windows finds them
-      #         all present -- except its own `integration` hash, which ubuntu's enumeration
-      #         snapshot predates (MEASURED on run 30400231720: ubuntu enumerated at
-      #         ~21:21:11Z, windows integration finished at ~21:23:13Z). Plus its own
-      #         publish seed. So `publish (windows)` reports a small nonzero `mirrored`, not
-      #         0 -- the all-restore-MISS warning requires `mirrored === 0` and will not
-      #         fire -- and that seed is precisely the asset OBS-05 reads back, which is why
-      #         "the windows leg mirrors zero assets" is the wrong summary of this change
-      #         and "zero DUPLICATE assets" is the right one.
+      #         THE WINDOWS LEG STILL MIRRORS EXACTLY ONE ASSET -- ITS OWN PUBLISH SEED --
+      #         and that carve-out is why the per-leg counts are still NOT equal. Zero REAL
+      #         TASK assets, one asset in total. `max-parallel: 1` runs ubuntu first, so
+      #         ubuntu mirrors every name it can restore and windows finds them all present.
+      #         So `publish (windows)` reports `mirrored: 1`, NOT 0 -- the all-restore-MISS
+      #         warning requires `mirrored === 0` and will not fire -- and that seed is
+      #         precisely the asset OBS-05 reads back, which is why "the windows leg mirrors
+      #         zero assets" is the wrong summary of this change and "zero REAL TASK assets,
+      #         one seed" is the right one.
+      #         ZERO REAL TASK ASSETS DEPENDS ON XOS-07's WIDENED `needs:`, NOT ON THE RENAME
+      #         ALONE, and the distinction is measurable rather than pedantic. Before the
+      #         widening, ubuntu's enumeration snapshot PREDATED the windows `integration`
+      #         job, so windows was the sole mirrorer of that one hash -- i.e. one real task
+      #         asset, not zero (MEASURED on run 30400231720: ubuntu enumerated at
+      #         ~21:21:11Z while windows integration did not finish until ~21:23:13Z, and the
+      #         shard carries the fingerprint -- task hash 8059758544828235640 exists ONLY
+      #         under a `-windows` suffix, never under `-linux`). `needs:` above now includes
+      #         `integration`, so ubuntu's snapshot contains that hash and windows skips it.
+      #         Reverting that `needs:` list silently restores the one-real-asset case.
+      #         CONSEQUENCE FOR THE DEFERRED SINGLE-LEG COLLAPSE, recorded here because this
+      #         is where a reader arrives with the idea: the windows leg's ONE asset is the
+      #         only thing OBS-05 has to read back, so collapsing the matrix to one leg would
+      #         DESTROY OBS-05's dead-publish detection. The full both-halves record is
+      #         .planning/phases/10-os-invariant-releases-mirror/10-SC6-NOTES.md.
       #   (b) Wall clock. Uploads are throttled to ~1/sec, so publish gains a few
       #       seconds per push.
       #

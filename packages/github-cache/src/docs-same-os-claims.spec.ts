@@ -304,7 +304,20 @@ const DOCS_08_SITES = [
       'brings it back DOWN, because the suffix is GONE',
       "THE ARITHMETIC, from this estimate's own stated inputs",
       '1000 / 8 = ~125 default-branch pushes inside ONE calendar month',
-      'THE WINDOWS LEG STILL MIRRORS EXACTLY ONE REAL ASSET',
+      // The Windows-leg carve-out, re-pinned in plan 10-08 with research correction
+      // C-1 applied. It USED to read `THE WINDOWS LEG STILL MIRRORS EXACTLY ONE REAL
+      // ASSET`, which was measured correct on run 30400231720 and went stale the moment
+      // XOS-07 widened `publish`'s `needs:` -- ubuntu's enumeration snapshot then
+      // contained the Windows `integration` hash, so the Windows leg's one remaining
+      // asset is its own SEED and its real-task count is ZERO. Three phrases, each
+      // pinning one half of the corrected claim, because a single phrase let the count
+      // and its CAUSE drift apart. Every phrase is deliberately WITHIN ONE LINE of the
+      // wrapped comment: `read()` is a raw file read and this is `toContain`, so a phrase
+      // spanning a line break would have to embed the `#` continuation prefix and would
+      // then redden on a pure re-wrap.
+      'THE WINDOWS LEG STILL MIRRORS EXACTLY ONE ASSET -- ITS OWN PUBLISH SEED',
+      '`mirrored: 1`, NOT 0',
+      "ZERO REAL TASK ASSETS DEPENDS ON XOS-07's WIDENED `needs:`, NOT ON THE RENAME",
     ],
     forbidden: [],
   },

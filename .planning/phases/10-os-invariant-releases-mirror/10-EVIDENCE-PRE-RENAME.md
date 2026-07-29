@@ -221,6 +221,86 @@ What Phase 11 inherits, precisely:
 
 ---
 
+## RETAIN-05(a) shard census and disposition
+
+### Census, live at capture time
+
+Commands (counts and names extracted programmatically; **no raw `gh api` payload was pasted
+here** -- some payload fields carry committer identity):
+
+```
+gh api repos/op-nx/github-cache/releases/tags/cache-mirror-202607
+gh api "repos/op-nx/github-cache/releases/354838660/assets?per_page=100" --paginate
+```
+
+**Shard tag: `cache-mirror-202607`. Release id: `354838660`. Measured 2026-07-29.**
+The tag is named beside every number below on purpose: this shard rolls over 2026-08-01 and
+a bare count is unattributable afterwards.
+
+Bucketing reuses the real predicates rather than paraphrasing them -- `HASH_PATTERN`
+(`/^[a-f0-9]{1,512}$/`, from `cache-key.ts`) for the hash half and `CACHE_OS_VALUES`
+(`['windows', 'macos', 'linux']`, from `release-asset-name.ts`) for the OS half. Every
+asset falls into exactly one family.
+
+| Family | Count in `cache-mirror-202607` | Matched by |
+|---|---|---|
+| `<hash>.tar.gz` (PoC-era) | **50** | NO filter, before or after RETAIN-04 |
+| `<hash>-linux` | 46 | RETAIN-04's legacy branch |
+| `<hash>-windows` | 26 | RETAIN-04's legacy branch |
+| `<hash>-macos` | 0 | -- |
+| anything else | 0 | -- |
+| **total in `cache-mirror-202607`** | **122** | of a 1000-asset per-shard cap |
+
+**No delta from the research figure.** 10-RESEARCH.md / CONTEXT.md D-08 measured
+122 / 50 / 46 / 26 / 0 / 0 at release id `354838660` on 2026-07-29 and today's re-take
+returns the identical six numbers at the identical release id. No default-branch push
+intervened between the two reads. The requirement's "~50" is exact: **50**.
+
+**`label` was measured EMPTY on all 122 assets** (0 non-empty labels). That is what makes
+OBS-03's `mirrored-by: <os>` a genuinely NEW field rather than a partially populated one --
+no reconciliation with pre-existing label content is needed, and any future non-empty label
+in this shard is unambiguously OBS-03's.
+
+### The DECISION
+
+The 50 PoC-era `<hash>.tar.gz` assets are **accepted dead weight with a measured count.
+No code change. No third accept branch.**
+
+RETAIN-05(a) sanctions three options. Widening `isServerProducedAssetName` with a third
+`<hash>.tar.gz` accept branch is **the worst of them**, not merely the most work: it would
+widen a DELETE filter that quick `260721-vdn` deliberately narrowed on security grounds, and
+a bare `<hash>.tar.gz` name is **indistinguishable in shape** from a foreign asset dropped
+into a genuine shard. The filter governs a delete path (C9), so a false positive there
+destroys someone else's bytes. Rejected on that ground alone.
+
+### The BOUNDING argument
+
+The 1000-asset cap is **per-SHARD**, not global. Shard `cache-mirror-202607` holds **122 of
+1000** and **rolls over 2026-08-01**, after which nothing new is written to it. So:
+
+- That shard's cap is now **unreachable** -- 122 of 1000 with 3 days of writes left.
+- The 50 PoC-era assets are permanent occupants of a cap **nothing will approach**.
+- The cap already degrades to **skip-and-warn, never a hard failure**, so even a reached cap
+  is not a correctness event.
+
+"Permanent occupants of the 1000-asset cap" is therefore true AND bounded. That conjunction
+is why D-08 records rather than prunes, and it is written down here so v0.0.3 does not
+re-derive it.
+
+Related and recorded for the same reason: the Phase 9-to-10 window **doubled shard growth**
+(every restorable hash mirrored under both `-linux` and `-windows` until the rename lands).
+The 46 + 26 = 72 OS-suffixed assets in this census are that window's measured record.
+Bounded, not a correctness bug.
+
+### The remaining option
+
+A **one-off manual prune** of the 50 PoC-era assets stays available to the maintainer. It is
+explicitly operational and **not code**, and it is **not this phase's work**. It needs no filter change
+and no release, and it can be taken at any time or never -- the bounding argument above is
+what makes "never" an acceptable answer.
+
+---
+
 ## Provenance
 
 | Fact | Value |

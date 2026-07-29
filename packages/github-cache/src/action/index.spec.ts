@@ -237,6 +237,79 @@ describe('createPublishClient.listCacheEntries keyless-row filter', () => {
   });
 });
 
+describe('createPublishClient.listCacheEntries ref scoping (TRUST-10)', () => {
+  // THE PIN BEHIND THE COMMENT LOCK in action/index.ts's `Scope to this ref` adapter
+  // comment. What is pinned is not "a ref is passed" but the WHOLE call: the endpoint
+  // reference, every option beside it, and the fact that there is exactly ONE
+  // enumeration. Three separate regressions are in scope and each reddens a DIFFERENT
+  // case below, which is why this is not one assertion:
+  //   - dropping `ref` from the options   -> the two ref cases redden
+  //   - adding a SECOND paginate call     -> only the count case reddens
+  //   - hardcoding the ref value          -> only the SECOND ref case reddens
+  // A property-scoped `expect(opts.ref).toBe(ref)` would pass through all of the first
+  // and none of the last two, which is the shape D-11 rejects.
+  //
+  // `getActionsCacheList` is held as a NAMED sentinel and asserted by identity: the
+  // endpoint reference is half of what makes the call scoped, and swapping it for an
+  // unscoped list endpoint is a regression a `{ ref }`-only check cannot see.
+  function octokitSpy() {
+    const getActionsCacheList = {};
+    const paginate = vi.fn().mockResolvedValue([]);
+
+    return {
+      getActionsCacheList,
+      paginate,
+      octokit: {
+        paginate,
+        rest: { actions: { getActionsCacheList } },
+      } as unknown as Octokit,
+    };
+  }
+
+  // TWO distinct refs, so the value is proven PLUMBED from the constructor rather than
+  // matched by coincidence against a default or a hardcoded literal. The second is a
+  // non-default-branch ref on purpose: it is the value whose entries must never reach
+  // the world-readable mirror.
+  it.each([
+    'refs/heads/main',
+    'refs/heads/gsd/v0.0.2-os-invariant-cross-os-sharing',
+  ])('scopes the enumeration to the constructor ref %s', async (ref) => {
+    const { getActionsCacheList, paginate, octokit } = octokitSpy();
+
+    await createPublishClient(
+      octokit,
+      'op-nx',
+      'github-cache',
+      ref,
+    ).listCacheEntries();
+
+    // ONE assertion over the WHOLE recorded argument ARRAY (D-11), never a per-property
+    // read: `per_page` and the owner/repo pair are inside it deliberately, so a mistake
+    // that kept `ref` while dropping the page size or the repo identity still reddens.
+    expect(paginate.mock.calls[0]).toEqual([
+      getActionsCacheList,
+      { owner: 'op-nx', repo: 'github-cache', ref, per_page: 100 },
+    ]);
+  });
+
+  it('enumerates the Actions cache EXACTLY once, so no second unscoped enumeration can be added', async () => {
+    const { paginate, octokit } = octokitSpy();
+
+    await createPublishClient(
+      octokit,
+      'op-nx',
+      'github-cache',
+      'refs/heads/main',
+    ).listCacheEntries();
+
+    // A SEPARATE case from the argument-array cases above, and not a redundant one: a
+    // deep equality on `.mock.calls[0]` says nothing whatsoever about a SECOND call, and
+    // a second, unscoped enumeration is exactly the regression the ref scoping exists to
+    // prevent. Negate the QUANTIFIER (how many calls), not the predicate.
+    expect(paginate).toHaveBeenCalledOnce();
+  });
+});
+
 describe('createPublishClient.uploadReleaseAsset label forwarding (OBS-03, D-09)', () => {
   // LOAD-BEARING, not ceremonial. TypeScript ACCEPTS a contextually-typed adapter that
   // declares only three parameters against the four-parameter PublishClient method -- a

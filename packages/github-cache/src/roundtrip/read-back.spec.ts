@@ -3,10 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createReleasesReadBackend } from '../backend/releases-backend.js';
 import { dogfoodBody } from '../lib/dogfood-body.js';
 import { mirrorSeedHash } from '../lib/mirror-seed.js';
-import {
-  CACHE_OS_VALUES,
-  cachePlatform,
-} from '../lib/release-asset-name.js';
+import { CACHE_OS_VALUES, cachePlatform } from '../lib/release-asset-name.js';
 import { run } from './read-back.js';
 
 // THIS BIN HAD NO SPEC BEFORE PLAN 09-08, and that is the direct cause of the regression

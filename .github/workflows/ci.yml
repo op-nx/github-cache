@@ -1065,12 +1065,27 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
-      # Seed a known entry keyed on the run id (all-decimal, satisfies the
-      # ^[a-f0-9]{1,512}$ hash validator) so each OS leg has a DETERMINISTIC entry to
-      # mirror -- and so the live cross-OS round-trip has a producer: publish-verify
-      # reads <run_id> back through the real Releases reader below (the leg deferred
-      # from Phase 3). Seed runs as a JS-action operation for the same reason publish
-      # does (the Actions-cache runtime is JS-action-only).
+      # Seed a known entry keyed on a seed only THIS leg can produce, so each OS leg has
+      # a DETERMINISTIC entry to mirror -- and so the live cross-OS round-trip has a
+      # producer: publish-verify reads that same derived seed back through the real
+      # Releases reader below (the leg deferred from Phase 3). Seed runs as a JS-action
+      # operation for the same reason publish does (the Actions-cache runtime is
+      # JS-action-only).
+      #
+      # `operation: mirror-seed`, NOT `seed`, and the two are deliberately separate verbs
+      # (OBS-05, D-13). `seed` writes ONE key per RUN, which dogfood-seed/dogfood-verify
+      # REQUIRE -- seeding that shared key per OS is exactly the vacuity trap VER-06
+      # closed. This job needs the opposite: a key only this leg can produce, so a
+      # publish-verify leg that finds its own seed proves its OWN publish path ran.
+      #
+      # `hash:` STAYS `${{ github.run_id }}` and that is load-bearing (D-14). The per-leg
+      # derivation happens in TypeScript, at BOTH call sites, from the ONE helper
+      # mirrorSeedHash in packages/github-cache/src/lib/mirror-seed.ts -- the mirror-seed
+      # operation writes it and roundtrip/read-back.ts reads it back. A per-leg
+      # `${{ matrix.os == 'windows-11-arm' && 'x' || 'y' }}` expression here would put the
+      # OS mapping in TWO languages, which is the drift class this repo guards against
+      # everywhere else: YAML cannot import the tuple, so the two mappings would be free
+      # to disagree and the symptom would be a SILENT publish-verify MISS.
       #
       # The seeds are NO LONGER the only nx-cache-* entries in play. build, typecheck,
       # test and integration now route their real Nx tasks through the sidecar, so a
@@ -1121,7 +1136,7 @@ jobs:
       - uses: ./packages/github-cache
         with:
           hash: ${{ github.run_id }}
-          operation: seed
+          operation: mirror-seed
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: ./packages/github-cache

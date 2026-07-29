@@ -5,7 +5,7 @@ milestone_name: framing
 current_phase: 11
 current_phase_name: live-proofs-o1-o2-o3
 status: executing
-last_updated: "2026-07-29T21:29:51.790Z"
+last_updated: "2026-07-29T21:54:25.473Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 11 execution started
 progress:
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 11 (live-proofs-o1-o2-o3) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Progress: 4/6 phases complete [####--] 67%
 Last activity: 2026-07-29 — Phase 11 execution started
@@ -123,6 +123,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 10 P08 | 23m | 3 tasks | 6 files |
 | Phase 11 P01 | 7min | 2 tasks | 3 files |
 | Phase 11 P02 | 17min | 3 tasks | 2 files |
+| Phase 11 P03 | 18min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -237,6 +238,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 11]: 11-02: D-06 DISCHARGED via outcome 1 of the three defined -- cold EQUALS warm on all four proof targets (build 17269409342684722256, typecheck 122473981802582055, test 11681410932071446589, integration 8137422034373911537), all four MATCH D-02 exactly, and all four are PRESENT in cache-mirror-202607 created 2026-07-29T16:44Z. D-07 did NOT fire. The mirrored-by: linux label is a PUBLISHER, never a producer (D-14). Recorded as a FINDING and deliberately NOT promoted to a proof: PARITY-04 post-08-05 status looks answered but its does-my-everyday-box-hit question stays out of scope -- TEST-10 reset makes this the COLD question only. Consequence for 11-03: a MISS there is no longer attributable to cold/warm divergence or a stale mirror, since both are excluded by measurement.
 - [Phase 11]: 11-02: two results MEASURED that the record did not previously state. (a) A capture-hashes.mjs invocation itself warms .nx/workspace-data from 0 to 13 entries, so the cold number was obtainable in exactly ONE window -- which is why the capture runs once and why a verification re-run would have destroyed it. .nx/cache stays absent, so no local hit can short-circuit the 11-03 remote read. (b) packages/github-cache/dist/lib/trust.js SURVIVES nx reset (dist is a task output dir outside .nx/), so no rebuild is needed before the 11-03 D-08 soundness probe and none must be inserted -- a rebuild would populate outputs that typecheck dependentTasksOutputFiles hashes.
 - [Phase 11]: 11-02: T-11-12 pagination guard proven load-bearing by MEASUREMENT, not assertion -- the shard read WITHOUT --paginate returns 30 of 141 assets carrying ZERO nx-cache- names, so an unpaginated read would have reported all four hashes ABSENT and manufactured a false D-07 finding that stopped the phase on a reader artifact. Matcher also proven non-vacuous the other way (rejects 125 non-prefixed assets; a bogus nx-cache-0000000000000000000 reads ABSENT). Separately: requirements mark-complete was deliberately SUPPRESSED -- XOS-01, XOS-02 and TEST-10 stay OPEN because no live proof exists until 11-03, continuing the 11-01 finding.
+- [Phase ?]: Plan 11-03: the aggregate dist/ mtime currency check FAILED and the session continued on three stronger content-level checks with NO rebuild -- recorded in 11-EVIDENCE.md as a numbered deviation rather than absorbed
+- [Phase ?]: Plan 11-03: producer fingerprints re-taken in-process after a Git Bash MSYS path-mangling FALSE ZERO -- a leading-slash literal is rewritten before rg sees it, so /home/runner read as absent while the path was demonstrably present
+- [Phase ?]: Plan 11-03: XOS-01, XOS-02, TEST-10 and OBS-02 flipped complete on the O1/O2 evidence; TEST-08 deliberately NOT flipped -- its text spans O1-O4 and its traceability row pins it Pending until Phase 12 appends the O4 row
 
 ### Pending Todos
 
@@ -363,7 +367,7 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T21:29:51.773Z
+Last session: 2026-07-29T21:53:48.604Z
 Stopped at: Completed 11-02-PLAN.md -- D-06 discharged, cache cleared, 11-03 unblocked
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.

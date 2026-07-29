@@ -340,10 +340,10 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 ### Cross-OS outcomes (XOS)
 
-- [ ] **XOS-01**: A local Windows developer gets a cache HIT for `build`, `typecheck` and `test`
+- [x] **XOS-01**: A local Windows developer gets a cache HIT for `build`, `typecheck` and `test`
   from artifacts produced by Linux CI, via the Releases mirror. (O1)
 
-- [ ] **XOS-02**: A local Windows developer gets a cache HIT for `integration` from artifacts
+- [x] **XOS-02**: A local Windows developer gets a cache HIT for `integration` from artifacts
   produced by Windows CI. Measured BEFORE the CORR-02 rename as a baseline and AFTER as a
   non-regression. (O2)
 
@@ -505,7 +505,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   So reframed, the proof is STRONGER: it shows the declared Nx input is the only thing separating
   the two targets, which is CORR-04's actual claim.
 
-- [ ] **TEST-10**: The O1/O2 local proofs begin from a cleared local Nx cache (`nx reset`), and the
+- [x] **TEST-10**: The O1/O2 local proofs begin from a cleared local Nx cache (`nx reset`), and the
   order is reset FIRST, THEN start the sidecar -- `nx reset` deletes `.nx/cache`, which is where
   VER-07 puts the archive, so resetting under a running sidecar makes the next PUT 500. A HIT
   recorded without a preceding reset is not accepted: a local cache hit short-circuits before the
@@ -523,7 +523,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 ### Observability (OBS)
 
-- [ ] **OBS-02**: Proof evidence is a non-zero count of tasks carrying the literal `[remote cache]`
+- [x] **OBS-02**: Proof evidence is a non-zero count of tasks carrying the literal `[remote cache]`
   label, named per target. Nx 23.1's end-of-run performance report is supporting context only --
   it cannot separate local from remote, cannot attribute a producer OS, and prints an identical
   `0%` line for a run with no sidecar at all. It renders to the job summary in CI and to the
@@ -648,13 +648,13 @@ honour table: `.planning/ROADMAP.md`.
 | TRUST-11 | Phase 10 | Complete |
 | TRUST-12 | Phase 10 | Complete |
 | TRUST-13 | Phase 10 | Complete (10-SECURITY.md section 1; auditor adopted B2 and refined both legs) |
-| XOS-01 | Phase 11 | Pending (live-CI/live-workstation only) |
-| XOS-02 | Phase 11 | Pending (baseline captured in Phase 10, before CORR-02) |
+| XOS-01 | Phase 11 | Complete (live-workstation measurement taken in 11-03: 1 `[remote cache]` occurrence each for `build`, `typecheck`, `test`; see 11-EVIDENCE.md O1) |
+| XOS-02 | Phase 11 | Complete (baseline captured in Phase 10 before CORR-02; post-rename non-regression measured in 11-03 against BOTH baseline halves; see 11-EVIDENCE.md O2) |
 | XOS-03 | Phase 11 | Pending (live-CI only) |
 | TEST-08 | Phase 11 | Pending (O4 evidence row appended in Phase 12) |
 | TEST-09 | Phase 11 | Pending (live-CI only) |
-| TEST-10 | Phase 11 | Pending |
-| OBS-02 | Phase 11 | Pending |
+| TEST-10 | Phase 11 | Complete |
+| OBS-02 | Phase 11 | Complete |
 | XOS-04 | Phase 12 | Pending |
 | XOS-05 | Phase 12 | Pending (live-CI only; carries the conditional scheduled-detector clause) |
 | XOS-08 | Phase 12 | Pending (`needs:` ordering -- without it the HIT cannot occur) |

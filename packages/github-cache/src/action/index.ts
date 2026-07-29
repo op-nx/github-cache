@@ -46,6 +46,38 @@ export function createPublishClient(
     async listCacheEntries() {
       // getActionsCacheList needs the job's actions:read scope (Pitfall 3). Scope to
       // this ref (refs/heads/<default-branch>) so only default-branch entries mirror.
+      //
+      // THAT `ref` IS THE SOLE IN-REPO CONTROL for the property it carries, and it did
+      // not used to be. What it governs: only default-branch Actions-cache entries are
+      // ENUMERATED, and the engine mirrors nothing it was not handed -- so only
+      // default-branch entries can reach the anonymously-readable Release.
+      //
+      // Why nothing else carries it. Two facts, both readable in this tree:
+      //  1. `TRUSTED_EVENTS` (lib/trust.ts) admits `push` with NO ref check, so a push
+      //     to ANY branch is write-trusted and its entries really are in the Actions
+      //     cache, waiting to be enumerated. The sync gate does NOT cover this: it
+      //     decides whether THIS RUN may publish at all (`isSyncTrusted` requires the
+      //     run's own ref to be the default branch, runPublish's first statement), which
+      //     is a different question from WHICH ENTRIES a legitimately-running
+      //     default-branch publisher may see. Only the argument below answers that one.
+      //  2. Until Phase 9 the `@actions/cache` version differed per OS, so a leg could
+      //     restore only a fraction of what it enumerated. That barrier was never
+      //     ref-based -- it narrowed the reachable set incidentally -- and VER-01/VER-03
+      //     removed it. A single leg can now restore everything handed to it, so the
+      //     enumeration is the only place the set is still narrowed.
+      // The C-numbered control ledger is at .planning/THREAT-MODEL.md (C1, C2, C16);
+      // it is cited, not restated.
+      //
+      // FAILURE MODE OF LOSING IT: a non-default-branch trusted write becomes reachable
+      // from a world-readable Release asset. That is an INFORMATION-DISCLOSURE change,
+      // not a cache MISS -- nothing goes red, no restore fails, and the mirror keeps
+      // reporting success while publishing bytes it should never have seen.
+      //
+      // PINNED BY SPEC, in action/index.spec.ts's
+      // `createPublishClient.listCacheEntries ref scoping (TRUST-10)` describe: a
+      // whole-argument-array deep equality driven with two distinct constructor refs,
+      // plus a SEPARATE call-count pin so a second unscoped enumeration cannot be added
+      // silently. Deleting this comment does not delete the guard.
       const caches = await octokit.paginate(
         octokit.rest.actions.getActionsCacheList,
         { owner, repo, ref, per_page: 100 },

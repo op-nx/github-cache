@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
 current_phase: 11
-current_phase_name: Live Proofs -- O1, O2, O3
-status: planned
-last_updated: "2026-07-29T20:32:23.293Z"
+current_phase_name: live-proofs-o1-o2-o3
+status: executing
+last_updated: "2026-07-29T20:58:57.992Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 11 planning complete -- 7 plans, plan-checker passed
+last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 33
-  completed_plans: 26
-  percent: 67
+  completed_phases: 1
+  total_plans: 38
+  completed_plans: 27
+  percent: 17
 ---
 
 # Project State
@@ -23,15 +23,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 11 -- Live Proofs -- O1, O2, O3
+**Current focus:** Phase 11 — live-proofs-o1-o2-o3
 
 ## Current Position
 
-Phase: 11 (Live Proofs -- O1, O2, O3) -- PLANNED, ready to execute
-Plan: 0 of 7
-Status: 7 plans in 7 sequential waves. Research resolved U-01 empirically -- the O3 existence inequality IS establishable post-hoc (ubuntu-first by a 109-182s structural margin across 11 of 11 runs), so the dedicated-job fallback is deliberately NOT built. Plan-checker passed: 0 blockers, 5 warnings. Requirements 7/7 covered, decisions 23/23 covered.
+Phase: 11 (live-proofs-o1-o2-o3) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
 Progress: 4/6 phases complete [####--] 67%
-Last activity: 2026-07-29 -- Phase 11 planning complete
+Last activity: 2026-07-29 — Phase 11 execution started
 
 **PERISHABLE, and it gates plans 11-02 and 11-03.** The warm Releases mirror holding the four hashes
 this workstation computes was published 2026-07-29T16:44Z, and cleanup prunes past 30 days, so the
@@ -121,6 +121,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 10 P06 | ~35m | 1 tasks | 6 files |
 | Phase 10 P07 | 19m | 3 tasks | 14 files |
 | Phase 10 P08 | 23m | 3 tasks | 6 files |
+| Phase 11 P01 | 7min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -228,6 +229,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 10]: The ref-scoping pin is THREE cases, not one assertion — Three distinct regressions each redden a different case: dropping ref reddens the two whole-argument-array cases, adding a second unscoped enumeration reddens only the call-count pin, and hardcoding the ref value reddens only the second of the two constructor-ref cases. A property-scoped assertion catches only the first.
 - [Phase 10]: TRUST-13 left OPEN; secure-phase must spawn gsd-security-auditor and must not take the inline short-circuit — The short-circuit fires when the threat register looks clean and was authored at plan time, which is exactly Phase 10's shape. TRUST-13 forbids self-certification in as many words, so 10-TRUST-EVIDENCE.md Part B is INPUT and the verdict is authored by the auditor in 10-SECURITY.md.
 - [Phase 10]: C16's unchanged-ness asserted at FUNCTION scope, not file scope — cache-key.ts legitimately changed this phase (+25 comment-only lines widening its prefix lock), so a file-scoped diff prints a non-empty result whose honest reading is unchanged -- the exact trap. Scoped instead by a --unified=0 non-comment-line filter plus the pre-existing seven-case accept/reject pin.
+- [Phase 11]: D-13's negative control is typecheck, not test: test's dependsOn is ^build (dependencies' build, none in this single-project workspace) so it resolves ONE task and never proves the resolver expands dependsOn, while typecheck's inferred [build, ^typecheck] resolves TWO with one a FORBIDDEN member — RESEARCH.md verified the inferred dependsOn in @nx/js source; the intersection is what makes the absence assertion over the integration set non-vacuous (D-13)
+- [Phase 11]: capture-hashes.mjs's --out writer was duplicated into the new mode rather than extracted to a shared helper — Extraction would edit the capture path plan 11-02's irrecoverable warm capture depends on, and verifying the refactor would mean running that warm capture, which plan 11-01 does not own. Ten duplicated lines is the cheaper risk
+- [Phase 11]: Both wave-1 instruments are workspace-root, mechanically confirmed to match none of nx.json's 21 workspaceRoot inputs via node:path matchesGlob with a live eslint.config.mjs positive control — D-10 row 4 / D-11: the perishable O1/O2 window stays intact, so plan 11-02's warm capture is still available (.nx/workspace-data 18 entries, .nx/cache 86, both unchanged)
 
 ### Pending Todos
 
@@ -354,7 +358,7 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T18:13:08.439Z
+Last session: 2026-07-29T20:57:55.065Z
 Stopped at: Phase 11 context gathered
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.

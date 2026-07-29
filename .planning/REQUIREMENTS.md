@@ -559,7 +559,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   flag is a no-op on the version -- so the first-push all-MISS on BOTH legs is caused by the PATH
   change, not the flag.
 
-- [ ] **OBS-05**: Each `publish` matrix leg seeds a leg-DISTINGUISHABLE hash and each
+- [x] **OBS-05**: Each `publish` matrix leg seeds a leg-DISTINGUISHABLE hash and each
   `publish-verify` leg reads back its OWN leg's asset. Today both legs seed
   `GITHUB_RUN_ID` (`read-back.ts:37`) and are separated only by the OS suffix, so CORR-02 would
   make the Windows leg read the ubuntu-produced asset and pass even if the Windows publish path
@@ -637,13 +637,13 @@ honour table: `.planning/ROADMAP.md`.
 | OBS-04 | Phase 9 | Complete (reworded message + two-push tripwire + advance record `e7018d0`; signal SAMPLED, prediction rows not met -- see `09-EVIDENCE.md` ADDENDUM) |
 | DOCS-08 | Phase 9 | Complete (four corrections + two additive, phrase-pinned; `read-back.ts` and `ci.yml:693` were always Phase 10 scope) |
 | CORR-02 | Phase 10 | Complete |
-| RETAIN-04 | Phase 10 | Pending (same commit as CORR-02) |
+| RETAIN-04 | Phase 10 | Complete (landed in 10-07, the same commit as CORR-02; row was stale against its own ticked checkbox) |
 | RETAIN-05 | Phase 10 | Pending (same commit as CORR-02) |
 | CORR-05 | Phase 10 | Pending (4 sites; 1 removed in Phase 9 with VER-02; site 4 needs an explicit Phase 10 call) |
 | OBS-03 | Phase 10 | Complete |
-| OBS-05 | Phase 10 | Pending (must land before CORR-02) |
+| OBS-05 | Phase 10 | Complete (both clauses observed live on run 30471772954; see 10-EVIDENCE-LIVE-CI.md) |
 | XOS-06 | Phase 10 | Complete |
-| XOS-07 | Phase 10 | Complete (live full-task-set census is a post-merge push observation) |
+| XOS-07 | Phase 10 | Complete (live full-task-set census DONE on run 30471772954: publish started 3s after the last needs: dep; see 10-EVIDENCE-LIVE-CI.md) |
 | TRUST-10 | Phase 10 | Complete |
 | TRUST-11 | Phase 10 | Complete |
 | TRUST-12 | Phase 10 | Complete |

@@ -8,9 +8,11 @@ created: 2026-07-29
 audited_at: 2026-07-29
 audited_tree: 3934b84
 rows_total: 33
-rows_green: 31
-rows_manual_only: 2
+rows_green: 33
+rows_manual_only: 0
 rows_still_open: 0
+live_ci_closed_at: 2026-07-29
+live_ci_run: 30471772954
 ---
 
 # Phase 10 -- Validation Strategy
@@ -88,12 +90,12 @@ maps each row onto a task and the executor fills `Status`.
 | OBS-05 | `read-back.ts` accepts its OWN leg's seed payload and REJECTS every other member's | unit | quick run, `read-back` | [OK] TIGHTEN `read-back.spec.ts:80` `it.each(CACHE_OS_VALUES)` (D-15) | [OK] green -- `read-back.spec.ts:215-250`, own-leg accept + full cross-producer-pair reject matrix |
 | OBS-05 | **the read-back asset's `mirrored-by` label equals the reader's own OS** -- the U-01 control | unit | quick run, `read-back` | [W0] NEW cases; mutation = flip the label | [OK] green -- `read-back.spec.ts:320-375`, own-label accept, wrong-label reject (named pair), empty-label reject |
 | OBS-05 | the `mirror-seed` operation PUTs at the DERIVED hash, not the raw `hash` input | unit | quick run, `action/index` | [W0] NEW case asserting the fetched URL path -- the `url`-reuse trap at `action/index.ts:265`; without this the trap ships silently | [OK] green -- `action/index.spec.ts:513-553`, whole-URL equality + `not.toBe(RUN_ID)` on the final path segment |
-| OBS-05 | live: each `publish-verify` leg reads back its OWN leg's asset | **live CI, push-to-`main`** | `publish-verify` job | [OK] job exists -- **NOT observable pre-merge**, see Live-CI close | [ ] pending (live-CI only, by design -- push-gated to `main`, this branch is unmerged; see Manual-Only Verifications) |
+| OBS-05 | live: each `publish-verify` leg reads back its OWN leg's asset | **live CI, push-to-`main`** | `publish-verify` job | [OK] observed on run `30471772954` -- both legs named their OWN OS; windows mirrored exactly 1 (its own seed), not 0 | [OK] green (see Post-Audit Addendum) |
 | XOS-06 | `max-parallel: 1` retained | unit (ci.yml value) | quick run | [W0] NEW -- `jobBlock('publish')` matches `/max-parallel:\s*1/`. No guard exists today | [OK] green -- `dogfood-cross-os.spec.ts:191-206` |
 | XOS-06 | the comment records "not a correctness control" + the rejected ordering argument + the U-01 sensitivity | unit (raw-file phrase) | quick run, `docs-same-os-claims` | [W0] NEW `DOCS_08_SITES` rows (raw `read(file)` sees comments; `jobBlock` does not) | [OK] green -- `docs-same-os-claims.spec.ts:160-236`, three separate additive rows (status+mechanism, rejected argument, guard-sensitivity) |
 | XOS-07 | `publish` declares `needs: [build, typecheck, test, integration]` | unit (ci.yml value) | quick run | [W0] NEW -- `jobBlock('publish')` matches all four | [OK] green -- `dogfood-cross-os.spec.ts:153-189`, four separate per-producer cases |
 | XOS-07 | the comment records `!cancelled()` as the mechanism | unit (raw-file phrase) | quick run, `docs-same-os-claims` | [W0] NEW row | [OK] green -- `docs-same-os-claims.spec.ts:131-159` |
-| XOS-07 | live: one push mirrors that push's full task set | **live CI** | `gh api` asset census after the merge push | [OK] see Live-CI close | [ ] pending (live-CI only, by design -- push-gated to `main`, this branch is unmerged; see Manual-Only Verifications) |
+| XOS-07 | live: one push mirrors that push's full task set | **live CI** | `gh api` asset census after the merge push | [OK] observed on run `30471772954` -- 16 new-form assets, 10 real task hashes each exactly once, legacy count 72 -> 72 | [OK] green (see Post-Audit Addendum) |
 | TRUST-10 | C1/C2 unchanged | commit-range diff + existing specs | `git diff <base>..HEAD -- src/lib/trust.ts src/lib/sync-gate.ts` (expect empty) + `trust.spec.ts`, `sync-gate.spec.ts` | [OK] | [OK] green -- RAN this audit: `git diff --stat 06019d4..HEAD -- ...trust.ts ...sync-gate.ts` empty, exit 0 |
 | TRUST-10 | C16 Actions-cache side unchanged | function-scoped diff + accept/reject pin | `cache-key.spec.ts:34-74` | [OK] | [OK] green -- `cache-key.spec.ts:34-84` (TRUST-08/SRV-03 accept/reject + bounds), file re-read this audit |
 | TRUST-10 | `listCacheEntries` is `ref`-scoped, pinned by spec + comment-locked | unit | quick run, `action/index` | [W0] NEW case -- whole-argument-array assertion on `octokit.paginate` + call count | [OK] green -- `action/index.spec.ts:240-311`, whole-array `toEqual` over 2 distinct refs + separate `toHaveBeenCalledOnce()` |
@@ -261,3 +263,32 @@ live G3 (negated-quantifier-in-`toHaveBeenCalledWith`) violations.
 **FILLED.** 33/33 rows resolved: 31 `[OK] green`, 2 correctly `[ ] pending` (live-CI-only
 by design, not gaps). `nyquist_compliant: true`, `wave_0_complete: true`,
 `status: passed`.
+
+---
+
+## Post-Audit Addendum 2026-07-29 -- the two live-CI rows CLOSED
+
+The audit above left OBS-05's per-leg read-back and XOS-07's full-task-set census `[ ] pending`
+on the correct ground that both are `push`-to-`main` gated and the branch was unmerged. That
+condition no longer holds: a maintainer-authorised TEMPORARY push to `main` sampled them on run
+`30471772954`, and `main` was then restored to `fe25a3f` (verified by SHA equality).
+
+Both rows are now `[OK] green`, so `rows_green` moves 31 -> 33 and `rows_manual_only` 2 -> 0.
+This is a new MEASUREMENT arriving after the audit, not a revision of its judgement -- the audit
+named exactly this as the condition for closing them.
+
+- **OBS-05:** each `publish-verify` leg named its OWN OS as publisher (`mirrored-by: linux` on
+  the ubuntu leg, `mirrored-by: windows` on the windows leg), and the non-vacuity condition held
+  -- `publish (windows)` mirrored exactly ONE asset, its own seed `nx-cache-feed030471772954`,
+  not zero.
+- **XOS-07:** `publish` started 3 s after the LAST of its four `needs:` dependencies finished
+  (`integration (windows-11-arm)` at 16:43:49Z, publish at 16:43:52Z), having waited ~3m16s for
+  it; the shard gained 16 new-form assets with all ten real task hashes present exactly once and
+  the legacy `<hash>-<os>` count unchanged at 72.
+
+The pre-registered CORR-02 falsifier did NOT fire: measured `readMisses` is 0, not
+`readMisses == scanned`.
+
+Full detail, including the before/after census and the `main` backup/restore record, is in
+`10-EVIDENCE-LIVE-CI.md`. The Manual-Only Verifications table above is left as authored; its
+first two rows are now discharged by that file.

@@ -996,13 +996,45 @@ jobs:
   # off so a Windows-only failure never hides the ubuntu result. It runs as `operation: publish`
   # on the node24 JS action, NOT a `run: node` step, because @actions/cache restoreCache needs
   # the JS-action-only ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL runtime (a plain run: step
-  # silently MISSes -- verified Phase 2). needs: build (NOT test): a failing test leg must never
-  # skip the mirror and drop already-built entries (RESEARCH Anti-Patterns). if: !cancelled() &&
-  # push -- the mirror runs only on the trusted push trigger, and isSyncTrusted re-checks the
-  # default branch in-process as the load-bearing gate (D-01), not the workflow if: alone.
+  # silently MISSes -- verified Phase 2). if: !cancelled() && push -- the mirror runs only on the
+  # trusted push trigger, and isSyncTrusted re-checks the default branch in-process as the
+  # load-bearing gate (D-01), not the workflow if: alone.
+  #
+  # WHY needs: [build, typecheck, test, integration] and not the needs: build it replaced
+  # (XOS-07). The comment that stood here argued for `needs: build (NOT test)` so that a failing
+  # test leg could never skip the mirror and drop already-built entries. That concern is STILL
+  # REAL -- it is stated here rather than deleted, so nobody reconstructs it from scratch and
+  # narrows needs: straight back. It is simply no longer what needs: has to carry, because a
+  # different mechanism already covers it:
+  #   MECHANISM: !cancelled() runs this job even when a needs: dependency FAILED.
+  # GitHub documents that a job whose if: expression causes it to continue is NOT skipped when a
+  # needs: dependency fails -- the FAILED case, not merely the skipped one -- so a red test leg
+  # does not skip the mirror under the wide list.
+  #   BOUNDED FAILURE MODE: a skipped mirror, never a wrong artifact.
+  # Named because that !cancelled()-past-a-FAILED-needs: behaviour is CITED from GitHub's docs
+  # and has never been reproduced in this repo (no run on record has a failed publish ancestor).
+  # If the citation is wrong or the semantics change, publish is SKIPPED on a red-test push and
+  # that push's entries simply stay in the Actions cache until the next green push mirrors them.
+  # A recoverable GAP, never a wrong artifact reaching the world-readable mirror. That is the
+  # whole trade, and an operator diagnosing a missing mirror should find the cause written here.
+  #   MEASURED on run 30400231720, which is why this widening is a fix and not a precaution:
+  #   publish (ubuntu-24.04-arm) enumerated the Actions cache about 122 seconds BEFORE
+  #   integration (windows-11-arm) finished, so the Windows integration entry did not exist yet
+  #   when the enumeration snapshot was taken -- and the shard carries the fingerprint, task
+  #   hash 8059758544828235640 present ONLY under a -windows suffix. Each leg's view of the
+  #   Actions-cache key set is ONE listCacheEntries() call taken at that leg's publish step
+  #   start and is never re-read (the `const entries` line in publish-mirror.ts), so what a leg
+  #   can mirror is a function of its START TIME. Waiting on every producer is what makes one
+  #   default-branch push mirror that push's full task set instead of racing job completion.
+  #   WALL CLOCK: publish used to start ~40s into the run; it now waits for integration
+  #   (windows-11-arm), roughly 3 minutes. Acceptable for a push-only background mirror job.
+  #   DOWNSTREAM, and it changes which pushes sample OBS-05: publish-verify carries
+  #   if: github.event_name == 'push' with NO !cancelled(), so it is skipped whenever publish
+  #   FAILS. The wide list makes publish run on a red-test push, so publish-verify now runs
+  #   there too. Desirable, and named here rather than discovered.
   publish:
     if: ${{ !cancelled() && github.event_name == 'push' }}
-    needs: build
+    needs: [build, typecheck, test, integration]
     strategy:
       fail-fast: false
       # max-parallel 1 serializes the OS legs (WR-01). Run concurrently, each leg

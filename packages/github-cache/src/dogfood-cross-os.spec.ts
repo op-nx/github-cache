@@ -109,6 +109,78 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
 });
 
 /**
+ * XOS-07's `needs:` VALUE guard, and the FIRST such guard in the repo. Nothing asserted any
+ * job's `needs:` value before this phase, so reverting the widening reddened NOTHING. Stated
+ * plainly rather than implied: "CI already covers it" is exactly what let this value sit
+ * unguarded while the race below was live and measurable.
+ *
+ * WHY IT LIVES IN THIS FILE. `jobBlock` above is the only job-block extractor in the repo.
+ * Extracting it to a shared module so this guard could live elsewhere would be a NEW mechanism
+ * built for one caller, which 10-RESEARCH's Don't-Hand-Roll table names as the smell. So the
+ * guard comes to the helper rather than the helper going to the guard.
+ *
+ * THE SUPERSET HOLE, and how the shape below closes it. A `toMatch` against a `needs:` LIST is
+ * satisfied by any SUPERSET, so one assertion looking for `integration` would still pass
+ * against `needs: [integration]` alone -- against a rewrite that DROPPED `build`. Each of the
+ * four producers therefore gets its own case, `build` INCLUDED: the `build`-SURVIVES clause is
+ * not decoration, it is the half a naive check structurally cannot express. Four separate cases
+ * rather than four `expect`s in one, so the revert-to-`needs: build` mutation shows its 3-of-4
+ * split instead of stopping at the first failure.
+ *
+ * Note the direction differs from every other clause in this file: `dogfood-cross-os` otherwise
+ * asserts a job's shape is NARROW (the single-leg seed), and that direction inherits safety from
+ * a non-vacuity control alone. Asserting a list is WIDE does not, which is why the per-member
+ * split exists on top of the control.
+ *
+ * Each pattern is anchored at `^ {4}needs:` -- a job's own keys sit one level under the
+ * two-space job key -- so the token must appear ON the `needs:` line. Unanchored, `\bbuild\b`
+ * would already be satisfied by this same job's `- run: npm run build` step and the guard would
+ * be a tautology.
+ *
+ * NO comment-phrase assertion belongs here. `codeLines` strips every `#` line, so a comment
+ * lock placed in this file is vacuous by construction; XOS-07's comment lock lives in
+ * `docs-same-os-claims.spec.ts`, whose read is raw.
+ */
+describe('ci.yml publish waits on every job that produces a mirrored entry (XOS-07)', () => {
+  const reason =
+    'The publish job must declare needs: [build, typecheck, test, integration]. A leg reads ' +
+    'the Actions-cache key set ONCE at its publish step start and never re-reads it, so what ' +
+    'it can mirror is a function of its START TIME -- measured on run 30400231720, where the ' +
+    'ubuntu leg enumerated 122s before integration (windows-11-arm) finished and task hash ' +
+    '8059758544828235640 reached the shard only under -windows. Each producer is asserted ' +
+    'SEPARATELY because a toMatch against a needs: list is satisfied by any SUPERSET: a check ' +
+    'for `integration` alone would pass against needs: [integration], which dropped build.';
+
+  // POSITIVE CONTROL, and it comes first for the same reason the two controls above do. Every
+  // clause below is a `toMatch`, so a `jobBlock` that returned the WRONG non-empty block would
+  // have them asserting about the wrong job. This `if:` expression is unique to `publish` and
+  // is real YAML, so it survives the comment strip.
+  it('scopes to a real publish job block', () => {
+    expect(jobBlock('publish')).toMatch(
+      /^ {4}if:\s*\$\{\{\s*!cancelled\(\)\s*&&\s*github\.event_name == 'push'\s*\}\}$/m,
+    );
+  });
+
+  it('waits on build -- the SURVIVES clause, which a superset check cannot express', () => {
+    expect(jobBlock('publish'), reason).toMatch(/^ {4}needs:.*\bbuild\b/m);
+  });
+
+  it('waits on typecheck', () => {
+    expect(jobBlock('publish'), reason).toMatch(/^ {4}needs:.*\btypecheck\b/m);
+  });
+
+  it('waits on test', () => {
+    expect(jobBlock('publish'), reason).toMatch(/^ {4}needs:.*\btest\b/m);
+  });
+
+  it('waits on integration -- the two-leg matrix, so both OS legs finish first', () => {
+    expect(jobBlock('publish'), reason).toMatch(
+      /^ {4}needs:.*\bintegration\b/m,
+    );
+  });
+});
+
+/**
  * ROBUST-04's SAMPLING RATE, and it lives in VER-06's guard because it is the same fact
  * about which event samples what.
  *

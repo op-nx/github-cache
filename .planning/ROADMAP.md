@@ -416,11 +416,11 @@ must be proven to CATCH the three CORR-05 violations before this phase removes t
      mirrored under both `-linux` and `-windows` until the rename lands: bounded, NOT a correctness
      bug, and the existing "~5 assets per push" estimate in `ci.yml` reads about double during it.
 
-**Plans**: 2/8 plans executed
+**Plans**: 3/8 plans executed
 
 - [x] 10-01-PLAN.md
 - [x] 10-02-PLAN.md
-- [ ] 10-03-PLAN.md
+- [x] 10-03-PLAN.md
 - [ ] 10-04-PLAN.md
 - [ ] 10-05-PLAN.md
 - [ ] 10-06-PLAN.md
@@ -721,7 +721,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 4/4 | Complete   | 2026-07-27 |
 | 8. Nx Task-Hash Parity | v0.0.2 | 6/6 | Complete   | 2026-07-28 |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 8/8 | Complete    | 2026-07-28 |
-| 10. OS-Invariant Releases Mirror | v0.0.2 | 2/8 | In Progress | - |
+| 10. OS-Invariant Releases Mirror | v0.0.2 | 3/8 | In Progress | - |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 0/? | Not started | - |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 0/? | Not started | - |
 

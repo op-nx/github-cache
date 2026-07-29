@@ -382,7 +382,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   safe by CORR-05's platform-agnosticism, not by ordering. A comment records this explicitly so a
   future reader does not reconstruct the rejected ordering argument.
 
-- [ ] **XOS-07**: `publish` depends on every job producing a mirrored entry (`build`, `typecheck`,
+- [x] **XOS-07**: `publish` depends on every job producing a mirrored entry (`build`, `typecheck`,
   `test`, `integration`), not on `build` alone, so one default-branch push mirrors that push's full
   task set. Otherwise the O1 proof races job completion and can fail on a correct implementation.
 
@@ -643,7 +643,7 @@ honour table: `.planning/ROADMAP.md`.
 | OBS-03 | Phase 10 | Complete |
 | OBS-05 | Phase 10 | Pending (must land before CORR-02) |
 | XOS-06 | Phase 10 | Pending |
-| XOS-07 | Phase 10 | Pending |
+| XOS-07 | Phase 10 | Complete (live full-task-set census is a post-merge push observation) |
 | TRUST-10 | Phase 10 | Pending |
 | TRUST-11 | Phase 10 | Pending |
 | TRUST-12 | Phase 10 | Pending |

@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 10
 current_phase_name: OS-Invariant Releases Mirror
 status: executing
-last_updated: "2026-07-29T10:55:59.343Z"
+last_updated: "2026-07-29T11:14:43.753Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 20
+  completed_plans: 21
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 10 (OS-Invariant Releases Mirror) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
 Last activity: 2026-07-29 — Phase 10 execution started
@@ -103,6 +103,7 @@ Last activity: 2026-07-29 — Phase 10 execution started
 | Phase 08 P06 | 42min | 2 tasks | 4 files |
 | Phase 10 P01 | 50m | 2 tasks | 1 files |
 | Phase 10 P02 | 13min | 2 tasks | 4 files |
+| Phase 10 P03 | 15min | 3 tasks tasks | 3 files files |
 
 ## Accumulated Context
 
@@ -199,6 +200,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase ?]: [Phase 10]: 10-02: the retraction is comment-locked at the construction site with two independent grounds -- listCacheEntries yields { key } only (the adapter maps every row to { key: cache.key }), and Phase 9's VER-01/VER-03 broke publisher-equals-producer, so a producing-OS reading would be wrong in exactly the cross-OS case the label serves. The comment also states what the hoist does NOT guarantee: moving it back inside the loop is behaviourally identical, and only the multi-hash called-ONCE case notices.
 - [Phase ?]: [Phase 10]: 10-02: the baseline expected label derives from CACHE_OS_VALUES[0] (windows), never the literal 'linux' -- so on the ubuntu-only test job even the four baseline argument-array assertions redden against an engine that read the ambient platform. Recorded as a bonus, NOT a guarantee: on a Windows workstation the two coincide, and the it.each(CACHE_OS_VALUES) group is the only clause that bites on every machine.
 - [Phase ?]: [Phase 10]: 10-02: an acceptance grep asserting zero negated-matchers-inside-toHaveBeenCalledWith returns 1 at HEAD and did so before this plan -- the hit is a COMMENT from Phase 9's gap-closure commit 5184427 explaining why the shape is NOT used. Kept, not deleted; comment-stripped the count is 0. Reproduces Phase 8's lesson that a grep-verifiable absence claim must not spell the token it forbids anywhere in the file, including in the sentence explaining the rule.
+- [Phase ?]: [Phase 10]: 10-03: XOS-07 widened publish to needs: [build, typecheck, test, integration] -- the race is MEASURED (run 30400231720: the ubuntu publish leg enumerated the Actions cache ~122s BEFORE integration (windows-11-arm) finished; task hash 8059758544828235640 reached the shard only as -windows). No cycle: all four deps declare no needs: of their own, verified by reading every needs: line.
+- [Phase ?]: [Phase 10]: 10-03: the old needs: build (NOT test) argument is RESTATED and then replaced, not deleted -- !cancelled() is the mechanism that keeps a red test leg from skipping the mirror, and it is recorded as CITED (never reproduced here) with the bounded downside named: a SKIPPED mirror, never a wrong artifact. publish-verify has no !cancelled(), so the widening also makes it run on red-test pushes, changing which pushes sample OBS-05.
+- [Phase ?]: [Phase 10]: 10-03: the repo's FIRST needs: VALUE guard is superset-proof three ways -- four independent per-producer cases (a toMatch on a list is satisfied by any SUPERSET), an observed 3-of-4 revert split with build staying green, and anchoring at ^ {4}needs: (unanchored, build is satisfied by the job's own - run: npm run build step, making that case a tautology). forbidden: [] on the new drift row is deliberate: an absence check there is satisfied by deleting the whole comment.
 
 ### Pending Todos
 
@@ -325,8 +329,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T10:55:18.932Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-07-29T11:14:43.740Z
+Stopped at: Completed 10-03-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

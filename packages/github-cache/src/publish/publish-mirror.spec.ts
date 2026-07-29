@@ -1,7 +1,11 @@
 import * as core from '@actions/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Hash } from '../lib/cache-key.js';
-import { releaseAssetName } from '../lib/release-asset-name.js';
+import {
+  CACHE_OS_VALUES,
+  cachePlatform,
+  releaseAssetName,
+} from '../lib/release-asset-name.js';
 import { octokitFault } from '../test/octokit-fault.js';
 import {
   publishMirror,
@@ -35,8 +39,41 @@ vi.mock('@actions/core', () => ({
   setFailed: vi.fn(),
 }));
 
+// PARTIAL mock -- only `cachePlatform` is replaced, everything else is spread from the
+// real module (the idiom already shipped at action/index.spec.ts:84-88). Two exports
+// depend on that: `CACHE_OS_VALUES` stays the REAL single-sourced tuple, which is what
+// makes the it.each OS axis below honest rather than a restatement of the mock; and
+// `releaseAssetName` stays real, so the name assertions keep comparing the engine's
+// derivation against the one true helper.
+//
+// The mock's return value is set in beforeEach, not here: the file-level afterEach runs
+// vi.resetAllMocks(), which discards a factory-supplied implementation after the first
+// test.
+vi.mock('../lib/release-asset-name.js', async (orig) => {
+  const actual = await orig<typeof import('../lib/release-asset-name.js')>();
+
+  return { ...actual, cachePlatform: vi.fn() };
+});
+
 const HASH = 'abc123' as Hash;
 const SHARD_ID = 555;
+
+const cachePlatformMock = vi.mocked(cachePlatform);
+
+/**
+ * The publishing leg's OS for every case that does not drive its own OS axis, taken from
+ * the REAL CACHE_OS_VALUES tuple rather than hand-authored (LINT-02 / Phase 9 gap G2).
+ *
+ * Index 0 and not a literal, for a measurable reason: the `test` job is single-leg
+ * ubuntu, so an expectation of `'linux'` is indistinguishable from one derived from the
+ * running machine and is sampled at a rate of ZERO there. Index 0 is `windows`, so on that
+ * one job an engine reading the ambient platform instead of calling `cachePlatform()`
+ * reddens even these baseline assertions. That is a bonus, NOT the guarantee: on a Windows
+ * workstation the two coincide again. The clause that bites on EVERY machine is the
+ * it.each group below, which mocks all three OSes and so must differ from the ambient one.
+ */
+const PUBLISHING_OS = CACHE_OS_VALUES[0];
+const LABEL = `mirrored-by: ${PUBLISHING_OS}`;
 
 /**
  * A restore HIT whose bytes carry only the byteLength the engine reads before the size
@@ -65,6 +102,9 @@ function client(overrides: Partial<PublishClient> = {}): PublishClient {
 beforeEach(() => {
   vi.clearAllMocks();
   getMock.mockResolvedValue(hit());
+  // Restored per test because the afterEach below resets implementations, and because
+  // mockClear alone would not undo an OS an earlier it.each case set.
+  cachePlatformMock.mockReturnValue(PUBLISHING_OS);
 });
 
 afterEach(() => {
@@ -121,6 +161,7 @@ describe('publishMirror happy-path mirror (TEST-03)', () => {
       SHARD_ID,
       releaseAssetName(HASH),
       expect.anything(),
+      LABEL,
     );
   });
 
@@ -135,6 +176,59 @@ describe('publishMirror happy-path mirror (TEST-03)', () => {
     expect(name).toBe(releaseAssetName(HASH));
     expect(name).not.toBe(HASH);
     expect(name.startsWith(`${HASH}-`)).toBe(true);
+  });
+});
+
+describe('publishMirror mirrored-by label (OBS-03, D-09/D-10/D-11)', () => {
+  // The OS axis over the REAL CACHE_OS_VALUES tuple with `cachePlatform` MOCKED to each
+  // member -- UNFILTERED, unlike action/index.spec.ts's reader cases, because every OS is
+  // a legitimate publishing leg here. This is the clause that is machine-INDEPENDENT: the
+  // `test` job runs one ubuntu leg, so a hand-authored `'linux'` expectation would be
+  // sampled at a rate of ZERO on the only runner that executes it (Phase 9 gap G2). Adding
+  // an OS discriminator to the tuple adds a case here rather than leaving one unsampled.
+  it.each(CACHE_OS_VALUES)(
+    'stamps every upload with the %s publishing leg as part of the ONE upload argument array',
+    async (os) => {
+      cachePlatformMock.mockReturnValue(os);
+      const fake = client();
+
+      await publishMirror(fake);
+
+      // D-11: deep equality over the WHOLE recorded argument array, never a separate
+      // expect.stringContaining for the label. Phase 9 measured toEqual and
+      // toStrictEqual identical on all eight argument shapes at vitest 4.1.10, so the
+      // load-bearing choice is asserting the whole array -- a label checked in isolation
+      // would stay green against an argument that landed in the wrong position.
+      expect(vi.mocked(fake.uploadReleaseAsset).mock.calls).toEqual([
+        [
+          SHARD_ID,
+          releaseAssetName(HASH),
+          expect.anything(),
+          `mirrored-by: ${os}`,
+        ],
+      ]);
+    },
+  );
+
+  it('calls cachePlatform exactly ONCE per run (the hoist), stamping both uploads with the same label', async () => {
+    // MULTI-hash on purpose: this is the only case that distinguishes the hoist above the
+    // loop from a call per iteration, and a single-hash fixture cannot -- one hash calls
+    // cachePlatform once either way.
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+      ]),
+    });
+
+    await publishMirror(fake);
+
+    expect(cachePlatformMock).toHaveBeenCalledOnce();
+    // The upload COUNT is pinned as well, and that clause is load-bearing rather than
+    // decorative: called-once alone is satisfied by a run that uploaded nothing at all.
+    const calls = vi.mocked(fake.uploadReleaseAsset).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls.map((call) => call[3])).toEqual([LABEL, LABEL]);
   });
 });
 
@@ -215,6 +309,7 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
       SHARD_ID,
       releaseAssetName(HASH),
       expect.anything(),
+      LABEL,
     );
   });
 
@@ -238,6 +333,7 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
       SHARD_ID,
       releaseAssetName(HASH),
       expect.anything(),
+      LABEL,
     );
   });
 
@@ -398,6 +494,7 @@ describe('publishMirror ~2 GiB boundary fail-loud (ROBUST-02, D-12)', () => {
       SHARD_ID,
       releaseAssetName('bb22' as Hash),
       expect.anything(),
+      LABEL,
     );
     expect(core.error).toHaveBeenCalledOnce();
     // Still loud + red: the aggregate failed>0 check fires exactly once at the end.

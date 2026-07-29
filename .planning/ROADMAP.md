@@ -164,7 +164,6 @@ changes `hash_project_config` and invalidates the root-cause record).
 **Requirements**: PARITY-01, PARITY-02, PARITY-03, PARITY-04, PARITY-05, PARITY-06, PARITY-07, CORR-03, CORR-04.
 <!-- KEEP ON ONE LINE (see the note on Phase 10's Requirements line). -->
 
-
 **Success Criteria** (what must be TRUE):
 
   1. A recorded root-cause document names, node by node, every hash input that differed, is dated
@@ -256,7 +255,6 @@ version is rotated, so a rotation MISS is never confused with a parity MISS).
 
 **Requirements**: PARITY-08, VER-01, VER-02, VER-03, VER-04, VER-05, VER-06, VER-07, ROBUST-04, OBS-04, DOCS-08.
 <!-- KEEP ON ONE LINE (see the note on Phase 10's Requirements line). -->
-
 
 **Success Criteria** (what must be TRUE):
 
@@ -352,7 +350,6 @@ must be proven to CATCH the three CORR-05 violations before this phase removes t
 <!-- KEEP ON ONE LINE. gsd-tools parses `**Requirements**:` up to the first newline, so a wrapped
      line silently drops every ID on the continuation. Measured: Phase 8 lost CORR-03/CORR-04,
      Phase 9 lost OBS-04/DOCS-08, and this line lost all four TRUST-1x IDs until unwrapped. -->
-
 
 **Success Criteria** (what must be TRUE):
 

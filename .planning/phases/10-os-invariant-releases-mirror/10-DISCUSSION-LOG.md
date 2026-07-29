@@ -33,7 +33,7 @@ consumers of one prefix, not two aliases of one builder.
 | Option | Description | Selected |
 |--------|-------------|----------|
 | Alias to `cacheKeyFor` | One builder for both namespaces | |
-| Compose from `CACHE_KEY_PREFIX` (recommended) | Import the prefix, compose locally, comment-lock the deliberate separation | ✓ |
+| Compose from `CACHE_KEY_PREFIX` (recommended) | Import the prefix, compose locally, comment-lock the deliberate separation | [x] |
 | Separate literal | Independent template | |
 
 `[auto] Asset-name single source -- Q: "How is nx-cache-<hash> derived?" -> Selected: "Compose from CACHE_KEY_PREFIX" (recommended default)`
@@ -66,7 +66,7 @@ publisher never produced.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Record as accepted dead weight (recommended) | Write the measured count + the per-shard bounding argument; no code change | ✓ |
+| Record as accepted dead weight (recommended) | Write the measured count + the per-shard bounding argument; no code change | [x] |
 | Prune once by hand | Maintainer-run one-off | |
 | Third accept branch | Filter widening | |
 
@@ -95,7 +95,7 @@ the spec mocking that module** -- both halves follow shipped precedent.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Fourth positional `label` + mocked `cachePlatform` (recommended) | Matches `action/index.spec.ts`'s existing harness | ✓ |
+| Fourth positional `label` + mocked `cachePlatform` (recommended) | Matches `action/index.spec.ts`'s existing harness | [x] |
 | Options object | Extensible signature | |
 | Inject via `PublishOptions` | New injection seam | |
 
@@ -131,7 +131,7 @@ OS component indexed out of `CACHE_OS_VALUES`. Verified this session that a new 
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| New `operation` + one hex-letter helper (recommended) | `mirror-seed`; both seed and read-back call the same derivation | ✓ |
+| New `operation` + one hex-letter helper (recommended) | `mirror-seed`; both seed and read-back call the same derivation | [x] |
 | Re-purpose `operation: seed` | Breaks VER-06 | |
 | Workflow-side expression | Mapping in two languages | |
 | Decimal-digit suffix | Probabilistic collision argument | |
@@ -164,7 +164,7 @@ Recording that mechanism is what makes the widening safe to read.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Widen + rewrite the comment (recommended) | Names `!cancelled()` as the mechanism preserving the original intent | ✓ |
+| Widen + rewrite the comment (recommended) | Names `!cancelled()` as the mechanism preserving the original intent | [x] |
 | Keep `needs: build` | Fails XOS-07 | |
 | Widen only | Stale contradictory prose | |
 
@@ -193,7 +193,7 @@ Windows.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| New co-located integration spec (recommended) | Better cohesion AND runs on both OS legs | ✓ |
+| New co-located integration spec (recommended) | Better cohesion AND runs on both OS legs | [x] |
 | `public-server.integration.spec.ts` | The roadmap's literal recommendation | |
 | Delete | Loses live coverage | |
 
@@ -223,7 +223,7 @@ upload, and it only appears once XOS-04 adds a second producer.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Auditor-authored from corrected INPUT (recommended) | `gsd-security-auditor` reaches the verdict; orchestrator only routes and commits | ✓ |
+| Auditor-authored from corrected INPUT (recommended) | `gsd-security-auditor` reaches the verdict; orchestrator only routes and commits | [x] |
 | Orchestrator-authored inline | Self-certification | |
 | Defer to Phase 12 | Misses a Phase 10 requirement | |
 
@@ -254,7 +254,7 @@ HIGH-impact item resolved by taking the dominant option rather than by picking a
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Capture fresh AND cite (recommended) | Fresh capture is the baseline of record; 2026-07-26 is the corroborating prior | ✓ |
+| Capture fresh AND cite (recommended) | Fresh capture is the baseline of record; 2026-07-26 is the corroborating prior | [x] |
 | Cite only | Straddles Phase 9's rotation | |
 | Capture only | Discards a qualifying record | |
 

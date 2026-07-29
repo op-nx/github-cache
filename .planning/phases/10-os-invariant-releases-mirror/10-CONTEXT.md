@@ -52,7 +52,7 @@ signalling (out of scope -- zero adopters).
 
 ### BLOCKING PRE-FLIGHT: what the tooling and the ROADMAP get wrong for this phase
 
-- **D-00:** `gsd-tools query init.plan-phase 10` now returns all **TWELVE** IDs -- the
+- **D-00 [informational]:** `gsd-tools query init.plan-phase 10` now returns all **TWELVE** IDs -- the
   ROADMAP unwrap fix at `ff21b5f` works and the Phase 8 / Phase 9 truncation defect does
   NOT recur here. MEASURED this session. Two residual traps:
 
@@ -69,10 +69,19 @@ signalling (out of scope -- zero adopters).
   the researcher, the planner, the plan-checker, the coverage gate, the security auditor
   and the verifier. Surfaced, NOT silently fixed in ROADMAP.md.
 
-- **D-01:** Audit coverage against **REQUIREMENTS.md's own words, never ROADMAP.md's table
+- **D-01 [informational]:** Audit coverage against **REQUIREMENTS.md's own words, never ROADMAP.md's table
   or paraphrase.** Phase 8 caught ROADMAP's stale PARITY numbering exactly this way and
   Phase 9 caught three missing traceability rows; this phase's ROADMAP table is missing one
   requirement outright. Where the two disagree on substance, REQUIREMENTS.md wins.
+
+> **Why D-00 and D-01 are tagged `[informational]` rather than cited in a plan.** Both are
+> ORCHESTRATOR pre-flight instructions about artifact defects, not implementable behaviour -- an
+> executor cannot "build" either one. Both were ACTED ON at plan time rather than deferred: the
+> authoritative twelve-ID list was passed explicitly to the researcher, the planner, the
+> plan-checker and the coverage gate, and every coverage audit in this phase (the plan-checker's
+> included) ran against REQUIREMENTS.md's words rather than ROADMAP's table. They stay recorded
+> because the ROADMAP defect they name is still live and Phase 11 will meet it. Tagged per the
+> decision-coverage gate's own documented resolution, not to dodge the gate.
 
 - **D-02:** Two ROADMAP success-criteria claims are **already partly satisfied by Phase 9**
   and must not be read as gaps. (a) SC6 says the "~5 assets per push" estimate in `ci.yml`

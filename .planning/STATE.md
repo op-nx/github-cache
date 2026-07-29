@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 10
 current_phase_name: OS-Invariant Releases Mirror
 status: executing
-last_updated: "2026-07-29T12:15:58.386Z"
+last_updated: "2026-07-29T12:33:54.082Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 23
+  completed_plans: 24
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 10 (OS-Invariant Releases Mirror) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
 Last activity: 2026-07-29 — Phase 10 execution started
@@ -106,6 +106,7 @@ Last activity: 2026-07-29 — Phase 10 execution started
 | Phase 10 P03 | 15min | 3 tasks tasks | 3 files files |
 | Phase 10 P04 | 16min | 1 tasks | 6 files |
 | Phase 10 P05 | 62min | 3 tasks | 5 files |
+| Phase 10 P06 | ~35m | 1 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -208,6 +209,8 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase ?]: [Phase 10]: 10-04: mirror seed encoding is feed<CACHE_OS_VALUES index><run_id> -- a hex-word marker following ci.yml consumer-smoke's shipped cafe<run_id> precedent with a DIFFERENT word, so the two families stay distinguishable in a shard listing
 - [Phase ?]: [Phase 10]: 10-04: mirrorSeedHash lives in its own lib/mirror-seed.ts leaf, NOT folded into release-asset-name.ts -- unreachable from serve(), so the bundle delta is ZERO and ROBUST-04 stays whole on plan 10-07
 - [Phase ?]: [Phase 10]: 10-04: OBS-05 NOT marked complete -- only its first half (the mechanism) landed; ci.yml still runs operation: seed and plan 10-05 flips the workflow and read-back.ts together
+- [Phase ?]: 10-06: the RED half of the rename pair lands as its OWN ADD-only commit, so 10-07's five converging same-commit rules bind the smallest possible unrecoverable window
+- [Phase ?]: 10-06: a grep-verifiable absence criterion must never spell its forbidden token, even in prose -- the new integration spec's header names the contortion and why
 
 ### Pending Todos
 
@@ -334,8 +337,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T12:15:37.960Z
-Stopped at: Completed 10-03-PLAN.md
+Last session: 2026-07-29T12:33:54.068Z
+Stopped at: Completed 10-06-PLAN.md (RED landed; test is RED by contract until 10-07)
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

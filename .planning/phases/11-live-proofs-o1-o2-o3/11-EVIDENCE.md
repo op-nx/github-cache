@@ -28,6 +28,7 @@ O4 is RESERVED for Phase 12 and must be neither filled nor deleted here.
 | **O2 (XOS-02)** -- the same run HITs `integration` from a Windows-CI-produced artifact | **PROVEN.** 1 occurrence, pre-registered count MET, and the restored artifact carries a Windows runner path |
 | Structured corroborator -- `run.json` `cacheStatus` == `remote-cache-hit` | **4 of 4 targets**, exactly the pre-registered set `{build, typecheck, test, integration}` |
 | Producer fingerprint, per hit | `test` -> **LINUX**, `integration` -> **WINDOWS**. `build`/`typecheck` UNAVAILABLE with a stated reason (see the table) |
+| Producer ATTRIBUTION, per hit hash (TEST-08's own mandated capture) | **COMPLETE, 4 of 4.** `build`/`typecheck`/`test` -> **LINUX**, `integration` -> **WINDOWS**. The two hashes with no fingerprint are carried by the job-window cross-reference, which resolves a UNIQUE runner OS for all four |
 | **O3 (XOS-03, TEST-09)** | **PENDING** -- plan 11-07 |
 | **O4 (XOS-04, XOS-05)** | **RESERVED** -- Phase 12 |
 
@@ -459,6 +460,259 @@ means, of which this record supplies two directly:
 
 What NOTHING answers, and this is the honest shape of the retraction: the mirror carries no field
 that names the PRODUCING leg. That claim is retracted rather than relocated.
+
+**The retraction's replacement is no longer only structural.** The attribution section below turns
+D-14 row 3 into a MEASUREMENT on this record's own four hashes, and it separates publisher from
+producer to the second: for `integration` the two events are **55.16 seconds and two different
+runner OS labels apart**. See `### The publisher-versus-producer separation, measured` below.
+
+---
+
+## TEST-08 producer attribution, captured at proof time (D-14, D-15)
+
+TEST-08's own mandated capture, in its own words: per hit hash, the Actions-cache entry list and the
+shard asset list with `created_at`, cross-referenced against job windows, capturing `created_at` and
+the OBS-03 label PER ASSET rather than just the asset list. Taken now because enabling O4
+permanently destroys the ability to re-derive it (see the O4 section), and because plans 11-05 and
+11-06 rotate three of these four hashes.
+
+### How this was read
+
+| Item | Value |
+|---|---|
+| Capture time (UTC) | `2026-07-29T22:04:12Z` -- about 20 minutes after the O1/O2 measurement run ended at `21:44:31.930Z` |
+| Repository | `op-nx/github-cache` |
+| `gh` | 2.86.0 (2026-01-21) |
+| Calls | read-only, GET-shaped only. Nothing created, updated or deleted: no release, no asset, no issue, no pull request, no workflow dispatch |
+| Extraction | every value pulled by FIELD NAME through `gh api -q`, then matched in-process. No raw REST payload is pasted -- payload fields carry uploader identity, node ids and signed URLs, and this is a public repository (T-11-03) |
+| Order within this capture | the Actions-cache half FIRST, because it is the more perishable of the two. That ordering is justified by a measurement, not by caution -- see the clock subsection at the end |
+| Nx invocations | **zero.** Nothing here touches Nx, so `.nx/cache/run.json` is not perturbed and the O1/O2 values above remain the ones the measurement wrote |
+
+### Pagination, re-measured in this session rather than inherited (T-11-12)
+
+Plan 11-02 MEASURED this trap on the shard endpoint and this record cites that measurement above.
+Both endpoints were nonetheless re-read here in both forms, because this capture's own ABSENT/PRESENT
+verdicts must not rest on a reader artifact from a different session.
+
+| Endpoint | Paginated | Single page | `nx-cache-` names on the single page | What a single page would have reported for the four hit hashes |
+|---|---|---|---|---|
+| `GET /repos/{owner}/{repo}/actions/caches` | **142** entries | **30** | 30 of 30 (all four hashes happen to be on it) | PRESENT -- by luck of ordering, not by design |
+| `GET /repos/{owner}/{repo}/releases/354838660/assets` | **141** assets | **30** | **0** | **ABSENT, all four** -- a false eviction finding |
+
+Two facts worth separating, because they fail differently:
+
+1. The Actions-cache endpoint's own `total_count` field reads **142**, and the paginated read returned
+   exactly 142 rows -- so the count is self-consistent and the guard is verifiable from inside the
+   response.
+2. `gh api` without `--paginate` returns **30**, not 100. The per-page MAXIMUM is 100 but the
+   DEFAULT is 30, so "the repository holds fewer than 100 entries" would not have been a safe
+   substitute for paginating even if it were true. It is not true: 142 > 100 as well.
+
+On the shard the single-page read carries **zero** `nx-cache-` names, so an unpaginated reader would
+have reported every one of these four hashes ABSENT. Every read below used `--paginate`.
+
+### Exact-key equality, and the prefix trap it avoids
+
+`?key=` is a PREFIX match, so `total_count > 0` is not an existence test. Rather than rely on the
+filter at all, the full lists above were pulled and matched in-process for **exact string equality**
+on `.key` / `.name`. The trap was re-measured on this session's own data:
+
+| Probe on the 142 paginated entries | Matches |
+|---|---|
+| keys equal to `nx-cache-8137422034373911537` (exact) | **2** (two refs -- see below) |
+| keys STARTING WITH `nx-cache-813742203437391153` (the full key minus its last character) | **2** -- a shorter hash that is a prefix would have passed a count test |
+| keys STARTING WITH `nx-cache-1` (short prefix) | **40** |
+| keys equal to the deliberately bogus `nx-cache-0000000000000000000` | **0** -- so the matcher discriminates rather than matching everything |
+
+The bogus-key control is included for the same reason 11-02 included one: a matcher that matched
+everything would satisfy every PRESENT assertion simultaneously.
+
+### List 1 -- Actions-cache entries, by exact key (142 entries read, 136 `nx-cache-` prefixed)
+
+Exact-key equality returns **TWO** entries per hash, on two different refs, from two different runs.
+Both rows are recorded rather than one being silently chosen.
+
+| Target | Key | `ref` | `created_at` | `last_accessed_at` | Size (bytes) |
+|---|---|---|---|---|---|
+| `build` | `nx-cache-17269409342684722256` | `refs/heads/main` | **2026-07-29T16:40:22.677666000Z** | 2026-07-29T17:54:34.886217000Z | 127542 |
+| `build` | same key | `refs/pull/10/merge` | 2026-07-29T16:32:41.378341000Z | 2026-07-29T16:32:42.612618000Z | 127752 |
+| `typecheck` | `nx-cache-122473981802582055` | `refs/heads/main` | **2026-07-29T16:40:25.516159000Z** | 2026-07-29T17:54:35.339630000Z | 93260 |
+| `typecheck` | same key | `refs/pull/10/merge` | 2026-07-29T16:32:44.000667000Z | 2026-07-29T16:32:44.000667000Z | 93494 |
+| `test` | `nx-cache-11681410932071446589` | `refs/heads/main` | **2026-07-29T16:40:32.428633000Z** | 2026-07-29T17:54:31.241303000Z | 1238 |
+| `test` | same key | `refs/pull/10/merge` | 2026-07-29T16:32:48.972927000Z | 2026-07-29T16:32:48.972927000Z | 1250 |
+| `integration` | `nx-cache-8137422034373911537` | `refs/heads/main` | **2026-07-29T16:43:31.841858000Z** | 2026-07-29T17:57:11.636089000Z | 695 |
+| `integration` | same key | `refs/pull/10/merge` | 2026-07-29T16:34:51.553240000Z | 2026-07-29T16:34:51.553240000Z | 698 |
+
+**No hash read ABSENT.** Every one of the four is still in the Actions cache at capture time. Had one
+been evicted it would be recorded as the literal ABSENT here, because an eviction is a fact about the
+clock and not a gap in the proof.
+
+**The `refs/heads/main` row is the one the mirror was published from, and that is a structural fact
+rather than a choice.** `publish` is gated on `github.event_name == 'push'` and `on.push.branches` is
+`[main]` only, so the `refs/pull/10/merge` entries were never visible to any publish leg. The
+bolded `created_at` values above are therefore the ones cross-referenced below. The PR-ref rows are
+recorded as an independent second observation of the same four hashes at the same OS split -- and
+RESEARCH.md's `## U-01` section (1) already measured the window containment across THREE runs
+including `30471172051`, so that is cited rather than re-derived here.
+
+Sizes differ by 200-250 bytes between the two refs for the same hash. That is expected -- the
+archive wraps the same task output with per-run metadata -- and it is recorded rather than smoothed
+over, since a reader comparing the two rows will notice it.
+
+### List 2 -- month-shard release assets, by exact name (141 assets read, 16 `nx-cache-` names)
+
+Shard `cache-mirror-202607`, release id `354838660`.
+
+| Target | Asset name | `created_at` | `label` (OBS-03) |
+|---|---|---|---|
+| `build` | `nx-cache-17269409342684722256` | 2026-07-29T16:44:31Z | `mirrored-by: linux` |
+| `typecheck` | `nx-cache-122473981802582055` | 2026-07-29T16:44:32Z | `mirrored-by: linux` |
+| `test` | `nx-cache-11681410932071446589` | 2026-07-29T16:44:30Z | `mirrored-by: linux` |
+| `integration` | `nx-cache-8137422034373911537` | 2026-07-29T16:44:27Z | `mirrored-by: linux` |
+
+Exactly one asset each -- no duplicate under a second name. Label distribution across all 141:
+`mirrored-by: linux` 15, `mirrored-by: windows` 1, no label 125. Unchanged from Phase 10's post-run
+census, so nothing has been mirrored into this shard since.
+
+**The label is a PUBLISHER stamp. It is not read as a producer anywhere in this record.**
+
+### List 3 -- the bounding job windows, from run `30471772954`
+
+The producing run: event `push`, branch `main`, head `180c3d3`, 22 job legs, conclusion `success`.
+All 22 legs were read; the relevant windows are below.
+
+The window that BOUNDS a cache write is the leg's **loopback sidecar** window, not the target-run
+step: no cache entry can be created while the sidecar is down, because the sidecar IS the
+`NX_SELF_HOSTED_REMOTE_CACHE_SERVER` the Nx client posts to. Three ubuntu legs in this run
+(`dogfood-seed`, `pack-check`, `hash-parity`) run `npm run build` and start NO sidecar, so they
+appear as target-run candidates and are correctly excluded as writers.
+
+**A recorded artefact so a transcriber does not misread it: the sidecar step's `conclusion` is
+`cancelled` on EVERY leg, in every run, because the `Cancel` step kills it -- while the JOB
+conclusion is `success`.** That is the designed shape, not a failure.
+
+Comparison mechanics: cache `created_at` is sub-second, job and step timestamps are whole seconds, so
+the comparison is done in epoch seconds with the cache value's fractional part FLOORED. This is
+RESEARCH.md's measured method, reused rather than reinvented.
+
+| Target | Entry `created_at` (main ref) | Sidecar-alive windows containing it | Leg(s) | Runner OS label(s) | Verdict from windows alone |
+|---|---|---|---|---|---|
+| `build` | 16:40:22.677666Z | **1** | `typecheck` sidecar 16:40:17Z-16:40:25Z | `ubuntu-24.04-arm` | unique OS -> **LINUX** |
+| `typecheck` | 16:40:25.516159Z | **3** | `typecheck` 16:40:17Z-16:40:25Z, `build` 16:40:25Z-16:40:29Z, `test` 16:40:24Z-16:40:32Z | all three `ubuntu-24.04-arm` | unique OS -> **LINUX** (NOT a unique job) |
+| `test` | 16:40:32.428633Z | **1** | `test` sidecar 16:40:24Z-16:40:32Z | `ubuntu-24.04-arm` | unique OS -> **LINUX** |
+| `integration` | 16:43:31.841858Z | **1** | `integration (windows-11-arm)` sidecar 16:43:22Z-16:43:42Z | `windows-11-arm` | unique OS -> **WINDOWS** |
+
+Three findings in that table are worth stating rather than leaving for a reader to notice:
+
+1. **The `build` hash was written by the `typecheck` job, not by the `build` job.** The `build` job's
+   own sidecar came up at 16:40:25Z, three seconds AFTER the entry already existed. This is the graph
+   premise's own observation appearing as live metadata: the `typecheck` job's resolved graph
+   includes `build` via an inferred `dependsOn: ["build", "^typecheck"]`, which is exactly why plan
+   11-01 chose `typecheck` as its negative control. The `build` job then got a remote HIT off the
+   `typecheck` job's write.
+2. **`typecheck`'s entry has THREE candidate windows, and the means still resolves it -- to an OS,
+   not to a job.** All three candidates are `ubuntu-24.04-arm`, so the producing OS is determined
+   regardless of which leg won the write. Stated explicitly because "unique window" and "unique OS"
+   are different claims and only the second is being made.
+3. **`integration`'s sole candidate is the Windows leg**, and no ubuntu window contains its
+   timestamp. The ubuntu `integration` leg's sidecar closed at 16:40:21Z, 190 seconds earlier.
+
+### The publisher-versus-producer separation, measured
+
+This is D-14's retraction restated as arithmetic on this record's own load-bearing hash, so the
+correction ships with something a reader can use instead of the claim it removes.
+
+`integration`, hash `8137422034373911537`:
+
+| Event | When | Where | OS |
+|---|---|---|---|
+| PRODUCED -- the Actions-cache entry was created | 2026-07-29T16:43:31.841858Z | inside `integration (windows-11-arm)`'s sidecar window 16:43:22Z-16:43:42Z, the SOLE candidate | **windows-11-arm** |
+| PUBLISHED -- the shard asset was created | 2026-07-29T16:44:27Z | inside `publish (ubuntu-24.04-arm)`'s mirror step 16:44:24Z-16:44:47Z | **ubuntu-24.04-arm** |
+| The label the mirror stored | `mirrored-by: linux` | -- | records the PUBLISHER |
+
+**Separation: 55.16 seconds, and two different runner OS labels.** All four shard assets were
+created inside that one ubuntu publish step (16:44:27Z to 16:44:32Z), which is the mechanical reason
+all four carry `mirrored-by: linux` -- including the one whose bytes a Windows runner produced. The
+label is a faithful record of the publishing leg and a wrong answer to the producing question.
+
+### The four means, and which one carried each verdict
+
+Every row names the means that carried it AND that means' limit. Where a means does not apply, that
+is stated with its limit rather than left blank.
+
+| Target | Hash | Entry `created_at` | Asset `created_at` | `mirrored-by` | Bounding job window | `terminalOutput` fingerprint | Producer concluded | Carried by |
+|---|---|---|---|---|---|---|---|---|
+| `build` | `17269409342684722256` | 16:40:22.677666Z | 16:44:31Z | `mirrored-by: linux` (publisher) | `typecheck` leg [ubuntu-24.04-arm] sidecar 16:40:17Z-16:40:25Z | **UNAVAILABLE** -- 44 bytes, `tsc` prints no absolute path | **LINUX** | **M3 primary** (sole window, unique OS) + **M1 corroborating**. M2 unavailable. M4 does not apply |
+| `typecheck` | `122473981802582055` | 16:40:25.516159Z | 16:44:32Z | `mirrored-by: linux` (publisher) | three ubuntu sidecar windows, 16:40:17Z-16:40:32Z, all `ubuntu-24.04-arm` | **UNAVAILABLE** -- 62 bytes, same cause | **LINUX** | **M3 primary** (three windows, one OS) + **M1 corroborating**. M2 unavailable. M4 does not apply |
+| `test` | `11681410932071446589` | 16:40:32.428633Z | 16:44:30Z | `mirrored-by: linux` (publisher) | `test` leg [ubuntu-24.04-arm] sidecar 16:40:24Z-16:40:32Z | `/home/runner/work/...` -> **LINUX** | **LINUX** | **M2 primary** (byte-level, in-artifact) + **M3** (sole window, own leg) + **M1**. M4 does not apply. Three independent means agree |
+| `integration` | `8137422034373911537` | 16:43:31.841858Z | 16:44:27Z | `mirrored-by: linux` (publisher -- and WRONG about production) | `integration (windows-11-arm)` sidecar 16:43:22Z-16:43:42Z | `C:/a/github-cache/...` -> **WINDOWS** | **WINDOWS** | **M2 primary** + **M3** (sole window, windows-only) + **M4** (cited from `10-EVIDENCE-LIVE-CI.md`). M1 does not apply |
+
+The four means and their limits, keyed as used above:
+
+| Key | Means | What it establishes | Its LIMIT |
+|---|---|---|---|
+| **M1** | The graph premise from plan 11-01 | Windows CI resolves no `build`, `typecheck` or `test` task, so any such hash in the store is Linux-produced | Structural, and valid only because it was ASSERTED mechanically rather than assumed. It is a property of the CURRENT resolved graph: `integration`'s `dependsOn: ["^build"]` resolves to zero extra tasks only because this is a single-project workspace, so a second project means re-asserting it. **It says nothing about `integration`**, which the Windows leg DOES resolve -- that is why M1 is marked "does not apply" on the `integration` row |
+| **M2** | The replayed artifact's `terminalOutput` runner path | A per-hit, byte-level producer fingerprint INSIDE the served bytes | Readable only AFTER a HIT, which is why 11-03 captured it and this plan does not re-take it. And it does not exist at all when the target's tool prints no absolute path -- `tsc` prints none on success, which is why `build` and `typecheck` are UNAVAILABLE rather than unmeasured |
+| **M3** | The Actions-cache entry list plus the shard asset list with `created_at` and the OBS-03 label, cross-referenced against job windows | The requirement's own mandated capture. Bounds WHEN each entry could have been written and on WHICH labelled runner | **Timing, not identity.** It resolves the producing OS when the candidate windows share one OS label, and it does NOT resolve which JOB wrote the entry (see `typecheck`, three candidates). It also depends on the run's job records remaining readable -- GitHub's run retention is finite, so this means decays on its own clock, independently of the cache and mirror clocks |
+| **M4** | Recompute the hash on a known platform and match | Established the producer live in `10-EVIDENCE-LIVE-CI.md` | Works only for OS-SENSITIVE targets. `integration` carries the `{"runtime":"node -p process.platform"}` discriminator so a `win32` box and a `linux` box cannot compute the same value; `build`, `typecheck` and `test` are OS-invariant, so a recomputation matches on EVERY platform and discriminates nothing. **It serves O2 and never O1** |
+
+**`mirrored-by` is not a means and cannot become one.** It appears in the table only as a publisher
+label, in a column labelled as such.
+
+### An independent corroborator the capture turned up: `last_accessed_at`
+
+The four main-ref entries were last accessed **17:54:31Z to 17:57:11Z**. The O1/O2 measurement ran
+**21:44:28Z to 21:44:31Z**, nearly four hours later, and `last_accessed_at` records the LATEST
+access -- so had that run touched the Actions cache, these fields would read `21:44`. They do not.
+
+**The local read provably never reached the Actions cache**, which independently corroborates the O1
+soundness probe's backend finding (`isWriteTrusted(...).trusted === false` -> the off-CI branch into
+`createReleasesReadBackend`). That conclusion was previously established by reading the built
+`dist/lib/trust.js`; it is now also visible in live server-side metadata the local session could not
+have influenced. The 17:5x accesses belong to the later CI run, not to this workstation.
+
+### The clock, measured -- and why the Actions-cache half went first
+
+The plan asserts the Actions-cache half is the more perishable of the two. That is now a number.
+
+| Half | Governing clock | Basis | Approximate close |
+|---|---|---|---|
+| Actions-cache entries | eviction after a period of no ACCESS | earliest `last_accessed_at` of the four is 2026-07-29T17:54:31Z; GitHub's documented no-access eviction window is 7 days (a documented figure, NOT measured here) | around **2026-08-05** |
+| Releases-mirror shard | pruned past `DEFAULT_MAX_AGE_DAYS` (30) on CREATION time, daily at 03:17 UTC | assets created 2026-07-29T16:44Z (D-03) | around **2026-08-28** |
+
+The Actions-cache half closes roughly **23 days earlier**, so taking it first was load-bearing rather
+than tidy. Two honest qualifications: the 7-day figure is GitHub's documented policy rather than
+something this session measured, and any future CI run that restores these keys pushes
+`last_accessed_at` forward and defers the eviction. Neither changes the ordering.
+
+### D-15 -- the inherited Phase 9 snapshot, CITED and not spent
+
+`09-EVIDENCE.md`'s `## Producer-attribution snapshot (D-34)`, captured **2026-07-28T20:30:55Z** at
+commit `72eeca3`, holds the pre-Phase-9 window: **106** shard assets in `cache-mirror-202607` (every
+one with an EMPTY `label`, because OBS-03 had not landed) plus the repository Actions-cache entry
+list of that moment.
+
+**Phase 11's capture above is the SECOND half of a two-part record; Phase 9's is the first.** The two
+halves cover different windows and neither substitutes for the other: before the merge the asset
+name's OS suffix still WAS producer attribution, and from the first post-merge push it stopped being
+one.
+
+Its contents are deliberately NOT re-enumerated here, it was NOT re-run, and the one-shot observation
+it preserves is NOT consumed (D-15). Its own scope note records it as evidence PRESERVATION,
+explicitly not a proof, and forbids the next step being the proof -- this section is that next step,
+and it is a separate capture at a separate time against a separate population (141 assets, 16 of them
+new-form and labelled, versus 106 unlabelled).
+
+### What this attribution capture does NOT establish
+
+- **Which JOB wrote a given entry**, where more than one same-OS window brackets it. `typecheck` has
+  three candidates. The OS is determined; the leg is not. M3's limit, stated in place.
+- **Anything about the producing leg from mirror metadata alone.** Retracted, not relocated.
+- **A per-hit fingerprint for `build` or `typecheck`.** `tsc` prints no absolute path. M3 and M1
+  carry those two rows, which is precisely why the four-means scheme exists.
+- **That the shard asset's bytes are byte-identical to the Actions-cache entry's.** Not compared
+  here; the O1/O2 halves establish that Nx accepted and replayed the mirror's bytes, which is the
+  question that matters and a different one.
 
 ---
 

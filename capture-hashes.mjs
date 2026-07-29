@@ -78,6 +78,31 @@ const TARGETS = ['build', 'typecheck', 'test', 'integration', 'lint'];
 const INSTALL_MODES = ['ci', 'install'];
 
 /**
+ * The targets TEST-08's premise asserts are ABSENT from the Windows CI leg's
+ * RESOLVED task graph. That absence is what licenses "any `build`, `typecheck`
+ * or `test` hash in the store is Linux-produced" (D-12; D-14's attribution table
+ * row 1, the only structural rather than observational means).
+ */
+const FORBIDDEN_TARGETS = ['build', 'typecheck', 'test'];
+
+/**
+ * D-13's mandatory negative control, and it is `typecheck` rather than `test`
+ * DELIBERATELY. `test`'s `dependsOn` is `^build` -- DEPENDENCIES' build, of which
+ * this single-project workspace has none -- so it resolves ONE task, clearing
+ * bare vacuity without proving the resolver expands `dependsOn` at all.
+ * `typecheck` carries an INFERRED `dependsOn: ["build", "^typecheck"]`
+ * (`@nx/js/dist/src/plugins/typescript/plugin.js`, whose build branch fires
+ * because `nx.json` supplies `plugins[].options.build`), so it resolves TWO
+ * tasks, one of them a member of `FORBIDDEN_TARGETS`. That intersection is the
+ * whole reason the absence assertion over the `integration` set means anything.
+ *
+ * Same lesson as `nx-target-inputs.spec.ts`'s two non-vacuity controls, whose
+ * comments record that the discriminator has to be CHOSEN per target rather than
+ * copied from a sibling.
+ */
+const CONTROL_TARGET = 'typecheck';
+
+/**
  * The Nx project NAME, DERIVED not guessed (RESEARCH Pattern 2, trap 1).
  * Hardcoding the directory name produces a `TypeError` deep inside Nx's
  * `resolveConfiguration`; hardcoding the scoped name works but drifts silently
@@ -107,7 +132,12 @@ const NX_VERSION = JSON.parse(
  * ponytail: three flags, no arg library.
  */
 function parseArgs(argv) {
-  const parsed = { installMode: undefined, out: undefined, diff: undefined };
+  const parsed = {
+    installMode: undefined,
+    out: undefined,
+    diff: undefined,
+    assertGraphPremise: undefined,
+  };
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -115,6 +145,12 @@ function parseArgs(argv) {
     if (flag === '--install-mode') {
       parsed.installMode = argv[index + 1];
       index += 1;
+      continue;
+    }
+
+    // Consumes NO following argument -- the mode's only companion is `--out`.
+    if (flag === '--assert-graph-premise') {
+      parsed.assertGraphPremise = true;
       continue;
     }
 
@@ -133,7 +169,8 @@ function parseArgs(argv) {
     throw new Error(
       `capture-hashes: unrecognised argument \`${flag}\`. Usage:\n` +
         '  node capture-hashes.mjs --install-mode <ci|install> [--out <path>]\n' +
-        '  node capture-hashes.mjs --diff <recordA.json> <recordB.json>',
+        '  node capture-hashes.mjs --diff <recordA.json> <recordB.json>\n' +
+        '  node capture-hashes.mjs --assert-graph-premise [--out <path>]',
     );
   }
 
@@ -390,6 +427,190 @@ async function capture(args) {
   process.stdout.write(serialised);
 }
 
+/**
+ * The RESOLVED task-id set for a `run-many` over `targets`, sorted. This is the
+ * SAME call `captureTargets` makes; the new mode just emits the value that
+ * function only ever uses on its throw path. The second argument MUST stay `{}`
+ * for the measured reason recorded at that call site.
+ */
+function resolvedTaskIds(projectGraph, targets) {
+  const taskGraph = createTaskGraph(
+    projectGraph,
+    {},
+    [PROJECT],
+    targets,
+    undefined,
+    {},
+  );
+
+  return Object.keys(taskGraph.tasks).sort();
+}
+
+/**
+ * The target segment of a task id: everything after the LAST colon. Splitting on
+ * the last colon rather than substring-matching the id is load-bearing -- PROJECT
+ * is SCOPED (`@op-nx/github-cache`), so an id already carries structure, and a
+ * future `@op-nx/github-cache:build-deps` would false-positive an
+ * `id.includes('build')`.
+ */
+function targetSegment(taskId) {
+  return taskId.slice(taskId.lastIndexOf(':') + 1);
+}
+
+/**
+ * TEST-08's mechanical premise assertion (D-12) with D-13's mandatory
+ * non-vacuity control. THE CONTRACT, written down before the implementation,
+ * because these six clauses ARE the mode:
+ *
+ *   1. the `integration` set is NON-EMPTY. An empty set satisfies every absence
+ *      assertion simultaneously -- Phase 7's `filterUsingGlobPatterns` lesson
+ *      recurring, and the exact class of silent false pass D-13 exists to stop;
+ *   2. no member of that set has a target segment in `FORBIDDEN_TARGETS`. This
+ *      is the premise itself;
+ *   3. the control set holds EXACTLY two members. The COUNT is asserted, not
+ *      just the membership: it is a property of the RESOLVED graph, so an Nx
+ *      upgrade that changes the inferred `dependsOn` must fail loud instead of
+ *      quietly weakening the control;
+ *   4. those two members are `<PROJECT>:build` and `<PROJECT>:<CONTROL_TARGET>`;
+ *   5. the control set INTERSECTS `FORBIDDEN_TARGETS`. This is the clause that
+ *      makes assertion 2 meaningful rather than vacuous;
+ *   6. the control set DIFFERS from the `integration` set. A resolver returning
+ *      the same thing for every input fails here.
+ *
+ * Every failure ENUMERATES both observed sets, mirroring `captureTargets`'s
+ * missing-task throw. All six THROW; none warns. TEST-08 requires the assertion
+ * OUTPUT captured as evidence, so the verdict lands in the `--out`/stdout JSON
+ * rather than only in the stderr summary line.
+ */
+async function assertGraphPremise(args) {
+  const commit = git('rev-parse', 'HEAD').trim();
+  const projectGraph = await createProjectGraphAsync({ exitOnError: false });
+
+  // The Windows CI leg's ACTUAL command is `npm run integration`, i.e.
+  // `nx run-many -t integration`. `run-many` over every project in a
+  // single-project workspace is `[PROJECT]`, which is what `resolvedTaskIds`
+  // passes -- so this resolves the command the leg really runs, not a proxy.
+  const premiseTargets = ['integration'];
+  const controlTargets = [CONTROL_TARGET];
+  const premiseCommand = `nx run-many -t ${premiseTargets.join(' ')}`;
+  const controlCommand = `nx run-many -t ${controlTargets.join(' ')}`;
+  const premiseIds = resolvedTaskIds(projectGraph, premiseTargets);
+  const controlIds = resolvedTaskIds(projectGraph, controlTargets);
+
+  // Built once and appended to every throw below, so no failure path can forget
+  // to say what was actually observed.
+  const observed =
+    `Observed \`${premiseCommand}\` set (${premiseIds.length}): ` +
+    `${premiseIds.join(', ') || '<empty>'}. ` +
+    `Observed \`${controlCommand}\` control set (${controlIds.length}): ` +
+    `${controlIds.join(', ') || '<empty>'}.`;
+  const fail = (assertion, detail) => {
+    throw new Error(
+      `capture-hashes: --assert-graph-premise FAILED assertion ${assertion} -- ${detail} ${observed}`,
+    );
+  };
+
+  if (premiseIds.length === 0) {
+    fail(
+      1,
+      `the resolved task graph for \`${premiseCommand}\` is EMPTY, so every absence assertion ` +
+        'below would pass trivially. Suspect a renamed target, a plugin that failed to load, or a ' +
+        'project name that no longer matches.',
+    );
+  }
+
+  const offenders = premiseIds.filter((taskId) =>
+    FORBIDDEN_TARGETS.includes(targetSegment(taskId)),
+  );
+
+  if (offenders.length > 0) {
+    fail(
+      2,
+      `\`${premiseCommand}\` resolves forbidden target(s) ${offenders.join(', ')}. TEST-08's ` +
+        `premise is that the Windows CI leg resolves no ${FORBIDDEN_TARGETS.join('/')} task, so ` +
+        'any such hash in the store is Linux-produced (D-12, D-14 row 1). With this false, that ' +
+        'attribution is withdrawn.',
+    );
+  }
+
+  if (controlIds.length !== 2) {
+    fail(
+      3,
+      `the \`${CONTROL_TARGET}\` control resolved ${controlIds.length} task(s), wanted exactly 2. ` +
+        `\`${CONTROL_TARGET}\`'s INFERRED dependsOn is ["build", "^${CONTROL_TARGET}"]; if an Nx ` +
+        'upgrade changed that inference the control is weaker than D-13 requires and must be ' +
+        're-chosen, not re-counted.',
+    );
+  }
+
+  const expectedControlIds = [
+    `${PROJECT}:build`,
+    `${PROJECT}:${CONTROL_TARGET}`,
+  ].sort();
+
+  if (controlIds.join(',') !== expectedControlIds.join(',')) {
+    fail(
+      4,
+      `the \`${CONTROL_TARGET}\` control set is not ${expectedControlIds.join(', ')}. The control ` +
+        "is only strictly stronger than a `test` control while it resolves this project's own " +
+        '`build` alongside it.',
+    );
+  }
+
+  if (
+    !controlIds.some((taskId) =>
+      FORBIDDEN_TARGETS.includes(targetSegment(taskId)),
+    )
+  ) {
+    fail(
+      5,
+      `the \`${CONTROL_TARGET}\` control set intersects ${FORBIDDEN_TARGETS.join('/')} nowhere, so ` +
+        'it does not demonstrate that this resolver EVER puts a forbidden task into a set. ' +
+        'Assertion 2 would then be an absence over a set that never contains one.',
+    );
+  }
+
+  if (premiseIds.join(',') === controlIds.join(',')) {
+    fail(
+      6,
+      'the control set is IDENTICAL to the `integration` set, which is what a resolver returning ' +
+        'the same thing for every input looks like.',
+    );
+  }
+
+  const record = {
+    mode: 'assert-graph-premise',
+    meta: {
+      os: process.platform,
+      arch: process.arch,
+      nxVersion: NX_VERSION,
+      nodeVersion: process.version,
+      project: PROJECT,
+      commit,
+      capturedAt: new Date().toISOString(),
+    },
+    forbiddenTargets: FORBIDDEN_TARGETS,
+    integration: { command: premiseCommand, taskIds: premiseIds },
+    control: { command: controlCommand, taskIds: controlIds },
+    verdict: 'PREMISE OK',
+  };
+
+  const serialised = `${JSON.stringify(record, null, 2)}\n`;
+
+  if (args.out) {
+    writeFileSync(args.out, serialised);
+    process.stderr.write(
+      `capture-hashes: premise ${record.verdict} for ${PROJECT} ` +
+        `(${record.meta.os}/${record.meta.arch}, ${premiseIds.length} integration task(s), ` +
+        `${controlIds.length} ${CONTROL_TARGET} control task(s)) written to ${args.out}\n`,
+    );
+
+    return;
+  }
+
+  process.stdout.write(serialised);
+}
+
 /** Flatten an object to dotted leaf paths with JSON-encoded leaf values. */
 function flatten(value, prefix, out) {
   if (value === null || typeof value !== 'object') {
@@ -523,7 +744,19 @@ function diff(paths) {
 
 const args = parseArgs(process.argv.slice(2));
 
-if (args.diff) {
+if (args.assertGraphPremise) {
+  if (args.installMode !== undefined) {
+    throw new Error(
+      'capture-hashes: --assert-graph-premise is mutually exclusive with --install-mode. ' +
+        'The mode resolves a task graph and measures no hash, so recording an install mode ' +
+        'against it would make the record claim a provenance it never measured. --out IS ' +
+        'accepted, and is the intended channel: TEST-08 requires the assertion OUTPUT captured ' +
+        'as evidence, not discarded as a pre-flight check.',
+    );
+  }
+
+  await assertGraphPremise(args);
+} else if (args.diff) {
   if (args.installMode !== undefined || args.out !== undefined) {
     throw new Error(
       'capture-hashes: --diff is mutually exclusive with --install-mode and --out. ' +

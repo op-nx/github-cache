@@ -1,9 +1,19 @@
 import * as core from '@actions/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createReleasesReadBackend } from '../backend/releases-backend.js';
+import type { Hash } from '../lib/cache-key.js';
 import { dogfoodBody } from '../lib/dogfood-body.js';
+import {
+  resolveLocalReadToken,
+  resolveRepoIdentity,
+} from '../lib/local-context.js';
 import { mirrorSeedHash } from '../lib/mirror-seed.js';
-import { CACHE_OS_VALUES, cachePlatform } from '../lib/release-asset-name.js';
+import {
+  CACHE_OS_VALUES,
+  cachePlatform,
+  releaseAssetName,
+  type CacheOs,
+} from '../lib/release-asset-name.js';
 import { run } from './read-back.js';
 
 // THIS BIN HAD NO SPEC BEFORE PLAN 09-08, and that is the direct cause of the regression
@@ -72,9 +82,19 @@ vi.mock('../lib/release-asset-name.js', async (importOriginal) => {
 
   return { ...actual, cachePlatform: vi.fn(actual.cachePlatform) };
 });
+// The label read resolves its token and repo through these two, and BOTH must be mocked or
+// this spec spawns `gh auth token` / `git credential fill` / `git remote get-url` -- a
+// subprocess that can touch a real keychain (the select-backend.spec.ts rule). `fetch` is
+// stubbed below for the same reason: nothing here may reach api.github.com.
+vi.mock('../lib/local-context.js', () => ({
+  resolveLocalReadToken: vi.fn(),
+  resolveRepoIdentity: vi.fn(),
+}));
 
 const createReleasesReadBackendMock = vi.mocked(createReleasesReadBackend);
 const cachePlatformMock = vi.mocked(cachePlatform);
+const resolveLocalReadTokenMock = vi.mocked(resolveLocalReadToken);
+const resolveRepoIdentityMock = vi.mocked(resolveRepoIdentity);
 
 // HAND-AUTHORED literals (the pinned-literal discipline, A1b). The hash is the REAL run
 // id from the measured failure, so this spec and 09-EVIDENCE.md's addendum read as the
@@ -107,6 +127,68 @@ const CROSS_PRODUCER_PAIRS = CACHE_OS_VALUES.flatMap((readerOs) =>
 
 const get = vi.fn();
 
+const TOKEN = 'ghs-fake-token-for-the-label-read';
+const REPO = 'op-nx/github-cache';
+const RELEASE_ID = 4242;
+
+// The publisher's page size, authored here as a pinned literal because read-back.ts's
+// ASSETS_PER_PAGE is module-local. The pagination loop stops on the first SHORT page, so
+// this value is what a multi-page fixture must fill page one with to force a second
+// request -- which is the only reason it matters.
+const ASSETS_PER_PAGE = 100;
+
+type AssetRow = { name: string; label: string | null };
+
+const fetchMock = vi.fn<typeof fetch>();
+
+/**
+ * The real global Response, not a hand-rolled object: `.ok`, `.status` and `.json()` then
+ * behave exactly as the production reader sees them, so a status-discrimination bug cannot
+ * hide behind a lenient fake.
+ */
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+/** Serve one release lookup plus a paginated asset listing, page by page. */
+function serveShard(pages: readonly (readonly AssetRow[])[]): void {
+  fetchMock.mockImplementation((input) => {
+    const url = new URL(String(input));
+
+    if (url.pathname.includes('/releases/tags/')) {
+      return Promise.resolve(jsonResponse({ id: RELEASE_ID }));
+    }
+
+    const page = Number(url.searchParams.get('page'));
+
+    return Promise.resolve(jsonResponse(pages[page - 1] ?? []));
+  });
+}
+
+/** The shard row for `readerOs`'s OWN seed asset, carrying `label` verbatim. */
+function ownSeedRow(readerOs: CacheOs, label: string | null): AssetRow {
+  return {
+    name: releaseAssetName(mirrorSeedHash(HASH, readerOs) as Hash),
+    label,
+  };
+}
+
+/** The publisher's label value. Pinned as a literal, exactly as publish-mirror.spec.ts does. */
+function mirroredBy(os: CacheOs): string {
+  return `mirrored-by: ${os}`;
+}
+
+/** `count` rows that are NOT the asset under test -- page filler, nothing more. */
+function decoyRows(count: number): AssetRow[] {
+  return Array.from({ length: count }, (_, index) => ({
+    name: `decoy-asset-${index}`,
+    label: '',
+  }));
+}
+
 // The repo's bin-spec harness (cleanup/index.spec.ts, action/index.spec.ts): a file-level
 // env save plus a per-test copy. clearAllMocks (NOT resetAllMocks) -- reset would clear
 // the `{ get }` implementation wired below and every rejection test would fail on a
@@ -119,10 +201,15 @@ beforeEach(() => {
   process.env.GITHUB_RUN_ID = HASH;
   createReleasesReadBackendMock.mockReturnValue({ get });
   cachePlatformMock.mockReturnValue(DEFAULT_READER_OS);
+  resolveLocalReadTokenMock.mockResolvedValue(TOKEN);
+  resolveRepoIdentityMock.mockResolvedValue(REPO);
+  vi.stubGlobal('fetch', fetchMock);
+  serveShard([[ownSeedRow(DEFAULT_READER_OS, mirroredBy(DEFAULT_READER_OS))]]);
 });
 
 afterEach(() => {
   process.env = ORIGINAL_ENV;
+  vi.unstubAllGlobals();
 });
 
 describe('round-trip read-back derives its OWN leg seed and accepts only that leg (OBS-05, D-15)', () => {
@@ -132,6 +219,7 @@ describe('round-trip read-back derives its OWN leg seed and accepts only that le
       cachePlatformMock.mockReturnValue(os);
       const seed = mirrorSeedHash(HASH, os);
       get.mockResolvedValue({ kind: 'hit', bytes: dogfoodBody(seed, os) });
+      serveShard([[ownSeedRow(os, mirroredBy(os))]]);
 
       await expect(run()).resolves.toBeUndefined();
 
@@ -203,6 +291,177 @@ describe('round-trip read-back still fails loud on every corruption class (09-08
     get.mockResolvedValue({ kind: 'miss' });
 
     await expect(run()).rejects.toThrow('MISS');
+  });
+});
+
+/**
+ * THE DEAD-PUBLISH-LEG DETECTOR, and the ONLY one there is.
+ *
+ * The seed derivation above answers "which KEY does this leg read?" -- it does NOT answer
+ * "which leg UPLOADED the asset under that key?". Those are different questions and only
+ * the `mirrored-by` label answers the second. Concretely: if the windows publish path is
+ * DEAD but the ubuntu leg's enumeration happened to see the windows seed, ubuntu restores
+ * it and uploads it under the windows leg's own asset name. The bytes are still
+ * dogfoodBody(seed_win, 'windows') -- the SEED was written by windows -- so the byte
+ * comparison above passes and the windows publish-verify leg goes GREEN on a dead
+ * publisher. The label reads `mirrored-by: linux` and is the only field that differs.
+ *
+ * IT IS PROVEN OFFLINE, deliberately. `publish` / `publish-verify` are push-gated to
+ * `main`, so no PR run samples them at any rate -- which is exactly why Phase 9's
+ * regression was findable only live. Mutation-proving this group against a fake asset
+ * listing is what makes the detection believable WITHOUT breaking the real publish path on
+ * `main` to demonstrate it.
+ *
+ * THE OS AXES ARE BOTH TUPLE-DRIVEN. The reader's OS comes from CACHE_OS_VALUES and so
+ * does the observed publisher, so the wrong-label matrix is every ordered pair with the
+ * two different -- never "the OS this machine is not", which on the ubuntu-only `test` job
+ * would sample the non-linux legs at rate ZERO.
+ */
+describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U-01)', () => {
+  it.each(CACHE_OS_VALUES)(
+    'accepts a %s leg asset labelled as published by that same leg',
+    async (os) => {
+      cachePlatformMock.mockReturnValue(os);
+      get.mockResolvedValue({
+        kind: 'hit',
+        bytes: dogfoodBody(mirrorSeedHash(HASH, os), os),
+      });
+      serveShard([[ownSeedRow(os, mirroredBy(os))]]);
+
+      await expect(run()).resolves.toBeUndefined();
+    },
+  );
+
+  it.each(CROSS_PRODUCER_PAIRS)(
+    'a %s reader REJECTS its own asset when %s published it -- the dead-publish-leg case',
+    async (readerOs, publisherOs) => {
+      cachePlatformMock.mockReturnValue(readerOs);
+      // The BYTES are this leg's own, because the SEED was. Only the publisher differs,
+      // which is the whole point: this fixture passes every other assertion in the file.
+      get.mockResolvedValue({
+        kind: 'hit',
+        bytes: dogfoodBody(mirrorSeedHash(HASH, readerOs), readerOs),
+      });
+      serveShard([[ownSeedRow(readerOs, mirroredBy(publisherOs))]]);
+
+      const message = await run().catch((error: unknown) =>
+        error instanceof Error ? error.message : String(error),
+      );
+
+      // BOTH values named, so an operator reading the failed job does not have to guess
+      // which leg published it. Asserted as two separate containments rather than one
+      // whole-message equality, which would break on any rewording.
+      expect(message).toContain(mirroredBy(publisherOs));
+      expect(message).toContain(mirroredBy(readerOs));
+    },
+  );
+
+  it.each(CACHE_OS_VALUES)(
+    'a %s reader REJECTS an EMPTY label -- a legacy asset must not read as a pass',
+    async (os) => {
+      // MEASURED: all 122 assets in the live cache-mirror-202607 shard carry an empty
+      // label, because every one predates OBS-03. So "no label" is the COMMON case in the
+      // shard and treating it as satisfied would make this guard vacuous on contact with
+      // real data rather than on some hypothetical.
+      cachePlatformMock.mockReturnValue(os);
+      get.mockResolvedValue({
+        kind: 'hit',
+        bytes: dogfoodBody(mirrorSeedHash(HASH, os), os),
+      });
+      serveShard([[ownSeedRow(os, '')]]);
+
+      await expect(run()).rejects.toThrow('publisher');
+    },
+  );
+
+  it.each(CACHE_OS_VALUES)(
+    'a %s reader resolves an asset that sits on a page AFTER the first',
+    async (os) => {
+      // THE LIVE SHARD HOLDS 122 ASSETS, so the seed asset can legitimately sit beyond
+      // page one and a single-page read would redden on a CORRECT implementation. Page one
+      // is filled to exactly the page size, because the pagination loop's exit condition is
+      // a SHORT page -- a 99-row first page would stop the walk and this case would prove
+      // nothing.
+      cachePlatformMock.mockReturnValue(os);
+      get.mockResolvedValue({
+        kind: 'hit',
+        bytes: dogfoodBody(mirrorSeedHash(HASH, os), os),
+      });
+      serveShard([
+        decoyRows(ASSETS_PER_PAGE),
+        [ownSeedRow(os, mirroredBy(os))],
+      ]);
+
+      await expect(run()).resolves.toBeUndefined();
+
+      const pages = fetchMock.mock.calls
+        .map(([input]) => new URL(String(input)))
+        .filter((url) => url.searchParams.has('page'));
+
+      expect(pages).toHaveLength(2);
+      expect(pages.map((url) => url.searchParams.get('page'))).toEqual([
+        '1',
+        '2',
+      ]);
+      // The page SIZE is requested explicitly rather than left to the endpoint default of
+      // 30: the inline release.assets snapshot this read deliberately avoids is
+      // first-page-capped, and asking for a small page would reintroduce the same problem
+      // one level down.
+      expect(pages[0]?.searchParams.get('per_page')).toBe(
+        String(ASSETS_PER_PAGE),
+      );
+    },
+  );
+
+  it.each(CACHE_OS_VALUES)(
+    'a %s reader fails loud when the asset is absent after every page is exhausted',
+    async (os) => {
+      cachePlatformMock.mockReturnValue(os);
+      get.mockResolvedValue({
+        kind: 'hit',
+        bytes: dogfoodBody(mirrorSeedHash(HASH, os), os),
+      });
+      // A full first page and an empty second: the walk must terminate on the short page
+      // rather than paginate forever.
+      serveShard([decoyRows(ASSETS_PER_PAGE), []]);
+
+      await expect(run()).rejects.toThrow('no asset named');
+    },
+  );
+
+  it.each(CACHE_OS_VALUES)(
+    'a %s reader fails loud on a non-404 fault from the asset listing',
+    async (os) => {
+      cachePlatformMock.mockReturnValue(os);
+      get.mockResolvedValue({
+        kind: 'hit',
+        bytes: dogfoodBody(mirrorSeedHash(HASH, os), os),
+      });
+      fetchMock.mockImplementation((input) =>
+        Promise.resolve(
+          new URL(String(input)).pathname.includes('/releases/tags/')
+            ? jsonResponse({ id: RELEASE_ID })
+            : jsonResponse({ message: 'rate limited' }, 403),
+        ),
+      );
+
+      await expect(run()).rejects.toThrow('403');
+    },
+  );
+
+  it('fails loud rather than skipping the check when no read credential resolves', async () => {
+    // The consumer READER degrades a missing credential to a MISS by design. This bin must
+    // NOT: a provenance assertion that silently no-ops when a token is absent is exactly
+    // the vacuity it exists to close, and publish-verify would go green having checked
+    // nothing.
+    get.mockResolvedValue({
+      kind: 'hit',
+      bytes: dogfoodBody(SEED, DEFAULT_READER_OS),
+    });
+    resolveLocalReadTokenMock.mockResolvedValue(undefined);
+
+    await expect(run()).rejects.toThrow('cannot read the publisher label');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

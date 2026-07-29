@@ -1594,9 +1594,15 @@ New files and new cases required before or alongside implementation:
 
 ---
 
-## Open Questions
+## Open Questions (ALL RESOLVED at plan time -- 2026-07-29)
 
-1. **Should XOS-07's `needs:` widening get a drift guard?**
+None of the five below is open any longer. Each recommendation was traced into an implementing
+plan and confirmed by `gsd-plan-checker` (`10-PLAN-CHECK.md`). The heading is annotated rather
+than the section deleted, because the reasoning behind each recommendation is the record of WHY
+the plan took the shape it did -- and a section titled "Open Questions" that is in fact closed is
+exactly the stale-prose class this phase exists to sweep out of `read-back.ts` and `ci.yml`.
+
+1. **[RESOLVED -- guard added in plan 10-03 Task 2] Should XOS-07's `needs:` widening get a drift guard?**
    - What we know: NO spec asserts `publish`'s `needs:` today. Reverting the widening would redden
      nothing. `jobBlock()` exists and would make it a three-line guard.
    - What's unclear: XOS-07's text asks only that `publish` "depends on every job producing a

@@ -4,9 +4,10 @@ milestone: v0.0.2
 milestone_name: framing
 current_phase: 10
 current_phase_name: OS-Invariant Releases Mirror
-status: verifying
+status: complete
 last_updated: "2026-07-29T15:16:19.886Z"
 last_activity: 2026-07-29
+last_activity_desc: Phase 10 closed -- verified, secured, validated, learnings extracted
 progress:
   total_phases: 6
   completed_phases: 1
@@ -26,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 ## Current Position
 
-Phase: 10 (OS-Invariant Releases Mirror) — EXECUTING
+Phase: 10 (OS-Invariant Releases Mirror) -- COMPLETE
 Plan: 8 of 8
-Status: Phase complete — ready for verification
+Status: All four gates closed -- verification passed, threats_open 0, nyquist_compliant true, learnings extracted. Two live-CI items await the merge push (OBS-05 per-leg read-back, XOS-07 full-task-set census).
 Progress: 0/6 phases complete [------] 0%
 Last activity: 2026-07-29
 

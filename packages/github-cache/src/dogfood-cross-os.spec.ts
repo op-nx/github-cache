@@ -248,3 +248,130 @@ describe('ci.yml action-bundle-drift stays PR-eligible (ROBUST-04)', () => {
     ).not.toMatch(/^ {4}if:/m);
   });
 });
+
+/**
+ * XOS-03 / TEST-09's PRESENCE and SHAPE guard for the `o3-witness` job, authored RED -- it
+ * lands one commit BEFORE the `ci.yml` job it asserts on. That is the recorded shape from
+ * plan 10-03, whose guards were written first and whose `ci.yml` change landed as the single
+ * GREEN commit; HEAD is deliberately red in between. Do not soften these assertions and do
+ * not stub a placeholder job to make the suite green.
+ *
+ * THREE THINGS THIS BLOCK'S HOME DEPENDS ON, because the wrong half in the wrong file is
+ * vacuous rather than merely misplaced.
+ *
+ *   1. PRESENCE AND SHAPE BELONG HERE, and specifically here rather than in any file that
+ *      reads `ci.yml` some other way. `jobBlock(name)` above THROWS when the job key is
+ *      absent, and that throw IS the anti-silent-deletion mechanism. `o3-witness` is a new
+ *      CI job with NO inferred Nx target behind it, and this repo's own recorded trap is
+ *      that `nx run-many` on a missing target prints "No tasks were run" and exits 0 -- by
+ *      the same logic a deleted CI JOB is a silently removable gate unless something asserts
+ *      it by content. `jobBlock` is the only job-block extractor in the repo, so the guard
+ *      comes to the helper rather than the helper going to the guard -- the same reasoning
+ *      XOS-07's block above records, and the reason `jobBlock` stays unexported here.
+ *   2. THE COMMENT-PROSE LOCK FOR THE SAME `ci.yml` CHANGE IS DELIBERATELY NOT HERE.
+ *      `codeLines` strips every `#` line, so a comment assertion placed in this file is
+ *      vacuous by construction. The `o3-witness` rationale prose is locked phrase by phrase
+ *      in `docs-same-os-claims.spec.ts`, whose read is RAW, as five additive
+ *      `DOCS_08_SITES` rows keyed on this same file. Two harnesses, one question each.
+ *   3. IT CANNOT REPLAY A CACHED PASS COMPUTED BEFORE ITS SUBJECT EXISTED, because
+ *      `{workspaceRoot}/.github/workflows/ci.yml` is an `nx.json` `test` input (`nx.json:69`,
+ *      PARITY-08, Phase 9). `ci.yml`'s OWN comment blocks above `hash-parity` and
+ *      `hash-parity-compare` currently claim the OPPOSITE; both are STALE, plan 11-06
+ *      corrects them WITH a replacement reason, and the membership fact above was read from
+ *      `nx.json` rather than from them.
+ */
+describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', () => {
+  const permissionsReason =
+    'The o3-witness job must carry a job-level permissions block granting exactly ' +
+    'contents: read and actions: read. Such a block REPLACES the workflow-level grant ' +
+    '(contents: read) WHOLESALE rather than merging it, so a missing scope is silently ' +
+    'dropped rather than reported -- which is why contents: read is RESTATED and why the ' +
+    'two scopes are asserted by two SEPARATE cases below. actions: read is what ' +
+    '/actions/caches and /actions/runs/{id}/jobs need; actions: write is the cache DELETE ' +
+    'verb and is deliberately NOT requested.';
+
+  // POSITIVE CONTROL, and it comes FIRST for the same reason every other control in this
+  // file does: every clause below is a `toMatch`, so a `jobBlock` that returned the WRONG
+  // non-empty block would have the six of them asserting about the wrong job. `needs:
+  // integration` is real YAML, so it survives the comment strip, and it is unique in this
+  // file -- every other `needs:` line names a different value.
+  it('scopes to a real o3-witness job block that waits on integration', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'jobBlock THROWS when no job is keyed `  o3-witness:`, and that throw is the whole ' +
+        'presence guard: it is what stops the witness from being a gate that can be deleted ' +
+        'without anything going red. A new CI job has no inferred Nx target behind it, and ' +
+        'this repo has already recorded that `nx run-many` on a missing target exits 0. So ' +
+        'the correct response to a red here is to RESTORE THE JOB, never to delete the ' +
+        'assertion. `needs: integration` rather than `needs: hash-parity` is itself ' +
+        'load-bearing (D-17 sub-lock 1): on a pull_request, hash-parity pins the PR head ' +
+        "SHA while integration takes actions/checkout's default MERGE commit, so the two " +
+        'measure DIFFERENT TREES and their task hashes are not commensurable. H_linux must ' +
+        "come from the integration leg's own record.",
+    ).toMatch(/^ {4}needs: integration$/m);
+  });
+
+  // Anchored at FOUR spaces -- a job's own keys sit one level under the two-space job key.
+  // Unanchored, `permissions` would already be satisfied by the workflow-level grant's text
+  // if the extraction ever widened, which is the tautology this file's own comment warns
+  // about after an unanchored `\bbuild\b` was satisfied by a `npm run build` step.
+  it('declares a job-level permissions block at all', () => {
+    expect(jobBlock('o3-witness'), permissionsReason).toMatch(
+      /^ {4}permissions:$/m,
+    );
+  });
+
+  // Clauses 3 and 4 are SEPARATE cases on purpose. D-17 sub-lock 3's whole hazard is that a
+  // job-level block REPLACES the workflow grant rather than merging it, so dropping
+  // contents: read and dropping actions: read are two different regressions with two
+  // different symptoms -- the first breaks actions/download-artifact, the second 404s the
+  // cache enumeration -- and a combined assertion would report them identically. Anchored at
+  // SIX spaces (one level under the job's own keys) but NOT terminated with `$`, because a
+  // trailing `#` rationale comment on the same line is legitimate here and must not redden.
+  it('RESTATES contents: read, which the job-level block would otherwise drop', () => {
+    expect(jobBlock('o3-witness'), permissionsReason).toMatch(
+      /^ {6}contents: read\b/m,
+    );
+  });
+
+  it('grants actions: read, which is what the two REST endpoints need', () => {
+    expect(jobBlock('o3-witness'), permissionsReason).toMatch(
+      /^ {6}actions: read\b/m,
+    );
+  });
+
+  it('runs on a SINGLE ubuntu-24.04-arm runner, not a matrix', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The witness must run on one ubuntu-24.04-arm runner. It is curl plus jq against two ' +
+        'REST endpoints, so a matrix would issue the same read twice and a windows-11-arm ' +
+        'leg would reopen the gh/jq availability question this design closed by staying ' +
+        'ubuntu-only. It also needs no checkout, no npm ci and no build -- unlike ' +
+        'hash-parity-compare, whose comparator is TypeScript in dist/.',
+    ).toMatch(/^ {4}runs-on: ubuntu-24\.04-arm$/m);
+  });
+
+  it('carries a timeout-minutes value -- generic hang insurance, like every other job', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The witness must carry a timeout-minutes value. Every job in ci.yml does; the ' +
+        'non-matrix siblings sit at 15. Without one, a hung curl against the REST API holds ' +
+        'a runner for the account default rather than failing loud, and this job is ' +
+        "build-gating from its first commit so its failure mode has to be a job's own, not " +
+        'the platform ceiling.',
+    ).toMatch(/^ {4}timeout-minutes: \d+$/m);
+  });
+
+  it('carries the house if: !cancelled() form, so a red needs: dependency still gates', () => {
+    expect(
+      jobBlock('o3-witness'),
+      "The witness must carry `if: ${{ !cancelled() }}`, this file's house form. The two " +
+        'candidate forms differ on exactly one case -- cancellation -- and a cancelled run ' +
+        'producing a red gate is noise rather than signal, which is the reason ' +
+        'hash-parity-compare records for choosing it over always(). Note what may NOT ' +
+        'appear: nothing in this if: may govern whether the job PASSES, and there is ' +
+        'deliberately no needs.*.result reference anywhere in it -- the verdict comes from ' +
+        'the recorded cache-service and run metadata only.',
+    ).toMatch(/^ {4}if:\s*\$\{\{\s*!cancelled\(\)\s*\}\}$/m);
+  });
+});

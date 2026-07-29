@@ -8,7 +8,7 @@ import {
   type Hash,
 } from '../lib/cache-key.js';
 import { statusOf } from '../lib/octokit-status.js';
-import { releaseAssetName } from '../lib/release-asset-name.js';
+import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
 import { shardTag } from '../lib/retention.js';
 
 /**
@@ -55,6 +55,12 @@ export interface PublishRelease {
  * paginates, never reading a release's inline `assets` first-page snapshot -- Pitfall 4).
  * getReleaseByTag throws a 404 when the shard does not exist yet; createRelease throws a
  * 422 when another matrix leg created the tag first.
+ *
+ * uploadReleaseAsset's `label` is free-form Release METADATA (OBS-03), deliberately
+ * outside the lookup name -- see the construction site below for what it does and does
+ * NOT claim. Positional rather than an options object, following the `ref` 4th positional
+ * already shipped on the sibling seam's createPublishClient: one call site, one
+ * implementation.
  */
 export interface PublishClient {
   listCacheEntries(): Promise<CacheEntry[]>;
@@ -65,6 +71,7 @@ export interface PublishClient {
     releaseId: number,
     name: string,
     bytes: Buffer,
+    label: string,
   ): Promise<void>;
 }
 
@@ -212,6 +219,34 @@ export async function publishMirror(
   // were always set together) on the first restorable entry.
   let shard: { id: number; names: Set<string> } | undefined;
 
+  // OBS-03: producer attribution as Release METADATA, outside the lookup name, so it
+  // survives a namespace change to the name itself. COMMENT-LOCKED, and the lock is the
+  // load-bearing half -- what this value means is easy to overstate and the overstatement
+  // is worse than no label at all.
+  //
+  // It names the OS of the PUBLISHING leg -- the leg that ran THIS `publishMirror` and
+  // uploaded the bytes. It does NOT name the OS that produced them, and no comment, doc,
+  // summary or threat-model line may say otherwise. Two independent reasons:
+  //
+  // - There is no producing-OS field to read, even if one wanted to. `listCacheEntries`
+  //   yields `CacheEntry` = `{ key }` only (see the interface above), and the real adapter
+  //   maps every Actions-cache row to `{ key: cache.key }` -- so a producing-OS claim
+  //   could only ever be fabricated here, never derived.
+  // - Phase 9 is precisely what broke the publisher-equals-producer identity: VER-01 made
+  //   the archive path OS-invariant and VER-03 set `enableCrossOsArchive`, so restore is
+  //   no longer same-OS. From that phase forward an ubuntu leg CAN restore and mirror a
+  //   Windows-produced entry, and would stamp it `linux`. A producing-OS reading would
+  //   therefore be WRONG in exactly the cross-OS case the label exists to serve, which is
+  //   the worst possible place for an attribution field to lie.
+  //
+  // Hoisted above the loop so `cachePlatform()` runs ONCE per run rather than once per
+  // hash (D-10). Be clear about what that does and does not guarantee: moving it back
+  // inside the loop is BEHAVIOURALLY IDENTICAL -- the platform cannot change mid-run -- so
+  // the hoist is a readability and cost choice, not a correctness invariant. The only
+  // thing protecting it is the multi-hash called-ONCE case in publish-mirror.spec.ts;
+  // nothing else in the suite would notice the move. Do not read more protection into it.
+  const label = `mirrored-by: ${cachePlatform()}`;
+
   for (const hash of hashes) {
     const restored: GetResult = await actionsCache.get(hash);
 
@@ -266,7 +301,7 @@ export async function publishMirror(
     }
 
     try {
-      await client.uploadReleaseAsset(shard.id, name, bytes);
+      await client.uploadReleaseAsset(shard.id, name, bytes, label);
       shard.names.add(name);
       mirrored++;
     } catch (error) {

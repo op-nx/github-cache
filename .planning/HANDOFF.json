@@ -1,0 +1,61 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-29T13:47:38.617Z",
+  "phase": "10",
+  "phase_name": "OS-Invariant Releases Mirror",
+  "phase_dir": ".planning/phases/10-os-invariant-releases-mirror",
+  "plan": 8,
+  "task": 8,
+  "total_tasks": 8,
+  "status": "paused",
+  "pause_point": "after verify_phase_goal (passed), before /gsd:secure-phase 10 -- paused on explicit user instruction",
+  "completed_tasks": [
+    {"id": 1, "name": "10-01 capture the two perishable pre-rename measurements (D-25 baseline, D-08 census)", "status": "done", "commit": "f867326"},
+    {"id": 2, "name": "10-02 the mirrored-by label seam through the real Octokit adapter", "status": "done", "commit": "d17cbd2"},
+    {"id": 3, "name": "10-03 widen publish needs: + the repo's first needs: VALUE guard", "status": "done", "commit": "7cb071b"},
+    {"id": 4, "name": "10-04 lib/mirror-seed.ts + the mirror-seed operation branch", "status": "done", "commit": "1894b70"},
+    {"id": 5, "name": "10-05 flip seed and reader atomically + the mirrored-by read-back control (U-01)", "status": "done", "commit": "cfe22d1"},
+    {"id": 6, "name": "10-06 ADD-only assertion-level RED for the rename wave", "status": "done", "commit": "b37a358"},
+    {"id": 7, "name": "10-07 THE ONE COMMIT: OS-free name, two-branch filter, prose sweep, rebuilt bundle", "status": "done", "commit": "6d65459"},
+    {"id": 8, "name": "10-08 ref-scoping pin, TRUST-11/12 handed to the auditor as INPUT, SC6 record", "status": "done", "commit": "80e27ad"},
+    {"id": 9, "name": "verify_phase_goal (gsd-verifier) -- status passed, 13/13 code-level must-haves", "status": "done", "commit": "bb3a23a"}
+  ],
+  "remaining_tasks": [
+    {"id": 10, "name": "/gsd:secure-phase 10 -- MUST spawn gsd-security-auditor; must NOT take the inline short-circuit", "status": "not_started"},
+    {"id": 11, "name": "/gsd:validate-phase 10 -- owns flipping 10-VALIDATION.md's draft/nyquist_compliant/wave_0_complete fields", "status": "not_started"},
+    {"id": 12, "name": "/gsd:extract-learnings 10 -- run LAST, after secure and validate are clean", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Merge the branch to main, then read the ubuntu publish leg's OBS-01 summary and census the shard for cache-mirror-<YYYYMM>",
+      "context": "CORR-02's warm-mirror republish is Phase 11's hard precondition. Expected: nonzero mirrored, readMisses 0, no all-restore-MISS warning, nx-cache-* names present, legacy <hash>-<os> names stop growing. FALSIFIER: if the ubuntu leg reports mirrored:0 with readMisses == scanned, the full-republish prediction is falsified and must be recorded as such.",
+      "blocking": true
+    },
+    {
+      "action": "Read both publish-verify leg logs after that same push",
+      "context": "OBS-05's live half. Each leg must read back its OWN leg's asset and name its own OS as producer. Expected: publish (windows) reports mirrored: 1 -- its own seed -- NOT 0. That single seed asset is what keeps OBS-05 non-vacuous; a 0 would mean the per-leg seed never landed.",
+      "blocking": true
+    },
+    {
+      "action": "Confirm publish starts only after integration (windows-11-arm) completes",
+      "context": "XOS-07's live half. On run 30400231720 publish enumerated 122 s BEFORE integration finished, which is the race the widened needs: closes. Fingerprint of the old behaviour: a task hash present only under -windows and never -linux.",
+      "blocking": true
+    },
+    {
+      "action": "Two Phase 9 items still open at the real merge",
+      "context": "publish-verify (windows-11-arm) green with a 'linux' producer line; and OBS-04's rotation signal is SPENT (sampled on run 30400231720) -- read 09-EVIDENCE.md's ADDENDUM, never the merge run.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {"decision": "Ran execution sequential-on-main, not in git worktrees", "rationale": "AGENTS.md's own rule: sequentially-dependent plans gain no parallelism (7 waves for 8 plans). Decisive: 10-07 requires npm run check:action in the MAIN tree -- a fresh worktree has no node_modules, and junctioning it makes esbuild rewrite ~689 module paths with zero source edits and report false drift. Set per-run; workflow.use_worktrees was NOT persisted to false.", "phase": "10"},
+    {"decision": "D-00/D-01 tagged [informational] rather than cited in a plan", "rationale": "Both are orchestrator pre-flight instructions about artifact defects, not implementable behaviour. Both were acted on at plan time. The other nine uncovered decisions got real D-NN citations instead.", "phase": "10"},
+    {"decision": "U-01 resolved to the additive branch: the mirrored-by label assertion", "rationale": "Measured 5/5 push runs -- ubuntu's publish step ends 150-190 s before the Windows seed step starts -- but GitHub documents NO matrix leg ORDER guarantee. The law is narrower than CONTEXT.md guessed: the leg that runs LAST is the only one whose dead publish path is detectable. The label assertion REPLACES the ordering dependency with a non-overlap dependency.", "phase": "10"},
+    {"decision": "OBS-05 and TRUST-13 deliberately left unticked", "rationale": "OBS-05's code landed but its per-leg read-back is push-gated. TRUST-13 closes when gsd-security-auditor publishes SECURITY.md, not when a plan lands.", "phase": "10"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Run /gsd:secure-phase 10 and force it to spawn gsd-security-auditor -- do NOT accept the inline short-circuit, which WILL fire on this phase's shape (threats_open:0 AND register_authored_at_plan_time:true) and would self-certify TRUST-13.",
+  "context_notes": "Phase 10 is code-complete and independently verified (823 tests; build/typecheck/lint/format:check/check:action/fallow:ci/integration all exit 0). 34 commits from planning base 06019d4. Branch gsd/v0.0.2-os-invariant-cross-os-sharing is 209 ahead of origin/main and UNPUSHED, no PR. The ephemeral workflow._auto_chain_active flag was set false at pause, so nothing auto-advances. Nothing is blocked -- the pause is a deliberate checkpoint, not a stuck state."
+}

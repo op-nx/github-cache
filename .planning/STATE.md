@@ -10,10 +10,10 @@ last_activity: 2026-07-29
 last_activity_desc: Phase 10 closed -- verified, secured, validated, learnings extracted
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 4
   total_plans: 30
   completed_plans: 26
-  percent: 17
+  percent: 67
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 10 (OS-Invariant Releases Mirror) -- COMPLETE
 Plan: 8 of 8
-Status: All four gates closed -- verification passed, threats_open 0, nyquist_compliant true, learnings extracted. Two live-CI items await the merge push (OBS-05 per-leg read-back, XOS-07 full-task-set census).
-Progress: 0/6 phases complete [------] 0%
+Status: All four gates closed -- verification passed, threats_open 0, nyquist_compliant true, learnings extracted. 12/12 requirements closed: the two live-CI items (OBS-05 per-leg read-back, XOS-07 full-task-set census) were observed on run 30471772954 via a temporary push to main, since restored to fe25a3f. See 10-EVIDENCE-LIVE-CI.md.
+Progress: 4/6 phases complete [####--] 67%
 Last activity: 2026-07-29
 
 ## Performance Metrics

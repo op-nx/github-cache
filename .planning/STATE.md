@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
 current_phase: 10
+current_phase_name: OS-Invariant Releases Mirror
 status: executing
-last_updated: "2026-07-29T10:16:53.558Z"
+last_updated: "2026-07-29T10:35:42.893Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 10 planning complete
+last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 21
-  completed_plans: 18
+  total_plans: 30
+  completed_plans: 19
   percent: 17
-current_phase_name: OS-Invariant Releases Mirror
 ---
 
 # Project State
@@ -23,15 +23,15 @@ current_phase_name: OS-Invariant Releases Mirror
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 09 -- os-invariant-actions-cache-version
+**Current focus:** Phase 10 — OS-Invariant Releases Mirror
 
 ## Current Position
 
-Phase: 10 -- OS-Invariant Releases Mirror
-Plan: Not started
+Phase: 10 (OS-Invariant Releases Mirror) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
-Last activity: 2026-07-29 — Phase 10 planning complete
+Last activity: 2026-07-29 — Phase 10 execution started
 
 ## Performance Metrics
 
@@ -101,6 +101,7 @@ Last activity: 2026-07-29 — Phase 10 planning complete
 | Phase 08 P04 | 28min | 2 tasks | 1 files |
 | Phase 08 P05 | 5h 6m | 3 tasks | 4 files |
 | Phase 08 P06 | 42min | 2 tasks | 4 files |
+| Phase 10 P01 | 50m | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -189,6 +190,10 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 08]: 08-06: the compare job uses if: !cancelled() rather than D-17's always(), chosen deliberately -- it covers failed and skipped legs (D-17's actual requirement) and is already this file's house form on a dependent job; the two forms differ only on cancellation, where a red gate is noise
 - [Phase 08]: 08-06: the D-22 real-leg RED used an ADDITIVE OS-sensitive input on build, not a removal of integration's discriminator -- D-14 requires that string byte-identical, and a remove-then-restore of it is a needless risk when an obviously-wrong mutation on a different target reddens the same clause
 - [Phase 08]: 08-06: both mutations are kept on the branch as adjacent applied-and-reverted PAIRS rather than squashed away, because a demonstration whose commits are gone is indistinguishable from one that never happened (the same reasoning D-21 applies to a downgraded clause)
+- [Phase 10]: 10-01: D-25 baseline splits: pre-rename read path PROVEN LIVE (HTTP 200, 410 bytes on 13758457399293023985-windows) while Nx's own run MISSED (Cache 0/1) -- attributed solely to this branch's four hashes never having been mirrored, since the branch is unmerged
+- [Phase 10]: 10-01: Phase 11 XOS-02 inherits an open PRECONDITION, not a read-path defect: a default-branch push must republish the mirror under the OS-free name before any post-rename local read is measurable
+- [Phase 10]: 10-01: RETAIN-05(a): 50 PoC-era <hash>.tar.gz assets accepted as dead weight with a measured count (50 of 122 in shard cache-mirror-202607, release 354838660). No code change, no third accept branch; manual prune stays operational and not code
+- [Phase 10]: 10-01: Release asset label measured EMPTY on all 122 shard assets, so OBS-03's mirrored-by field is genuinely new rather than partially populated
 
 ### Pending Todos
 
@@ -315,8 +320,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T00:02:29.514Z
-Stopped at: Phase 10 context gathered
+Last session: 2026-07-29T10:35:30.204Z
+Stopped at: Completed 10-01-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.
@@ -384,7 +389,7 @@ Stopped at: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-r
 Task 3a (413-flush, F14) RESOLVED as a documented HTTP/1.1 limitation (lead-approved option a): a bounded raw-socket investigation proved the ECONNRESET is deterministic for a client streaming a body far over the cap (60/60 on a 100MB repro; <=16KB-over-cap gets a clean 413, >=256KB resets), and the prescribed destroy-on-finish fix does NOT resolve it (and one variant hangs). Landed a ponytail ceiling comment at both destroy sites (cb2832d), no behavior change, no bundle diff, no flaky test. The memory-bounding cap (backend.put never reached, proven by the mid-stream abort test) is intact regardless.
 HELD (deliberately, for the lead): the branch push and the PR-body update. The lead handles the outward-facing push after independently verifying the series. This executor did not push and did not touch the PR body.
 Final local battery at HEAD cb2832d: fmt / build / typecheck / typecheck:action / test (430) / fallow:ci / check:action / pack:check all exit 0.
-Resume file: .planning/phases/10-os-invariant-releases-mirror/10-CONTEXT.md
+Resume file: None
 Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates the PR #3 body. Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.
 
 ## Operator Next Steps

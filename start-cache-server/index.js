@@ -68483,17 +68483,8 @@ function statusOf(error2) {
 }
 
 // packages/github-cache/src/lib/release-asset-name.ts
-function cachePlatform(platform2 = process.platform) {
-  if (platform2 === "win32") {
-    return "windows";
-  }
-  if (platform2 === "darwin") {
-    return "macos";
-  }
-  return "linux";
-}
-function releaseAssetName(hash, platform2 = process.platform) {
-  return `${hash}-${cachePlatform(platform2)}`;
+function releaseAssetName(hash) {
+  return `${CACHE_KEY_PREFIX}${hash}`;
 }
 
 // packages/github-cache/src/lib/retention.ts

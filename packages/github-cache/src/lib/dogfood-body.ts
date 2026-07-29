@@ -15,16 +15,20 @@ import type { CacheOs } from './release-asset-name.js';
  * release-asset-name.ts imports HASH_PATTERN from cache-key.js at runtime: the type
  * erases at compile time. Type-only, and one OS vocabulary rather than two (D-18).
  *
- * `producerOs` IS REQUIRED, WITH NO DEFAULT -- comment-locked (D-18, VER-06).
- * Contrast `releaseAssetName(hash, platform = process.platform)` in the sibling
- * module, whose default is deliberate and correct there because every caller wants
- * THIS machine's asset. Here the default would be actively wrong: the verify leg's
- * whole job is to assert the body came from a DIFFERENT OS than its own, and a default
- * would let it silently compare against ITSELF. That silent self-comparison is the
- * vacuity trap VER-06 exists to close, so the ABSENCE of the default is the control,
- * not an omission. `dogfood-body.spec.ts` pins it structurally via
- * `dogfoodBody.length === 2` (the selectBackend.length precedent), because
- * Function.length counts parameters before the first default.
+ * `producerOs` IS REQUIRED, WITH NO DEFAULT -- comment-locked (D-18, VER-06). This
+ * rule used to be justified BY CONTRAST with the sibling module's defaulted platform
+ * parameter; CORR-02 DELETED that parameter, so the contrast case no longer exists and
+ * the rule now stands on its own ground, which was always the stronger half of the
+ * argument: a default here would be actively wrong. The verify leg's whole job is to
+ * assert the body came from a DIFFERENT OS than its own, and a default resolving to the
+ * running platform would let it silently compare against ITSELF -- passing on every
+ * runner while proving nothing. That silent self-comparison is the vacuity trap VER-06
+ * exists to close, so the ABSENCE of the default IS the control, not an omission.
+ * `dogfood-body.spec.ts` pins it structurally via `dogfoodBody.length === 2` (the
+ * selectBackend.length precedent), because Function.length counts parameters before the
+ * first default. The sibling helper is now pinned by the same mechanism for the
+ * opposite reason -- its arity is asserted to be 1, so its deleted parameter cannot
+ * return behind a default either.
  *
  * `producerOs` REACHES THE BYTES, and that is load-bearing rather than incidental. A
  * parameter that only sat in the signature would make the verify leg's provenance

@@ -271,6 +271,45 @@ const DOCS_08_SITES = [
   },
   {
     /**
+     * CORRECTION, CORR-02 -- the shard-growth estimate's THIRD correction, and the
+     * first DOWNWARD one. Phase 9 raised it (each leg mirrored every restorable hash
+     * under its own OS suffix, so ~5 real assets per push became ~10); CORR-02 brings it
+     * back down, because one name per hash means the second leg to publish finds the
+     * name present and skips it, so a hash is mirrored ONCE regardless of how many legs
+     * restore it.
+     *
+     * The row requires the CORRECTED FIGURES, the ARITHMETIC that produces them, the
+     * THIRD-CORRECTION RECORD naming both prior corrections, AND the Windows-leg
+     * carve-out. That last one is the subtlest and the reason this is a row rather than
+     * a silent edit: "the Windows leg now mirrors zero assets" is the natural summary of
+     * this change and it is FALSE. It mirrors exactly ONE real asset -- its own publish
+     * seed, plus its own `integration` hash whenever ubuntu's enumeration snapshot
+     * predates it -- and that seed is precisely the asset OBS-05 reads back. A reader who
+     * deleted the carve-out would be one step from collapsing the publish matrix to a
+     * single leg and destroying OBS-05's only subject.
+     *
+     * `forbidden` is EMPTY, and here that is LOAD-BEARING for a reason the other empty
+     * rows do not share: this comment DELIBERATELY QUOTES its own superseded figures, in
+     * the correction-history paragraph. So a forbidden pattern over the old numbers would
+     * redden on the correct implementation -- the very record that makes the correction
+     * auditable is what an absence check would forbid. The row asserts on surviving
+     * CONTENT only, which is also why it needs none of the single-character
+     * character-class contortion the `forbidden` rows further up carry.
+     */
+    file: '.github/workflows/ci.yml',
+    bucket: 'correction',
+    required: [
+      'corrected this estimate for the THIRD',
+      'Phase 9 raised it UPWARD to ~10',
+      'brings it back DOWN, because the suffix is GONE',
+      "THE ARITHMETIC, from this estimate's own stated inputs",
+      '1000 / 8 = ~125 default-branch pushes inside ONE calendar month',
+      'THE WINDOWS LEG STILL MIRRORS EXACTLY ONE REAL ASSET',
+    ],
+    forbidden: [],
+  },
+  {
+    /**
      * ADDITIVE, and this is the row whose CLASSIFICATION changed -- see D-32 in the
      * doc block above. DOCS-08 names this site for correction; it is textually the
      * same fault-degradation claim as the README's and the trust doc's, so the
@@ -328,11 +367,15 @@ const DOCS_08_SITES = [
  *
  * `packages/github-cache/src/lib/mirror-seed.ts` joined the list in the SAME commit that
  * created it (OBS-05), which is what the previous revision of this comment asked for.
- * Deliberately NOT here yet: `packages/github-cache/src/lib/release-asset-name.integration.spec.ts`.
- * It does not exist at this commit; `read()` is a `readFileSync` and THROWS on a missing
- * path, so an early entry would blow up rather than guard. The later plan in this phase
- * that CREATES it extends this list in the same commit. The omission is sequencing, not an
- * oversight.
+ *
+ * `packages/github-cache/src/lib/release-asset-name.integration.spec.ts` has now joined
+ * too. The previous revision of this comment held it out on SEQUENCING grounds -- it did
+ * not exist yet, and `read()` is a `readFileSync` that THROWS on a missing path, so an
+ * early entry would blow up rather than guard -- and asked the plan that created it to add
+ * it in the same commit. That is not quite what happened: the RED plan created the file
+ * ADD-only, one commit ahead of the rename, and this entry lands with the rename instead.
+ * A one-commit lag, recorded rather than papered over, because the instruction it did not
+ * follow is still the right instruction for the next file.
  */
 const EDITED_FILES = [
   'docs/advanced.md',
@@ -343,6 +386,7 @@ const EDITED_FILES = [
   'packages/github-cache/src/action/index.ts',
   'packages/github-cache/src/roundtrip/read-back.ts',
   'packages/github-cache/src/lib/release-asset-name.ts',
+  'packages/github-cache/src/lib/release-asset-name.integration.spec.ts',
   'packages/github-cache/src/lib/mirror-seed.ts',
   'packages/github-cache/src/lib/cache-key.ts',
   'packages/github-cache/src/cleanup/cleanup.ts',

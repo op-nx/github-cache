@@ -81,11 +81,23 @@ export async function cleanupMirror(
     const assets = await client.listAllAssets(release.id);
 
     for (const asset of assets) {
-      // Prune only the publisher's <hash>-<os> assets, mirroring the read/write
-      // side's isServerProducedKey discipline: a foreign asset dropped into a
-      // genuine shard is never deleted as ours. First statement in the loop so a
-      // foreign asset (even one with a malformed created_at) is skipped silently
-      // and `scanned` counts only genuine mirror assets considered.
+      // Prune only the publisher's own assets, in BOTH name families (RETAIN-04):
+      // the CURRENT `nx-cache-<hash>` shape and the LEGACY pre-CORR-02
+      // `<hash>-<os>` shape. The widening is purely ADDITIVE -- the legacy branch
+      // is the pre-rename filter preserved verbatim, so every name that was
+      // accepted before is still accepted, which is what keeps the 122 assets
+      // already published under the old shape prunable instead of turning them
+      // into permanent shard growth. It had to land in the SAME COMMIT as the
+      // rename: a publisher writing the new name against an unwidened filter
+      // silently stops pruning, with no error anywhere.
+      //
+      // Unchanged and still in force: this mirrors the read/write side's
+      // isServerProducedKey discipline, so a foreign asset dropped into a genuine
+      // shard is never deleted as ours -- neither branch admits an unrecognised
+      // shape, and there is deliberately no third branch for the PoC-era
+      // `<hash>.tar.gz` family (D-08). First statement in the loop so a foreign
+      // asset (even one with a malformed created_at) is skipped silently and
+      // `scanned` counts only genuine mirror assets considered.
       if (!isServerProducedAssetName(asset.name)) {
         continue;
       }

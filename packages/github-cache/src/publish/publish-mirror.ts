@@ -162,10 +162,18 @@ async function ensureShardRelease(
  *   discarded every count and bypassed the aggregate check).
  * - 1000-asset cap (D-11/ROBUST-05): a shard at the cap skips-and-warns (core.warning),
  *   never hard-fails.
- * - First-write-wins (D-05/TRUST-07): a name already present is a benign no-op (the shard
- *   asset set is byte-identical under CORR-01); a duplicate-upload race returning 422 is
- *   likewise benign. A real per-item fault (401/403/429/5xx) is annotated and counted but
- *   isolated so the rest of the batch still mirrors (D-13 per-item vs whole-run).
+ * - First-write-wins (D-05/TRUST-07): a name already present is a benign no-op, and the
+ *   byte-identity that makes it benign SURVIVES CORR-02 with a DIFFERENT reason. It used
+ *   to rest on OS-namespacing -- each leg owned its own suffix, so two legs could not
+ *   collide on a name at all. That reason is gone with the suffix. What holds now: for a
+ *   given hash the Actions cache holds exactly ONE entry, and every publish leg RESTORES
+ *   that one entry and uploads it VERBATIM without re-executing the task, so the uploaded
+ *   bytes are byte-identical no matter which leg wins the race. A duplicate-upload race
+ *   returning 422 is likewise benign. A real per-item fault (401/403/429/5xx) is annotated
+ *   and counted but isolated so the rest of the batch still mirrors (D-13 per-item vs
+ *   whole-run). The residual -- arbitration between NON-identical payloads -- becomes
+ *   reachable only once a SECOND producer exists, which is a later phase's write decision
+ *   and not this one's (T-10-04).
  * - Aggregate fail-loud (OBS-01/D-15): a nonzero `failed` count calls core.setFailed after
  *   the batch, so a systemic upload regression (a token whose permissions regressed, a
  *   sustained upload-phase outage) fails the job instead of reporting CI green -- mirroring
@@ -292,8 +300,14 @@ export async function publishMirror(
       continue;
     }
 
-    // D-05 first-write-wins: an already-present name is a benign no-op (byte-identical
-    // under CORR-01) -- no upload, never an overwrite.
+    // D-05 first-write-wins: an already-present name is a benign no-op -- no upload,
+    // never an overwrite. The SECOND of this file's two byte-identity justifications,
+    // and it needs the same corrected reason as the engine doc block above rather than
+    // a pointer to it, because this is the branch a reader lands on when they ask "why
+    // is skipping safe HERE". No longer byte-identical because the name was
+    // OS-namespaced (CORR-02 removed that): byte-identical because the Actions cache
+    // holds exactly ONE entry per hash and every leg restores and re-uploads it
+    // VERBATIM without re-running the task.
     if (shard.names.has(name)) {
       skipped++;
 

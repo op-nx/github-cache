@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+// `readFileSync` left with `CORR_05_SITES`'s rows: its only consumer was
+// `readSiteLines`, the enumeration helper that read each violation site off disk to
+// locate its described disable. With zero sites there is nothing to read.
 import { fileURLToPath } from 'node:url';
 import { ESLint, type Linter } from 'eslint';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -702,7 +704,27 @@ describe('the exemption is exactly the integration suite, not everything named i
  * `lineIndexOf` below; a site whose disable is gone fails through
  * `reportUnusedDisableDirectives`. Neither can rot silently.
  *
- * There are now THREE sites and THREE error positions. There is NO fourth.
+ * THE TABLE IS NOW EMPTY, and CORR-05 IS TRUE: there are ZERO extant
+ * ambient-platform reads in unit specs. Phase 10's CORR-02 commit removed the last
+ * three -- two because the `platform` parameter they read into was DELETED, and one
+ * (the `cachePlatform()` default-resolution assertion) because it MOVED to
+ * `release-asset-name.integration.spec.ts`, where LINT-02's `ignores` exempts the
+ * path and a two-leg matrix actually samples the running platform. Each row left in
+ * the SAME COMMIT as its site and its `eslint-disable-next-line` directive, because a
+ * row whose site is gone fails at `lineIndexOf` while a directive whose violation is
+ * gone fails `reportUnusedDisableDirectives: 'error'` -- two different failure modes
+ * that only one commit satisfies.
+ *
+ * THE RULE'S NON-VACUITY NEVER LIVED IN THIS TABLE, which is what makes emptying it a
+ * completed requirement rather than a coverage loss. `EVASION_SHAPES` above proves the
+ * ban FIRES on all six evasion shapes at a unit-spec path and is EXEMPT at an
+ * integration path, and it survives this commit untouched. Without that sentence a
+ * reader finds an empty table and concludes the rule is unproven. The positive
+ * assertion below states the emptiness as a checkable fact, because an enumeration
+ * over an empty array emits zero tests silently.
+ *
+ * HISTORICAL: there were THREE sites and THREE error positions at the time this
+ * paragraph was written, and there was NO fourth.
  *
  * HISTORICAL, and preserved rather than deleted, because a removed miscount lock is
  * indistinguishable from a miscount that never existed. Phase 7 authored this block with
@@ -726,147 +748,34 @@ describe('the exemption is exactly the integration suite, not everything named i
  *    to name the right number for the wrong reason -- do not read the coincidence as
  *    the document having been correct.
  */
-const CORR_05_SITES = [
-  {
-    /** Removed by CORR-02, Phase 10. */
-    file: 'packages/github-cache/src/backend/releases-backend.spec.ts',
-    expression:
-      "cachePlatform(process.platform) === 'windows' ? 'linux' : 'win32';",
-    rule: 'no-restricted-syntax',
-  },
-  {
-    /** Removed by CORR-02, Phase 10. */
-    file: 'packages/github-cache/src/lib/release-asset-name.spec.ts',
-    expression: "releaseAssetName('abc123' as Hash, process.platform),",
-    rule: 'no-restricted-syntax',
-  },
-  {
-    /**
-     * Removed by NOTHING in this milestone. Phase 10 makes an explicit call; the
-     * recommendation on record is moving this assertion to
-     * `src/server/public-server.integration.spec.ts`, where LINT-02 allows it.
-     */
-    file: 'packages/github-cache/src/lib/release-asset-name.spec.ts',
-    expression:
-      'expect(cachePlatform()).toBe(cachePlatform(process.platform));',
-    rule: 'no-restricted-syntax',
-  },
-] as const;
-
-function readSiteLines(file: string): string[] {
-  return readFileSync(new URL(file, WORKSPACE_ROOT_URL), 'utf8').split('\n');
-}
-
-function lineIndexOf(
-  lines: string[],
-  expression: string,
-  file: string,
-): number {
-  const index = lines.findIndex((line) => line.trim() === expression);
-
-  expect(
-    index,
-    `${file} no longer contains the exact expression \`${expression}\`. This table is keyed on FILE + EXPRESSION TEXT on purpose; if the site was legitimately removed by its scheduled requirement, delete its ROW here in the same commit.`,
-  ).not.toBe(-1);
-
-  return index;
-}
+const CORR_05_SITES = [] as const;
 
 describe('every extant CORR-05 violation is caught while it still exists (LINT-03, D-22)', () => {
-  // CORR-05 stated as a POSITIVE claim. RED today with three rows, deliberately: it
-  // goes GREEN in plan 10-07, the single commit that deletes all three rows together
-  // with their sites and their directives.
+  // CORR-05 stated as a POSITIVE claim, and now GREEN: the CORR-02 commit deleted all
+  // three rows together with their sites and their directives.
   //
-  // Why the positive claim is needed at all. The enumeration below is
+  // Why the positive claim is needed at all, and why it is the ONLY thing left in this
+  // describe. The per-row enumeration that used to live here was
   // `for (const ... of CORR_05_SITES)`, and an enumeration over an EMPTY array emits
-  // ZERO tests, SILENTLY. So at the exact moment CORR-05 becomes true, everything this
-  // describe contributes drops to nothing with no signal whatsoever -- a passing suite
-  // that has stopped asserting. This one assertion converts that silent zero into a
-  // stated, checkable fact, and it is authored HERE, one commit BEFORE the table
-  // empties, so the cliff is closed before it is reached rather than after.
+  // ZERO tests, SILENTLY. So at the exact moment CORR-05 became true, everything this
+  // describe contributed would have dropped to nothing with no signal whatsoever -- a
+  // passing suite that has stopped asserting. This one assertion converts that silent
+  // zero into a stated, checkable fact. It was authored one commit BEFORE the table
+  // emptied, so the cliff was closed before it was reached rather than after.
+  //
+  // THE ENUMERATION AND ITS TWO HELPERS (`readSiteLines`, `lineIndexOf`) LEFT WITH THE
+  // ROWS, deliberately. Dead machinery over an empty table is worse than absent
+  // machinery: it reads as coverage, reports zero tests, and cannot fail. If a future
+  // requirement ever needs a described-disable ledger again, the shape is recoverable
+  // from this commit rather than kept alive on the off chance.
   //
   // The RULE's non-vacuity does NOT live in this table, which is what makes emptying it
-  // acceptable rather than a coverage loss: `EVASION_SHAPES` above proves the ban fires
-  // on every evasion shape at a unit-spec path and is exempt at an integration path, and
-  // that survives untouched. Nor is this table's HISTORICAL doc block deleted when its
-  // rows go -- a removed miscount lock is indistinguishable from a miscount that never
-  // existed.
+  // a satisfied requirement rather than a coverage loss: `EVASION_SHAPES` above proves
+  // the ban fires on every evasion shape at a unit-spec path and is exempt at an
+  // integration path, and that survives untouched. Nor is this table's HISTORICAL doc
+  // block deleted when its rows go -- a removed miscount lock is indistinguishable from
+  // a miscount that never existed.
   it('CORR-05 is now TRUE: zero extant ambient-platform reads remain in unit specs', () => {
     expect(CORR_05_SITES).toEqual([]);
   });
-
-  for (const { file, expression, rule } of CORR_05_SITES) {
-    describe(`${file} -- ${expression}`, () => {
-      it('is CAUGHT by the ban once its described disable is stripped', async () => {
-        const lines = readSiteLines(file);
-        const index = lineIndexOf(lines, expression, file);
-        const stripped = [...lines];
-
-        // BLANK, never splice. Deleting the directive line would shift every
-        // later line by one and the position assertion below would then be
-        // asserting the wrong number for every site whose disable precedes it.
-        if (stripped[index - 1]?.includes('eslint-disable-next-line')) {
-          stripped[index - 1] = '';
-        }
-
-        const messages = await lintFixture(stripped.join('\n'), file);
-
-        // Exactly one, and AT the expression. The other sites in the same file
-        // keep their own disables, so a second error here would mean the ban is
-        // firing somewhere this table does not account for.
-        expect(banRuleIdsOf(messages)).toEqual([rule]);
-        expect(banErrorsOf(messages)[0]?.line).toBe(index + 1);
-      });
-
-      it('carries a described disable stating why the assertion cannot move to integration', () => {
-        const lines = readSiteLines(file);
-        const index = lineIndexOf(lines, expression, file);
-        const directive = lines[index - 1] ?? '';
-
-        expect(directive).toContain(`eslint-disable-next-line ${rule}`);
-
-        // `--` may legitimately appear inside the prose, so everything after the
-        // FIRST separator is the reason. A directive with `--` and nothing after
-        // it still parses and still satisfies `require-description`, which is why
-        // emptiness is asserted here rather than delegated to the rule.
-        const reason = directive.split('--').slice(1).join('--').trim();
-
-        expect(reason.length).toBeGreaterThan(0);
-
-        // Strip any *.integration.spec.* FILENAME before looking for the word.
-        // That strip IS this assertion, not a nicety around it. The one semantic
-        // clause LINT-06 adds over LINT-05 is "say WHY the assertion cannot move
-        // to integration" -- and a bare toContain('integration') is satisfied by
-        // the substring sitting inside a path like
-        // `public-server.integration.spec.ts`. Site 4's reason did exactly that
-        // while ARGUING THE OPPOSITE: it recommended the move, i.e. conceded the
-        // disable was unnecessary, and the guard passed it on a filename token.
-        // A described disable whose description concedes it is unnecessary is
-        // precisely the failure this control exists to prevent, so requiring the
-        // word in the SURVIVING PROSE is what makes the clause mean anything.
-        //
-        // The extension part is `\w+`, not the `[cm]?ts` this used to carry
-        // (security audit residual N-2). Keying on the integration runner's
-        // collect set was the wrong frame: the token being stripped is a
-        // FILENAME QUOTED IN PROSE, and prose can cite any name at all --
-        // including one whose file would NOT be an integration spec, which is
-        // precisely the case where the reason is misleading and the strip
-        // matters most.
-        //
-        // Measured, so the residual is stated correctly rather than as the
-        // security audit phrased it. `.tsx` was never the hole: `[cm]?ts`
-        // matches the `ts` inside `.tsx` and strips the token anyway, leaving a
-        // stray `x`. The four that LEAKED are the JS family --
-        // `.js`, `.mjs`, `.cjs`, `.jsx` -- all four of which ME-01 brought into
-        // the ban's `files` set, so all four are now real in-scope path shapes
-        // rather than the theoretical one N-2 described.
-        const prose = reason.replace(/\S+\.integration\.spec\.\w+/g, '');
-
-        expect(
-          prose,
-          `${file}: this disable's reason mentions "integration" only inside a FILENAME. LINT-06 wants prose saying why the assertion cannot move to an integration spec -- not a path that happens to contain the word.`,
-        ).toContain('integration');
-      });
-    });
-  }
 });

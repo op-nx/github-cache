@@ -165,17 +165,25 @@ describe('publishMirror happy-path mirror (TEST-03)', () => {
     );
   });
 
-  it('derives the uploaded asset name ONLY through releaseAssetName(hash) (CORR-01, non-vacuous)', async () => {
+  it('derives the uploaded asset name ONLY through releaseAssetName(hash) (CORR-02, non-vacuous)', async () => {
     const fake = client();
 
     await publishMirror(fake);
 
     const name = vi.mocked(fake.uploadReleaseAsset).mock.calls[0][1];
-    // Non-vacuous: the name must be the OS-namespaced single-source form, never the bare
-    // hash -- this fails the moment the publisher inlines its own template and drifts.
+    // Non-vacuous: the name must be the single-source form, never the bare hash --
+    // this fails the moment the publisher inlines its own template and drifts.
     expect(name).toBe(releaseAssetName(HASH));
     expect(name).not.toBe(HASH);
-    expect(name.startsWith(`${HASH}-`)).toBe(true);
+    // The third clause was RE-AUTHORED by CORR-02, not deleted. It used to assert the
+    // name STARTS with `<hash>-`, which pinned the deleted OS-suffixed shape and was
+    // the only assertion here that could tell "derived through the helper" apart from
+    // "happens to equal whatever the helper returns today". Its replacement pins the
+    // surviving structural fact: the hash is the name's SUFFIX now, under a prefix, so
+    // this still fails if the publisher were to emit the bare hash, a prefix-only
+    // string, or the hash under some other decoration.
+    expect(name.endsWith(HASH)).toBe(true);
+    expect(name.length).toBeGreaterThan(HASH.length);
   });
 });
 

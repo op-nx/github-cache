@@ -1130,19 +1130,40 @@ jobs:
       # outcome and is deliberately ACCEPTED here (the Releases mirror now holds real
       # task outputs, which is the whole point of a remote cache), with two consequences:
       #
-      #   (a) Shard growth, and Phase 9 DOUBLED it. There are ~5 distinct real task
-      #       hashes per input-changing push (build, typecheck, test, integration-linux,
-      #       integration-win32). This estimate used to read 4 from the ubuntu leg plus 1
-      #       from the windows leg, because each leg could restore ONLY its own OS's
-      #       saves. VER-01 + VER-03 removed that partition, so EACH leg now restores all
-      #       ~5 and uploads them under its OWN `<hash>-<os>` suffix -- ~10 real assets
-      #       per push, not ~5, on top of the ~3 run_id-keyed ones. So roughly 75
-      #       default-branch pushes inside ONE calendar month before that month's shard
-      #       reaches RELEASE_ASSET_CAP, down from ~125 -- and the cap already degrades to
-      #       skip-and-warn (D-11), never a hard failure, while retention prunes shards
-      #       past the window. Still not a concern at this repo's push rate. The duplicate
-      #       pair per hash is the same accepted cost OBS-05 owns (a leg's asset suffix
-      #       names the PUBLISHING leg, not the producer).
+      #   (a) Shard growth, and CORR-02 has now corrected this estimate for the THIRD
+      #       time -- the first DOWNWARD one. There are ~5 distinct real task hashes per
+      #       input-changing push (build, typecheck, test, integration-linux,
+      #       integration-win32).
+      #         CORRECTION HISTORY, recorded so a fourth reader does not re-derive it.
+      #         (1) It first read ~5 real assets per push: 4 from the ubuntu leg plus 1
+      #             from the windows leg, because each leg could restore ONLY its own OS's
+      #             saves. (2) Phase 9 raised it UPWARD to ~10: VER-01 + VER-03 removed
+      #             that partition, so each leg restored all ~5 and uploaded them under
+      #             its OWN `<hash>-<os>` suffix -- a duplicate pair per hash. (3) CORR-02
+      #             brings it back DOWN, because the suffix is GONE. One asset name per
+      #             hash means the second leg to publish finds the name already present
+      #             and skips it as a first-write-wins no-op, so a hash is mirrored ONCE
+      #             no matter how many legs restore it.
+      #         THE ARITHMETIC, from this estimate's own stated inputs. ~5 real assets per
+      #         push (back to roughly the distinct-task-hash count, not double it) plus the
+      #         ~3 run_id-keyed seeds = ~8 per push. RELEASE_ASSET_CAP is 1000, so
+      #         1000 / 8 = ~125 default-branch pushes inside ONE calendar month before that
+      #         month's shard reaches the cap -- roughly DOUBLE the ~75 Phase 9's figure
+      #         implied, and back to the pre-Phase-9 number by the same arithmetic. The cap
+      #         degrades to skip-and-warn (D-11), never a hard failure, and retention prunes
+      #         shards past the window, so this was never a concern at this repo's push rate
+      #         and is now half as much of one.
+      #         THE WINDOWS LEG STILL MIRRORS EXACTLY ONE REAL ASSET, and that carve-out is
+      #         why the per-leg counts are still NOT equal. `max-parallel: 1` runs ubuntu
+      #         first, so ubuntu mirrors every name it can restore and windows finds them
+      #         all present -- except its own `integration` hash, which ubuntu's enumeration
+      #         snapshot predates (MEASURED on run 30400231720: ubuntu enumerated at
+      #         ~21:21:11Z, windows integration finished at ~21:23:13Z). Plus its own
+      #         publish seed. So `publish (windows)` reports a small nonzero `mirrored`, not
+      #         0 -- the all-restore-MISS warning requires `mirrored === 0` and will not
+      #         fire -- and that seed is precisely the asset OBS-05 reads back, which is why
+      #         "the windows leg mirrors zero assets" is the wrong summary of this change
+      #         and "zero DUPLICATE assets" is the right one.
       #   (b) Wall clock. Uploads are throttled to ~1/sec, so publish gains a few
       #       seconds per push.
       #

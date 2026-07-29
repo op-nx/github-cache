@@ -35,9 +35,14 @@ import { CACHE_ARCHIVE_DIR } from '../lib/cache-archive-path.js';
  * preferred. Measured across `packages/github-cache`: zero `afterAll`, zero
  * `process.chdir`, zero `vi.stubEnv`/`vi.unstubAllEnvs`, zero save-and-restore of any
  * process global. That absence is itself a pattern -- the convention here is INJECTION,
- * not mutation: `selectBackend(env)` takes an env bag, `releaseAssetName(hash, platform)`
- * takes a platform, and vitest.config.mts neutralises the consumer env vars in CONFIG
- * rather than in a hook. VER-04's subject IS `process.cwd()`, which no injection seam can
+ * not mutation: `selectBackend(env)` takes an env bag, `createReleasesReadBackend(client)`
+ * takes its whole read seam as a parameter, `cleanupMirror(client, options)` takes the
+ * client whose delete calls it would otherwise make for real, and vitest.config.mts
+ * neutralises the consumer env vars in CONFIG rather than in a hook. (The example that
+ * used to head that list was the sibling asset-name helper's platform parameter; CORR-02
+ * DELETED it, so the example is replaced with live ones rather than left citing a
+ * signature that no longer exists -- stale prose about a deleted signature is exactly the
+ * class the Phase 9 regression came from.) VER-04's subject IS `process.cwd()`, which no injection seam can
  * reach without parameterising `createActionsCacheBackend()` -- and TRUST-05 forbids that
  * (select-backend.ts:36-37 comment-locks the factory staying zero-parameter and
  * synchronous). So the process-global mutation is the only remaining shape, not the

@@ -4,12 +4,10 @@ import {
   resolveRepoIdentity,
 } from '../lib/local-context.js';
 import type { Hash } from '../lib/cache-key.js';
-import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
-// A SECOND import statement from the same module rather than a widened one above:
-// plan 10-06 is ADD-only by contract (`git diff --numstat` must show zero deletions
-// on this file), and editing the existing specifier list would register as a
-// deletion. Plan 10-07, which already rewrites the line above, folds the two.
-import { CACHE_OS_VALUES } from '../lib/release-asset-name.js';
+import {
+  CACHE_OS_VALUES,
+  releaseAssetName,
+} from '../lib/release-asset-name.js';
 import {
   createReleasesReadBackend,
   createReleasesReadClient,
@@ -33,15 +31,20 @@ const mockRepo = vi.mocked(resolveRepoIdentity);
 // temp-file race like actions-cache-backend.spec.ts guards against with a
 // per-spec unique hash.
 const INVARIANT_HASH = 'deadbeef' as Hash;
-const SENSITIVE_HASH = 'beefcafe' as Hash;
 
-// The OS discriminator this test process is NOT running under, so a "foreign OS"
-// seeded entry is genuinely foreign on every CI matrix leg (Windows, Linux,
-// macOS). cachePlatform(OTHER_PLATFORM) is always different from the running one,
-// so releaseAssetName(hash) (running platform) never collides with the seed.
-const OTHER_PLATFORM: NodeJS.Platform =
-  // eslint-disable-next-line no-restricted-syntax -- OTHER_PLATFORM is DEFINED as the OS this process is not on, so the running platform is the input to the definition rather than an expectation derived from it; an integration spec would still have to read the runner to know which OS to be foreign to. Removed by CORR-02, Phase 10.
-  cachePlatform(process.platform) === 'windows' ? 'linux' : 'win32';
+// DELETED BY CORR-02, with its `eslint-disable-next-lin[e] no-restricted-syntax`
+// directive and its `CORR_05_SITES` row, all three in the one commit those rules
+// force together. The single-character character class in that token is LOAD-BEARING,
+// the same contortion docs-same-os-claims.spec.ts uses and for the same reason: CORR-05
+// is verified by enumerating surviving directives with `rg`, and spelling the token in
+// prose that RECORDS a deletion would return a hit indistinguishable from a live
+// violation. Do not tidy the bracket out.
+// `OTHER_PLATFORM` was DEFINED as the OS this process is not running
+// under, so that a seeded entry could be made genuinely foreign on every matrix leg.
+// Once the asset name carries no OS there is no foreign-OS name to construct: "here"
+// and "there" are the same string, so the concept has no referent and the constant
+// could not be re-pointed at anything meaningful. `SENSITIVE_HASH` left with it --
+// its only consumer was the cross-OS MISS case below.
 
 interface RecordingClient extends ReleaseReadClient {
   readonly requested: readonly string[];
@@ -88,40 +91,46 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('createReleasesReadBackend get cross-OS round-trip (CORR-01, TEST-05)', () => {
-  it('returns THIS platform bytes for an OS-invariant hash present under both platforms (CORR-01)', async () => {
-    const here = releaseAssetName(INVARIANT_HASH);
-    const there = releaseAssetName(INVARIANT_HASH, OTHER_PLATFORM);
+describe('createReleasesReadBackend get over the OS-invariant asset name (CORR-02, TEST-05)', () => {
+  it('returns the bytes stored under the single OS-invariant name, whichever leg wrote them (CORR-02)', async () => {
+    // RE-AUTHORED by CORR-02, not edited, and the re-authoring IS the requirement's
+    // payoff. Its predecessor seeded TWO names for one hash -- this platform's and
+    // another platform's -- and asserted the reader picked its own. With one name per
+    // hash there is no second name to pick between: the publishing leg's OS is
+    // unrepresentable in the name, so whichever leg mirrored these bytes, THIS is the
+    // name they sit under and this read HITs where it would previously have MISSED.
+    const name = releaseAssetName(INVARIANT_HASH);
     const backend = createReleasesReadBackend(
-      recordingClient(
-        new Map([
-          [here, Buffer.from('here-bytes')],
-          [there, Buffer.from('there-bytes')],
-        ]),
-      ),
+      recordingClient(new Map([[name, Buffer.from('mirrored-bytes')]])),
     );
 
     const result = await backend.get(INVARIANT_HASH);
 
-    expect(result).toEqual({ kind: 'hit', bytes: Buffer.from('here-bytes') });
+    expect(result).toEqual({
+      kind: 'hit',
+      bytes: Buffer.from('mirrored-bytes'),
+    });
   });
 
-  it('MISSES an OS-sensitive hash present ONLY under another platform -- never a wrong-OS artifact (CORR-01)', async () => {
-    // Non-vacuous: a positive-only correct-hit assertion above still passes with
-    // OS-namespacing deleted entirely (releaseAssetName ignoring its platform).
-    // THIS negative case is the one that actually proves CORR-01 -- it goes red the
-    // moment the reader would serve a foreign-OS artifact as a valid hit. The repo
-    // has already shipped one tautological guard (select-backend.spec.ts:196-198);
-    // that failure mode must not recur here.
-    const there = releaseAssetName(SENSITIVE_HASH, OTHER_PLATFORM);
-    const backend = createReleasesReadBackend(
-      recordingClient(new Map([[there, Buffer.from('there-bytes')]])),
-    );
-
-    const result = await backend.get(SENSITIVE_HASH);
-
-    expect(result).toEqual({ kind: 'miss' });
-  });
+  // DELETED BY CORR-02 -- the trade recorded here rather than left to be inferred
+  // from a diff.
+  //
+  // WHAT WAS REMOVED: `MISSES an OS-sensitive hash present ONLY under another
+  // platform -- never a wrong-OS artifact (CORR-01)`. It seeded a hash under the
+  // other platform's asset name only, and asserted the reader MISSED rather than
+  // serving a foreign-OS artifact as a valid hit. It was CORR-01's documented
+  // non-vacuity proof: the positive HIT case above passes even with OS-namespacing
+  // deleted entirely, so this negative was the assertion that actually bit.
+  //
+  // WHY IT BECAME INCOHERENT: CORR-02 destroys it ON PURPOSE. With no platform in the
+  // name, "the name another platform would have written" IS this name, so the case
+  // would seed the very asset it then asserts is absent. It is not weakened by the
+  // rename, it is unstateable -- which is why re-pointing it was never an option.
+  //
+  // WHERE THE REPLACEMENT LIVES: the `name derivation (TEST-05)` describe below, whose
+  // third clause asserts the requested name carries NO member of CACHE_OS_VALUES.
+  // Plan 10-06 authored it one commit BEFORE this deletion, deliberately, so the
+  // invariant is never left with zero guards.
 });
 
 describe('createReleasesReadBackend name derivation (TEST-05)', () => {

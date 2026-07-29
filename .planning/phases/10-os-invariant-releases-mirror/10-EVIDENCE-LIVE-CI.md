@@ -168,6 +168,54 @@ closed checkbox against the old text.
 
 ---
 
+## The OBS-03 retraction, confirmed by live data rather than by reasoning
+
+Measured after the run, from this native Windows arm64 workstation at `3c6415f`, via
+`npm run capture:hashes -- --install-mode ci`:
+
+| Target | Local hash (win32/arm64) | Present in the warm mirror | Stored label |
+|---|---|---|---|
+| `build` | `17269409342684722256` | yes | `mirrored-by: linux` |
+| `typecheck` | `122473981802582055` | yes | `mirrored-by: linux` |
+| `test` | `11681410932071446589` | yes | `mirrored-by: linux` |
+| `integration` | `8137422034373911537` | yes | `mirrored-by: linux` |
+| `lint` | `12188798272866712437` | no | -- |
+
+**The `integration` row is the load-bearing one.** That target carries the
+`{"runtime":"node -p process.platform"}` discriminator (`nx.json` `targetDefaults.integration`),
+so its hash is OS-sensitive BY DESIGN: a `win32` machine and a `linux` machine cannot compute the
+same value. This workstation is `win32`, so `8137422034373911537` is the hash the
+`integration (windows-11-arm)` CI leg computes -- and it is in the mirror carrying
+`mirrored-by: linux`.
+
+So the ubuntu `publish` leg enumerated a WINDOWS-produced Actions-cache entry, restored it
+(Phase 9's `enableCrossOsArchive` + OS-invariant version is what allows that), and stamped its
+OWN OS on it. **Publisher `linux`, producer `windows`, in one asset, live.** This is exactly the
+case the OBS-03 comment lock retracts the producing-OS reading for, and it is no longer a
+hypothetical: a reader who took `mirrored-by` as provenance would draw the wrong conclusion about
+this specific asset today.
+
+Note how the producer was established: by RECOMPUTING the hash on a known platform and matching
+it. Nothing the mirror stores identifies the producer -- which is the whole reason
+`listCacheEntries` exposes no producing-OS field and the label could not honestly claim one.
+
+`lint` is absent from the mirror BY DESIGN, not by hash divergence: the `lint` CI job is the one
+quality job that does not start the cache sidecar, so its Nx result never reaches the Actions
+cache and no publish leg can enumerate it. Not a gap, and not in Phase 11's success criteria.
+
+### Consequence for Phase 11
+
+All four targets named by Phase 11's SC1 (`build`, `typecheck`, `test`) and SC2 (`integration`)
+are warm under hashes THIS workstation computes. The `.planning`-only commits since the mirrored
+tree do not rotate them -- `.planning` appears in no named input (`nx.json` `namedInputs.default`
+is `{projectRoot}/**/*` plus `sharedGlobals`, and every workspace-root input is enumerated
+explicitly).
+
+**There is a clock on this.** The assets were created 2026-07-29T16:44Z and cleanup prunes past
+`DEFAULT_MAX_AGE_DAYS` (30), daily at 03:17 UTC, so the window closes around 2026-08-28. The
+2026-08-01 shard rollover is NOT a threat: `shardTagsForWindow` walks calendar months newest-first
+across the retention window, so `cache-mirror-202607` stays reachable from an August read.
+
 ## What remains unobservable
 
 Nothing in Phase 10. Both live clauses are now sampled.

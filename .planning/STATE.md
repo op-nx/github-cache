@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 11
 current_phase_name: live-proofs-o1-o2-o3
 status: executing
-last_updated: "2026-07-29T21:54:25.473Z"
+last_updated: "2026-07-29T22:26:54.444Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 38
-  completed_plans: 28
+  completed_plans: 30
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 11 (live-proofs-o1-o2-o3) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Progress: 4/6 phases complete [####--] 67%
 Last activity: 2026-07-29 — Phase 11 execution started
@@ -124,6 +124,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 11 P01 | 7min | 2 tasks | 3 files |
 | Phase 11 P02 | 17min | 3 tasks | 2 files |
 | Phase 11 P03 | 18min | 3 tasks | 1 files |
+| Phase 11 P04 | 23min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -241,6 +242,8 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase ?]: Plan 11-03: the aggregate dist/ mtime currency check FAILED and the session continued on three stronger content-level checks with NO rebuild -- recorded in 11-EVIDENCE.md as a numbered deviation rather than absorbed
 - [Phase ?]: Plan 11-03: producer fingerprints re-taken in-process after a Git Bash MSYS path-mangling FALSE ZERO -- a leading-slash literal is rewritten before rg sees it, so /home/runner read as absent while the path was demonstrably present
 - [Phase ?]: Plan 11-03: XOS-01, XOS-02, TEST-10 and OBS-02 flipped complete on the O1/O2 evidence; TEST-08 deliberately NOT flipped -- its text spans O1-O4 and its traceability row pins it Pending until Phase 12 appends the O4 row
+- [Phase 11]: 11-04: maintainer selected 'proceed' at the blocking rotation sign-off, authorising 11-05/11-06 to rotate test, typecheck, integration and lint — 4/4 pre-registered counts MET, 4/4 cacheStatus remote-cache-hit, D-07 never fired, and all four hashes attributed with a named means and its limit. Three weaknesses accepted as STATED LIMITS: build/typecheck carried by timing (M3) plus structure (M1) not identity; typecheck's created_at sits on a whole-second truncation edge that does not change the verdict; finite GitHub run-record retention reduces those two rows to M1 once run 30471772954 ages out, mitigated by transcribing the windows
+- [Phase 11]: 11-04: producer attribution is established by four independent means with each hash naming which carried it AND that means' limit; mirrored-by is a PUBLISHER label and is not a means — The job-window cross-reference resolves a UNIQUE runner OS for all four hashes, which is what carries build and typecheck where no in-artifact fingerprint exists. D-14's retraction now ships arithmetic: integration was produced on windows-11-arm and published from ubuntu-24.04-arm 55.16s later, which is exactly why its label reads mirrored-by: linux
 
 ### Pending Todos
 
@@ -367,7 +370,7 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T21:53:48.604Z
+Last session: 2026-07-29T22:26:54.410Z
 Stopped at: Completed 11-02-PLAN.md -- D-06 discharged, cache cleared, 11-03 unblocked
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.

@@ -86,7 +86,7 @@ Full phase detail, success criteria, traceability, and coverage validation archi
 - [x] **Phase 7: Lint Toolchain and the Ambient-Platform-Read Ban** - Adopt ESLint 9 flat config and a `lint` target, then make "unit specs must not read the running machine" a build failure instead of a convention. (completed 2026-07-27)
 - [x] **Phase 8: Nx Task-Hash Parity** - Root-cause the cross-OS hash divergence node by node, fix it, and keep `integration` the only target that diverges -- enforced by a build-gating CI measurement. (completed 2026-07-28)
 - [x] **Phase 9: OS-Invariant Actions-Cache Version** - Make the `@actions/cache` version stop depending on the OS: one hardcoded forward-slash path plus `enableCrossOsArchive` at every call site, closed behaviourally by a Windows runner reading back a Linux-written entry. (completed 2026-07-28)
-- [ ] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed.
+- [x] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed. (completed 2026-07-29)
 - [ ] **Phase 11: Live Proofs -- O1, O2, O3** - Record the three live proofs in the mandated order, including the producer attribution that enabling O4 destroys forever.
 - [ ] **Phase 12: Windows CI Reuse (O4) + Consumer Recipe** - Add the Windows `build`/`typecheck`/`test` legs, prove they HIT on Linux-produced entries, and ship the safe-by-default adoption recipe.
 
@@ -416,7 +416,7 @@ must be proven to CATCH the three CORR-05 violations before this phase removes t
      mirrored under both `-linux` and `-windows` until the rename lands: bounded, NOT a correctness
      bug, and the existing "~5 assets per push" estimate in `ci.yml` reads about double during it.
 
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans complete
 
 - [x] 10-01-PLAN.md
 - [x] 10-02-PLAN.md
@@ -425,7 +425,7 @@ must be proven to CATCH the three CORR-05 violations before this phase removes t
 - [x] 10-05-PLAN.md
 - [x] 10-06-PLAN.md
 - [x] 10-07-PLAN.md
-- [ ] 10-08-PLAN.md
+- [x] 10-08-PLAN.md
 
 - [x] `10-01-PLAN.md` - capture the two perishable pre-rename measurements (D-25 XOS-02 baseline, D-08 census)
 - [ ] `10-02-PLAN.md` - the `mirrored-by` label seam, engine through real Octokit adapter (OBS-03)
@@ -721,7 +721,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 7. Lint Toolchain and the Ambient-Platform-Read Ban | v0.0.2 | 4/4 | Complete   | 2026-07-27 |
 | 8. Nx Task-Hash Parity | v0.0.2 | 6/6 | Complete   | 2026-07-28 |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 8/8 | Complete    | 2026-07-28 |
-| 10. OS-Invariant Releases Mirror | v0.0.2 | 7/8 | In Progress|  |
+| 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 0/? | Not started | - |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 0/? | Not started | - |
 

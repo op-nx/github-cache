@@ -410,7 +410,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 ### CREEP trust posture (TRUST)
 
-- [ ] **TRUST-10**: C1 (write-trust allowlist), C2 (sync gate) and C16's enumeration-side filter
+- [x] **TRUST-10**: C1 (write-trust allowlist), C2 (sync gate) and C16's enumeration-side filter
   (`isServerProducedKey`, over Actions-cache keys) are unchanged, verified rather than assumed.
   C16's Releases-side filter (`isServerProducedAssetName`) DOES change under CORR-02/RETAIN-04;
   the change is additive. The `ref` scoping of `listCacheEntries` (`action/index.ts:40-43`) is
@@ -418,7 +418,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   in-repo control keeping non-default-branch trusted writes (`TRUSTED_EVENTS` includes `push` with
   no ref check) out of the world-readable mirror.
 
-- [ ] **TRUST-11**: The phase threat model records where first-write-wins arbitrates between
+- [x] **TRUST-11**: The phase threat model records where first-write-wins arbitrates between
   NON-identical payloads -- **at `saveCache`, not at the Release upload.** Two publish legs never
   produce differing payloads: for a given hash the Actions cache holds exactly ONE entry, and both
   legs restore it and upload it verbatim without re-executing the task, so the uploaded bytes are
@@ -436,7 +436,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   comment is rewritten in the SAME COMMIT as CORR-02 -- byte-identity survives, but its REASON
   changes from OS-namespacing to one-entry-per-hash.
 
-- [ ] **TRUST-12**: The phase threat model records that VER-01/VER-03 remove the incidental
+- [x] **TRUST-12**: The phase threat model records that VER-01/VER-03 remove the incidental
   within-scope OS partitioning, leaving CORR-04's declared discriminator as the sole separation
   mechanism; and records the public-repo EXPOSURE DELTA -- a single-OS publish leg can now restore
   and mirror every OS's entries, so the captured terminal output of every CI job on every OS
@@ -644,9 +644,9 @@ honour table: `.planning/ROADMAP.md`.
 | OBS-05 | Phase 10 | Pending (must land before CORR-02) |
 | XOS-06 | Phase 10 | Complete |
 | XOS-07 | Phase 10 | Complete (live full-task-set census is a post-merge push observation) |
-| TRUST-10 | Phase 10 | Pending |
-| TRUST-11 | Phase 10 | Pending |
-| TRUST-12 | Phase 10 | Pending |
+| TRUST-10 | Phase 10 | Complete |
+| TRUST-11 | Phase 10 | Complete |
+| TRUST-12 | Phase 10 | Complete |
 | TRUST-13 | Phase 10 | Pending |
 | XOS-01 | Phase 11 | Pending (live-CI/live-workstation only) |
 | XOS-02 | Phase 11 | Pending (baseline captured in Phase 10, before CORR-02) |

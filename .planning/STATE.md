@@ -5,15 +5,14 @@ milestone_name: framing
 current_phase: 10
 current_phase_name: OS-Invariant Releases Mirror
 status: complete
-last_updated: "2026-07-29T15:16:19.886Z"
+last_updated: "2026-07-29T18:13:08.452Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 10 closed -- verified, secured, validated, learnings extracted
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 1
   total_plans: 30
   completed_plans: 26
-  percent: 67
+  percent: 17
 ---
 
 # Project State
@@ -342,8 +341,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T13:25:55.438Z
-Stopped at: Completed 10-08-PLAN.md (final plan of phase 10)
+Last session: 2026-07-29T18:13:08.439Z
+Stopped at: Phase 11 context gathered
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.
@@ -411,7 +410,7 @@ Stopped at: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-r
 Task 3a (413-flush, F14) RESOLVED as a documented HTTP/1.1 limitation (lead-approved option a): a bounded raw-socket investigation proved the ECONNRESET is deterministic for a client streaming a body far over the cap (60/60 on a 100MB repro; <=16KB-over-cap gets a clean 413, >=256KB resets), and the prescribed destroy-on-finish fix does NOT resolve it (and one variant hangs). Landed a ponytail ceiling comment at both destroy sites (cb2832d), no behavior change, no bundle diff, no flaky test. The memory-bounding cap (backend.put never reached, proven by the mid-stream abort test) is intact regardless.
 HELD (deliberately, for the lead): the branch push and the PR-body update. The lead handles the outward-facing push after independently verifying the series. This executor did not push and did not touch the PR body.
 Final local battery at HEAD cb2832d: fmt / build / typecheck / typecheck:action / test (430) / fallow:ci / check:action / pack:check all exit 0.
-Resume file: None
+Resume file: .planning/phases/11-live-proofs-o1-o2-o3/11-CONTEXT.md
 Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates the PR #3 body. Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.
 
 ## Operator Next Steps

@@ -102,11 +102,13 @@ describe('mirrorSeedHash (OBS-05 per-leg publish seed, D-12)', () => {
   });
 
   it('pins the PRECONDITION for that injectivity: CACHE_OS_VALUES holds under ten members', () => {
-    // At ten discriminators index 1 and index 10 share a first digit, so feed1<run_id>
-    // becomes ambiguous and the single-digit slot stops separating the legs. Adding OS
-    // number ten therefore has to change the ENCODING, not only the tuple. This
-    // assertion is the only place in the repo that says so, and without it the
-    // injectivity case above would keep passing right up to the tenth member.
+    // At ten members the index stops being one character, so the boundary between the
+    // index slot and the run id stops being positional: `feed1` followed by `0<run_id>`
+    // renders identically to `feed10` followed by `<run_id>`. Two legs of the SAME run
+    // would still differ -- which is exactly why the injectivity case above cannot carry
+    // this claim and would keep passing past the tenth member. Adding OS number ten has
+    // to change the ENCODING (a separator, or a fixed-width index), not just the tuple.
+    // This is the only assertion in the repo that says so.
     expect(CACHE_OS_VALUES.length).toBeLessThan(10);
   });
 

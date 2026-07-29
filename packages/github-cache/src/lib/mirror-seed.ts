@@ -23,8 +23,13 @@ import { CACHE_OS_VALUES, type CacheOs } from './release-asset-name.js';
  * the safety: adding a fourth OS discriminator shifts the indices in exactly one place,
  * so a new leg cannot silently collide with an existing seed. The precondition that
  * makes a single-digit index injective -- CACHE_OS_VALUES holding under ten members --
- * is pinned by mirror-seed.spec.ts rather than assumed, because at ten the slot stops
- * separating the legs and the ENCODING, not just the tuple, has to change.
+ * is pinned by mirror-seed.spec.ts rather than assumed. At ten the index stops being one
+ * character, so the boundary between the index slot and the run id stops being
+ * positional: `feed1` followed by `0<run_id>` renders identically to `feed10` followed by
+ * `<run_id>`. Two legs of the SAME run would still differ, so the tenth discriminator
+ * costs injectivity over the whole (runId, os) domain without breaking the per-run case
+ * -- which is why the length bound is asserted directly. Adding OS number ten therefore
+ * has to change the ENCODING (a separator, or a fixed-width index), not just the tuple.
  *
  * The marker word must stay DISTINCT from `cafe<run_id>`, the seed ci.yml's
  * `consumer-smoke` job already ships (its comment carries the identical hex-word

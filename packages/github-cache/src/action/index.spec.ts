@@ -235,6 +235,45 @@ describe('createPublishClient.listCacheEntries keyless-row filter', () => {
   });
 });
 
+describe('createPublishClient.uploadReleaseAsset label forwarding (OBS-03, D-09)', () => {
+  // LOAD-BEARING, not ceremonial. TypeScript ACCEPTS a contextually-typed adapter that
+  // declares only three parameters against the four-parameter PublishClient method -- a
+  // narrower implementation signature is assignable -- so forgetting the adapter half of
+  // D-09 typechecks clean, passes every engine test (which asserts against a fake, not
+  // this adapter), and silently drops the label on every real upload. This is the only
+  // place that failure mode is observable before it reaches uploads.github.com.
+  it('forwards the label into the Octokit call alongside an unchanged name', async () => {
+    const uploadReleaseAsset = vi.fn(async () => ({}));
+    const octokit = {
+      rest: { repos: { uploadReleaseAsset } },
+    } as unknown as Octokit;
+    const bytes = Buffer.from('ab');
+
+    const client = createPublishClient(octokit, 'op-nx', 'github-cache', 'ref');
+    await client.uploadReleaseAsset(7, 'nm', bytes, 'mirrored-by: windows');
+
+    expect(uploadReleaseAsset).toHaveBeenCalledOnce();
+    // ONE assertion over the WHOLE recorded argument object, never a per-property pair
+    // (D-11). `name` is inside it deliberately: a mistake that wrote the label over the
+    // filename would satisfy a label-only check while renaming every mirrored asset.
+    // `label` is an OS-agnostic pass-through here -- the adapter never derives it -- so
+    // the value is an INPUT chosen by this test, not a hand-authored expectation about
+    // the running machine.
+    expect(uploadReleaseAsset).toHaveBeenCalledWith({
+      owner: 'op-nx',
+      repo: 'github-cache',
+      release_id: 7,
+      name: 'nm',
+      data: bytes,
+      label: 'mirrored-by: windows',
+      headers: {
+        'content-type': 'application/octet-stream',
+        'content-length': '2',
+      },
+    });
+  });
+});
+
 describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
   function fakeServer() {
     return {

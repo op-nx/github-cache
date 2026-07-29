@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 10
 current_phase_name: OS-Invariant Releases Mirror
 status: executing
-last_updated: "2026-07-29T10:35:42.893Z"
+last_updated: "2026-07-29T10:55:59.343Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 19
+  completed_plans: 20
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 10 (OS-Invariant Releases Mirror) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Progress: 0/6 phases complete [------] 0%
 Last activity: 2026-07-29 — Phase 10 execution started
@@ -102,6 +102,7 @@ Last activity: 2026-07-29 — Phase 10 execution started
 | Phase 08 P05 | 5h 6m | 3 tasks | 4 files |
 | Phase 08 P06 | 42min | 2 tasks | 4 files |
 | Phase 10 P01 | 50m | 2 tasks | 1 files |
+| Phase 10 P02 | 13min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -194,6 +195,10 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 10]: 10-01: Phase 11 XOS-02 inherits an open PRECONDITION, not a read-path defect: a default-branch push must republish the mirror under the OS-free name before any post-rename local read is measurable
 - [Phase 10]: 10-01: RETAIN-05(a): 50 PoC-era <hash>.tar.gz assets accepted as dead weight with a measured count (50 of 122 in shard cache-mirror-202607, release 354838660). No code change, no third accept branch; manual prune stays operational and not code
 - [Phase 10]: 10-01: Release asset label measured EMPTY on all 122 shard assets, so OBS-03's mirrored-by field is genuinely new rather than partially populated
+- [Phase ?]: [Phase 10]: 10-02: OBS-03's mirrored-by label is a 4th POSITIONAL parameter on PublishClient.uploadReleaseAsset (the ref precedent on createPublishClient), hoisted above the hash loop so cachePlatform() runs once per run; PublishOptions stays { now }. The adapter edit is the load-bearing half -- TypeScript accepts a contextually-typed adapter declaring only three parameters against a four-parameter interface, so a forgotten adapter typechecks clean, passes every engine test against the fake, and silently drops the label on every real upload.
+- [Phase ?]: [Phase 10]: 10-02: the retraction is comment-locked at the construction site with two independent grounds -- listCacheEntries yields { key } only (the adapter maps every row to { key: cache.key }), and Phase 9's VER-01/VER-03 broke publisher-equals-producer, so a producing-OS reading would be wrong in exactly the cross-OS case the label serves. The comment also states what the hoist does NOT guarantee: moving it back inside the loop is behaviourally identical, and only the multi-hash called-ONCE case notices.
+- [Phase ?]: [Phase 10]: 10-02: the baseline expected label derives from CACHE_OS_VALUES[0] (windows), never the literal 'linux' -- so on the ubuntu-only test job even the four baseline argument-array assertions redden against an engine that read the ambient platform. Recorded as a bonus, NOT a guarantee: on a Windows workstation the two coincide, and the it.each(CACHE_OS_VALUES) group is the only clause that bites on every machine.
+- [Phase ?]: [Phase 10]: 10-02: an acceptance grep asserting zero negated-matchers-inside-toHaveBeenCalledWith returns 1 at HEAD and did so before this plan -- the hit is a COMMENT from Phase 9's gap-closure commit 5184427 explaining why the shape is NOT used. Kept, not deleted; comment-stripped the count is 0. Reproduces Phase 8's lesson that a grep-verifiable absence claim must not spell the token it forbids anywhere in the file, including in the sentence explaining the rule.
 
 ### Pending Todos
 
@@ -320,8 +325,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T10:35:30.204Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-07-29T10:55:18.932Z
+Stopped at: Completed 10-02-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

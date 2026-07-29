@@ -529,7 +529,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   `0%` line for a run with no sidecar at all. It renders to the job summary in CI and to the
   terminal locally.
 
-- [ ] **OBS-03**: Every mirrored asset records `mirrored-by: <os>` in Release asset metadata that
+- [x] **OBS-03**: Every mirrored asset records `mirrored-by: <os>` in Release asset metadata that
   is NOT part of the lookup name (the free-form `label` field). The store stays OS-invariant for
   lookup; only attribution is preserved. CORR-02 otherwise removes the only means of attributing a
   served artifact to a producer -- an incident-response gap of the same class the ADR weighed
@@ -640,7 +640,7 @@ honour table: `.planning/ROADMAP.md`.
 | RETAIN-04 | Phase 10 | Pending (same commit as CORR-02) |
 | RETAIN-05 | Phase 10 | Pending (same commit as CORR-02) |
 | CORR-05 | Phase 10 | Pending (4 sites; 1 removed in Phase 9 with VER-02; site 4 needs an explicit Phase 10 call) |
-| OBS-03 | Phase 10 | Pending |
+| OBS-03 | Phase 10 | Complete |
 | OBS-05 | Phase 10 | Pending (must land before CORR-02) |
 | XOS-06 | Phase 10 | Pending |
 | XOS-07 | Phase 10 | Pending |

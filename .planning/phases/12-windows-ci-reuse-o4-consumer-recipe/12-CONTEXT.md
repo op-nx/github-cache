@@ -58,7 +58,7 @@ env knob, action input or package export (D2-02, PARITY-07).
   pass it EXPLICITLY to the researcher, the planner, the plan-checker, the coverage gate, the
   security auditor and the verifier.
 
-- **D-01 [informational] -- ROADMAP.md UNDERCOUNTS this phase, and REQUIREMENTS.md wins.**
+- **D-01 [informational]:** ROADMAP.md UNDERCOUNTS this phase, and REQUIREMENTS.md wins.
   MEASURED this session:
 
   | Source | Says |
@@ -84,7 +84,7 @@ env knob, action input or package export (D2-02, PARITY-07).
 
 ### The wiring shape (XOS-04, XOS-08)
 
-- **D-02 -- THREE dedicated jobs, not a matrix and not one combined job.** Add
+- **D-02:** THREE dedicated jobs, not a matrix and not one combined job. Add
   `build-windows`, `typecheck-windows` and `test-windows`, each `runs-on: windows-11-arm`, each
   declaring `needs:` on its ONE corresponding ubuntu job (`build`, `typecheck`, `test`
   respectively). Grounds, in order of weight:
@@ -107,7 +107,7 @@ env knob, action input or package export (D2-02, PARITY-07).
   does not re-derive it; see the Deferred Ideas entry on the block-drift guard for the cost this
   choice takes on.
 
-- **D-03 -- the sidecar block is COPIED VERBATIM, and the invariant is restated, not weakened.**
+- **D-03:** the sidecar block is COPIED VERBATIM, and the invariant is restated, not weakened.
   `ci.yml` carries an explicit unguarded invariant: "The EXECUTABLE shell must stay identical
   across all four wired jobs -- only the final `npm run <target>` line may differ, and only
   build's copy carries extra comments." This phase takes it from FOUR wired jobs to SEVEN. The
@@ -116,10 +116,10 @@ env knob, action input or package export (D2-02, PARITY-07).
   is already Windows-correct and needs no adaptation. Update the invariant comment's count and its
   job list in the SAME commit that adds the legs.
 
-- **D-04 -- port 3000 on every new leg, unchanged.** Each job is its own isolated runner; the
+- **D-04:** port 3000 on every new leg, unchanged. Each job is its own isolated runner; the
   `integration` matrix comment already records this. No port allocation scheme, no new input.
 
-- **D-05 -- `timeout-minutes` on each new leg, matching its ubuntu counterpart's 15.** Generic
+- **D-05:** `timeout-minutes` on each new leg, matching its ubuntu counterpart's 15. Generic
   hang insurance, the reason already comment-locked above the `build` job. Not a teardown
   workaround.
 
@@ -140,7 +140,7 @@ env knob, action input or package export (D2-02, PARITY-07).
   env knob or action input, so a read-only Actions-cache branch cannot be added in this phase.
   The decision is therefore recorded as FORCED, with its reasoning, not presented as a preference.
 
-- **D-07 -- the two consequences fire, and both are Phase 12 scope.** XOS-05's own words:
+- **D-07:** the two consequences fire, and both are Phase 12 scope. XOS-05's own words:
   1. **The attribution loss is recorded alongside TRUST-11/12.** Append to Phase 10's threat-model
      record (`.planning/THREAT-MODEL.md` and/or
      `.planning/phases/10-os-invariant-releases-mirror/10-SECURITY.md`'s TRUST-11 section --
@@ -151,7 +151,7 @@ env knob, action input or package export (D2-02, PARITY-07).
      is what removes the RACE; it does not remove the second-producer fact.
   2. **The scheduled `--skip-nx-cache` windows-11-arm job becomes REQUIRED** (D-08).
 
-- **D-08 -- the regression detector: a NEW workflow file, not a job in `ci.yml`.**
+- **D-08:** the regression detector: a NEW workflow file, not a job in `ci.yml`.
   `.github/workflows/windows-regression-detector.yml` (name at Claude's discretion), with:
 
   - `on: schedule` (a daily cron off the top of the hour -- `cleanup.yml`'s `'17 3 * * *'` is the
@@ -185,14 +185,14 @@ env knob, action input or package export (D2-02, PARITY-07).
   every one of them grew an `if:`, and `cleanup.yml`'s own header already records the reason a
   scheduled concern lives in its own file.
 
-- **D-09 -- if the detector file gets a spec asserting on it, REGISTER IT in `nx.json`'s `test`
-  inputs in the SAME commit.** PARITY-08's lesson, in the requirement's own words: `nx.json`
+- **D-09:** if the detector file gets a spec asserting on it, REGISTER IT in `nx.json`'s `test`
+  inputs in the SAME commit. PARITY-08's lesson, in the requirement's own words: `nx.json`
   listed `cleanup.yml` and NOT `ci.yml`, so any spec asserting on `ci.yml` served a stale cached
   PASS. A new workflow file starts out unregistered and repeats the defect exactly.
 
 ### DOCS-07: the recipe
 
-- **D-10 -- a NEW `docs/cross-os.md`, not a section inside `docs/advanced.md`.** The repo's docs
+- **D-10:** a NEW `docs/cross-os.md`, not a section inside `docs/advanced.md`. The repo's docs
   convention is one topic per file (`advanced.md`, `configuration.md`, `trust-and-security.md`,
   `versioning.md`), and this is the milestone's headline consumer deliverable, not an "advanced
   opt-in capability". The lazier alternative -- a section in `advanced.md`, which is ALREADY an
@@ -202,13 +202,13 @@ env knob, action input or package export (D2-02, PARITY-07).
   the new file is one `nx.json` line and one nav link, and this phase pays a `test` rotation
   regardless.
 
-- **D-11 -- section ORDER is load-bearing and is fixed by the requirement.** Safe default FIRST
+- **D-11:** section ORDER is load-bearing and is fixed by the requirement. Safe default FIRST
   ("declare the platform discriminator across ALL cacheable targets, then remove it per target
   only after proving that target's output is portable"), portability checklist SECOND, framed as
   how to EARN a removal. A reader who stops after section one must land on the safe
   configuration. Do not lead with the checklist, do not merge the two.
 
-- **D-12 -- the checklist items are INHERITED, not re-derived.**
+- **D-12:** the checklist items are INHERITED, not re-derived.
   `.planning/phases/08-nx-task-hash-parity/08-ROOT-CAUSE.md` `## Hand-off to Phase 12 (DOCS-07)`
   (`:1777-1828`) writes them out explicitly so Phase 12 inherits a list rather than a re-read.
   Items 1-5 ship; **item 6 is a STRUCK, FALSIFIED claim and its own text says what to document
@@ -223,13 +223,13 @@ env knob, action input or package export (D2-02, PARITY-07).
   | 5 | To REPRODUCE rather than repair, use `NX_WORKSPACE_DATA_DIRECTORY` + `NX_NATIVE_FILE_CACHE_DIRECTORY` -- non-destructive, and cold BY CONSTRUCTION rather than by an operation that can fail | yes |
   | 6 | ~~"a developer who has BUILT computes a different `typecheck` hash"~~ | **NO -- measured FALSE; document nothing** |
 
-- **D-13 -- the two axes `process.platform` does not cover are named, with the honest limit
-  stated.** Architecture and libc. The recipe states plainly that THIS repo cannot exercise
+- **D-13:** the two axes `process.platform` does not cover are named, with the honest limit
+  stated. Architecture and libc. The recipe states plainly that THIS repo cannot exercise
   either -- every machine here is arm64 -- so the reader is told the discriminator's coverage
   ends where this project's evidence ends. Requirement's own words; do not soften it into a
   "consider also" bullet.
 
-- **D-14 -- the drift guard is the shipped phrase-keyed pattern, and it is proven RED first.**
+- **D-14:** the drift guard is the shipped phrase-keyed pattern, and it is proven RED first.
   `docs-same-os-claims.spec.ts` (phrase-keyed `DOCS_08_SITES`), `docs-adoption.spec.ts` and
   `docs-trust.spec.ts` are the three in-repo precedents; `docs-trust.spec.ts` is the strongest
   shape because it IMPORTS the single source and asserts the doc renders it verbatim, so widening
@@ -243,7 +243,7 @@ env knob, action input or package export (D2-02, PARITY-07).
 
 ### The discriminator command: direction locked, exact string UNRESOLVED
 
-- **D-15 -- the DOCUMENTED command and `nx.json`'s OWN command are ONE string, single-sourced.**
+- **D-15:** the DOCUMENTED command and `nx.json`'s OWN command are ONE string, single-sourced.
   Documenting a hardened command the repo does not itself run is the exact defect class DOCS-08
   spent a phase correcting, and it would leave the drift guard unable to assert equality. So
   whatever the stderr-immune form turns out to be (U-01), `nx.json`'s `integration` runtime input
@@ -272,8 +272,8 @@ env knob, action input or package export (D2-02, PARITY-07).
   | a new NON-spec source file under `packages/github-cache/src/` | the above plus `build` |
   | a NEW root-level workflow file, unregistered | **nothing** |
 
-- **D-17 -- there is NO ordering constraint of the Phase 10 / Phase 11 kind, and saying so is the
-  decision.** Phases 10 and 11 each guarded a PERISHABLE measurement that their own edits would
+- **D-17:** there is NO ordering constraint of the Phase 10 / Phase 11 kind, and saying so is the
+  decision. Phases 10 and 11 each guarded a PERISHABLE measurement that their own edits would
   destroy. Phase 12 does not: the O4 proof is a SAME-RUN property. The ubuntu producer and the
   Windows consumer both check out the same tree in the same run, the `needs:` edge orders them,
   and the ubuntu leg saves whatever hash the run's own tree computes. So the commit that
@@ -284,7 +284,7 @@ env knob, action input or package export (D2-02, PARITY-07).
 
 ### The proving run
 
-- **D-18 -- a SAME-REPO pull-request run is the vehicle. NO temporary `main` push.** This breaks
+- **D-18:** a SAME-REPO pull-request run is the vehicle. NO temporary `main` push. This breaks
   the Phase 9 / 10 / 11 pattern deliberately, and the reasons are measured rather than assumed:
 
   | Fact | Measured where | Why it matters |
@@ -325,15 +325,15 @@ env knob, action input or package export (D2-02, PARITY-07).
   (retained backup ref, restore verified by SHA EQUALITY, the restore force-push's own run
   predicted IN ADVANCE) -- but nothing in XOS-04/05/08 requires it.
 
-- **D-19 -- counts are PRE-REGISTERED in the PLAN, not written after the run.** Phase 11's
+- **D-19:** counts are PRE-REGISTERED in the PLAN, not written after the run. Phase 11's
   pattern, and TEST-08's rule applied to O4. Per target, name in advance: whether the ubuntu leg
   is expected to HIT or MISS-and-save (both are legitimate; `build` does NOT rotate on a
   `ci.yml`-only edit, so its ubuntu leg may well HIT a pre-existing ubuntu-produced entry), and
   the expected non-zero `[remote cache]` occurrence count on the Windows leg. Count OCCURRENCES,
   not lines: `rg -c` counts lines; use `rg -o | wc -l`.
 
-- **D-20 -- `Cache: n/m hit` stays marked NON-DISCRIMINATING IN BOTH DIRECTIONS, beside the
-  line.** OBS-02 and Phase 11's D-24, unchanged: a `0%` prints identically with no sidecar at all
+- **D-20:** `Cache: n/m hit` stays marked NON-DISCRIMINATING IN BOTH DIRECTIONS, beside the
+  line. OBS-02 and Phase 11's D-24, unchanged: a `0%` prints identically with no sidecar at all
   (run `30169158892`), and a non-zero count includes local hits. The gate is the literal
   `[remote cache]` label count, named per target.
 
@@ -363,7 +363,7 @@ env knob, action input or package export (D2-02, PARITY-07).
 
 ### Evidence
 
-- **D-22 -- the O4 section is APPENDED to `11-EVIDENCE.md`. There is no `12-EVIDENCE.md`.**
+- **D-22:** the O4 section is APPENDED to `11-EVIDENCE.md`. There is no `12-EVIDENCE.md`.
   Locked upstream and not reopened here: TEST-08's own words are "Phase 12 appends the O4 row to
   the same evidence record", and `11-EVIDENCE.md:1002-1019` carries an explicit
   `## O4 (XOS-04, XOS-05) -- RESERVED` block that says "Do not fill this section and do not delete

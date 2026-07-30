@@ -240,12 +240,22 @@ describe('ci.yml publish waits on every job that produces a NEW mirrored key (XO
  * ROBUST-04's SAMPLING RATE, and it lives in VER-06's guard because it is the same fact
  * about which event samples what.
  *
- * A green `dogfood-verify` is NOT ROBUST-04 evidence: both dogfood jobs use
- * `./packages/github-cache`, whose `dist/action/index.js` is built from source IN-JOB, so
- * neither ever executes the committed `start-cache-server/index.js` that four of the five
- * sidecar `uses:` sites run. `action-bundle-drift` is the only control tying the two
- * together, and `09-RESEARCH.md`'s validation table states ROBUST-04's sampling rate as
- * "every PR and every push" on the strength of that job carrying NO `if:`.
+ * A green `dogfood-verify` is NOT ROBUST-04 evidence, and the split is decided by the
+ * `uses:` PATH rather than by a count: every `- uses: ./start-cache-server` site runs the
+ * COMMITTED `start-cache-server/index.js`, and every `- uses: ./packages/github-cache` site
+ * builds `dist/action/index.js` from source IN-JOB. Both dogfood jobs take the second path,
+ * so neither ever executes the committed bundle. `action-bundle-drift` is the only control
+ * tying the two together, and `09-RESEARCH.md`'s validation table states ROBUST-04's
+ * sampling rate as "every PR and every push" on the strength of that job carrying NO `if:`.
+ *
+ * The ARITHMETIC, measured at HEAD rather than carried forward: 8 of the 12 sidecar `uses:`
+ * sites in `ci.yml` run the committed bundle, and the other 4 build it in-job. This block
+ * used to say "four of the five", which was stale BECAUSE OF THIS PHASE'S OWN EDIT -- XOS-04
+ * added three `./start-cache-server` sites, taking the split from 5+4 at `0251bd3` to 8+4
+ * (IN-06) -- and the numbers will rot again on the next job added. So the rule above is the
+ * load-bearing statement and the counts are context: the ROBUST-04 ARGUMENT, that the
+ * dogfood jobs build the action in-job and therefore never sample the committed bundle, does
+ * not depend on either number and was never wrong. Re-measure before restating.
  *
  * Nothing in the tree asserted that shape. Adding `if: github.event_name == 'push'` to it
  * -- the same gate that makes VER-06 and OBS-04 unobservable pre-merge, and therefore the
@@ -271,8 +281,9 @@ describe('ci.yml action-bundle-drift stays PR-eligible (ROBUST-04)', () => {
       jobBlock('action-bundle-drift'),
       'action-bundle-drift has acquired a job-level `if:`. That job is the ONLY standing ' +
         'control proving the committed start-cache-server/index.js matches a fresh build, ' +
-        'and four of the five sidecar sites execute THAT file rather than the in-job build ' +
-        'the dogfood jobs use. Gating it on an event drops ROBUST-04 from "every PR and ' +
+        'and every `- uses: ./start-cache-server` site executes THAT file rather than the ' +
+        'in-job build the `- uses: ./packages/github-cache` sites (both dogfood jobs among ' +
+        'them) use. Gating it on an event drops ROBUST-04 from "every PR and ' +
         'every push" to push-only, which is exactly the gate that already makes VER-06 and ' +
         'OBS-04 unobservable before a merge.',
     ).not.toMatch(/^ {4}if:/m);

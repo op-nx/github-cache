@@ -56,16 +56,31 @@ if (!run.run?.command?.includes(TARGET)) {
   );
 }
 
-const task = run.tasks?.find((entry) => entry.target === TARGET);
+const matches = (run.tasks ?? []).filter((entry) => entry.target === TARGET);
 
 // GUARD 2 (repudiation). Enumerate what WAS observed; never write an empty hash.
-if (!task) {
+//
+// EXACTLY ONE, never a first-match, and the difference is not defensive
+// programming. `npm run integration` is `nx run-many -t integration`, which is
+// INHERENTLY multi-project; the workspace holds one project TODAY, so the set is a
+// singleton by circumstance rather than by construction. A first-match would let a
+// second project with an `integration` target silently make this leg upload an
+// ARBITRARY project's hash -- and that hash then becomes the H_linux the whole O3
+// proof rests on, with nothing going red. Same class as `capture-hashes.mjs`'s
+// single-project premise: a guard that silently NARROWS rather than breaking. The
+// count is asserted so a second project fails loud here instead.
+if (matches.length !== 1) {
   throw new Error(
-    `read-integration-hash: no \`${TARGET}\` task in ${runJsonPath} -- the target was renamed, ` +
-      'deleted, or its run did not reach the task graph. Observed targets: ' +
+    `read-integration-hash: expected exactly ONE \`${TARGET}\` task in ${runJsonPath}, found ` +
+      `${matches.length} (${matches.map((entry) => entry.taskId).join(', ') || '<none>'}). ` +
+      'Zero means the target was renamed, deleted, or its run did not reach the task graph; ' +
+      "more than one means a first-match would upload an arbitrary project's hash as this " +
+      "leg's H_linux. Observed targets: " +
       `${(run.tasks ?? []).map((entry) => entry.target).join(', ') || '<none>'}`,
   );
 }
+
+const task = matches[0];
 
 // GUARD 3 (empty/malformed hash). `if-no-files-found: error` only checks that a
 // file EXISTS, so an empty or malformed hash uploads cleanly and becomes a

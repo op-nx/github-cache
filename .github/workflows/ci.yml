@@ -697,6 +697,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p integration-hash-records
+      # THE ARTIFACT NAME IS A CONTRACT, on the same footing as the integration STEP name
+      # above and previously undocumented. THREE literals must move together: the
+      # integration job's `matrix.os` value, its upload name `integration-hash-${{
+      # matrix.os }}`, and this hardcoded download name. A matrix bump that edits only the
+      # first two leaves this job requesting an artifact nobody produced, and the symptom
+      # is a download-artifact error HERE -- one job away from the cause, with no message
+      # about why. The witness's own `runs-on:` assertion does not cover this: that pins
+      # this job's runner, not the integration matrix's label. `dogfood-cross-os.spec.ts`
+      # now reads the label out of this line and asserts it still appears in the
+      # integration job, so the two fail loud when they drift APART while staying green on
+      # a legitimate coordinated bump.
       - uses: actions/download-artifact@v8
         with:
           name: integration-hash-ubuntu-24.04-arm

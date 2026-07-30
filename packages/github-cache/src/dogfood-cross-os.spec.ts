@@ -462,4 +462,42 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
         'the export step is ever reinstated, validate BEFORE the write.',
     ).toMatch(/case "\$\{h_linux\}" in\s*\n\s*''\|\*\[!0-9\]\*\)/);
   });
+
+  /**
+   * THREE LITERALS MUST MOVE TOGETHER and only one pair was documented as a contract.
+   * `ci.yml` records that the integration STEP NAME is a contract ("If this name is ever
+   * edited, the witness's jq selector must be edited in the SAME commit"), but the
+   * ARTIFACT-NAME coupling -- `matrix.os`, the upload's `integration-hash-${{ matrix.os }}`
+   * and this job's hardcoded `integration-hash-ubuntu-24.04-arm` -- carried no such note
+   * and no guard.
+   *
+   * The `runs-on` clause above does NOT cover it: that pins the WITNESS's own runner, so
+   * it stays green through a matrix bump to a different ubuntu label. The symptom would
+   * be a `download-artifact` error one job away from the cause, with nothing saying why.
+   *
+   * This reads the label OUT of the witness rather than spelling it, so the clause does
+   * not need re-authoring on a legitimate coordinated bump -- it fails only when the two
+   * drift APART, which is the actual defect.
+   */
+  it('downloads an artifact name the integration matrix actually produces', () => {
+    const witness = jobBlock('o3-witness');
+    const wanted = witness.match(/name: integration-hash-(\S+)/)?.[1];
+
+    // POSITIVE CONTROL: `toContain(undefined)` would throw rather than assert, so prove
+    // the label was extracted before comparing against the matrix.
+    expect(
+      wanted,
+      'o3-witness no longer downloads an `integration-hash-<os>` artifact at all, so the ' +
+        'coupling this case guards cannot be evaluated.',
+    ).toBeDefined();
+
+    expect(
+      jobBlock('integration'),
+      `o3-witness downloads integration-hash-${wanted}, but \`${wanted}\` no longer appears ` +
+        "in the integration job's block. THREE literals must move together: the " +
+        'integration matrix.os value, the upload name integration-hash-${{ matrix.os }}, ' +
+        'and this download name. When they drift apart the symptom is a download-artifact ' +
+        'error inside o3-witness, one job away from the cause, with no message about why.',
+    ).toContain(wanted);
+  });
 });

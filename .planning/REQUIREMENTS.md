@@ -347,7 +347,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   produced by Windows CI. Measured BEFORE the CORR-02 rename as a baseline and AFTER as a
   non-regression. (O2)
 
-- [ ] **XOS-03**: Windows CI gets a cache MISS for `integration` produced by Linux CI. **This is a
+- [x] **XOS-03**: Windows CI gets a cache MISS for `integration` produced by Linux CI. **This is a
   statement about Nx HASHES, not about cache storage.** After VER-01/VER-03 the storage layer no
   longer partitions by OS, so a storage-level probe for the Linux hash from a Windows runner would
   HIT -- asserting a 404 there would assert a property this milestone deliberately destroyed. The
@@ -489,7 +489,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   hypothesis, named in the plan rather than after the run; `ACTIONS_STEP_DEBUG` is on for the
   proving run, since restore MISSes log at `core.debug` and are otherwise absent from the log.
 
-- [ ] **TEST-09**: The O3 proof is an Nx-HASH proof, not a storage probe, and runs AFTER VER-01 and
+- [x] **TEST-09**: The O3 proof is an Nx-HASH proof, not a storage probe, and runs AFTER VER-01 and
   VER-03 have landed. A storage-level probe is now INVALID: with the version OS-invariant,
   `restoreCache([path], 'nx-cache-<H_linux>')` on windows-11-arm would HIT, so asserting a 404 would
   assert a property this milestone deliberately destroyed -- and if it DID 404, the likeliest cause
@@ -650,9 +650,9 @@ honour table: `.planning/ROADMAP.md`.
 | TRUST-13 | Phase 10 | Complete (10-SECURITY.md section 1; auditor adopted B2 and refined both legs) |
 | XOS-01 | Phase 11 | Complete (live-workstation measurement taken in 11-03: 1 `[remote cache]` occurrence each for `build`, `typecheck`, `test`; see 11-EVIDENCE.md O1) |
 | XOS-02 | Phase 11 | Complete (baseline captured in Phase 10 before CORR-02; post-rename non-regression measured in 11-03 against BOTH baseline halves; see 11-EVIDENCE.md O2) |
-| XOS-03 | Phase 11 | Pending (live-CI only) |
+| XOS-03 | Phase 11 | Complete (live-CI: push run 30500255530; Windows `integration` EXECUTED with 0 remote-cache label occurrences and `cacheStatus=cache-miss`; see 11-EVIDENCE.md O3) |
 | TEST-08 | Phase 11 | Pending (O4 evidence row appended in Phase 12) |
-| TEST-09 | Phase 11 | Pending (live-CI only) |
+| TEST-09 | Phase 11 | Complete (all three parts on push run 30500255530: inequality CITED from CORR-03(b), o3-witness delta 144s against a 30s margin, positive control 200 on both legs; see 11-EVIDENCE.md O3) |
 | TEST-10 | Phase 11 | Complete |
 | OBS-02 | Phase 11 | Complete |
 | XOS-04 | Phase 12 | Pending |

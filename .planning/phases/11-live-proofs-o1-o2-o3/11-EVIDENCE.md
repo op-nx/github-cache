@@ -15,8 +15,9 @@ capture time (D-03). Separately, plans 11-05 and 11-06 rotate three of the four 
 here, so this measurement cannot be retaken at this commit once they land (D-10, D-11).
 
 This record has FOUR sections by design (D-22, TEST-08's own words: "Phase 12 appends the O4 row to
-the same evidence record"). O1 and O2 are complete below. O3 is PENDING and owned by plan 11-07.
-O4 is RESERVED for Phase 12 and must be neither filled nor deleted here.
+the same evidence record"). O1, O2 and O3 are all complete below; O3 was owned by plan 11-07 and
+closed by the live push run recorded in its section. O4 is RESERVED for Phase 12 and must be
+neither filled nor deleted here.
 
 ---
 
@@ -29,7 +30,7 @@ O4 is RESERVED for Phase 12 and must be neither filled nor deleted here.
 | Structured corroborator -- `run.json` `cacheStatus` == `remote-cache-hit` | **4 of 4 targets**, exactly the pre-registered set `{build, typecheck, test, integration}` |
 | Producer fingerprint, per hit | `test` -> **LINUX**, `integration` -> **WINDOWS**. `build`/`typecheck` UNAVAILABLE with a stated reason (see the table) |
 | Producer ATTRIBUTION, per hit hash (TEST-08's own mandated capture) | **COMPLETE, 4 of 4.** `build`/`typecheck`/`test` -> **LINUX**, `integration` -> **WINDOWS**. The two hashes with no fingerprint are carried by the job-window cross-reference, which resolves a UNIQUE runner OS for all four |
-| **O3 (XOS-03, TEST-09)** | **PENDING** -- plan 11-07 |
+| **O3 (XOS-03, TEST-09)** -- the Windows `integration` task EXECUTES carrying no remote-cache label, in a run where the `H_linux` entry demonstrably existed | **PROVEN.** All three parts satisfied on push run `30500255530`; witness delta `144s` against a `30s` stated margin; positive control `200` on both legs |
 | **O4 (XOS-04, XOS-05)** | **RESERVED** -- Phase 12 |
 
 Both proved halves are LOCAL measurements against an already-warm mirror. **Nothing in O1 or O2
@@ -716,34 +717,285 @@ new-form and labelled, versus 106 unlabelled).
 
 ---
 
-## O3 (XOS-03, TEST-09) -- PENDING
+## O3 (XOS-03, TEST-09) -- PROVEN
 
-**Owner: plan 11-07.** This section's shape is fixed HERE, before the run, so it is not invented
-after it. O3 is proven as an Nx-HASH property, never as a storage probe: with the version now
-OS-invariant, a storage-level probe for the Linux hash from a Windows runner would HIT, and
-asserting a 404 there would assert a property this milestone deliberately destroyed.
+**Owner: plan 11-07.** This section's shape was fixed by plan 11-03 BEFORE the run, so it was not
+invented after it. O3 is proven as an Nx-HASH property, never as a storage probe.
 
-The three parts TEST-09 requires, each to be filled by 11-07:
+### Push-and-restore provenance
 
-1. **CITE** CORR-03(b)'s build-gating record that `H_linux != H_win` for `integration` at the
-   commit. Phase 11 CITES it and does not re-derive it. `PROBE-RESULTS.md` Q3
-   (`8865876519165210738` vs `1822904335635353663` at `fe25a3f`) is the corroborating prior, also
-   cited rather than re-taken.
-2. **SHOW** the Windows `integration` task EXECUTED, carrying no `[remote cache]` label, in a run
-   where `nx-cache-<H_linux>` demonstrably existed in the Actions cache at the time. The existence
-   half is the `o3-witness` job's post-hoc inequality
-   `floor(epoch(created_at)) + 30s <= epoch(started_at)`, with the entry matched by EXACT key
-   equality rather than `total_count > 0` (the `?key=` filter is a PREFIX match). The
-   absence-of-label observation is **RECORDED, never GATED**: it is false on a correct re-run at the
-   same commit, and a tripwire that fires on correct work gets disabled.
-3. **A POSITIVE CONTROL in the same job** -- an authed GET on the leg's OWN just-saved
-   `nx-cache-<H_win>` returning exactly **200** through the same sidecar and backend, taken AFTER
-   the task ran, so part 2 is not an artifact of a dead sidecar. A run that MISSes everything is not
-   a valid proof.
+| Item | Value |
+|---|---|
+| Observed run | `30500255530`, event `push`, branch `main` |
+| Run URL | `https://github.com/op-nx/github-cache/actions/runs/30500255530` |
+| Head commit | `38f9aea`, from phase branch `gsd/v0.0.2-os-invariant-cross-os-sharing` |
+| `main` before | `fe25a3f` |
+| `main` after restore | `fe25a3f` -- **verified by SHA equality, not by assumption** |
+| Backup ref RETAINED | `refs/heads/backup/main-before-phase11-verify` = `fe25a3f`, published to the remote before the push |
+| Outbound push shape | `fe25a3f..38f9aea`, a FAST-FORWARD -- measured, not forced |
+| Restore push shape | `38f9aea...fe25a3f`, forced update, the only non-fast-forward leg |
+| Run conclusion | `success` -- **23 of 23 job legs green** |
+| `ACTIONS_STEP_DEBUG` set (UTC) | `2026-07-29T23:39:35Z` |
+| `ACTIONS_STEP_DEBUG` deleted (UTC) | `2026-07-29T23:57:22Z` |
+| Restore push run | `30501074211`, event `push`, head `fe25a3f` |
 
-Also to be recorded by 11-07: the run URL, and both `ACTIONS_STEP_DEBUG` timestamps (on before the
-proving push, off after), since restore MISSes log at `core.debug` and are otherwise absent from the
-log.
+`main` does NOT contain Phase 7-11 work. `38f9aea` is not an ancestor of `fe25a3f`.
+
+**The outbound leg needed no force, and that was measured rather than assumed.** At pre-flight
+`git rev-list --left-right --count origin/main...HEAD` read `0  240` and
+`git merge-base --is-ancestor origin/main HEAD` exited 0, so `main` was a strict ancestor of the
+phase branch. `--force-with-lease` was still passed on both legs, as a CONCURRENCY guard rather
+than to overpower a rejection: the lease pinned the expected prior value, so a third-party push
+landing mid-operation would have aborted the write instead of silently clobbering it.
+
+**The restore is a git-ref restore ONLY.** It does not un-publish what the run mirrored, and that
+is the intended outcome rather than a side effect to regret: the push re-warmed the mirror under
+the post-Phase-11 hashes, which Phase 12 needs.
+
+### The restore run was predicted IN ADVANCE, then resolved
+
+Quoted from the plan-11-07 decision checkpoint, written before anything was pushed:
+
+> Step E's restore will itself fire a second `push` run on `main` at head `fe25a3f` -- precedent
+> Phase 9 run `30401077417`, Phase 10 run `30473116345`.
+
+**Resolved:** run `30501074211`, event `push`, head `fe25a3f`, created `2026-07-29T23:55:47Z`.
+Predicting it in advance is what stops a later reader treating it as an anomaly. Phase 9's restore
+produced run `30401077417` and Phase 10's produced run `30473116345` the same way.
+
+---
+
+### TEST-09 part 1 -- `H_linux != H_win` for `integration`, CITED
+
+**Phase 11 CITES this and does not re-derive it (D-18).** The citation is CORR-03(b)'s build-gating
+record at THIS commit, produced by the `hash-parity-compare` job of the same run:
+
+```
+hash-parity-compare: hash-parity: PARITY OK linux vs win32 -- build=17269409342684722256/17269409342684722256 typecheck=14220792214246320661/14220792214246320661 test=5057102264757918793/5057102264757918793 integration=18442367512424001648/4283357908429349587 lint=6877603161093158279/6877603161093158279
+```
+
+| Target | linux | win32 | Relation |
+|---|---|---|---|
+| `integration` | `18442367512424001648` | `4283357908429349587` | **DIFFERENT** -- this is `H_linux != H_win` |
+| `build` | `17269409342684722256` | `17269409342684722256` | identical (OS-invariant) |
+| `typecheck` | `14220792214246320661` | `14220792214246320661` | identical (OS-invariant) |
+| `test` | `5057102264757918793` | `5057102264757918793` | identical (OS-invariant) |
+| `lint` | `6877603161093158279` | `6877603161093158279` | identical (OS-invariant) |
+
+**On a push, `github.sha` equals the head, so `integration`, `hash-parity` and
+`hash-parity-compare` all measured ONE tree** and the citation is commensurable with the O3
+observation below. That commensurability is the whole reason D-20 chose a push over a pull request.
+
+**Corroborating prior, also CITED rather than re-taken:** `PROBE-RESULTS.md` Q3 recorded
+`8865876519165210738` against `1822904335635353663` at commit `fe25a3f`. Different values from
+today's, at a different commit, and deliberately not re-measured here.
+
+**A storage-level probe for the Linux hash from a Windows runner would now HIT, and is NOT the
+proof.** With the cache version now OS-invariant, asserting a 404 there would assert a property
+this milestone deliberately DESTROYED. That is why O3 is an Nx-hash property and the existence
+half is demonstrated positively rather than by an absence.
+
+### TEST-09 part 2 -- the Windows task EXECUTED, in a run where the `H_linux` entry existed
+
+The existence half is the `o3-witness` job's own assertion, evaluated on recorded cache-service and
+run metadata:
+
+```
+o3-witness: H_linux=18442367512424001648
+o3-witness: key=nx-cache-18442367512424001648 created_at=2026-07-29T23:40:37.933086000Z started_at=2026-07-29T23:43:01Z delta=144s margin=30s
+o3-witness: EXISTENCE OK key=nx-cache-18442367512424001648 created_at=2026-07-29T23:40:37.933086000Z started_at=2026-07-29T23:43:01Z delta=144s margin=30s
+```
+
+| Timing fact | Value |
+|---|---|
+| Key looked up, by EXACT `.key` equality plus a `.ref` filter | `nx-cache-18442367512424001648` |
+| Entry `created_at` (ubuntu leg's save) | `2026-07-29T23:40:37.933086000Z` |
+| Windows `Run the integration target and tee its output` `started_at` | `2026-07-29T23:43:01Z` |
+| Computed delta | **144 s** |
+| Stated minimum margin | **30 s** |
+| Prior measured range across 11 consecutive runs | 109 s to 182 s, ubuntu-first 11 of 11 |
+
+**The margin is recorded as a MEASUREMENT and never as a guarantee.** The 109-to-182-second range
+has a structural cause -- `npm ci` costs about 19 s on ubuntu against about 180 s on
+windows-11-arm -- but a measurement is not a documented guarantee, which is exactly why the
+comparison demands a STATED 30-second minimum rather than a bare `<` that a timestamp-truncation
+artefact could satisfy.
+
+**This is an ASSERTION evaluated on recorded metadata, NOT an ordering control.** If the margin
+ever collapses the witness fails LOUD and no O3 proof is recorded for that run. Leg order is
+therefore not a correctness control, and XOS-06 and PROJECT.md's platform-agnosticism row are
+untouched by it.
+
+Independently confirmed from the cache service after the run, both entries under the push's own
+ref scope:
+
+```
+key=nx-cache-18442367512424001648 ref=refs/heads/main created=2026-07-29T23:40:37.933086000Z
+key=nx-cache-4283357908429349587 ref=refs/heads/main created=2026-07-29T23:43:10.036127000Z
+```
+
+The Windows leg's own entry was created at `23:43:10`, which is AFTER its step started at
+`23:43:01` -- the leg saved its artifact 9 s into the task, exactly as a MISS-then-save should.
+
+**The execution half**, quoted per leg:
+
+```
+integration (windows-11-arm): integration hash=4283357908429349587 cacheStatus=cache-miss status=0
+integration (windows-11-arm): remote-cache label occurrences on windows-11-arm: 0 -- RECORDED, never gated
+integration (ubuntu-24.04-arm): integration hash=18442367512424001648 cacheStatus=cache-miss status=0
+integration (ubuntu-24.04-arm): remote-cache label occurrences on ubuntu-24.04-arm: 0 -- RECORDED, never gated
+```
+
+The Windows count of 0 is **RECORDED and never GATED**, and the reason is not squeamishness: a zero
+count is CORRECT on the Windows leg and equally correct on any re-run at the same commit, where a
+LOCAL hit precedes any remote read. Gating on it would redden the workflow for being right, and a
+tripwire that fires on correct work gets disabled -- OBS-04 is this repo's own record of that
+happening. The structured corroborator is the `cacheStatus` value of **`cache-miss`**, which is the
+remote-versus-local discrimination the label count cannot make.
+
+The ubuntu leg's 0 is recorded beside it so the Windows 0 is not misread as asymmetric: the
+`integration` hash DID rotate on this commit, so neither leg could hit.
+
+### TEST-09 part 3 -- the positive control, both legs
+
+```
+integration (ubuntu-24.04-arm): positive control: GET /v1/cache/18442367512424001648 -> 200 (wanted 200)
+integration (windows-11-arm): positive control: GET /v1/cache/4283357908429349587 -> 200 (wanted 200)
+```
+
+| Leg | Observed | Acceptance set |
+|---|---|---|
+| `integration (ubuntu-24.04-arm)` | **200** | 200 ALONE |
+| `integration (windows-11-arm)` | **200** | 200 ALONE |
+
+The acceptance set was **200 alone**, and a 404 there would have been a control FAILURE rather than
+a readiness answer. The Windows 200 is the observation that makes the Windows MISS attributable
+rather than an artefact of a dead sidecar.
+
+**Why a false 200 is impossible, in one sentence:** the backend calls the restore path BEFORE any
+local read and returns a miss on no match, and the server degrades any fault to a 404, so a 200 can
+only have come from a real cache-service hit and the control is strictly conservative.
+
+### Pre-registered counts (D-23), fixed in plan 11-07 BEFORE the run
+
+No pre-registered value was edited after the run.
+
+| Observation | Pre-registered expectation | Observed | Verdict |
+|---|---|---|---|
+| `o3-witness` computed delta, in seconds | at least 30; measured range 109 to 182 across 11 runs | **144 s** | **MET** |
+| positive control, `integration (ubuntu-24.04-arm)` | HTTP 200 | **200** | **MET** |
+| positive control, `integration (windows-11-arm)` | HTTP 200 | **200** | **MET** |
+| Windows `integration` remote-cache label occurrences | 0, RECORDED and never GATED | **0**, recorded, not gated | **MET** |
+| Windows `integration` `cacheStatus` in `run.json` | the exact string `cache-miss` | **`cache-miss`** | **MET** |
+| echoed `runner.debug` value | `1` | **`1`** on both legs | **MET** |
+| RUN-LEVEL NON-VACUITY: ubuntu `build` remote-cache label occurrences | at least 1 | **2**, with `Cache: 1/1 hit (100%)` | **MET** |
+| ubuntu `integration` remote-cache label occurrences | 0, expected because the `integration` hash DID rotate | **0** | **MET** |
+| green job legs | 23 | **23 of 23** | **MET** |
+
+**The run-level non-vacuity prediction was CONFIRMED, not rescued.** The plan's stated rationale was
+that `build`'s hash does not rotate on this commit, because `build` excludes `src/**/*.spec.ts` and
+takes no workspace-root workflow input. That held: `build` hit from the store while `integration`
+missed on both legs, so this run was demonstrably NOT an everything-misses run and the proof does
+not rest on the two positive controls alone. No re-run was performed to obtain a better number.
+
+### `Cache: n/m hit` lines -- NON-DISCRIMINATING IN BOTH DIRECTIONS
+
+```
+integration (ubuntu-24.04-arm): Cache:             0/1 hit (0%)
+```
+**NON-DISCRIMINATING IN BOTH DIRECTIONS.**
+
+```
+integration (windows-11-arm): Cache:             0/1 hit (0%)
+```
+**NON-DISCRIMINATING IN BOTH DIRECTIONS.**
+
+```
+build: Cache:             1/1 hit (100%)
+```
+**NON-DISCRIMINATING IN BOTH DIRECTIONS.**
+
+The two measured grounds, stated once for all three: a `0%` prints identically with no sidecar at
+all (run `30169158892`), and a non-zero count includes LOCAL hits. Nx 23.1's end-of-run performance
+report cannot separate local from remote and cannot attribute a producer OS. Every claim above
+rests on the label count, the `cacheStatus` value and the witness's assertion -- never on these
+lines.
+
+### `runner.debug` -- step debug logging was ACTIVE, observed from the EFFECT side
+
+```
+integration (ubuntu-24.04-arm): runner.debug=1
+integration (windows-11-arm): runner.debug=1
+```
+
+TEST-08 requires step debug logging because restore MISSes log at `core.debug` and are otherwise
+absent from the log. The recorder is ECHO-ONLY rather than a fatal gate, which is why it survives
+the variable being unset afterwards.
+
+**This observation reads the EFFECT rather than the configuration, which is what makes it immune to
+the documented secret-takes-precedence trap.** GitHub documents that when both a secret and a
+variable named `ACTIONS_STEP_DEBUG` exist, the SECRET takes precedence -- so a stale secret at any
+value, including `false`, would have made D-21's variable silently ineffective with no visible
+signal. The trap was closed from BOTH sides independently:
+
+- **Configuration side, at pre-flight:** the repository holds **zero secrets**, established by a
+  read returning `total_count = 0` rather than by an empty-output no-match. The distinction
+  mattered: `gh secret list` returned empty output and a bare filter returned exit 1, but a
+  positive control showed the listing had no content at all, so "no match" could not be
+  distinguished from "nothing was read". The REST read with its `total_count` field resolved it.
+- **Effect side, in-run:** `runner.debug=1` on both legs.
+
+The rehearsal run recorded `runner.debug=<unset>` on both legs with the variable deliberately not
+set, which is the negative control for this same observation.
+
+### The rehearsal that preceded this run -- a MECHANICS CHECK, never a proof
+
+Recorded because a reader will otherwise find a second run at the same head and have to guess at it.
+
+Before the proving push, the maintainer chose to rehearse on a pull request. PR #11 was reopened at
+head `38f9aea`, producing run `30499450423` (`pull_request`, conclusion `success`, 15 green legs
+with the 5 push-gated jobs skipped; 15 + 8 push-only legs = the 23 pre-registered for a push). It
+was closed again before the proving push, deliberately, so no permanent MERGED record would be left
+for a `main` state that existed for about fifteen minutes -- a considered divergence from the
+Phase 9 and Phase 10 precedent, where the PR was allowed to auto-merge.
+
+The rehearsal exposed **no defect**: no selector, `jq` filter, step name, job name or artifact name
+fault. It was the FIRST EVER execution of the `o3-witness` job, which is absent from `ci.yml` at
+`0bea74b` (the branch's prior remote head) and present at `38f9aea`, so the branch's earlier green
+PR run `30477430909` had never exercised it.
+
+**None of the rehearsal's values are cited as proof anywhere in this section.** Every number above
+comes from push run `30500255530`.
+
+**A finding that qualifies how strong the "a PR cannot be the proof" claim is.** The design's stated
+reason (`ci.yml`, the `o3-witness` block) is that on a pull request, `integration` takes
+actions/checkout's default MERGE commit while `hash-parity` pins the head SHA, so the two jobs
+measure DIFFERENT TREES and their task hashes are not commensurable. Measured on this PR:
+`refs/pull/11/merge` was a distinct COMMIT (`376975c`), but its TREE was byte-identical to the
+head's -- both `f6610d30613d7b2b802c9e081a0cebbbe2d85920`, with `git diff 38f9aea 376975c` empty.
+Corroborated independently: the rehearsal's Windows `integration` hash equalled the local hash at
+HEAD, across two different commit SHAs and two machines.
+
+So at THIS divergence state the incommensurability did not obtain. The push was still the right
+instrument, for three reasons that are unaffected by it:
+
+1. The tree identity is CONTINGENT on `main` being a strict ancestor of the head (`0  240` at
+   pre-flight). The moment anyone pushes to `main`, the merge commit acquires content and the trees
+   diverge. It is a property of the divergence state, not of pull-request runs in general.
+2. It rests on a tree-identity argument rather than the commit-identity one D-20 specifies.
+3. A pull request cannot re-warm the mirror under the post-Phase-11 hashes, because `publish`,
+   `publish-verify`, `dogfood-seed`, `dogfood-verify` and `consumer-smoke` are all push-gated and
+   were observed SKIPPED on the rehearsal run. Phase 12 needs that warming.
+
+A future reader should get this from the record rather than rediscovering it.
+
+**The `.ref` clause was NOT exercised as a discriminator by the rehearsal.** Querying the key
+without the ref filter returned exactly ONE exact-key match, so the clause was proven not to
+FALSE-NEGATIVE in pull-request context but was not shown to discriminate. The reason it stays is
+plan 11-04's measurement that one hash can hold TWO entries on TWO refs, not anything the rehearsal
+observed. The rehearsal did confirm, empirically, the `ci.yml` claim that `$GITHUB_REF` is the
+correct filter value on BOTH events: both entries were written under `refs/pull/11/merge`, matching
+what the witness computed, so the witness needed no change.
 
 ---
 
@@ -779,11 +1031,29 @@ threat-model record.
 - **A per-hit fingerprint for `build` and `typecheck`.** Their `tsc` artifacts carry no absolute
   path. This is a property of what `tsc` prints, not a defect, and the graph premise covers their
   attribution structurally.
-- **O3 and O4.** Pending and reserved respectively, above.
+- **O4.** RESERVED above, and owned by Phase 12. O3 is CLOSED by push run `30500255530`.
+- **Whether the Windows leg would MISS at a commit where the `integration` hash had NOT rotated.**
+  Not observable here: the hash rotated on this commit, so both legs missed for that reason too.
+  The witness's existence assertion is what carries the attribution, not the coincidence of a miss.
+- **That the 30-second margin will hold on any future run.** Recorded as a MEASUREMENT, never as a
+  guarantee. The witness fails loud if it collapses, which is the correct failure mode, but nothing
+  here promises it will not.
 - **macOS in any form.** `cachePlatform` maps `darwin -> macos` and is unit-pinned, but no macOS
   runner or developer read exists.
 - **Whether a warm-graph local box hits these same hashes.** Not measured here; the reset removed
   the opportunity by design.
+
+### The calibrated instruments Phase 12 inherits, by name
+
+Each was exercised live by push run `30500255530` and is now a known-good measuring device rather
+than an untested one:
+
+| Instrument | What it measures | State handed to Phase 12 |
+|---|---|---|
+| the `o3-witness` job | that a named cache entry existed before a named step started, by exact `.key` equality plus a `.ref` filter, with a stated 30 s minimum margin | GREEN on a push and on a pull request; its `$GITHUB_REF` filter confirmed correct on BOTH events |
+| the positive control, per `integration` leg | that the sidecar and backend were alive on that leg, acceptance set 200 ALONE | 200 on both legs, on both runs |
+| `capture-hashes.mjs --assert-graph-premise` | the graph premise O1's producer attribution rests on | **Phase 12's XOS-04 CHANGES this premise.** Enabling the Windows `build`/`typecheck`/`test` legs makes Windows CI a second producer, so the assertion's subject moves and the flag must be re-read, not re-run blindly |
+| the `runner.debug` echo recorder | that step debug logging was active, from the EFFECT side | echo-only, so it survives the variable being unset; `1` observed with the variable set, `<unset>` without |
 
 ---
 
@@ -852,3 +1122,26 @@ caveat.
 | Source files changed by this capture | **none** (`git status --porcelain packages/ .github/ start-cache-server/` printed nothing; the full `git status --porcelain` was empty) |
 | Secret hygiene | the `gh auth token` result is recorded as a LENGTH only; the throwaway bearer is session-scoped and appears in no committed file; no raw REST payload is pasted |
 | Corroborating priors | `10-EVIDENCE-PRE-RENAME.md` (`06019d4`), `260725-w3s-STEP0-RESULTS.md` (2026-07-26, `bfd5143`), `11-task-graph-premise.json` (`7d90907`), `11-hashes-warm.json` / `11-hashes-cold.json` (11-02) |
+
+### Provenance of the O3 half -- the LIVE run, not the local session
+
+The table above covers the LOCAL session that produced O1 and O2. O3 was produced by a separate,
+live measurement and its provenance is distinct:
+
+| Fact | Value |
+|---|---|
+| Proving run | `30500255530`, event `push`, branch `main`, head `38f9aea` |
+| Rehearsal run (mechanics check, NOT a proof) | `30499450423`, event `pull_request`, head `38f9aea`, PR #11 reopened then closed before the push |
+| Restore run | `30501074211`, event `push`, head `fe25a3f` -- predicted in advance |
+| Runners | `ubuntu-24.04-arm` and `windows-11-arm`, GitHub-hosted |
+| `main` before and after | `fe25a3f` both, verified by SHA equality |
+| Backup ref retained | `refs/heads/backup/main-before-phase11-verify` = `fe25a3f` |
+| Step debug logging | repository VARIABLE `ACTIONS_STEP_DEBUG`, set `2026-07-29T23:39:35Z`, deleted `2026-07-29T23:57:22Z`; zero secrets at pre-flight by `total_count` |
+| Secret hygiene | named fields extracted programmatically; NO raw REST payload pasted; no address of any kind written into this record |
+
+**The O1 and O2 measurements above are NOT reproducible at any later commit.** This phase's own
+`ci.yml` and spec edits rotated `test`, `typecheck`, `integration` and `lint` -- `hash-parity`'s
+verdict line in the O3 section records their post-rotation values, and only `build`
+(`17269409342684722256`) is unchanged from the O1/O2 session. A future reader who tries to retake
+the O1 or O2 numbers at a later commit will measure different hashes against a different mirror
+state and should not attempt it. That is the sentence that stops the attempt.

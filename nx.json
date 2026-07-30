@@ -67,6 +67,7 @@
         "{workspaceRoot}/docs/examples/README.md",
         "{workspaceRoot}/.github/workflows/cleanup.yml",
         "{workspaceRoot}/.github/workflows/ci.yml",
+        "{workspaceRoot}/.github/workflows/windows-regression-detector.yml",
         "{workspaceRoot}/.gitattributes",
         "{workspaceRoot}/ppe/action.yml",
         "{workspaceRoot}/capture-hashes.mjs",

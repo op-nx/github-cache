@@ -683,4 +683,31 @@ describe('ci.yml is a test input, so no spec can assert on a replayed ci.yml (PA
     );
     expect(mergedTest(hostile).inputs).toEqual(['default']);
   });
+
+  // The same registration, one workflow file over, and it lands in the SAME
+  // COMMIT as the guard that reads that file (D-09). PARITY-08's lesson is
+  // that a brand-new workflow file starts out unregistered and repeats the
+  // stale-PASS defect exactly: `windows-regression-detector.spec.ts` asserts
+  // on the detector workflow's CONTENT, so without this entry an edit to that
+  // workflow would not rotate the `test` hash and Nx would serve the verdict
+  // computed before the assertion's subject existed. There is no ordering
+  // instruction to remember -- `{workspaceRoot}/nx.json` is itself a `test`
+  // input, so the line is effective on the run that introduces it.
+  //
+  // Explicit path, NOT `{workspaceRoot}/.github/workflows/**`, for the reason
+  // stated in full at lock fact 3 above: a glob is equivalent NOW and would
+  // silently adopt whatever workflow lands there next, which is the part that
+  // is not equivalent. It is placed immediately after the ci.yml entry in
+  // nx.json so the two workflow entries stay adjacent.
+  //
+  // The merged-configuration clause is NOT duplicated for this entry. Clauses
+  // 2 and 3 above already discharge it for the WHOLE `test` list -- a
+  // `project.json` `targets.test.inputs` array replaces the list wholesale, so
+  // it drops every entry or none, and a second copy per new entry would test
+  // the same mechanism again.
+  it('nx.json declares the windows-regression-detector workflow as a test input', () => {
+    expect(nxJson.targetDefaults.test.inputs).toContain(
+      '{workspaceRoot}/.github/workflows/windows-regression-detector.yml',
+    );
+  });
 });

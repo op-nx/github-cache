@@ -111,18 +111,31 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
     ).toHaveLength(1);
   });
 
-  // An occurrence COUNT, never a bare `toContain`: a phrase occurring twice is only
-  // HALF locked, because `toContain` is satisfied by the first occurrence and
-  // deleting the other leaves the guard green (WR-09). `split(x).length - 1` counts
-  // non-overlapping occurrences, which is the right counter -- this command cannot
-  // overlap itself.
-  it('the cross-os doc renders that exact command, byte for byte', () => {
+  // An EXACT occurrence count, never a bare `toContain` and never a `>= 1` floor.
+  // MEASURED, not predicted: the command renders TWICE in the doc -- once in the
+  // copy-pasteable `nx.json` snippet (the configuration an adopter installs) and once
+  // as the bare command in the verification fence (the thing they must RUN on each of
+  // their operating systems). Those are two different jobs, so both have to survive.
+  // A `>= 1` floor is exactly as HALF-LOCKING as the `toContain` it replaced: it is
+  // satisfied by the first occurrence, so deleting the verification fence -- the half
+  // that closes T-12-09, an adopter's discriminator silently collapsing to one value
+  // with no gate of ours to catch it -- would leave this guard green (WR-09).
+  //
+  // `split(x).length - 1` counts NON-OVERLAPPING occurrences, which is the right
+  // counter here: this command cannot overlap itself.
+  //
+  // A THIRD occurrence fails too, deliberately. If the doc legitimately grows another
+  // rendering, update this expected count HERE in the SAME commit; do not relax it
+  // back to a floor to make the suite green.
+  const RENDERED_DISCRIMINATOR_SITES = 2;
+
+  it('the cross-os doc renders that exact command, byte for byte, at both sites', () => {
     const command = declaredDiscriminators[0];
 
     expect(
       doc.split(command).length - 1,
-      `docs/cross-os.md does not render the discriminator nx.json declares (\`${command}\`). D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. ${REWORD_ADVICE}`,
-    ).toBeGreaterThanOrEqual(1);
+      `docs/cross-os.md must render the discriminator nx.json declares (\`${command}\`) at BOTH sites: the copy-pasteable config snippet AND the verification fence. D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. ${REWORD_ADVICE}`,
+    ).toBe(RENDERED_DISCRIMINATOR_SITES);
   });
 });
 

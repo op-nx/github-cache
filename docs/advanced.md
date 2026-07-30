@@ -55,6 +55,10 @@ discriminator for exactly that reason.
 These are the maintenance layers that keep the Releases store populated and
 bounded. They are opt-in and run in CI, not on a developer machine.
 
+Sharing one store across operating systems has its own recipe -- see
+[Cross-OS caching](cross-os.md) for the safe default and the checklist that earns
+a per-target exception.
+
 - **Publish / sync.** Enumerates the repository's `nx-cache-*` Actions-cache
   entries, restores them, and uploads them to the current month's
   `cache-mirror-YYYYMM` Release. **Restore is not same-OS.** From v0.0.2 the

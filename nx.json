@@ -60,6 +60,7 @@
         "{workspaceRoot}/start-cache-server/entry.ts",
         "{workspaceRoot}/README.md",
         "{workspaceRoot}/docs/configuration.md",
+        "{workspaceRoot}/docs/cross-os.md",
         "{workspaceRoot}/docs/advanced.md",
         "{workspaceRoot}/docs/trust-and-security.md",
         "{workspaceRoot}/docs/versioning.md",

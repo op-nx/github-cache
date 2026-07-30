@@ -146,6 +146,8 @@ dogfood action and is not for consumer use.
   Actions-cache 10 GB per-repo limit, and the no-default-local-read note.
 - [Advanced usage](docs/advanced.md) -- the opt-in Releases read store, publish /
   sync, cleanup, the `&` fallback for older runners, and the JS-action rationale.
+- [Cross-OS caching](docs/cross-os.md) -- the safe default for sharing one cache
+  across operating systems, and the checklist that earns a per-target exception.
 - [Trust and security](docs/trust-and-security.md) -- which events may write, the
   CREEP posture, the github.com-only backstop, and adopter prerequisites.
 - [Versioning](docs/versioning.md) -- the versioned consumer contract and what

@@ -1076,7 +1076,17 @@ as its conclusion (TRUST-13's own posture).
 
 ## Open Questions
 
+> **ALL FOUR RESOLVED (2026-07-30, at the plan-check gate).** Each question below carries an explicit
+> `**Recommendation:**`, and every one of those recommendations is concretely implemented by a task in
+> `12-01-PLAN.md` .. `12-06-PLAN.md` -- verified by the plan-checker against task text rather than
+> against the coverage table (`12-PLAN-CHECK.md`, WARNING 2). They are retained as questions, not
+> rewritten as decisions, because the REASONING is what a future reader needs: each one records what
+> was known, what was unclear, and why the recommendation was safe to take. Nothing here is awaiting
+> an answer. If a plan is revised in a way that departs from one of these recommendations, re-open the
+> corresponding question rather than editing this marker.
+
 1. **Does the maintainer accept superseding CORR-04's byte-identical discriminator invariant?**
+   *(RESOLVED -- recommendation taken; superseded in-commit with a replacement reason by `12-04`.)*
    - Known: the invariant is written at `08-ROOT-CAUSE.md:1589` with a reason, scoped in its prose to
      Phase 8 ("Phase 8 does not re-spell it"), and pinned by two exact-equality specs.
    - Unclear: whether the maintainer reads it as phase-scoped (my reading) or project-scoped.

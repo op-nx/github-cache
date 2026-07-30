@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
 current_phase: 12
-current_phase_name: O4
+current_phase_name: windows-ci-reuse-o4-consumer-recipe
 status: executing
-last_updated: "2026-07-30T10:09:25.015Z"
+last_updated: "2026-07-30T15:56:25.196Z"
 last_activity: 2026-07-30
-last_activity_desc: Phase 12 planning complete
+last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 38
-  completed_plans: 33
+  total_plans: 45
+  completed_plans: 34
   percent: 17
 ---
 
@@ -23,15 +23,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 11 — live-proofs-o1-o2-o3
+**Current focus:** Phase 12 — windows-ci-reuse-o4-consumer-recipe
 
 ## Current Position
 
-Phase: 12 — Windows CI Reuse (O4) + Consumer Recipe
-Plan: Not started
+Phase: 12 (windows-ci-reuse-o4-consumer-recipe) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
 Progress: 4/6 phases complete [####--] 67%
-Last activity: 2026-07-30 — Phase 12 planning complete
+Last activity: 2026-07-30 — Phase 12 execution started
 
 **PERISHABLE, and it gates plans 11-02 and 11-03.** The warm Releases mirror holding the four hashes
 this workstation computes was published 2026-07-29T16:44Z, and cleanup prunes past 30 days, so the
@@ -129,6 +129,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 11 P05 | 15m | 2 tasks | 2 files |
 | Phase 11 P06 | 25m | 2 tasks | 1 files |
 | Phase 11 P07 | 55m | 3 tasks | 2 files |
+| Phase 12 P01 | 35min | 2 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -380,8 +381,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-30T07:05:05.508Z
-Stopped at: Phase 12 context gathered
+Last session: 2026-07-30T15:56:25.183Z
+Stopped at: Completed 12-01-PLAN.md (RED gate: 27 failing assertions)
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.
@@ -449,7 +450,7 @@ Stopped at: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-r
 Task 3a (413-flush, F14) RESOLVED as a documented HTTP/1.1 limitation (lead-approved option a): a bounded raw-socket investigation proved the ECONNRESET is deterministic for a client streaming a body far over the cap (60/60 on a 100MB repro; <=16KB-over-cap gets a clean 413, >=256KB resets), and the prescribed destroy-on-finish fix does NOT resolve it (and one variant hangs). Landed a ponytail ceiling comment at both destroy sites (cb2832d), no behavior change, no bundle diff, no flaky test. The memory-bounding cap (backend.put never reached, proven by the mid-stream abort test) is intact regardless.
 HELD (deliberately, for the lead): the branch push and the PR-body update. The lead handles the outward-facing push after independently verifying the series. This executor did not push and did not touch the PR body.
 Final local battery at HEAD cb2832d: fmt / build / typecheck / typecheck:action / test (430) / fallow:ci / check:action / pack:check all exit 0.
-Resume file: .planning/phases/12-windows-ci-reuse-o4-consumer-recipe/12-CONTEXT.md
+Resume file: None
 Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates the PR #3 body. Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.
 
 ## Operator Next Steps

@@ -770,7 +770,18 @@ describe('ci.yml is a test input, so no spec can assert on a replayed ci.yml (PA
   // at lock fact 3 above: a glob is equivalent NOW and would silently adopt
   // whatever lands in `docs/` next. The six sibling docs entries are each named
   // individually for the same reason, and this one is placed immediately after
-  // `docs/configuration.md` so the `docs/` run stays alphabetical.
+  // `docs/configuration.md` so the seven `docs/` entries stay one CONTIGUOUS
+  // RUN.
+  //
+  // CONTIGUOUS, not alphabetical, and the distinction is worth the line because
+  // this comment used to claim the latter (IN-02). MEASURED: the run reads
+  // configuration, cross-os, advanced, trust-and-security, versioning,
+  // examples/minimal-ci.yml, examples/README.md -- which is not alphabetical,
+  // and was not alphabetical BEFORE this entry was inserted either
+  // (configuration, advanced, ...). So the old wording described a convention
+  // the file never had, and a reader "restoring" it would reorder five entries
+  // for nothing. Adjacency is the real and useful invariant: it is what makes a
+  // missing docs entry visible by reading one block.
   //
   // The merged-configuration clause is NOT duplicated here either: clauses 2 and
   // 3 above discharge it for the WHOLE `test` list, since a `project.json`

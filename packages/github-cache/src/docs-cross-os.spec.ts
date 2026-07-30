@@ -198,9 +198,23 @@ describe('docs/cross-os.md carries the five inherited checklist items (D-12)', (
   // was measured FALSE, and its own text says what to document instead: nothing.
   // Adding a reassurance about a non-problem is worse than silence.
   it('the portability checklist has exactly five numbered items', () => {
-    const afterHeading = doc.slice(
-      doc.indexOf(CHECKLIST_HEADING) + CHECKLIST_HEADING.length,
-    );
+    // GUARDED BEFORE SLICING, and the guard belongs HERE rather than in the ordering `it`
+    // above. `indexOf` returns -1 when the heading is reworded, so the old
+    // `doc.slice(-1 + CHECKLIST_HEADING.length)` sliced from an arbitrary positive offset
+    // and counted `^\d+\. ` matches over unrelated text -- reporting a COUNT MISMATCH for
+    // what is actually a MISSING HEADING. The `>= 0` control for this heading does exist,
+    // but it lives in a different `it`, so it does not stop this one computing against a
+    // garbage slice. This file's own header states the opposite standard for the
+    // `existsSync` guard: "a NAMED assertion failure rather than a module-load crash that
+    // says nothing about which claim was lost" (IN-04).
+    const checklistAt = doc.indexOf(CHECKLIST_HEADING);
+
+    expect(
+      checklistAt,
+      `docs/cross-os.md is missing the checklist heading \`${CHECKLIST_HEADING}\`, so the item count below would be computed over unrelated text and would report a count mismatch instead of the heading that actually went missing. ${REWORD_ADVICE}`,
+    ).toBeGreaterThanOrEqual(0);
+
+    const afterHeading = doc.slice(checklistAt + CHECKLIST_HEADING.length);
     const section = afterHeading.split(/^## /m)[0];
     const items = section.match(/^\d+\. /gm) ?? [];
 

@@ -566,9 +566,20 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
  * the SAME token -- so every clause below is anchored at its indent level: a job's own keys at
  * FOUR spaces, their step children at SIX.
  *
- * AND EVERY CLAUSE IS SCOPED TO `jobBlock(<leg>)`, never to the file. `windows-11-arm` occurs 19
- * times in `ci.yml` today, so a whole-file `toContain('windows-11-arm')` passes unconditionally
- * whatever these three jobs actually say.
+ * AND EVERY CLAUSE IS SCOPED TO `jobBlock(<leg>)`, never to the file. `windows-11-arm` occurs 10
+ * times in the COMMENT-STRIPPED `ci.yml` this guard actually reads (25 times in the raw file),
+ * so a whole-file `toContain('windows-11-arm')` passes unconditionally whatever these three jobs
+ * actually say.
+ *
+ * WHICH ARTIFACT the number is measured against is not a footnote, and this block previously got
+ * it wrong in both directions (WR-07). It said 19, which was (a) measured at author time, BEFORE
+ * this phase's own `ci.yml` edit landed, and never re-measured -- these guards were authored RED,
+ * so the number was frozen against a tree that did not yet contain the three legs -- and (b) the
+ * RAW count, when `codeLines` strips every `#` line, so the reading that supports the vacuity
+ * argument is the comment-stripped one. It was 7 stripped / 19 raw at `0251bd3`, and is 10
+ * stripped / 25 raw at HEAD. The ARGUMENT holds at any of these numbers; the number is this
+ * file's own house standard, which is MEASURED, not predicted. Re-measure BOTH readings when
+ * `ci.yml` next changes shape.
  *
  * NO COMMENT-PHRASE ASSERTION BELONGS HERE. `codeLines` strips every `#` line, so a comment lock
  * placed in this file is vacuous by construction; the sidecar-invariant and graph-premise prose
@@ -590,8 +601,9 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
     runsOn:
       `${leg} must run on windows-11-arm. It is the CONSUMER half of XOS-04, and a leg that ` +
       'quietly moved back to ubuntu proves nothing about cross-OS reuse while staying green. ' +
-      'Asserted against this job block alone: `windows-11-arm` occurs 19 times in ci.yml, so ' +
-      `a whole-file match would pass unconditionally. ${RENAME_NOTE}`,
+      'Asserted against this job block alone: `windows-11-arm` occurs 10 times in the ' +
+      'COMMENT-STRIPPED ci.yml this guard reads (25 in the raw file), so a whole-file match ' +
+      `would pass unconditionally. ${RENAME_NOTE}`,
     needs:
       `${leg} must declare \`needs: ${producer}\` -- a BARE SCALAR naming exactly ONE ` +
       'producer, never a list (XOS-08, D-02). The edge is what makes this leg a CONSUMER of ' +

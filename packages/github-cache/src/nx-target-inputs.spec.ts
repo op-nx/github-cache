@@ -755,4 +755,31 @@ describe('ci.yml is a test input, so no spec can assert on a replayed ci.yml (PA
       '{workspaceRoot}/.github/workflows/windows-regression-detector.yml',
     );
   });
+
+  // The same registration one FILE TYPE over, and it lands in the SAME COMMIT as
+  // the doc it covers (DOCS-07). `docs-cross-os.spec.ts` asserts on
+  // `docs/cross-os.md`'s CONTENT -- that it renders the discriminator `nx.json`
+  // declares, that the safe default precedes the portability checklist, and that
+  // the checklist has five items -- and `docs/` lives OUTSIDE this project's
+  // graph, so without this entry an edit to the doc would not rotate the `test`
+  // hash and Nx would serve the verdict computed before the assertion's subject
+  // existed. That is PARITY-08's defect exactly, and this repo has already
+  // shipped it twice (enumerated once at the `eslint.config.mjs` pin above).
+  //
+  // Explicit path, NOT `{workspaceRoot}/docs/**`, for the reason stated in full
+  // at lock fact 3 above: a glob is equivalent NOW and would silently adopt
+  // whatever lands in `docs/` next. The six sibling docs entries are each named
+  // individually for the same reason, and this one is placed immediately after
+  // `docs/configuration.md` so the `docs/` run stays alphabetical.
+  //
+  // The merged-configuration clause is NOT duplicated here either: clauses 2 and
+  // 3 above discharge it for the WHOLE `test` list, since a `project.json`
+  // `targets.test.inputs` array replaces the list wholesale and so drops every
+  // entry or none.
+  it('nx.json declares the cross-os recipe doc as a test input', () => {
+    expect(
+      nxJson.targetDefaults.test.inputs,
+      'nx.json no longer declares {workspaceRoot}/docs/cross-os.md as a `test` input, so docs-cross-os.spec.ts can replay a PASS computed before the doc it asserts on was edited. Restore the entry; do not weaken the guard.',
+    ).toContain('{workspaceRoot}/docs/cross-os.md');
+  });
 });

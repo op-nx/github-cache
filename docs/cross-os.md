@@ -71,11 +71,25 @@ pasted elsewhere applies to nothing while `build`, `test` and `lint` carry no
 discriminator, which is precisely the wrong-result configuration named above.
 
 `targetDefaults.<target>.inputs` REPLACES the inferred input list rather than
-merging into it, so declaring an input means ADDING A LINE to the whole list --
-nothing your plugin inferred survives beside it. The same rule applies one layer
-up: an `inputs` key declared in a project's own configuration sits ABOVE
-`targetDefaults` and replaces the default's key wholesale, discriminator
-included.
+merging into it, so declaring an input means REPRODUCING THE WHOLE LIST and then
+appending the discriminator -- nothing your plugin inferred survives beside it.
+The same rule applies one layer up: an `inputs` key declared in a project's own
+configuration sits ABOVE `targetDefaults` and replaces the default's key
+wholesale, discriminator included.
+
+Read the inferred list BEFORE you replace it:
+
+```bash
+nx show project <project> --json | jq '.targets["<target>"].inputs'
+```
+
+Reproduce every entry, then append the discriminator. An input you drop is an
+input Nx stops hashing, and a task that stops hashing an input it consumes gets a
+HIT on a stale entry -- a WRONG RESULT, the same class as the missing
+discriminator, arriving through a different door. This repository has already
+paid it: its `test` target carries a long explicit `inputs` list in `nx.json`
+precisely because declaring one entry destroyed everything `@nx/vitest` had
+inferred.
 
 Verify the command on your own runners before you trust it. Do not paste it and
 move on:

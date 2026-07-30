@@ -142,23 +142,53 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
  * `docs-same-os-claims.spec.ts`, whose read is raw.
  *
  * XOS-06's `max-parallel: 1` VALUE guard SHARES this describe, and shares its positive
- * control above. The describe's TITLE names XOS-07 only, which is a deliberate trade: the
- * title is cited by 10-03-SUMMARY's coverage refs, so renaming it would rot those
- * references, and the alternative -- a second describe with a second copy of the same
- * `jobBlock('publish')` control -- would duplicate a mechanism for one assertion. Both
- * guards ask the same kind of question about the same job block, so they share the one
- * control. XOS-06's own clauses are named in its `it()` title and its comment lock lives,
- * like XOS-07's, in `docs-same-os-claims.spec.ts`.
+ * control above. The describe's TITLE names XOS-07 only, and the alternative -- a second
+ * describe with a second copy of the same `jobBlock('publish')` control -- would duplicate a
+ * mechanism for one assertion. Both guards ask the same kind of question about the same job
+ * block, so they share the one control. XOS-06's own clauses are named in its `it()` title
+ * and its comment lock lives, like XOS-07's, in `docs-same-os-claims.spec.ts`.
+ *
+ * THE TITLE WAS NARROWED IN PHASE 12, "every job that produces a mirrored ENTRY" -> "every
+ * job that produces a NEW mirrored KEY", and the rename is recorded here because it is a
+ * REVERSAL of the trade this same block used to record. The old note declined to rename the
+ * title because `10-03-SUMMARY.md` and `10-05-SUMMARY.md` cite it verbatim in six coverage
+ * refs, which the rename rots. That trade was right when the only gain was cosmetic (adding
+ * XOS-06 to the title). It flipped when XOS-04 landed three new Windows legs and left the old
+ * title asserting coverage the `needs:` list does not provide (WR-09) -- and a guard title
+ * that reads as false coverage is the same defect class this phase spent commits correcting
+ * in `compare.ts` and in two `ci.yml` blocks. A stale ref is documentation archaeology;
+ * nothing in the tree resolves those refs mechanically. A false invariant is a standing
+ * argument. If you are following a rotted `10-0*-SUMMARY.md` ref, this describe is where it
+ * went.
+ *
+ * WHY THE THREE WINDOWS LEGS ARE DELIBERATELY ABSENT from the list, rather than an omission:
+ * `build-windows`, `typecheck-windows` and `test-windows` carry NO platform discriminator, so
+ * by design each computes the SAME task hash as its ubuntu producer. On the happy path they
+ * HIT and write no NEW key, so there is nothing for publish to miss. `integration` is in the
+ * list for exactly the inverse reason -- its `{ runtime: ... process.platform }` input makes
+ * the Windows leg's hash genuinely distinct, so that leg is the ONLY producer of those
+ * entries. The gap opens only when a Windows hash DIVERGES: that leg MISSes, executes, and
+ * saves a new key publish may have already raced past. That case is the regression this
+ * milestone exists to CATCH -- it is already gated by `hash-parity-compare` and by the
+ * scheduled detector -- and its cost is one mirror entry deferred to the next push, never a
+ * wrong artifact reaching the world-readable mirror.
  */
-describe('ci.yml publish waits on every job that produces a mirrored entry (XOS-07)', () => {
+describe('ci.yml publish waits on every job that produces a NEW mirrored key (XOS-07)', () => {
   const reason =
     'The publish job must declare needs: [build, typecheck, test, integration]. A leg reads ' +
     'the Actions-cache key set ONCE at its publish step start and never re-reads it, so what ' +
     'it can mirror is a function of its START TIME -- measured on run 30400231720, where the ' +
     'ubuntu leg enumerated 122s before integration (windows-11-arm) finished and task hash ' +
-    '8059758544828235640 reached the shard only under -windows. Each producer is asserted ' +
-    'SEPARATELY because a toMatch against a needs: list is satisfied by any SUPERSET: a check ' +
-    'for `integration` alone would pass against needs: [integration], which dropped build.';
+    '8059758544828235640 reached the shard only under -windows. The three windows-* legs ' +
+    '(XOS-04) are deliberately ABSENT and must stay absent unless the reason below stops ' +
+    'holding: they carry no platform discriminator, so they compute the SAME task hash as ' +
+    'their ubuntu producer and on the happy path they HIT and write no NEW key. A Windows leg ' +
+    'that MISSED would write one publish could race -- accepted, because that divergence is ' +
+    'itself the regression hash-parity-compare and the scheduled detector exist to catch, and ' +
+    'the cost is a mirror entry deferred to the next push rather than a wrong artifact. Each ' +
+    'producer is asserted SEPARATELY because a toMatch against a needs: list is satisfied by ' +
+    'any SUPERSET: a check for `integration` alone would pass against needs: [integration], ' +
+    'which dropped build.';
 
   // POSITIVE CONTROL, and it comes first for the same reason the two controls above do. Every
   // clause below is a `toMatch`, so a `jobBlock` that returned the WRONG non-empty block would

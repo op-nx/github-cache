@@ -1172,6 +1172,79 @@ Nothing above this line is an observation. The counts, the ubuntu expectations, 
 and the vehicle are all pre-registration, written before any run existed. The observation record is
 below.
 
+### The observation attempt, and its honest result
+
+Attempted `2026-07-30` at commit `f5d03b0` by plan 12-06 Task 3. **No proving run exists, so NO
+observation is recorded.** Not a partial one, not an inferred one, not one reconstructed from an
+earlier run. PENDING is an allowed terminal outcome for this section and this is it.
+
+Why there is no run, MEASURED rather than assumed:
+
+| Check | Command | Result |
+|---|---|---|
+| the branch's remote tip | `git ls-remote --heads origin gsd/v0.0.2-os-invariant-cross-os-sharing` | `38f9aea` -- the Phase 11 proving head, from 2026-07-29 |
+| how far the local tree is ahead of that tip | `git rev-list --count 38f9aea..HEAD` | **55 commits**, every one of them UNPUSHED |
+| open pull requests | `gh pr list --repo op-nx/github-cache --state open` | **none.** PR #11 is CLOSED, at head `38f9aea` |
+| the newest workflow run in the repository, any branch | `gh run list --repo op-nx/github-cache --limit 1` | `30518183457`, event `schedule`, branch `main`, head `fe25a3f`, created `2026-07-30T05:59:07Z` |
+
+The three Windows legs landed in commit `f5dd429` (plan 12-02) and exist nowhere on the remote. CI
+can only run on a pushed ref, and `ci.yml` is `on: push` for `main` plus `pull_request`, so no run
+can possibly carry them. **Opening the pull request is a carried OPERATOR decision. Plan 12-06
+prepares and records the observation; it does not open the pull request, push a branch, or trigger a
+workflow.**
+
+### The observation procedure, handed over so it does not have to be reconstructed
+
+Run this against the FIRST run of the same-repo proving pull request, never a re-run, and write the
+result into the VERDICT slot above plus the `## Headline` table's O4 row.
+
+1. **Identify the run and confirm it is the FIRST**, not a re-run. `gh run list --repo
+   op-nx/github-cache --branch gsd/v0.0.2-os-invariant-cross-os-sharing --event pull_request`; the
+   run's `run_attempt` must be `1`. A re-run is disqualified by anti-requirement 2, not merely
+   discouraged.
+2. **Per Windows leg, count OCCURRENCES of the literal label.** Download or open the log for
+   `build-windows`, `typecheck-windows` and `test-windows`, then for each:
+
+   ```
+   rg -o -F "[remote cache]" <log> | wc -l
+   ```
+
+   `-F` is mandatory (square brackets are a regex character class). `rg -o ... | wc -l` counts
+   occurrences; `rg -c` counts LINES and is wrong here. Read the EXIT CODE: 0 hits, 1 genuine
+   no-match, **2 the command FAILED** while printing nothing.
+
+   | Leg | Pre-registered occurrences | Targets that must be named INDIVIDUALLY |
+   |---|---|---|
+   | `build-windows` | **1** | `build` |
+   | `typecheck-windows` | **2** | `typecheck` AND `build` |
+   | `test-windows` | **1** | `test` |
+
+   Total 4. Record the Nx hash observed per target, and an explicit MET / NOT MET per leg. Never
+   report an aggregate in place of the per-target counts.
+3. **Per ubuntu leg, record MISSED-and-saved or HIT** for `build`, `typecheck` and `test`, and note
+   which outcome the ubuntu `typecheck` job's own `build` task took in its race with the ubuntu
+   `build` job. Both outcomes of that race are legitimate.
+4. **Record the run identifier and the run URL.** If a `Cache: n/m hit` line is quoted at all, mark
+   it NON-DISCRIMINATING IN BOTH DIRECTIONS beside the line.
+5. **If any count differs from the pre-registration, record the DIFFERENCE and its investigation.**
+   Do not adjust the pre-registration to match the observation, and do not round a partial result up
+   to PROVEN.
+6. **If the `test` target FAILS on any leg, capture the full output BEFORE any re-run** and append it
+   to `.planning/phases/08-nx-task-hash-parity/deferred-items.md` item 1 with the run URL, the Nx
+   version, the Node version and the leg's OS. The `69bd1b7` `test` failure has never been
+   attributed and its output was discarded once already by a re-run.
+
+**The same first run also closes RESEARCH assumption A1 for free**, and it is currently OPEN: the
+`integration` platform discriminator became `node --no-warnings -p process.platform` in plan 12-04,
+measured only on `win32/arm64`. `capture-hashes.mjs`'s `readDiscriminatorCommand` reads that string
+out of `nx.json` rather than re-spelling it, so the `hash-parity` job records the command's raw
+`stdout` AND `stderr` per OS with no new instrument. Download both legs' artifacts -- their names are
+the RUNNER LABELS, `hash-parity-ubuntu-24.04-arm` and `hash-parity-windows-11-arm`, each containing a
+same-named `.json` with a top-level `discriminator` block -- and record the two `stdout`/`stderr`
+pairs verbatim. Expected: `stdout` `linux` and `win32` respectively, `stderr` EMPTY on both. **A
+non-empty `stderr` on either leg is a FINDING, not a nuisance**: it means the hardening did not close
+the channel it was chosen for, and Nx hashes `trim(stdout) + trim(stderr)` together.
+
 ---
 
 ## What remains unobservable

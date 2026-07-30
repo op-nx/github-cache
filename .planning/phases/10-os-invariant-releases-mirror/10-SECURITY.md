@@ -148,6 +148,74 @@ wrong-result guarantee, and it is acceptable with the dependency recorded. It is
 comment-locked in both required places -- `roundtrip/read-back.ts:73-89` and
 `ci.yml:1064-1083` -- and I read both.
 
+**PHASE 12 RE-PRICING (XOS-04 / XOS-05), which is the promise the classification line above
+made when it said "re-priced by Phase 12".** Commit `f5dd429` added `build-windows`,
+`typecheck-windows` and `test-windows` to `.github/workflows/ci.yml`, each `runs-on:
+windows-11-arm` and each carrying the sidecar dogfood block. The residual stated above is now
+reachable, and it resolves into two findings that must be recorded TOGETHER, because either
+one alone is half true.
+
+**Leg A -- D-02's `needs:` edge removes the concurrent race, and only the race.** Each Windows
+leg declares `needs:` on its ONE ubuntu producer as a bare scalar (`ci.yml`, the
+`build-windows` / `typecheck-windows` / `test-windows` job keys), so for a given target the two
+legs are no longer simultaneous and the ubuntu producer always wins for a given hash within a
+run. The genuine race described above -- two producers computing hash H and both calling
+`saveCache(nx-cache-H)` -- therefore cannot occur inside one run. The edge is
+producer-to-consumer for HIT-ability ONLY: PROJECT.md locks that cross-OS sharing rests on
+target platform-agnosticism and NEVER on leg ordering, and XOS-06 forbids ordering from
+becoming a correctness control. Cross-RUN the winner is still whichever ran first, and no
+requirement DEPENDS on the winner. That remains a determinism and attribution property, not an
+authorization one, exactly as the paragraph above frames it.
+
+**Leg B -- what the edge does NOT do: it does not remove the second producer.** From `f5dd429`
+a `windows-11-arm` job holds a write-trusted Actions-cache backend for `build`, `typecheck` and
+`test`. O1's attribution -- "any such hash in the store is Linux-produced" -- is therefore
+permanently FALSE, and no re-run can restore it, because that inference rested on a CONJUNCTION
+whose second conjunct (Windows CI runs only `integration`) this commit falsifies. The
+`--assert-graph-premise` step is retained and still passes; its evidentiary claim is corrected
+in place at `ci.yml`'s premise comment block and at both `capture-hashes.mjs` attribution sites
+(the `FORBIDDEN_TARGETS` docblock and assertion 2's failure message), and the attribution
+record is FROZEN at `11-EVIDENCE.md`'s O1 section. A note recording Leg A without Leg B would
+report the race as gone while leaving a reader believing the producer count is still one.
+
+**The write decision is FORCED, not chosen, and this is the measurement that forces it.**
+`packages/github-cache/src/lib/select-backend.ts:32-59` has NO read-only-Actions-cache branch.
+Read in order: a non-write-trusted context returns `createReleasesReadBackend(...)` (`:40`),
+which is the Releases mirror and the wrong layer for an Actions-cache O4 observation; a
+write-trusted context with a valid `GITHUB_REPOSITORY` and NO token returns
+`createReadOnlyMemoryBackend()` (`:52-56`), an EMPTY in-memory backend where every read MISSes
+and XOS-05 is unprovable; only a write-trusted context WITH a token reaches
+`createActionsCacheBackend()` (`:59`), which reads AND writes. Withholding `GITHUB_TOKEN` from
+the Windows legs therefore does not buy a read-only Actions cache, it buys an empty one.
+TRUST-05 forbids a caller-facing mode flag and D2-02 forbids a new env knob or action input, so
+a read-only Actions-cache branch could not be added in this phase. Recorded as forced with its
+reasoning, never as a preference (D-06).
+
+**A sharpening that keeps the record honest: the second-producer fact is a CAPABILITY, not an
+observation about the proving run.** On a run where every Windows task RESTORES, the Windows
+legs write NOTHING -- Nx re-caches only genuinely-executed tasks and passes `shouldCache: false`
+on the replay path -- so the capability materialises on any Windows MISS rather than on the
+green O4 run this phase is aiming at. Marked [DERIVED from `12-RESEARCH.md` F-6's `postRunSteps`
+call-site enumeration over Nx 23.1.0's `task-orchestrator.js`], not measured on a run, so a
+later security audit re-checks it instead of inheriting it.
+
+**The TRUST-12 half: the exposure delta is now WHICH OS's output, never WHETHER output
+crosses.** Q2 below settles the whether, and it predates this phase -- VER-01/VER-03 in Phase 9
+are what made a single leg able to restore every OS's entries. What XOS-04 adds is that
+Windows-produced captured terminal output for these three targets can now reach the
+anonymously-readable Releases mirror. The containment is unchanged and none of it is OS-derived:
+`publish` is push-gated, `isSyncTrusted` is a separate allowlist (C2), and the mirror filter
+admits only server-produced keys (C16).
+
+**No new C-row, and that is a decision rather than an omission.** `.planning/THREAT-MODEL.md`'s
+C1-C18 ledger is one row per CONTROL. This phase adds no new credential, no new write PATH and
+no new public surface -- only a SECOND WRITER on an existing path -- so there is no control to
+add. The second writer sits under C1 (the write-trust allowlist decides who may write, and it
+is OS-blind: both legs are the same already-trusted principal on the same ref), with the
+arbitration between same-hash writes sitting under C3 (no-overwrite/409 per adapter, whose
+CREEP value is explicitly conditional on C1/C2). A reader looking for a C19 should stop
+looking; the re-pricing is here.
+
 ### Q2 (TRUST-12) -- collapsing the asset namespace from `<hash>-<os>` to `<hash>`
 
 **Classification: does NOT change the public-repo exposure surface. Phase 10's own delta

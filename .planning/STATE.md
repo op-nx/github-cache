@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 12
 current_phase_name: windows-ci-reuse-o4-consumer-recipe
 status: executing
-last_updated: "2026-07-30T16:21:13.673Z"
+last_updated: "2026-07-30T16:36:59.356Z"
 last_activity: 2026-07-30
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 45
-  completed_plans: 35
+  completed_plans: 36
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 12 (windows-ci-reuse-o4-consumer-recipe) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Progress: 4/6 phases complete [####--] 67%
 Last activity: 2026-07-30 — Phase 12 execution started
@@ -132,6 +132,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 12 P01 | 35min | 2 tasks tasks | 4 files files |
 | Phase 12 P02 | 40min | 2 tasks | 3 files |
 | Phase 12 P03 | 22min | 2 tasks | 1 files |
+| Phase 12 P04 | 38min | 3 tasks tasks | 7 files files |
 
 ## Accumulated Context
 
@@ -261,6 +262,7 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 12]: 12-02: the graph-premise correction supplies a replacement reason at all three sites (ci.yml plus BOTH capture-hashes.mjs attribution sites) rather than deleting the old claim -- D-21 and PATTERNS S-1: a bare deletion leaves a future reader holding a documented argument for undoing the work, which is how Phase 9 shipped a regression
 - [Phase 12]: 12-03: gate the detector on the PLURAL three-target success line, one nx run-many invocation -- Nx filters the printed target list down to targets that resolved a task, so the singular prefix passes a two-of-three run. MEASURED: a two-target run exits 0 while failing the plural needle.
 - [Phase 12]: 12-03: close the pre-merge risk by proving the COMMAND on Windows arm64, not the job -- GitHub only dispatches a workflow whose file is on the default branch, so workflow_dispatch buys no pre-merge proof. Green-on-runner is a POST-MERGE first-run close.
+- [Phase 12]: 12-04 (DOCS-07/D-15): the integration discriminator is now 'node --no-warnings -p process.platform' at all nine tree sites, one string rather than two that happen to match. --no-warnings rather than a redirect because hash_runtime runs the string through exactly ONE shell per OS (%COMSPEC% /C or sh -c), so a redirect breaks one OS; rather than nothing because Nx 23.1.0 hash_runtime.rs:33-35 hashes trimmed stdout CONCATENATED with trimmed stderr and node warnings carry the PID, making an emitted warning a permanent 100% MISS rather than a one-time rotation. CORR-04's byte-identical constraint is SUPERSEDED IN PLACE in 08-ROOT-CAUSE.md for exactly one re-spelling, on the phase-scoped reading its own prose supports.
 
 ### Pending Todos
 

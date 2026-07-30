@@ -1593,6 +1593,61 @@ mechanism separating OS-sensitive targets from OS-invariant ones. Phase 8 does n
 not relocate it and does not "improve" it -- it only asserts that it is the ONLY one. Touching it is
 a Core-Value regression, and `nx-target-inputs.spec.ts:241-260` already guards the "only one" half.
 
+#### SUPERSEDED by Phase 12 (DOCS-07, D-15) for exactly ONE re-spelling
+
+The byte-identical constraint above is **SUPERSEDED**, once, and remains in force going forward at
+the new value. It is kept here rather than deleted because a deletion is not a correction: a reader
+who arrives at the constraint must find the retirement attached to it, not filed in another
+document. Phase 12 inserted `--no-warnings` immediately after `node` and changed nothing else.
+
+**(1) What changed and what did not.** One re-spelling, authorised by this note; the requirement
+that the string stay byte-identical is unchanged in kind and now binds the new value.
+
+**(2) The mechanism, with the citation this constraint's own era lacked.** Nx 23.1.0's
+`packages/nx/src/native/tasks/hashers/hash_runtime.rs:33-35` does
+`hash(&[std_out, std_err].concat())`, with BOTH streams `.trim()`ed and NO separator between them.
+So a `runtime` input's stderr IS hashed, and any non-empty stderr silently EXTENDS the hashed token.
+Five in-repo documents asserted that premise uncited; it is now read from source at the installed
+version.
+
+**(3) The bounded failure mode if that mechanism is ever wrong.** Node's warning channel is the
+dominant realistic stderr producer, and its text carries the process PID (`(node:29864) Warning:
+...`). So an emitted warning would not rotate the hash ONCE -- it would vary the hashed value on
+EVERY invocation, producing a permanent 100% MISS on every target carrying the discriminator. That
+is strictly worse than the one-time rotation this constraint was protecting against, and because a
+MISS is never self-evidencing in this system (fail-closed writes, best-effort reads), it presents as
+"cross-OS caching does not work" rather than as a hash change anyone can see.
+
+**(4) The measurement that justifies it.** stderr was recorded EMPTY on BOTH CI legs
+(`{ "stdout": "linux\n", "stderr": "" }` and `{ "stdout": "win32\n", "stderr": "" }`), so the hazard
+is LATENT rather than live -- this is hardening, not a bug fix. A four-cell shell-by-flag matrix
+measured stdout byte-identical (`w i n 3 2 \n`) with and without the flag under BOTH shells Nx uses,
+which per `packages/nx/src/native/utils/command.rs` is exactly two: `%COMSPEC% /C` (default
+`cmd /C`) on Windows and `sh -c` everywhere else. That two-shell set is also why the fix is a NODE
+flag and not a redirect: `2>/dev/null` / `2>nul` would break the command on one OS rather than
+merely reading differently. An `emitWarning` positive control measured the channel closing from 100
+stderr bytes to 0.
+
+**(5) Why this supersession is legitimate rather than an override.** The prose above scopes the
+constraint to this phase in its own words -- "Phase 8 does not re-spell it". So it is a
+phase-scoped constraint being retired by a later phase with cause and with a replacement reason, not
+a project-level lock being quietly broken. This was RESEARCH Open Question 1 and the phase-scoped
+reading was adopted deliberately. The alternative reading has a cost worth writing down: under a
+project-scoped reading the old spelling would have to stay in `nx.json`, and then D-15's
+single-string lock forces the consumer recipe to publish the un-hardened form, so DOCS-07's
+stderr-immunity clause could not be honoured. Those two cannot both be satisfied without this
+change.
+
+**(6) The invariant is still mechanically enforced.** Both exact-equality pins moved WITH the
+literal, in the same phase and the same commit as the config:
+`packages/github-cache/src/nx-target-inputs.spec.ts` asserts the extracted runtime commands equal
+`['node --no-warnings -p process.platform']` against `targetDefaults` alone AND against the
+`project.json`-merged configuration. `toEqual` was kept over `toContain` so a SECOND runtime entry
+appearing on `integration` remains as much a CORR-04 event as the string changing. The residual the
+flag does NOT cover is stated in that file rather than glossed: node's startup-error channel is not
+suppressed by `--no-warnings`, but it empties stdout and exits non-zero, so it fails loud instead of
+silently re-partitioning the cache.
+
 ### Route for the ONE diverging node the measurement named
 
 The diverging node is `@op-nx/github-cache:ProjectConfiguration` and the diverging field is

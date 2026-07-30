@@ -555,6 +555,15 @@ function targetSegment(taskId) {
  * rather than only in the stderr summary line.
  */
 async function assertGraphPremise(args) {
+  // BOTH FIELDS, and `workingTreeClean` is measured BEFORE the graph is built and
+  // before any output file is written -- the same ordering and the same reason
+  // `capture()` records at its own call site. Recording `commit` ALONE let this
+  // record assert PREMISE OK "at commit X" over a graph that may have been resolved
+  // from an UNCOMMITTED nx.json or project.json edit. That is exactly the fault this
+  // mode's own mutual-exclusion error forbids -- "recording an install mode against
+  // it would make the record claim a provenance it never measured" -- and the commit
+  // field was making the same claim unguarded.
+  const workingTreeClean = git('status', '--porcelain').length === 0;
   const commit = git('rev-parse', 'HEAD').trim();
   const projectGraph = await createProjectGraphAsync({ exitOnError: false });
 
@@ -669,6 +678,7 @@ async function assertGraphPremise(args) {
       nodeVersion: process.version,
       project: PROJECT,
       commit,
+      workingTreeClean,
       capturedAt: new Date().toISOString(),
     },
     forbiddenTargets: FORBIDDEN_TARGETS,

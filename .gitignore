@@ -44,6 +44,15 @@ Thumbs.db
 # fallow dead-code analysis cache (self-ignored via .fallow/.gitignore too)
 .fallow/
 
+# capture-hashes.mjs measurement records, written at the workspace ROOT by the
+# hash-parity CI job and by a local `npm run capture:hashes` / `assert:graph-premise`.
+# Ignored so they never dirty the working tree the NEXT record measures: both modes
+# record `workingTreeClean`, which exists to reveal an uncommitted nx.json edit, and
+# an untracked sibling record would peg the field to false and destroy that signal.
+# The COMMITTED copies of these records live under .planning/, never here.
+/hash-parity-*.json
+/graph-premise-*.json
+
 # op-nx/github-cache act test harness (test-only, never a runtime dep)
 .act-cache
 .act-artifacts

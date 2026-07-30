@@ -434,9 +434,9 @@ export default [
           // exact thing CORR-06 bans. Named rather than left to P2 because this
           // repo's own notes reach for `env:RUNNER_OS` as an OS discriminator (it
           // was evaluated and rejected for the `integration` input in favour of
-          // `node -p process.platform`), so it is a shape a contributor on this
-          // milestone is actively primed to write. Measured zero findings on this
-          // tree when added.
+          // `node --no-warnings -p process.platform`), so it is a shape a
+          // contributor on this milestone is actively primed to write. Measured
+          // zero findings on this tree when added.
           //
           // An ALLOWLIST would be the wrong shape here: `process.env` is mostly
           // legitimate in a spec, so a denylist of the machine-dependent keys is

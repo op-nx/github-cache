@@ -96,7 +96,7 @@ function leg(os: string, integrationHash: string): HashParityRecord {
     },
     targets,
     discriminator: {
-      command: 'node -p process.platform',
+      command: 'node --no-warnings -p process.platform',
       stdout: `${os}\n`,
       stderr: '',
       status: 0,
@@ -278,11 +278,12 @@ describe('CORR-03(a): exactly two platform records (D-20)', () => {
 
 describe('CORR-03(b): integration DIFFERS between the legs (D-20)', () => {
   it('FAILS with integration-not-divergent when the two integration hashes MATCH', () => {
-    // The declared `{ "runtime": "node -p process.platform" }` input (D-14) is
-    // the ONLY thing that should make this target OS-sensitive. Two matching
-    // hashes mean either the input was deleted or it stopped discriminating --
-    // and CORR-03 is explicit that asserting nx.json CONTAINS the input does not
-    // substitute for this, because that proves it is DECLARED, not that it works.
+    // The declared `{ "runtime": "node --no-warnings -p process.platform" }`
+    // input (D-14) is the ONLY thing that should make this target OS-sensitive.
+    // Two matching hashes mean either the input was deleted or it stopped
+    // discriminating -- and CORR-03 is explicit that asserting nx.json CONTAINS
+    // the input does not substitute for this, because that proves it is
+    // DECLARED, not that it works.
     const [a, b] = validPair();
     b.targets[DIVERGENT_TARGET].hash = a.targets[DIVERGENT_TARGET].hash;
 

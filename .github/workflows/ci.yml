@@ -422,9 +422,9 @@ jobs:
   #   (a) `needs:` is per-JOB and never per-LEG, so a matrix leg cannot depend on its
   #       sibling -- a matrix cannot express XOS-08 at all; and
   #   (b) `integration`'s two legs compute DIFFERENT hashes, because of the
-  #       `{ runtime: "node -p process.platform" }` discriminator in its own target
-  #       inputs, so parallelism is harmless there and lethal here, where the two legs
-  #       computing the SAME hash is the entire point.
+  #       `{ runtime: "node --no-warnings -p process.platform" }` discriminator in
+  #       its own target inputs, so parallelism is harmless there and lethal here,
+  #       where the two legs computing the SAME hash is the entire point.
   #
   # And do NOT "fix the asymmetry" by giving `dogfood-seed` a Windows leg while in this
   # file. It is ubuntu-ONLY BY DESIGN and its own VACUITY CONDITION comment says why:
@@ -582,8 +582,9 @@ jobs:
       - cancel: cache-server
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
-  # so their Nx hash carries a `{ runtime: "node -p process.platform" }`
-  # discriminator (see nx.json's integration inputs): the Linux and Windows hashes
+  # so their Nx hash carries a
+  # `{ runtime: "node --no-warnings -p process.platform" }` discriminator (see
+  # nx.json's integration inputs): the Linux and Windows hashes
   # differ, so both matrix legs run and a Linux cache never satisfies a Windows
   # run -- and from VER-01/VER-03 that Nx hash is the ONLY thing separating them,
   # because the cache STORAGE no longer partitions by OS. A local Windows

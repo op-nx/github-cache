@@ -392,9 +392,16 @@ describe('lint declares its full input set (LINT-04)', () => {
   // visible rather than deleted, because a deletion is not a correction: a future
   // reader who found only the new literal would be left holding no record that
   // the byte-identity requirement was ever weighed. Phase 12 (DOCS-07, D-15)
-  // moved the string from `node -p process.platform` -- with `--no-warnings`
-  // inserted -- ONCE. The requirement stands GOING FORWARD at the new value; the
-  // pins below are what enforce it. The replacement reason, in four parts:
+  // re-spelled the string ONCE, by INSERTING `--no-warnings` immediately after
+  // `node` and changing nothing else -- so the prior value is recoverable from
+  // the pins below by deleting that one flag, and this note does not have to
+  // reproduce it. (Not reproducing it is deliberate: the D-15 completeness sweep
+  // greps the tree for the OLD spelling, and a copy planted in the very file
+  // that records its retirement would make that sweep permanently non-zero. Same
+  // reason `docs-same-os-claims.spec.ts` writes its forbidden phrases with a
+  // single-character character class.) The requirement stands GOING FORWARD at
+  // the new value; the pins below are what enforce it. The replacement reason,
+  // in four parts:
   //
   //   (a) stderr IS hashed, which is the citation the original argument's era
   //       never had. Nx 23.1.0's

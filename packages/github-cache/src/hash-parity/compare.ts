@@ -6,10 +6,11 @@
  * and `integration` -- only `integration` -- diverges.
  *
  * THE TEMPTING ALTERNATIVE, and why it is wrong: assert textually that `nx.json`
- * declares `{ "runtime": "node -p process.platform" }` on `integration`, and call
- * cross-OS divergence proven. CORR-03 and D-20 both rule that out. Such an
- * assertion proves the discriminator is DECLARED; it does not prove it
- * DISCRIMINATES, and it stays green on the day the input is declared and inert.
+ * declares `{ "runtime": "node --no-warnings -p process.platform" }` on
+ * `integration`, and call cross-OS divergence proven. CORR-03 and D-20 both rule
+ * that out. Such an assertion proves the discriminator is DECLARED; it does not
+ * prove it DISCRIMINATES, and it stays green on the day the input is declared
+ * and inert.
  * Clause (c) is what makes clause (b) mean anything: with every other input
  * demonstrably shared, the only surviving explanation for a divergent
  * `integration` is the declared discriminator.

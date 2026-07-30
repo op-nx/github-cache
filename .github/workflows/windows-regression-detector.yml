@@ -1,0 +1,113 @@
+name: Windows regression detector
+
+# The scheduled --skip-nx-cache windows-11-arm run (XOS-05/D-08). This is a
+# SEPARATE scheduled workflow, never a job inside ci.yml: adding a schedule
+# trigger to ci.yml would fire all nineteen of its jobs on a calendar cadence
+# unless every one of them grew an `if:` gate, and cleanup.yml's own header
+# already records why a scheduled concern lives in its own file.
+#
+# WHY IT EXISTS, in XOS-05's own words, because the job below is unreadable
+# without them: the success signal for O4 -- every target reporting
+# [remote cache], wall time collapsing to sidecar overhead -- is the IDENTICAL
+# observation to a Windows-only regression being invisible forever. A green O4
+# leg IS a Windows leg that did not run the code. Reading a green O4 CI as
+# evidence that the targets are PORTABLE is circular, and REQUIREMENTS.md's Out
+# of Scope table names it as such: a restored task does not execute.
+#
+# So once XOS-04 lands, this workflow is the ONLY path in the repository that
+# EXECUTES build, typecheck or test on a Windows runner. That is its whole
+# justification, and it is why it HARD FAILS rather than warning. It is NOT the
+# "tripwire that fires on correct work" class OBS-04 records disabling: a red
+# leg here means a genuine Windows-only regression in the code under test,
+# never correct work.
+on:
+  # Once daily, off the top of the hour: GitHub delays scheduled runs under
+  # top-of-hour load, and this check has no deadline, so an off-peak minute is
+  # fine. Both fields differ from cleanup.yml's '17 3 * * *' so the two
+  # scheduled workflows do not contend.
+  schedule:
+    - cron: '23 4 * * *'
+  # workflow_dispatch is how the detector gets re-run ON DEMAND AFTER merge.
+  # It does NOT close the "does this go green on a real runner" question before
+  # merge, and must never be documented as if it could: GitHub only dispatches a
+  # workflow whose file exists on the DEFAULT branch, so a brand-new file on a
+  # feature branch does not appear in the UI at all and the API rejects it.
+  # cleanup.yml, the shape precedent, carries a schedule trigger ONLY -- so this
+  # addition is deliberate, and its justification is post-merge re-runs.
+  workflow_dispatch:
+
+# Least privilege: this job checks out, installs and runs three targets, and
+# writes nothing -- no Releases asset, no Actions-cache entry, no package. It
+# therefore does not copy cleanup.yml's write scope (cleanup needs one because
+# it DELETES release assets), and it requests no Actions scope either.
+permissions:
+  contents: read
+
+# No concurrency group here, deliberately. cleanup.yml needs single-writer
+# serialization because concurrent DELETEs are unsafe; this job deletes nothing
+# and writes nothing, so two overlapping runs are harmless and the mechanism
+# would be unrequested.
+
+jobs:
+  detect:
+    runs-on: windows-11-arm
+    # 20 rather than the 15 the ci.yml jobs carry: this is the only job in the
+    # repository whose wall time is FULL cold execution of all three targets
+    # rather than a cache restore, so it needs more headroom than a leg that
+    # HITs.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # NO sidecar block and no remote-cache client variable, deliberately
+      # (D-08). --skip-nx-cache skips the remote READ and the remote WRITE at
+      # Nx 23.1.0 -- source-traced: doNotSkipCache gates the read AND is passed
+      # as postRunSteps' shouldCache argument -- so a cache server here would be
+      # dead weight and an extra cache producer this milestone does not want.
+      # With no remote-cache client variable in the environment there is no
+      # remote tier at all, regardless. No separate build step either: the
+      # run-many invocation below IS the build.
+      #
+      # Exit 0 is NOT sufficient, and that is the whole reason this is a
+      # scripted step rather than a bare `- run:`. nx run-many with no matching
+      # target ANYWHERE prints "NX No tasks were run" and exits 0 (measured in
+      # this repo). Worse for a three-target run: source-traced at
+      # node_modules/nx/dist/src/tasks-runner/life-cycles/formatting-utils.js:37
+      # Nx FILTERS the printed target list down to targets that actually
+      # resolved a task, so a needle matching only the singular prefix still
+      # PASSES when two of the three ran. The needle below therefore names all
+      # three, in -t argument order. The trade: it pins the -t ARGUMENT ORDER
+      # too, so reordering the flags reddens a CORRECT run -- and the fix for
+      # that is to update the needle and its clause in
+      # windows-regression-detector.spec.ts in the SAME commit, never to
+      # shorten the needle.
+      #
+      # One invocation rather than three single-target steps: one graph load on
+      # the slowest runner in the fleet, and Nx already names the failing target
+      # in its own output.
+      #
+      # NO_COLOR is MORE load-bearing here than in ci.yml's lint job, not less.
+      # Nx bolds each target name INDIVIDUALLY while the ", " separators are
+      # not, so with colour on the combined line carries three escape-sequence
+      # pairs interleaved with the commas and a plain-text match cannot fire. A
+      # gate that always fails gets deleted just as fast as one that never
+      # fires.
+      #
+      # shell: bash is REQUIRED, not stylistic: the default shell on
+      # windows-11-arm is pwsh, which fails on set -euo pipefail, on the pipe
+      # and on tee. The grep is runner-side POSIX inside a workflow body and is
+      # correct -- this project's never-use-grep rule governs the agent's own
+      # shell, not workflow bodies, and ci.yml's lint job already uses grep -q
+      # for exactly this purpose.
+      - name: Execute build, typecheck and test on Windows with the Nx cache bypassed
+        shell: bash
+        env:
+          NO_COLOR: '1'
+        run: |
+          set -euo pipefail
+          npm exec -- nx run-many -t build typecheck test --skip-nx-cache 2>&1 | tee detector.log
+          grep -q 'Successfully ran targets build, typecheck, test for project' detector.log

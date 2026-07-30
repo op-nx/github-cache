@@ -47,12 +47,29 @@ const run = JSON.parse(readFileSync(runJsonPath, 'utf8'));
 // GUARD 1 (spoofing). `run.json` self-documents the command that produced it, and
 // every `nx` invocation overwrites the file -- so a record left behind by a
 // DIFFERENT command must never be uploaded as this leg's integration hash.
-if (!run.run?.command?.includes(TARGET)) {
+//
+// MATCHED AS A WHITESPACE-DELIMITED TOKEN, never as a SUBSTRING, and that is a
+// TIGHTENING rather than a rewrite: every command the token pattern accepts was
+// already accepted by the substring test, and the ones it now rejects are the
+// spoofs the guard was written to catch. A substring test on a free-form command
+// string matches the literal anywhere in it, so
+// `nx run-many -t build --projects=integration-fixtures`, or an `nx reset` invoked
+// from a path containing the word, all satisfied a guard whose whole job is to
+// reject a record left by a DIFFERENT command. `\b` would NOT fix it -- there is a
+// word boundary between `n` and `-`, so `\bintegration\b` still matches
+// `integration-fixtures`.
+//
+// An ABSENT `run.command` still fails closed, which is the pre-existing and correct
+// behaviour: optional chaining yields `undefined`, and `??` substitutes the empty
+// string, which the pattern does not match.
+if (!/(^|\s)integration(\s|$)/.test(run.run?.command ?? '')) {
   throw new Error(
     `read-integration-hash: ${runJsonPath} is from a different nx invocation -- its ` +
-      `run.command is \`${run.run?.command}\`, which does not mention \`${TARGET}\`. ` +
-      'Every nx invocation overwrites run.json, so read it as the IMMEDIATELY NEXT step ' +
-      'after the integration run with no nx call in between.',
+      `run.command is \`${run.run?.command}\`, which does not name \`${TARGET}\` as a ` +
+      'whitespace-delimited token. A command that merely CONTAINS the word (for example ' +
+      '`--projects=integration-fixtures`) is a different invocation, not this one. Every nx ' +
+      'invocation overwrites run.json, so read it as the IMMEDIATELY NEXT step after the ' +
+      'integration run with no nx call in between.',
   );
 }
 

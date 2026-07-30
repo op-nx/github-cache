@@ -149,13 +149,16 @@ measured trap that has already made a correct configuration look broken.
    leaving a WARM graph behind a claim of cold.
 
 5. **To REPRODUCE the measurement rather than repair a box, redirect the cache
-   directories instead of destroying state.** Point Nx's two cache-directory
-   environment variables, `NX_WORKSPACE_DATA_DIRECTORY` and
-   `NX_NATIVE_FILE_CACHE_DIRECTORY`, at a temporary directory. That is cold BY
-   CONSTRUCTION -- an empty directory's emptiness is readable BEFORE the
-   measurement, whereas a reset is an operation that can fail -- and it is
-   non-destructive, which matters because the stale graph is itself a measurement
-   subject and cannot be regenerated once cleared.
+   directories instead of destroying state.** Point the two variables that govern
+   Nx's GRAPH and plugin-inference state, `NX_WORKSPACE_DATA_DIRECTORY` and
+   `NX_NATIVE_FILE_CACHE_DIRECTORY`, at a temporary directory. Those two are what
+   a HASH measurement depends on, and they are not all of Nx's cache-directory
+   variables: if you are measuring cache HITS rather than hashes, redirect
+   `NX_CACHE_DIRECTORY` too, or a local task-cache hit will masquerade as a
+   remote one. Redirecting is cold BY CONSTRUCTION -- an empty directory's
+   emptiness is readable BEFORE the measurement, whereas a reset is an operation
+   that can fail -- and it is non-destructive, which matters because the stale
+   graph is itself a measurement subject and cannot be regenerated once cleared.
 
 ## 3. What `process.platform` does not cover
 

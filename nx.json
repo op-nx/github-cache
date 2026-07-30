@@ -69,6 +69,7 @@
         "{workspaceRoot}/.github/workflows/ci.yml",
         "{workspaceRoot}/.gitattributes",
         "{workspaceRoot}/ppe/action.yml",
+        "{workspaceRoot}/capture-hashes.mjs",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
         {
           "json": "{workspaceRoot}/tsconfig.json",
@@ -92,6 +93,7 @@
       "inputs": [
         "default",
         "^production",
+        "{workspaceRoot}/read-integration-hash.mjs",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
         {
           "json": "{workspaceRoot}/tsconfig.json",

@@ -53,6 +53,15 @@ Thumbs.db
 /hash-parity-*.json
 /graph-premise-*.json
 
+# O3 probe records, written at the workspace ROOT by ci.yml's integration and
+# o3-witness steps and by a local `node read-integration-hash.mjs`. Ignored for the
+# same reason as the records above -- an untracked sibling would dirty the tree the
+# next `workingTreeClean` measurement reads -- and because integration-hash.txt's
+# contents become a cache key, so it must never be committed and mistaken for one.
+/integration-nx.log
+/integration-hash.txt
+/o3-witness.log
+
 # op-nx/github-cache act test harness (test-only, never a runtime dep)
 .act-cache
 .act-artifacts

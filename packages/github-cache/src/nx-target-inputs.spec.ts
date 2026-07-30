@@ -380,13 +380,51 @@ describe('lint declares its full input set (LINT-04)', () => {
   //      OS-sensitive targets from OS-invariant ones. Re-spelling it is a
   //      Core-Value regression even when the replacement reads equivalently --
   //      `node -e "console.log(process.platform)"` prints the same thing and
-  //      hashes to a different node, and this phase's whole result is stated in
+  //      hashes to a different node, and that phase's whole result was stated in
   //      terms of that node's identity.
   //   2. `capture-hashes.mjs` READS this string out of nx.json rather than
   //      re-spelling it (its `readDiscriminatorCommand`), precisely so the record
   //      cannot drift from the config. That means a re-spelling silently changes
   //      what the INSTRUMENT captures too, so the measurement and the thing being
   //      measured would move together and the change would leave no trace.
+  //
+  // BOTH POINTS ABOVE ARE SUPERSEDED FOR EXACTLY ONE RE-SPELLING, and are kept
+  // visible rather than deleted, because a deletion is not a correction: a future
+  // reader who found only the new literal would be left holding no record that
+  // the byte-identity requirement was ever weighed. Phase 12 (DOCS-07, D-15)
+  // moved the string from `node -p process.platform` -- with `--no-warnings`
+  // inserted -- ONCE. The requirement stands GOING FORWARD at the new value; the
+  // pins below are what enforce it. The replacement reason, in four parts:
+  //
+  //   (a) stderr IS hashed, which is the citation the original argument's era
+  //       never had. Nx 23.1.0's
+  //       `packages/nx/src/native/tasks/hashers/hash_runtime.rs:33-35` does
+  //       `hash(&[std_out, std_err].concat())` with BOTH streams `.trim()`ed and
+  //       NO separator between them, so any non-empty stderr silently EXTENDS the
+  //       hashed token. Five in-repo documents asserted that premise uncited;
+  //       it is now measured true at the installed version.
+  //   (b) The dominant realistic stderr channel is node's WARNING channel, and
+  //       its text carries the process PID -- `(node:29864) Warning: ...`. So a
+  //       warning would not rotate the hash ONCE, it would vary it on EVERY
+  //       invocation: a permanent 100% MISS on every target carrying the
+  //       discriminator. Because a MISS is never self-evidencing here
+  //       (fail-closed writes, best-effort reads), that presents as a phantom
+  //       portability failure rather than as a one-time rotation -- strictly
+  //       worse than the rotation byte-identity was protecting against.
+  //   (c) `--no-warnings` closes that channel completely (measured: 100 bytes of
+  //       stderr to 0) without touching stdout, and it is a NODE flag rather than
+  //       a shell construct. That distinction is load-bearing: `hash_runtime`
+  //       runs the string through exactly ONE shell per OS -- `%COMSPEC% /C`
+  //       (default `cmd.exe`) on Windows, `sh -c` everywhere else -- so a
+  //       redirect (`2>/dev/null` / `2>nul`) would BREAK the command on one OS
+  //       rather than merely reading differently. Measured byte-identical stdout
+  //       in all four shell-by-flag cells.
+  //   (d) The RESIDUAL, stated rather than glossed so the claim is not
+  //       overstated: node's STARTUP-ERROR channel (e.g. a rejected
+  //       `NODE_OPTIONS` value) is NOT suppressed by `--no-warnings`, and its
+  //       text is machine- and shell-specific. But that shape also empties stdout
+  //       and exits non-zero, so it fails LOUD instead of silently
+  //       re-partitioning the cache.
   //
   // Exact equality on the whole extracted list, not `toContain`: a second runtime
   // entry appearing on `integration` is as much a CORR-04 event as the string
@@ -397,7 +435,7 @@ describe('lint declares its full input set (LINT-04)', () => {
         typeof input === 'object' && 'runtime' in input ? [input.runtime] : [],
     );
 
-    expect(runtimeCommands).toEqual(['node -p process.platform']);
+    expect(runtimeCommands).toEqual(['node --no-warnings -p process.platform']);
   });
 });
 
@@ -443,7 +481,7 @@ describe('the discriminator survives the MERGED project configuration (CORR-04)'
       runtimeInputsOf(
         mergedIntegration(projectJson.targets.integration).inputs,
       ),
-    ).toEqual(['node -p process.platform']);
+    ).toEqual(['node --no-warnings -p process.platform']);
   });
 
   // NON-VACUITY control, and it has to be a negative one for the same reason the

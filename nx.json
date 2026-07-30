@@ -102,7 +102,7 @@
         },
         { "externalDependencies": ["vitest"] },
         { "dependentTasksOutputFiles": "**/*.js", "transitive": true },
-        { "runtime": "node -p process.platform" }
+        { "runtime": "node --no-warnings -p process.platform" }
       ]
     },
     "build": {

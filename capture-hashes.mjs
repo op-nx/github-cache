@@ -837,11 +837,25 @@ function diff(paths) {
 const args = parseArgs(process.argv.slice(2));
 
 if (args.assertGraphPremise) {
-  if (args.installMode !== undefined) {
+  // --diff IS CHECKED HERE TOO, not only --install-mode. The dispatch below is an
+  // if/else chain, so `--assert-graph-premise --diff a b` used to run the premise
+  // mode and DISCARD the diff silently -- a caller who asked for two things got one
+  // and no warning, which is the same "a record must never claim a provenance it
+  // never measured" posture this file states everywhere else, applied to the
+  // INVOCATION rather than to the record.
+  if (args.installMode !== undefined || args.diff !== undefined) {
     throw new Error(
-      'capture-hashes: --assert-graph-premise is mutually exclusive with --install-mode. ' +
-        'The mode resolves a task graph and measures no hash, so recording an install mode ' +
-        'against it would make the record claim a provenance it never measured. --out IS ' +
+      'capture-hashes: --assert-graph-premise is mutually exclusive with --install-mode and ' +
+        '--diff' +
+        (args.installMode !== undefined
+          ? ` (got --install-mode ${args.installMode})`
+          : '') +
+        (args.diff !== undefined
+          ? ` (got --diff ${args.diff.join(' ')})`
+          : '') +
+        '. The mode resolves a task graph and measures no hash, so recording an install mode ' +
+        'against it would make the record claim a provenance it never measured, and --diff ' +
+        'reads two already-captured records, which this mode does not produce. --out IS ' +
         'accepted, and is the intended channel: TEST-08 requires the assertion OUTPUT captured ' +
         'as evidence, not discarded as a pre-flight check.',
     );

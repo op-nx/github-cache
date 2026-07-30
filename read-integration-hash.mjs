@@ -123,6 +123,15 @@ writeFileSync(outPath, task.hash);
 // RECORDED observation and O1/O2's structured corroborator in the same line at no
 // extra cost. It is the remote-vs-local discrimination `Cache: n/m hit` cannot
 // make (D-24), and it is RECORDED, never GATED.
+//
+// AN ABSENT FIELD PRINTS `<absent>`, NOT `undefined`, and the distinction is worth
+// the four characters BECAUSE the value is never gated: nothing downstream would
+// reject a bad one, so this line IS the record. `cacheStatus=undefined` reads as a
+// real observed value in evidence that O1/O2 cite as their structured
+// corroborator, whereas `<absent>` cannot be mistaken for one. Deliberately still
+// NOT a throw -- gating a recorded-only observation is the tripwire-on-correct-work
+// failure this job's own comments forbid.
 console.log(
-  `${TARGET} hash=${task.hash} cacheStatus=${task.cacheStatus} status=${task.status} -> ${outPath}`,
+  `${TARGET} hash=${task.hash} cacheStatus=${task.cacheStatus ?? '<absent>'} ` +
+    `status=${task.status ?? '<absent>'} -> ${outPath}`,
 );

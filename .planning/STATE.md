@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 12
 current_phase_name: windows-ci-reuse-o4-consumer-recipe
 status: executing
-last_updated: "2026-07-30T16:36:59.356Z"
+last_updated: "2026-07-30T16:57:01.964Z"
 last_activity: 2026-07-30
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 45
-  completed_plans: 36
+  completed_plans: 37
   percent: 17
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 12 (windows-ci-reuse-o4-consumer-recipe) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Progress: 4/6 phases complete [####--] 67%
 Last activity: 2026-07-30 — Phase 12 execution started
@@ -133,6 +133,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 12 P02 | 40min | 2 tasks | 3 files |
 | Phase 12 P03 | 22min | 2 tasks | 1 files |
 | Phase 12 P04 | 38min | 3 tasks tasks | 7 files files |
+| Phase 12 P05 | 17min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -263,6 +264,7 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 12]: 12-03: gate the detector on the PLURAL three-target success line, one nx run-many invocation -- Nx filters the printed target list down to targets that resolved a task, so the singular prefix passes a two-of-three run. MEASURED: a two-target run exits 0 while failing the plural needle.
 - [Phase 12]: 12-03: close the pre-merge risk by proving the COMMAND on Windows arm64, not the job -- GitHub only dispatches a workflow whose file is on the default branch, so workflow_dispatch buys no pre-merge proof. Green-on-runner is a POST-MERGE first-run close.
 - [Phase 12]: 12-04 (DOCS-07/D-15): the integration discriminator is now 'node --no-warnings -p process.platform' at all nine tree sites, one string rather than two that happen to match. --no-warnings rather than a redirect because hash_runtime runs the string through exactly ONE shell per OS (%COMSPEC% /C or sh -c), so a redirect breaks one OS; rather than nothing because Nx 23.1.0 hash_runtime.rs:33-35 hashes trimmed stdout CONCATENATED with trimmed stderr and node warnings carry the PID, making an emitted warning a permanent 100% MISS rather than a one-time rotation. CORR-04's byte-identical constraint is SUPERSEDED IN PLACE in 08-ROOT-CAUSE.md for exactly one re-spelling, on the phase-scoped reading its own prose supports.
+- [Phase 12]: 12-05 (DOCS-07/D-15): docs/cross-os.md renders the discriminator at BOTH sites (the copy-pasteable config snippet and the verification fence), pinned by an EXACT occurrence count rather than a >= 1 floor -- a floor is as half-locking as the toContain it replaced, and the half it would have dropped is the verification fence, which is the only control an adopter has against a silently collapsed discriminator (T-12-09)
 
 ### Pending Todos
 
@@ -389,8 +391,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-30T16:21:03.175Z
-Stopped at: Completed 12-03-PLAN.md
+Last session: 2026-07-30T16:57:01.946Z
+Stopped at: Completed 12-05-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

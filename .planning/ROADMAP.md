@@ -555,15 +555,13 @@ prejudged).
      stderr), and the recipe is registered in `nx.json`'s `test` inputs and guarded against
      drift, so it cannot rot silently. (DOCS-07)
 
-**Plans**: 4/6 plans executed
-
-Plans:
+**Plans**: 5/6 plans executed
 
 - [x] `12-01-PLAN.md` - RED: the three Windows-leg shape guards and the detector-workflow guard, registered in the same commit (XOS-04, XOS-08, XOS-05)
 - [x] `12-02-PLAN.md` - GREEN: the three windows-11-arm legs, plus the four claims their existence falsifies (XOS-04, XOS-08, XOS-05)
 - [x] `12-03-PLAN.md` - the scheduled --skip-nx-cache Windows regression detector, and its command proven on Windows arm64 (XOS-05)
 - [x] `12-04-PLAN.md` - the single-sourced stderr-immune discriminator, and CORR-04's invariant superseded (DOCS-07)
-- [ ] `12-05-PLAN.md` - DOCS-07: docs/cross-os.md, registered, linked and drift-guarded (DOCS-07)
+- [x] `12-05-PLAN.md` - DOCS-07: docs/cross-os.md, registered, linked and drift-guarded (DOCS-07)
 - [ ] `12-06-PLAN.md` - the O4 pre-registration, the proof, and the O4 evidence appended to 11-EVIDENCE.md (XOS-05, XOS-04, XOS-08)
 
 **Live-CI close**: XOS-05's HIT is only observable on a real windows-11-arm runner after a
@@ -758,7 +756,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 8/8 | Complete    | 2026-07-28 |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 7/7 | Complete    | 2026-07-30 |
-| 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 4/6 | In Progress | - |
+| 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 5/6 | In Progress | - |
 
 ---
 *v0.0.2 roadmap created 2026-07-26 from `.planning/REQUIREMENTS.md` (43 requirements, revised

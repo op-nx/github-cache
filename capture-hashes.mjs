@@ -469,8 +469,15 @@ function targetSegment(taskId) {
 
 /**
  * TEST-08's mechanical premise assertion (D-12) with D-13's mandatory
- * non-vacuity control. THE CONTRACT, written down before the implementation,
- * because these six clauses ARE the mode:
+ * non-vacuity control. THE CONTRACT, written down before the implementation.
+ *
+ * SIX CLAUSES, BUT NOT SIX INDEPENDENT ONES, and the correction matters in a
+ * phase whose whole subject is guards that READ as coverage without being it. An
+ * earlier revision of this block presented all six as independent and named
+ * clause 5 as "the clause that makes assertion 2 meaningful rather than vacuous".
+ * Clause 4 already discharges that. What follows is the MEASURED split.
+ *
+ * THREE CLAUSES OVER THE RESOLVER -- these are the ones a graph change can fire:
  *
  *   1. the `integration` set is NON-EMPTY. An empty set satisfies every absence
  *      assertion simultaneously -- Phase 7's `filterUsingGlobPatterns` lesson
@@ -481,11 +488,28 @@ function targetSegment(taskId) {
  *      just the membership: it is a property of the RESOLVED graph, so an Nx
  *      upgrade that changes the inferred `dependsOn` must fail loud instead of
  *      quietly weakening the control;
- *   4. those two members are `<PROJECT>:build` and `<PROJECT>:<CONTROL_TARGET>`;
- *   5. the control set INTERSECTS `FORBIDDEN_TARGETS`. This is the clause that
- *      makes assertion 2 meaningful rather than vacuous;
- *   6. the control set DIFFERS from the `integration` set. A resolver returning
- *      the same thing for every input fails here.
+ *   4. those two members are `<PROJECT>:build` and `<PROJECT>:<CONTROL_TARGET>`.
+ *      This is what makes clause 2 non-vacuous: it PINS a forbidden segment into
+ *      the control set, so the resolver is shown to put one there.
+ *
+ * TWO CLAUSES OVER THE CONSTANTS -- belt and braces, and they are RETAINED
+ * deliberately rather than deleted, because a deleted clause is
+ * indistinguishable from one that never existed. They cannot be fired by any
+ * graph change:
+ *
+ *   5. the control set INTERSECTS `FORBIDDEN_TARGETS`. Unreachable while clause 4
+ *      holds, since clause 4 pins `build` and `<CONTROL_TARGET>` into the set and
+ *      both are members of `FORBIDDEN_TARGETS`. It is therefore a guard on the
+ *      CONSTANT: it fires only if `FORBIDDEN_TARGETS` is edited to stop covering
+ *      the control set. MEASURED both ways -- `FORBIDDEN_TARGETS = []` and
+ *      `FORBIDDEN_TARGETS = ['zzz']` each make clause 5 the first to fail;
+ *   6. the control set DIFFERS from the `integration` set. Unreachable FULL STOP,
+ *      for ANY value of the constants, not merely under the current ones: clause
+ *      2 passing means no `integration` member carries a forbidden segment, and
+ *      clause 5 passing means some control member does, so the two sets cannot be
+ *      equal. Its stated failure mode -- a resolver returning the same thing for
+ *      every input -- fires on clause 2 first and with a better message. Kept as
+ *      the written-down INTENT; do not read it as coverage.
  *
  * Every failure ENUMERATES both observed sets, mirroring `captureTargets`'s
  * missing-task throw. All six THROW; none warns. TEST-08 requires the assertion
@@ -567,6 +591,10 @@ async function assertGraphPremise(args) {
     );
   }
 
+  // BELT AND BRACES ON THE CONSTANT, not on the resolver -- see the contract
+  // block. Assertion 4 has already pinned `build` and `<CONTROL_TARGET>` into
+  // controlIds and both are FORBIDDEN_TARGETS members, so no graph change reaches
+  // here; only an edit to FORBIDDEN_TARGETS does.
   if (
     !controlIds.some((taskId) =>
       FORBIDDEN_TARGETS.includes(targetSegment(taskId)),
@@ -580,6 +608,11 @@ async function assertGraphPremise(args) {
     );
   }
 
+  // WRITTEN-DOWN INTENT, NOT COVERAGE -- see the contract block. Assertions 2 and
+  // 5 together make this unreachable for ANY value of the constants: 2 says no
+  // `integration` member carries a forbidden segment and 5 says some control
+  // member does, so the sets cannot be equal. Retained because a deleted clause is
+  // indistinguishable from one that never existed; do not count it as a guard.
   if (premiseIds.join(',') === controlIds.join(',')) {
     fail(
       6,

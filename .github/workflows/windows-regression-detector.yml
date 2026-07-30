@@ -2,9 +2,15 @@ name: Windows regression detector
 
 # The scheduled --skip-nx-cache windows-11-arm run (XOS-05/D-08). This is a
 # SEPARATE scheduled workflow, never a job inside ci.yml: adding a schedule
-# trigger to ci.yml would fire all nineteen of its jobs on a calendar cadence
+# trigger to ci.yml would fire EVERY ONE of its jobs on a calendar cadence
 # unless every one of them grew an `if:` gate, and cleanup.yml's own header
-# already records why a scheduled concern lives in its own file.
+# already records why a scheduled concern lives in its own file. (This line used
+# to say "all nineteen of its jobs". ci.yml declares 21 job keys at HEAD -- 18
+# before XOS-04 added three -- so the number was wrong on the day this file was
+# authored and wrong again three jobs later. The ARGUMENT never depended on it,
+# so the count is dropped rather than restated: an unguarded number in a comment
+# rots, and a comment carrying a false claim is a documented argument for undoing
+# the work it explains.)
 #
 # WHY IT EXISTS, in XOS-05's own words, because the job below is unreadable
 # without them: the success signal for O4 -- every target reporting

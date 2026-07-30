@@ -171,10 +171,24 @@ export type ParityVerdict =
  * IT IS HALF THE FIX, and says so. Stripping line breaks stops injected text
  * from STARTING a line; the other half is the `^` anchor on that grep, without
  * which the same text still matches as a mid-line SUBSTRING of the failure
- * line. Neither half suffices alone. The anchor cannot be pinned from a spec --
- * `ci.yml` is not a declared `test` input (PARITY-08, deferred to Phase 9), so a
- * spec asserting on its content would serve a stale cached PASS. This half is
- * the pinnable half, and `compare.spec.ts` pins it.
+ * line. Neither half suffices alone. This half is the one this module owns, and
+ * `compare.spec.ts` pins it.
+ *
+ * CORRECTED (Phase 12), and supplying the REPLACEMENT FACT is the point rather
+ * than retracting the old sentence. This block used to say the anchor "cannot be
+ * pinned from a spec", on the ground that `ci.yml` was not a declared `test`
+ * input (PARITY-08, deferred to Phase 9), so a spec asserting on its content
+ * would serve a stale cached PASS. Both halves are now false:
+ * `{workspaceRoot}/.github/workflows/ci.yml` IS a `test` input (`nx.json`,
+ * PARITY-08, Phase 9, pinned by name in `nx-target-inputs.spec.ts`), and
+ * `dogfood-cross-os.spec.ts` pins the sibling `o3-witness` job's
+ * `grep -q '^o3-witness: EXISTENCE OK'` expression by exactly this mechanism. So
+ * the `hash-parity-compare` job's `^hash-parity: PARITY OK` anchor is PINNABLE
+ * and simply is not pinned YET -- an OPEN GAP, never an impossibility. A bare
+ * deletion of the old sentence would have left a future reader holding a
+ * documented argument that one half of a two-half injection defence this same
+ * comment calls load-bearing is UNGUARDABLE, which is a documented reason not to
+ * guard it. Do not read the old wording as that reason.
  */
 function fail(reason: ParityFailureReason, detail: string): ParityVerdict {
   return { ok: false, reason, detail: detail.replace(/[\r\n]+/g, ' ') };

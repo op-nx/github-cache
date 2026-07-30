@@ -233,10 +233,21 @@ describe('docs/cross-os.md is reachable (cross-os nav)', () => {
     ).toMatch(/^- \[.+\]\(docs\/cross-os\.md\) -- /m);
   });
 
-  it('docs/advanced.md cross-links it', () => {
+  // A LINK-SHAPED assertion, matching the README sibling above rather than the bare
+  // `toContain('cross-os.md')` this replaced (IN-05). A containment passes on ANY occurrence
+  // of the substring, so it was satisfied by a prose mention, by an HTML comment, and by a
+  // bare filename in a code span -- all three measured against this regex and all three now
+  // rejected. Its own failure message also named a PLACEMENT the assertion never checked,
+  // which is why the placement is stated below as the convention it is rather than as a
+  // claim this clause enforces.
+  //
+  // KNOWN RESIDUAL, named rather than left for a reader to discover: a live link wrapped in
+  // `~~` strikethrough still matches. Catching that needs a lookbehind for one exotic edit,
+  // which is not worth the regex; the three realistic drift modes are closed.
+  it('docs/advanced.md cross-links it as an actual markdown link', () => {
     expect(
       read('docs/advanced.md'),
-      'docs/advanced.md no longer links cross-os.md. The cross-link sits in the publish / sync section because that is where a reader hits the cross-OS question.',
-    ).toContain('cross-os.md');
+      'docs/advanced.md no longer carries a markdown LINK to cross-os.md. A bare mention is not a cross-link: an unreachable recipe is not a consumer deliverable, and this doc is the one place a reader hits the cross-OS question. By convention the link sits in the publish / sync section -- that placement is not asserted here, only the link itself.',
+    ).toMatch(/\[[^\]]+\]\(cross-os\.md\)/);
   });
 });

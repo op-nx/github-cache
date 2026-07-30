@@ -544,3 +544,237 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
     ).toContain(wanted);
   });
 });
+
+/**
+ * XOS-04 / XOS-08's PRESENCE and SHAPE guard for the three Windows legs, authored RED -- these
+ * three describes land BEFORE the `ci.yml` jobs they assert on (plan 12-02). That is the
+ * recorded shape from plans 10-03 and 11-01, whose guards were written first and whose `ci.yml`
+ * change landed as the single GREEN commit; HEAD is deliberately red in between. Do not soften
+ * these assertions and do not stub placeholder jobs to make the suite green.
+ *
+ * WHY EACH LEG GETS ITS OWN DESCRIBE rather than one loop over three names. Each leg survives
+ * or falls independently -- a copy-paste leaving `npm run test` in `build-windows` is a
+ * different regression from a `typecheck-windows` that lost its `needs:` edge -- and a shared
+ * parameterised block would report all three identically. The three names also give
+ * `-t "build-windows"` something to select, which is how each RED was observed separately
+ * rather than as one undifferentiated failure.
+ *
+ * THE ANCHORING RULE IS LIVE HERE, not theoretical. This file already records shipping a
+ * tautology: an unanchored `\bbuild\b` on a `needs:` check was satisfied by that same job's own
+ * `- run: npm run build` step (XOS-07's block above, and its comment at the head of this file).
+ * `build-windows` reproduces the trap exactly -- its `needs:` value and its `- run:` line carry
+ * the SAME token -- so every clause below is anchored at its indent level: a job's own keys at
+ * FOUR spaces, their step children at SIX.
+ *
+ * AND EVERY CLAUSE IS SCOPED TO `jobBlock(<leg>)`, never to the file. `windows-11-arm` occurs 19
+ * times in `ci.yml` today, so a whole-file `toContain('windows-11-arm')` passes unconditionally
+ * whatever these three jobs actually say.
+ *
+ * NO COMMENT-PHRASE ASSERTION BELONGS HERE. `codeLines` strips every `#` line, so a comment lock
+ * placed in this file is vacuous by construction; the sidecar-invariant and graph-premise prose
+ * locks live in `docs-same-os-claims.spec.ts`, whose read is RAW. Two harnesses, one question
+ * each.
+ */
+const RENAME_NOTE =
+  'If the job was legitimately renamed, update this describe in the SAME commit; do not ' +
+  'delete the assertion to make the suite green.';
+
+function windowsLegReasons(leg: string, target: string, producer: string) {
+  return {
+    presence:
+      `jobBlock THROWS when no job is keyed \`  ${leg}:\`, and that throw IS the presence ` +
+      `guard: it is what stops ${leg} from being a gate that can be deleted without anything ` +
+      'going red. A CI job has no inferred Nx target behind it, and this repo has already ' +
+      'recorded that `nx run-many` on a missing target prints "No tasks were run" and exits ' +
+      `0. So the correct response to a red here is to RESTORE THE JOB. ${RENAME_NOTE}`,
+    runsOn:
+      `${leg} must run on windows-11-arm. It is the CONSUMER half of XOS-04, and a leg that ` +
+      'quietly moved back to ubuntu proves nothing about cross-OS reuse while staying green. ' +
+      'Asserted against this job block alone: `windows-11-arm` occurs 19 times in ci.yml, so ' +
+      `a whole-file match would pass unconditionally. ${RENAME_NOTE}`,
+    needs:
+      `${leg} must declare \`needs: ${producer}\` -- a BARE SCALAR naming exactly ONE ` +
+      'producer, never a list (XOS-08, D-02). The edge is what makes this leg a CONSUMER of ' +
+      'an artifact the ubuntu leg has already published; without it the leg races its own ' +
+      'producer and MISSes on correct code. Anchored at FOUR spaces because unanchored, ' +
+      `\`${producer}\` is already satisfied by this same job's own \`- run: npm run ${target}\` ` +
+      `step -- the exact tautology this file records having shipped once. ${RENAME_NOTE}`,
+    timeout:
+      `${leg} must carry timeout-minutes: 15 (D-05), the value every non-matrix sibling in ` +
+      'ci.yml uses. Without one, a hung step holds a runner for the account default rather ' +
+      `than failing loud as a job's own failure. ${RENAME_NOTE}`,
+    ownTarget:
+      `${leg} must run \`npm run ${target}\` and NEITHER of the other two targets. The three ` +
+      'Windows legs are verbatim copies of one block differing only in their final run line, ' +
+      'so a copy-paste leaving the wrong target behind is the single most likely error in ' +
+      'authoring them -- and nothing else in this file would catch it. The job would pass, ' +
+      `one target would run twice, and ${target} would simply never run on Windows. ` +
+      RENAME_NOTE,
+    sidecar:
+      `${leg} must carry the sidecar dogfood block -- \`- uses: ./start-cache-server\` and its ` +
+      '`- cancel: cache-server` teardown. Without the sidecar the leg has no remote cache ' +
+      'client at all, so it cannot exhibit the HIT XOS-05 is measured on: the leg goes green ' +
+      'having proved nothing. That is the same silent-success failure mode the scheduled ' +
+      `regression detector exists to catch. ${RENAME_NOTE}`,
+    noIf:
+      `${leg} must declare NO job-level if:. Its ubuntu producer carries none, and that is ` +
+      'exactly what makes build/typecheck/test PR-eligible -- which in turn is what makes the ' +
+      'D-18 proving run possible at all, since `on: schedule` and a push to main are the two ' +
+      'vehicles this phase deliberately does not use. Anchored at FOUR spaces so a step-level ' +
+      `\`if:\` (eight spaces, inside a \`- \` item) is deliberately not matched. ${RENAME_NOTE}`,
+  };
+}
+
+describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)', () => {
+  const { presence, runsOn, needs, timeout, ownTarget, sidecar, noIf } =
+    windowsLegReasons('build-windows', 'build', 'build');
+
+  // POSITIVE CONTROL, and it comes FIRST for the same reason every other control in this file
+  // does: the no-`if:` clause at the end is a `not.toMatch`, which an empty or mis-extracted
+  // block satisfies trivially. `jobBlock` THROWS on an absent job key, so this clause is
+  // simultaneously the presence guard and the extraction control.
+  it('scopes to a real build-windows job block that runs npm run build', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, presence).toMatch(/^ {6}- run: npm run build$/m);
+  });
+
+  it('runs on the windows-11-arm runner -- the CONSUMER half of XOS-04', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, runsOn).toMatch(/^ {4}runs-on: windows-11-arm$/m);
+  });
+
+  it('waits on the ubuntu build job as a bare single-producer needs: scalar (XOS-08)', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, needs).toMatch(/^ {4}needs: build$/m);
+  });
+
+  it('carries timeout-minutes: 15 -- generic hang insurance, like every other job', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, timeout).toMatch(/^ {4}timeout-minutes: 15$/m);
+  });
+
+  it('runs the build target its NAME claims, and neither of the other two', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, ownTarget).toMatch(/^ {6}- run: npm run build$/m);
+    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run typecheck$/m);
+    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run test$/m);
+  });
+
+  it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, sidecar).toMatch(/^ {6}- uses: \.\/start-cache-server$/m);
+    expect(block, sidecar).toMatch(/^ {6}- cancel: cache-server$/m);
+  });
+
+  it('declares NO job-level if:, so the leg stays PR-eligible', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, noIf).not.toMatch(/^ {4}if:/m);
+  });
+});
+
+describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-08)', () => {
+  const { presence, runsOn, needs, timeout, ownTarget, sidecar, noIf } =
+    windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck');
+
+  it('scopes to a real typecheck-windows job block that runs npm run typecheck', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, presence).toMatch(/^ {6}- run: npm run typecheck$/m);
+  });
+
+  it('runs on the windows-11-arm runner -- the CONSUMER half of XOS-04', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, runsOn).toMatch(/^ {4}runs-on: windows-11-arm$/m);
+  });
+
+  it('waits on the ubuntu typecheck job as a bare single-producer needs: scalar (XOS-08)', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, needs).toMatch(/^ {4}needs: typecheck$/m);
+  });
+
+  it('carries timeout-minutes: 15 -- generic hang insurance, like every other job', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, timeout).toMatch(/^ {4}timeout-minutes: 15$/m);
+  });
+
+  it('runs the typecheck target its NAME claims, and neither of the other two', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, ownTarget).toMatch(/^ {6}- run: npm run typecheck$/m);
+    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run build$/m);
+    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run test$/m);
+  });
+
+  it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, sidecar).toMatch(/^ {6}- uses: \.\/start-cache-server$/m);
+    expect(block, sidecar).toMatch(/^ {6}- cancel: cache-server$/m);
+  });
+
+  it('declares NO job-level if:, so the leg stays PR-eligible', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, noIf).not.toMatch(/^ {4}if:/m);
+  });
+});
+
+describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', () => {
+  const { presence, runsOn, needs, timeout, ownTarget, sidecar, noIf } =
+    windowsLegReasons('test-windows', 'test', 'test');
+
+  it('scopes to a real test-windows job block that runs npm run test', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, presence).toMatch(/^ {6}- run: npm run test$/m);
+  });
+
+  it('runs on the windows-11-arm runner -- the CONSUMER half of XOS-04', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, runsOn).toMatch(/^ {4}runs-on: windows-11-arm$/m);
+  });
+
+  it('waits on the ubuntu test job as a bare single-producer needs: scalar (XOS-08)', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, needs).toMatch(/^ {4}needs: test$/m);
+  });
+
+  it('carries timeout-minutes: 15 -- generic hang insurance, like every other job', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, timeout).toMatch(/^ {4}timeout-minutes: 15$/m);
+  });
+
+  it('runs the test target its NAME claims, and neither of the other two', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, ownTarget).toMatch(/^ {6}- run: npm run test$/m);
+    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run build$/m);
+    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run typecheck$/m);
+  });
+
+  it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, sidecar).toMatch(/^ {6}- uses: \.\/start-cache-server$/m);
+    expect(block, sidecar).toMatch(/^ {6}- cancel: cache-server$/m);
+  });
+
+  it('declares NO job-level if:, so the leg stays PR-eligible', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, noIf).not.toMatch(/^ {4}if:/m);
+  });
+});

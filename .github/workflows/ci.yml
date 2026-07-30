@@ -690,22 +690,27 @@ jobs:
         with:
           name: integration-hash-ubuntu-24.04-arm
           path: integration-hash-records
-      # An EMPTY hash must fail the job rather than compose a cache key ending in
-      # nothing. if-no-files-found: error on the upload side covers only the
-      # missing-file half of that.
-      - name: Read H_linux from the ubuntu integration leg's record
-        shell: bash
-        run: |
-          set -euo pipefail
-          h_linux="$(cat integration-hash-records/integration-hash.txt)"
-          if [ -z "${h_linux}" ]; then
-            echo "o3-witness: the downloaded integration-hash record is EMPTY -- refusing to compose a cache key ending in nothing" >&2
-            exit 1
-          fi
-          echo "H_LINUX=${h_linux}" >> "$GITHUB_ENV"
-          echo "o3-witness: H_linux=${h_linux}"
       # GITHUB_TOKEN through the step env:. No PAT and no new secret, so the THREAT-MODEL
       # ledger is unchanged.
+      #
+      # H_linux IS READ IN ITS ONE CONSUMING STEP AND NEVER ROUTED THROUGH $GITHUB_ENV, and
+      # that deletion is the fix rather than a filter on the old sink. The previous shape
+      # exported the value with a `-z` emptiness check as its only guard. Command
+      # substitution strips only TRAILING newlines, $GITHUB_ENV is parsed LINE BY LINE, and
+      # GitHub runs `run:` steps as `bash -e {0}` -- which sources BASH_ENV. So a record
+      # holding `123\nBASH_ENV=/tmp/evil.sh` would have defined a second variable for every
+      # later step in this job and executed arbitrary code. The value is ARTIFACT-CONTROLLED:
+      # it is produced by read-integration-hash.mjs in the integration job, which executes
+      # PR-authored code, and this job is ungated by event so it runs on pull_request from
+      # forks. This block already anchors the verification grep at `^` BECAUSE the record
+      # controls interpolated values; the same record must not reach a documented Actions
+      # injection sink.
+      #
+      # THE SHAPE CHECK IS THE SECOND HALF, and it subsumes the old emptiness check. Nx
+      # renders a task hash as an ALL-DECIMAL string, so `''|*[!0-9]*` rejects both an empty
+      # record and any value that is not a hash -- a cache key must never be composed from
+      # one. if-no-files-found: error on the upload side proves only that a file EXISTS, and
+      # read-integration-hash.mjs's own GUARD 3 is the upstream half of the same check.
       #
       # THE GREP IS REQUIRED ON TOP OF THE EXIT CODE, the same double signal
       # hash-parity-compare records: the exit code is the first verdict, and the anchored
@@ -721,10 +726,18 @@ jobs:
         run: |
           set -euo pipefail
           {
+            h_linux="$(cat integration-hash-records/integration-hash.txt)"
+            case "${h_linux}" in
+              ''|*[!0-9]*)
+                echo "o3-witness: FAIL -- the downloaded integration-hash record is empty or is not an Nx task hash (got '${h_linux}') -- refusing to compose a cache key from it" >&2
+                exit 1
+                ;;
+            esac
+            echo "o3-witness: H_linux=${h_linux}"
             auth="Authorization: Bearer ${GITHUB_TOKEN}"
             accept='Accept: application/vnd.github+json'
             api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
-            key="nx-cache-${H_LINUX}"
+            key="nx-cache-${h_linux}"
             # $GITHUB_REF is the correct filter value on BOTH events: refs/heads/main on
             # a push, refs/pull/N/merge on a pull request. Filter rather than paginate --
             # the repository holds ~142 entries against a per_page max of 100, and key

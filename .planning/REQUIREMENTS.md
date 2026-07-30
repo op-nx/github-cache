@@ -470,7 +470,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 ### Verification (TEST)
 
-- [ ] **TEST-08**: Each of O1-O4 has a recorded live proof executed in the mandated order.
+- [x] **TEST-08**: Each of O1-O4 has a recorded live proof executed in the mandated order.
   Evidence is defined: the workflow run URL (O3/O4) or captured terminal output (O1/O2), the Nx
   hash observed, and the literal `[remote cache]` label. The O1 proof additionally captures
   PRODUCER ATTRIBUTION at proof time -- per hit hash, the Actions-cache entry list and shard asset

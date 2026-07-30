@@ -738,7 +738,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 8. Nx Task-Hash Parity | v0.0.2 | 6/6 | Complete   | 2026-07-28 |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 8/8 | Complete    | 2026-07-28 |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
-| 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 7/7 | Complete   | 2026-07-30 |
+| 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 7/7 | Complete    | 2026-07-30 |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 0/? | Not started | - |
 
 ---

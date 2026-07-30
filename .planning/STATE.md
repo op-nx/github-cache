@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
-current_phase: 11
-current_phase_name: live-proofs-o1-o2-o3
+current_phase: 12
+current_phase_name: O4
 status: verifying
-last_updated: "2026-07-30T00:05:00.360Z"
-last_activity: 2026-07-29
-last_activity_desc: Phase 11 execution started
+last_updated: "2026-07-30T01:19:15.075Z"
+last_activity: 2026-07-30
+last_activity_desc: Phase 11 complete, transitioned to Phase 12
 progress:
   total_phases: 6
   completed_phases: 1
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 ## Current Position
 
-Phase: 11 (live-proofs-o1-o2-o3) — EXECUTING
-Plan: 7 of 7
+Phase: 12 — Windows CI Reuse (O4) + Consumer Recipe
+Plan: Not started
 Status: Phase complete — ready for verification
 Progress: 4/6 phases complete [####--] 67%
-Last activity: 2026-07-29 — Phase 11 execution started
+Last activity: 2026-07-30 — Phase 11 complete, transitioned to Phase 12
 
 **PERISHABLE, and it gates plans 11-02 and 11-03.** The warm Releases mirror holding the four hashes
 this workstation computes was published 2026-07-29T16:44Z, and cleanup prunes past 30 days, so the
@@ -49,7 +49,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 
 **Velocity:**
 
-- Total plans completed: 38
+- Total plans completed: 45
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -64,6 +64,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | 05 | 4 | - | - |
 | 6 | 5 | - | - |
 | 09 | 8 | - | - |
+| 11 | 7 | - | - |
 
 **Recent Trend:**
 

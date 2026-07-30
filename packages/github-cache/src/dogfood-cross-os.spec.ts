@@ -374,4 +374,92 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
         'the recorded cache-service and run metadata only.',
     ).toMatch(/^ {4}if:\s*\$\{\{\s*!cancelled\(\)\s*\}\}$/m);
   });
+
+  /**
+   * THE STEP BODY, and this block closes an ASYMMETRY rather than adding polish. Every
+   * clause above pins the job's ENVELOPE -- its key, `needs:`, `permissions:`,
+   * `runs-on:`, `timeout-minutes:`, `if:` -- and the ten Phase 11 prose locks in
+   * `docs-same-os-claims.spec.ts` pin the RATIONALE. Nothing read the SHELL. All ten
+   * locked phrases live in the job's LEADING COMMENT BLOCK, which a body edit does not
+   * touch, so each of the following left the entire suite green AND every phrase intact:
+   *
+   *   - replacing the `select(.key == $key and .ref == $ref)` filter with
+   *     `.actions_caches[0].created_at`, dropping exact-key equality, the ref filter and
+   *     the null terminator in one stroke;
+   *   - dropping `// empty` alone, after which an emptiness test runs against the literal
+   *     string `null`, is false, and the guard PASSES on absence;
+   *   - lowering `-lt 30` to `-lt 0`, turning the stated margin into the bare `<` this
+   *     file's own comment rejects as satisfiable by a timestamp-truncation artefact;
+   *   - deleting the `grep -q '^o3-witness: EXISTENCE OK'` second signal;
+   *   - reverting the H_linux shape check to a bare `-z` emptiness test, which is what
+   *     let an artifact-controlled value reach `$GITHUB_ENV` unvalidated.
+   *
+   * This job's own comment says of its mechanism: "THIS IS THE ONE THAT SHIPS SUBTLY
+   * BROKEN IF THE REASON IS LOST. A count-based check PASSES on the happy path and is
+   * wrong only in the case the witness exists to detect." The prose lock protected the
+   * REASON; the MECHANISM had no guard. The `max-parallel: 1` precedent above locks both
+   * the value AND the prose about the value, which is the shape this now matches.
+   *
+   * `codeLines` strips every `#` line, so each clause below is asserted against real
+   * shell rather than against the comment that explains it -- verified by dumping the
+   * stripped block. Five separate cases, not one, because each mechanism survives or
+   * falls independently and a combined assertion would report five regressions
+   * identically.
+   */
+  it('compares .key for EXACT equality and filters on ref -- ?key= is a prefix match', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The witness must compare the returned .key for EXACT string equality AND filter on ' +
+        'ref. ?key= is a PREFIX match (measured: `?key=nx-cache-1` returns 40 entries, and ' +
+        'a full key minus its last character still returns 2), and ONE hash holds entries ' +
+        'on TWO refs, so neither a count nor a key-only match is an existence proof.',
+    ).toMatch(/select\(\s*\.key == \$key and \.ref == \$ref\s*\)/);
+  });
+
+  it('terminates the cache extraction with // empty, so an absent match is not the string "null"', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The jq extraction of created_at must be terminated with `// empty`. Without it an ' +
+        'absent match yields the literal four-character string `null`, and `[ -z "${created}" ]` ' +
+        'against `null` is FALSE -- so the guard would PASS on exactly the absence it exists ' +
+        "to detect. This file's own comment names this failure mode explicitly.",
+    ).toMatch(/\.created_at\) \/\/ empty/);
+  });
+
+  it('demands the STATED 30-second minimum margin, not a bare <', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The witness must demand a 30-second minimum margin. A bare `<` (i.e. `-lt 0`, or ' +
+        '`-le 0`) is satisfiable by a timestamp-truncation artefact -- the cache side ' +
+        'carries sub-second precision and the step side is whole-second -- which is why ' +
+        'ci.yml states a margin rather than an ordering. The measured ubuntu-first floor is ' +
+        '109 s, so 30 s is roughly four times headroom, not a guess.',
+    ).toMatch(/\[ "\$\{delta\}" -lt 30 \]/);
+  });
+
+  it('proves the verdict was PRINTED, not just that the step exited 0', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The witness must keep the anchored `grep -q` on its own log as the SECOND signal. ' +
+        'The exit code is the first verdict; the anchored content assertion proves the ' +
+        'verdict was actually PRINTED rather than the step succeeding through an early ' +
+        'exit. The `^` anchor is load-bearing because both streams merge into the one log ' +
+        'this grep reads and the failure detail interpolates values the DOWNLOADED RECORD ' +
+        'controls, so an unanchored match could hit a mid-line substring of a failure line.',
+    ).toMatch(/grep -q '\^o3-witness: EXISTENCE OK' o3-witness\.log/);
+  });
+
+  it('validates the downloaded H_linux SHAPE, not merely that it is non-empty', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The witness must reject a downloaded integration-hash record that is not an Nx task ' +
+        'hash, using an all-decimal shape check rather than a bare `-z` emptiness test. The ' +
+        'value is ARTIFACT-CONTROLLED -- produced by a job that executes PR-authored code, ' +
+        'on a job that runs on pull_request including from forks. A `-z` check passes any ' +
+        'non-empty value, which is how the value previously reached $GITHUB_ENV unvalidated: ' +
+        'command substitution strips only TRAILING newlines, $GITHUB_ENV is parsed line by ' +
+        'line, and `run:` steps are executed as `bash -e {0}`, which sources BASH_ENV. If ' +
+        'the export step is ever reinstated, validate BEFORE the write.',
+    ).toMatch(/case "\$\{h_linux\}" in\s*\n\s*''\|\*\[!0-9\]\*\)/);
+  });
 });

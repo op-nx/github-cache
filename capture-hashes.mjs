@@ -88,10 +88,31 @@ const TARGETS = ['build', 'typecheck', 'test', 'integration', 'lint'];
 const INSTALL_MODES = ['ci', 'install'];
 
 /**
- * The targets TEST-08's premise asserts are ABSENT from the Windows CI leg's
- * RESOLVED task graph. That absence is what licenses "any `build`, `typecheck`
- * or `test` hash in the store is Linux-produced" (D-12; D-14's attribution table
- * row 1, the only structural rather than observational means).
+ * The targets TEST-08's premise asserts are ABSENT from the `nx run-many -t
+ * integration` RESOLVED task graph.
+ *
+ * CORRECTED BY XOS-04 (Phase 12), and the replacement reason is supplied rather
+ * than the old one merely deleted -- a comment carrying a false reason is a
+ * documented argument for undoing the work. This block used to say that absence
+ * "licenses `any build/typecheck/test hash in the store is Linux-produced`"
+ * (D-12; D-14's attribution table row 1). Three components, in order:
+ *
+ *   (a) WHAT THE ASSERTION STILL GUARDS, unchanged: the GRAPH PROPERTY itself.
+ *       An Nx upgrade that changed the inferred `dependsOn` must fail loud here
+ *       instead of quietly weakening the control. XOS-04 does not touch it --
+ *       `ci.yml`'s new build-windows / typecheck-windows / test-windows legs run
+ *       different commands and declare no new target and no new `dependsOn`, so
+ *       `integration`'s resolved set is unchanged and this assertion keeps
+ *       passing.
+ *   (b) WHAT IT NO LONGER ESTABLISHES: producer attribution. That inference
+ *       rested on a CONJUNCTION -- this graph premise AND the fact that Windows
+ *       CI ran only `integration`. The three Windows legs falsify the second
+ *       conjunct PERMANENTLY, so the premise alone cannot carry the attribution
+ *       and no re-run of this mode can restore it.
+ *   (c) WHERE THE ATTRIBUTION RECORD IS FROZEN:
+ *       `.planning/phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md`'s O1 section,
+ *       captured at proof time precisely because no future session can re-derive
+ *       it. Read that record rather than reconstructing attribution from here.
  */
 const FORBIDDEN_TARGETS = ['build', 'typecheck', 'test'];
 
@@ -630,9 +651,16 @@ async function assertGraphPremise(args) {
     fail(
       2,
       `\`${premiseCommand}\` resolves forbidden target(s) ${offenders.join(', ')}. TEST-08's ` +
-        `premise is that the Windows CI leg resolves no ${FORBIDDEN_TARGETS.join('/')} task, so ` +
-        'any such hash in the store is Linux-produced (D-12, D-14 row 1). With this false, that ' +
-        'attribution is withdrawn.',
+        `premise is that this command resolves no ${FORBIDDEN_TARGETS.join('/')} task, and that ` +
+        'is a property of the RESOLVED GRAPH: with it false, suspect an Nx upgrade that changed ' +
+        'the inferred dependsOn (D-12, D-14 row 1). CORRECTED BY XOS-04 (Phase 12), replacement ' +
+        'reason supplied rather than the old claim merely deleted: this message used to add "so ' +
+        'any such hash in the store is Linux-produced". It no longer does. That producer ' +
+        'attribution rested on a CONJUNCTION -- this premise AND the fact that Windows CI ran ' +
+        "only `integration` -- and ci.yml's build-windows/typecheck-windows/test-windows legs " +
+        'falsify the second conjunct permanently. The attribution record is FROZEN at ' +
+        ".planning/phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md's O1 section; this assertion " +
+        'now guards the graph property alone.',
     );
   }
 

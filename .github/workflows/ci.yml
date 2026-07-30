@@ -291,10 +291,22 @@ jobs:
       - run: npm ci
       # Sidecar dogfood block. Rationale, and the traps it avoids, are documented
       # once above the build job (whose copy also carries the inline trap notes).
-      # The EXECUTABLE shell must stay identical across all four wired jobs -- only
-      # the final `npm run <target>` line may differ, and only build's copy carries
-      # extra comments. Keep it that way, so the windows-11-arm integration leg
-      # never drifts from the others. This is an unguarded invariant: nothing fails
+      # The EXECUTABLE shell must stay identical across all seven wired jobs --
+      # build, typecheck, test, integration, build-windows, typecheck-windows and
+      # test-windows -- only the final `npm run <target>` line may differ, and only
+      # build's copy carries extra comments. Keep it that way, so the windows-11-arm
+      # legs never drift from the ubuntu producers they exist to reuse.
+      #
+      # SEVEN WIRED JOBS, EIGHT COPIES, and those are two different sets on purpose.
+      # The step occurs EIGHT times in this file; the eighth copy is in
+      # `consumer-smoke`, which drives a scripted PUT/GET rather than an Nx target and
+      # is deliberately OUTSIDE this invariant. (MEASURED before Phase 12: five copies,
+      # four wired. XOS-04 added three legs, so both counts moved by three.) A note
+      # saying "five become eight" without that distinction is describing a different
+      # set than the invariant governs. Do not weaken the invariant to accommodate the
+      # three new copies.
+      #
+      # This is an unguarded invariant: nothing fails
       # if it drifts. CORRECTED, and the replacement fact rather than a bare deletion:
       # this note used to say ci.yml was NOT in nx.json's test inputs, so such a guard
       # would first need it registered there. PARITY-08 registered it (nx.json:69), and
@@ -338,6 +350,192 @@ jobs:
 
   test:
     runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Sidecar dogfood block -- see the build job above.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
+      - run: npm run test
+      - cancel: cache-server
+
+  # THE THREE windows-11-arm REUSE LEGS (XOS-04), and they are the CONSUMER half of
+  # this milestone. Each runs the SAME Nx target as its ubuntu counterpart above, and
+  # build/typecheck/test carry NO platform discriminator (only `integration` does --
+  # see its comment below), so each Windows leg computes the SAME task hash its ubuntu
+  # producer just wrote and can restore that entry. That restore IS the XOS-05
+  # observation; without these jobs there is nothing on Windows to observe.
+  #
+  # THE `needs:` EDGE IS A PRODUCER-TO-CONSUMER DEPENDENCY FOR HIT-ABILITY, NEVER AN
+  # ORDERING-CORRECTNESS CONTROL. PROJECT.md locks that cross-OS sharing rests on target
+  # platform-agnosticism and NEVER on leg ordering, and XOS-06 forbids ordering from
+  # becoming a correctness control: no result computed here changes if the order
+  # changes, and a leg that ran first would MISS and execute, which is slow rather than
+  # wrong. What the edge buys is that the producer has finished before the consumer
+  # starts. WITHOUT it the two legs compute the same hash at the same time, so both
+  # MISS, both execute, and both call saveCache(nx-cache-H) -- the race TRUST-11
+  # predicted in advance (.planning/phases/10-os-invariant-releases-mirror/
+  # 10-SECURITY.md, the Q1 section). The edge removes the RACE. It does NOT remove the
+  # SECOND PRODUCER: from these jobs onward a windows-11-arm runner writes
+  # build/typecheck/test entries too, and that half is recorded in the same Q1 section
+  # rather than left implicit.
+  #
+  # `integration` IS NOT THE WIRING PRECEDENT, and that is worth writing down because it
+  # is the only existing two-OS Nx-target job, so it is the first thing a reader reaches
+  # for. Two independent reasons its matrix cannot serve here:
+  #   (a) `needs:` is per-JOB and never per-LEG, so a matrix leg cannot depend on its
+  #       sibling -- a matrix cannot express XOS-08 at all; and
+  #   (b) `integration`'s two legs compute DIFFERENT hashes, because of the
+  #       `{ runtime: "node -p process.platform" }` discriminator in its own target
+  #       inputs, so parallelism is harmless there and lethal here, where the two legs
+  #       computing the SAME hash is the entire point.
+  #
+  # And do NOT "fix the asymmetry" by giving `dogfood-seed` a Windows leg while in this
+  # file. It is ubuntu-ONLY BY DESIGN and its own VACUITY CONDITION comment says why:
+  # its key is one per RUN, so a Windows seed leg would make the Windows verify leg
+  # restore a Windows-written entry. These legs key on the task HASH, so that reasoning
+  # does not transfer.
+  build-windows:
+    # Consumer of the ubuntu `build` job's entry: a bare scalar naming exactly ONE
+    # producer (XOS-08). See the block above for why this is a HIT-ability edge.
+    needs: build
+    runs-on: windows-11-arm
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Sidecar dogfood block -- see the build job above.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
+      - run: npm run build
+      - cancel: cache-server
+
+  typecheck-windows:
+    # Consumer of the ubuntu `typecheck` job's entry -- same edge, same reasons as
+    # build-windows above. One producer, bare scalar, HIT-ability not ordering.
+    needs: typecheck
+    runs-on: windows-11-arm
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Sidecar dogfood block -- see the build job above.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
+      - run: npm run typecheck
+      - cancel: cache-server
+
+  test-windows:
+    # Consumer of the ubuntu `test` job's entry -- same edge, same reasons as
+    # build-windows above. One producer, bare scalar, HIT-ability not ordering.
+    needs: test
+    runs-on: windows-11-arm
     # Generic hang insurance -- see the build job.
     timeout-minutes: 15
     steps:
@@ -1053,11 +1251,34 @@ jobs:
       #
       # THIS JOB rather than a new one: the mode resolves a task graph and measures no
       # hash, so it needs no sidecar and no build, and this job has already installed. It
-      # runs on BOTH matrix legs, which is the point -- the premise it asserts is about
-      # the WINDOWS leg's resolved graph (D-12, D-14 row 1), so a ubuntu-only check would
-      # assert it on the wrong runner. Under set -euo pipefail a failed assertion reddens
-      # the leg, and the --out record is the evidence TEST-08 asks for rather than a
-      # discarded pre-flight check.
+      # runs on BOTH matrix legs, which is the point -- the premise is about the WINDOWS
+      # leg's resolved graph, so a ubuntu-only check would assert it on the wrong runner.
+      # Under set -euo pipefail a failed assertion reddens the leg, and the --out record
+      # is the evidence TEST-08 asks for rather than a discarded pre-flight check.
+      #
+      # CORRECTED BY XOS-04, with the replacement reason rather than a bare deletion,
+      # because a comment carrying a false reason is a documented argument for undoing
+      # the work. This block used to read the assertion as establishing PRODUCER
+      # ATTRIBUTION -- "any build/typecheck/test hash in the store is Linux-produced"
+      # (D-12, D-14 row 1). Three things, and the order matters:
+      #   (a) WHAT IT STILL GUARDS, unchanged and still a real gate: the GRAPH PROPERTY
+      #       that `nx run-many -t integration` resolves no build/typecheck/test task.
+      #       An Nx upgrade that changed the inferred dependsOn must fail loud here
+      #       instead of quietly weakening the control. XOS-04 does not touch that: the
+      #       new windows-11-arm legs run different commands and declare no new target
+      #       and no new dependsOn, so `integration`'s resolved set is untouched and this
+      #       assertion keeps passing.
+      #   (b) WHAT IT NO LONGER ESTABLISHES: producer attribution. That inference rested
+      #       on a CONJUNCTION -- the graph premise AND the fact that Windows CI ran only
+      #       `integration`. The build-windows / typecheck-windows / test-windows legs
+      #       falsify the second conjunct PERMANENTLY, so the premise alone can no longer
+      #       carry it. The second-producer consequence is priced in
+      #       .planning/phases/10-os-invariant-releases-mirror/10-SECURITY.md's Q1.
+      #   (c) WHERE THE ATTRIBUTION RECORD IS FROZEN:
+      #       .planning/phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md's O1 section,
+      #       captured at proof time precisely because no future session can re-derive
+      #       it. Read that record; do not try to reconstruct the attribution from this
+      #       assertion.
       #
       # --install-mode is deliberately absent and the script REJECTS it here: the mode
       # measures no hash, so recording an install mode against it would make the record

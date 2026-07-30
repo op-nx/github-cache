@@ -574,13 +574,24 @@ jobs:
       # the sidecar. The bearer token is built in a shell variable from the env var the
       # pre-set step already ::add-mask::ed, never interpolated, and only the HTTP code
       # is echoed.
+      #
+      # THE `|| true` IS LOAD-BEARING, and its absence defeated this control on the ONE
+      # case it exists to detect. On connection-refused -- a DEAD SIDECAR -- curl exits 7,
+      # the command substitution INHERITS that status, and `set -e` aborts the step
+      # immediately: before the echo, and before the explanatory failure message below.
+      # The step still went red, but with a bare curl exit and nothing in the log saying
+      # the MISS observation had been invalidated, which is the opposite of this block's
+      # stated intent. Swallowing the exit lets curl's own `-w` report `000`, the
+      # `!= "200"` branch fires, and the explanation reaches the log. The readiness poll
+      # above already carries this for the same reason; this step did not inherit it.
+      # Note `|| echo 000` is still WRONG here, for the reason recorded on that poll.
       - name: Positive control on this leg's own key, which must return 200
         shell: bash
         run: |
           set -euo pipefail
           auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
           own_hash="$(cat integration-hash.txt)"
-          code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/${own_hash}")
+          code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/${own_hash}" || true)
           echo "positive control: GET /v1/cache/${own_hash} -> ${code} (wanted 200)"
           if [ "${code}" != "200" ]; then
             echo "positive control FAILED on ${own_hash}: observed ${code}, wanted 200 -- the sidecar and backend were not proven alive, so this leg's MISS observation is not evidence" >&2

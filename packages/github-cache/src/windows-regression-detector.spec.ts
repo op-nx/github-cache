@@ -127,20 +127,32 @@ describe('windows-regression-detector.yml workflow config -- the XOS-05 detector
     expect(runsOnLines, reason).toHaveLength(1);
   });
 
-  it('bypasses the Nx cache, which is the only thing that makes it a detector', () => {
+  // ONE LINE CARRYING BOTH THE THREE TARGETS AND THE FLAG, never a file-wide
+  // `toContain('--skip-nx-cache')`. A bare containment ties the flag to nothing: it stays
+  // green while the flag MIGRATES onto a different command in a second step -- an
+  // `nx reset --skip-nx-cache` warm-up, say -- with the three-target run keeping the cache
+  // and replaying Linux artifacts, which this clause's own reason calls "a slower copy of
+  // the ci.yml Windows legs". The literal below contains no `.` and no other metacharacter,
+  // so it can only match CONTIGUOUSLY and therefore only on ONE line. MEASURED against the
+  // written workflow, and measured against the mutation too: dropping the flag from the
+  // run-many line no longer leaves this clause green.
+  it('bypasses the Nx cache on the SAME invocation that runs the three targets', () => {
     expect(
       codeLines,
-      'The detector must pass --skip-nx-cache. At Nx 23.1.0 that skips the cache READ and ' +
-        'the cache WRITE, so the run genuinely executes the three targets on Windows instead ' +
-        'of replaying Linux-produced artifacts. Without it this workflow is a slower copy of ' +
-        `the ci.yml Windows legs and detects nothing at all. ${RESTORE_NOTE}`,
-    ).toContain('--skip-nx-cache');
+      'The detector must pass --skip-nx-cache ON THE run-many INVOCATION ITSELF. At Nx ' +
+        '23.1.0 that skips the cache READ and the cache WRITE, so the run genuinely executes ' +
+        'the three targets on Windows instead of replaying Linux-produced artifacts. Without ' +
+        'it this workflow is a slower copy of the ci.yml Windows legs and detects nothing at ' +
+        'all. Asserted as one contiguous line rather than as a file-wide containment, because ' +
+        'a containment is satisfied by the flag sitting on any OTHER command in any other ' +
+        `step. ${RESTORE_NOTE}`,
+    ).toMatch(/nx run-many -t build typecheck test --skip-nx-cache/);
   });
 
   it('proves the run happened, rather than inferring it from an exit code', () => {
     const reason =
-      'The detector must demand the multi-target success LINE as a second signal after the ' +
-      'exit code, with NO_COLOR set. Exit 0 is not sufficient: `nx run-many` with no matching ' +
+      'The detector must demand the multi-target success LINE as a GATING grep, with ' +
+      'NO_COLOR set. Exit 0 is not sufficient: `nx run-many` with no matching ' +
       'target anywhere prints "NX No tasks were run" and exits 0, which this repo has already ' +
       'measured. NO_COLOR is load-bearing rather than tidiness -- Nx bolds each target name ' +
       'INDIVIDUALLY, so with colour on the plain-text match never fires and the gate fails on ' +
@@ -149,7 +161,22 @@ describe('windows-regression-detector.yml workflow config -- the XOS-05 detector
       `update this constant in the same commit, never to shorten the needle. ${RESTORE_NOTE}`;
 
     expect(codeLines, reason).toContain('NO_COLOR');
-    expect(codeLines, reason).toContain(MULTI_TARGET_SUCCESS_LINE);
+
+    // THE GATING FORM, not merely the needle -- and this is the whole point of the clause.
+    // A bare `toContain(MULTI_TARGET_SUCCESS_LINE)` ties the needle to nothing: rewriting
+    // `grep -q '...' detector.log` as `grep '...' detector.log || true` keeps the string and
+    // DELETES THE GATE, and moving the needle into an `echo` banner with the grep removed
+    // outright is satisfied too. Both mutations were measured against this regex and are
+    // rejected; both survive a containment. The `$` terminator is what rejects the `|| true`
+    // form specifically, so do not drop it. This is the shape `dogfood-cross-os.spec.ts`
+    // already uses for the sibling `o3-witness` anchor, which this guard was materially
+    // weaker than (WR-05).
+    expect(codeLines, reason).toMatch(
+      new RegExp(
+        `^\\s+grep -q '${MULTI_TARGET_SUCCESS_LINE}' \\S+\\.log$`,
+        'm',
+      ),
+    );
   });
 
   it('declares NO sidecar and no remote cache tier (D-08)', () => {

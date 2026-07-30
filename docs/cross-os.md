@@ -29,19 +29,46 @@ The discriminator is a `runtime` input: Nx runs the command and folds its output
 into the task hash, so two operating systems compute different hashes for the
 same target and never read each other's entries.
 
+Applied to a workspace's cacheable targets, that means EVERY one of them, not one
+of them. Replace the target names with your own, and replace each
+`"...your <target> inputs..."` placeholder with that target's OWN existing input
+list -- see the replacement warning below, because the entries you leave out are
+the entries Nx stops hashing:
+
 ```json
 {
   "targetDefaults": {
-    "integration": {
+    "build": {
       "inputs": [
-        "default",
-        "^production",
+        "...your build inputs...",
+        { "runtime": "node --no-warnings -p process.platform" }
+      ]
+    },
+    "test": {
+      "inputs": [
+        "...your test inputs...",
+        { "runtime": "node --no-warnings -p process.platform" }
+      ]
+    },
+    "lint": {
+      "inputs": [
+        "...your lint inputs...",
         { "runtime": "node --no-warnings -p process.platform" }
       ]
     }
   }
 }
 ```
+
+This repository's own `nx.json` no longer looks like that: it declares the
+discriminator on `integration` ALONE, and that is the END of section 2 rather
+than its start. `build`, `typecheck`, `test` and `lint` EARNED their removals
+against the checklist below and a build-gating two-leg hash comparison;
+`integration` is the one target that KEPT the discriminator, because its output
+is genuinely not portable. Do not copy this repository's end state as a starting
+point -- most workspaces have no `integration` target at all, so the same block
+pasted elsewhere applies to nothing while `build`, `test` and `lint` carry no
+discriminator, which is precisely the wrong-result configuration named above.
 
 `targetDefaults.<target>.inputs` REPLACES the inferred input list rather than
 merging into it, so declaring an input means ADDING A LINE to the whole list --

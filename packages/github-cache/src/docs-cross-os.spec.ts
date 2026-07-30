@@ -112,10 +112,20 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
   });
 
   // An EXACT occurrence count, never a bare `toContain` and never a `>= 1` floor.
-  // MEASURED, not predicted: the command renders TWICE in the doc -- once in the
-  // copy-pasteable `nx.json` snippet (the configuration an adopter installs) and once
-  // as the bare command in the verification fence (the thing they must RUN on each of
-  // their operating systems). Those are two different jobs, so both have to survive.
+  // MEASURED, not predicted: the command renders FOUR times in the doc -- ONCE PER
+  // TARGET in the copy-pasteable `nx.json` snippet, which shows the safe default's
+  // maximum on `build`, `test` AND `lint` (three), plus once as the bare command in
+  // the verification fence (the thing an adopter must RUN on each of their operating
+  // systems). Those are two different jobs and all four have to survive.
+  //
+  // The per-target repetition is not incidental, it is the CLAIM. Section 1's heading
+  // says "declare the discriminator on every cacheable target", and the snippet under
+  // it used to declare the discriminator on exactly ONE target -- `integration`, this
+  // repository's EARNED EXCEPTION -- so the only copy-pasteable artifact in the
+  // document demonstrated the opposite of its own heading (CR-01). Collapsing the
+  // snippet back to one target would restore that defect, and this count is what
+  // catches it: a count of 2 means the snippet went back to naming one target.
+  //
   // A `>= 1` floor is exactly as HALF-LOCKING as the `toContain` it replaced: it is
   // satisfied by the first occurrence, so deleting the verification fence -- the half
   // that closes T-12-09, an adopter's discriminator silently collapsing to one value
@@ -124,17 +134,17 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
   // `split(x).length - 1` counts NON-OVERLAPPING occurrences, which is the right
   // counter here: this command cannot overlap itself.
   //
-  // A THIRD occurrence fails too, deliberately. If the doc legitimately grows another
-  // rendering, update this expected count HERE in the SAME commit; do not relax it
-  // back to a floor to make the suite green.
-  const RENDERED_DISCRIMINATOR_SITES = 2;
+  // A FIFTH occurrence fails too, deliberately. If the doc legitimately grows another
+  // rendering, RE-MEASURE and update this expected count HERE in the SAME commit; do
+  // not relax it back to a floor to make the suite green.
+  const RENDERED_DISCRIMINATOR_SITES = 4;
 
-  it('the cross-os doc renders that exact command, byte for byte, at both sites', () => {
+  it('the cross-os doc renders that exact command, byte for byte, at every site', () => {
     const command = declaredDiscriminators[0];
 
     expect(
       doc.split(command).length - 1,
-      `docs/cross-os.md must render the discriminator nx.json declares (\`${command}\`) at BOTH sites: the copy-pasteable config snippet AND the verification fence. D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. ${REWORD_ADVICE}`,
+      `docs/cross-os.md must render the discriminator nx.json declares (\`${command}\`) at EVERY site: once per target in the copy-pasteable config snippet (three: build, test, lint) AND once in the verification fence. D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. A count of 2 means the snippet collapsed back to ONE target, which is CR-01: section 1's only copy-pasteable artifact demonstrating the opposite of section 1's heading. ${REWORD_ADVICE}`,
     ).toBe(RENDERED_DISCRIMINATOR_SITES);
   });
 });

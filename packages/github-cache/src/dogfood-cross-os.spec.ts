@@ -464,6 +464,49 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
   });
 
   /**
+   * THE SINK'S ABSENCE (T-11-28), and it is the one direction every clause above leaves
+   * open. CR-01's fix was a DELETION rather than a filter: the `$GITHUB_ENV` export step is
+   * gone and `h_linux` is read inside its one consuming step. The five body clauses above
+   * assert what the job now DOES -- including that the shape check is present -- but nothing
+   * asserted what it must never do again, so an editor could reinstate
+   * `echo "H_LINUX=${h_linux}" >> "$GITHUB_ENV"` and the whole suite would stay green.
+   *
+   * WHY THAT STILL MATTERS AFTER THE SHAPE CHECK. A reinstated sink would be materially
+   * safer than the original, because the all-decimal `case` now runs first in the same step.
+   * But the ORDERING is what makes it safe and the ordering is itself unguarded -- a
+   * reinstated export placed ABOVE the `case` is one line of diff away from the original
+   * vulnerability. The value is ARTIFACT-CONTROLLED: produced by a job that executes
+   * PR-authored code, on a job ungated by event, so it runs on pull_request from forks;
+   * command substitution strips only TRAILING newlines, `$GITHUB_ENV` is parsed LINE BY LINE,
+   * and `run:` steps execute as `bash -e {0}`, which sources BASH_ENV. Guarding the sink's
+   * absence outright is strictly cheaper than guarding a step ordering.
+   *
+   * `$GITHUB_OUTPUT` is in the same pattern deliberately: it is the same documented injection
+   * sink reached by a different key, since a step output is interpolated into later `run:`
+   * bodies. Rejecting one and accepting the other would guard the phrasing rather than the
+   * defect.
+   *
+   * TWO THINGS MAKE THIS NON-VACUOUS rather than an absence over an empty string. First, the
+   * positive control at the head of this describe proves `jobBlock('o3-witness')` returns the
+   * real block -- and `jobBlock` THROWS on an absent job key, so a deleted job cannot satisfy
+   * this clause by disappearing. Second, `codeLines` strips every `#` line, which is REQUIRED
+   * here rather than incidental: this job's own leading comment names `$GITHUB_ENV` five times
+   * while explaining why the sink was removed, so the identical assertion against the raw file
+   * would fail on the CORRECT implementation. Verified by dumping the stripped block: the only
+   * `GITHUB_*` tokens surviving in it are `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_REF` and
+   * `GITHUB_RUN_ID`.
+   *
+   * The `integration` job legitimately writes to `$GITHUB_ENV` (its sidecar pre-set step), so
+   * this clause is scoped to the witness's own block and must never be widened to the file.
+   */
+  it('routes the artifact-controlled H_linux into NO $GITHUB_ENV or $GITHUB_OUTPUT sink (T-11-28)', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The o3-witness job must not write to $GITHUB_ENV or $GITHUB_OUTPUT. CR-01 was fixed by DELETING that sink, not by filtering it: h_linux is artifact-controlled, produced by a job that executes PR-authored code, and this job runs on pull_request including from forks. $GITHUB_ENV is parsed line by line and `run:` steps execute as `bash -e {0}`, which sources BASH_ENV -- so a record holding `123\\nBASH_ENV=/tmp/evil.sh` defines a variable for every later step and executes arbitrary code. The all-decimal shape check does make a reinstated export safer, but only while it runs FIRST, and that ordering is unguarded. If a sink is genuinely needed, validate BEFORE the write and replace this clause with one that asserts the ordering.',
+    ).not.toMatch(/GITHUB_ENV|GITHUB_OUTPUT/);
+  });
+
+  /**
    * THREE LITERALS MUST MOVE TOGETHER and only one pair was documented as a contract.
    * `ci.yml` records that the integration STEP NAME is a contract ("If this name is ever
    * edited, the witness's jq selector must be edited in the SAME commit"), but the

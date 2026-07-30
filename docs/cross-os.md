@@ -177,3 +177,15 @@ CRLF-versus-LF difference in the discriminator's OWN output cannot skew the hash
 That is worth stating because it is the one line-ending hazard on this path you
 do not have to handle. Every other line-ending difference in your inputs is still
 yours to manage.
+
+The one you DO have to handle, and it is a PREREQUISITE rather than a footnote:
+normalise your checkout. GitHub's Windows runners default to
+`core.autocrlf=true`, so without a `.gitattributes` your Windows checkout is CRLF
+while your Linux checkout is LF. Nx hashes file CONTENTS, so every file-based
+input diverges, every task hash diverges, and cross-OS hits go to zero --
+silently, because a MISS reports nothing. One line at the repository root fixes
+it, and it is the line this repository itself ships:
+
+```gitattributes
+* text=auto eol=lf
+```

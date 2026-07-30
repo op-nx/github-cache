@@ -5,9 +5,8 @@ milestone_name: framing
 current_phase: 12
 current_phase_name: O4
 status: verifying
-last_updated: "2026-07-30T01:19:15.075Z"
+last_updated: "2026-07-30T02:00:27.574Z"
 last_activity: 2026-07-30
-last_activity_desc: Phase 11 complete, transitioned to Phase 12
 progress:
   total_phases: 6
   completed_phases: 1
@@ -31,7 +30,7 @@ Phase: 12 — Windows CI Reuse (O4) + Consumer Recipe
 Plan: Not started
 Status: Phase complete — ready for verification
 Progress: 4/6 phases complete [####--] 67%
-Last activity: 2026-07-30 — Phase 11 complete, transitioned to Phase 12
+Last activity: 2026-07-30
 
 **PERISHABLE, and it gates plans 11-02 and 11-03.** The warm Releases mirror holding the four hashes
 this workstation computes was published 2026-07-29T16:44Z, and cleanup prunes past 30 days, so the

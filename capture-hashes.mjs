@@ -165,7 +165,28 @@ function parseArgs(argv) {
     }
 
     if (flag === '--out') {
-      parsed.out = argv[index + 1];
+      const value = argv[index + 1];
+
+      // A MISSING VALUE IS AN ERROR, never a fallback to stdout. Both `capture()`
+      // and `assertGraphPremise()` treat a falsy `out` as "print to stdout", so
+      // `--out` as the last argument -- or `--out --install-mode ci`, where the
+      // next token is another flag -- silently produced NO FILE while exiting 0.
+      // The caller asked for a record and got none, which is the same
+      // silently-passing shape the rest of this file exists to reject. In ci.yml
+      // the value is always supplied and `if-no-files-found: error` would catch an
+      // empty upload, so this is about manual runs -- where nothing else would.
+      if (value === undefined || value.startsWith('--')) {
+        throw new Error(
+          'capture-hashes: --out was given with no path' +
+            (value === undefined
+              ? ' (it was the last argument)'
+              : ` (the next argument is the flag \`${value}\`)`) +
+            '. A missing value would silently fall back to stdout and write no record ' +
+            'at all, so pass the path or drop the flag.',
+        );
+      }
+
+      parsed.out = value;
       index += 1;
       continue;
     }

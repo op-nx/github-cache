@@ -5,7 +5,7 @@ milestone_name: framing
 current_phase: 12
 current_phase_name: windows-ci-reuse-o4-consumer-recipe
 status: executing
-last_updated: "2026-07-30T15:56:25.196Z"
+last_updated: "2026-07-30T16:09:06.493Z"
 last_activity: 2026-07-30
 last_activity_desc: Phase 12 execution started
 progress:
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 12 (windows-ci-reuse-o4-consumer-recipe) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Progress: 4/6 phases complete [####--] 67%
 Last activity: 2026-07-30 — Phase 12 execution started
@@ -130,6 +130,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 11 P06 | 25m | 2 tasks | 1 files |
 | Phase 11 P07 | 55m | 3 tasks | 2 files |
 | Phase 12 P01 | 35min | 2 tasks tasks | 4 files files |
+| Phase 12 P02 | 40min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -255,6 +256,8 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 11]: 11-06: o3-witness does NOT check out the repository (it is curl plus jq with no comparator to build), yet contents: read is RESTATED, because a job-level permissions block REPLACES the workflow grant wholesale rather than merging it
 - [Phase 11]: 11-06: a THIRD stale ci.yml test-inputs comment block was found in the typecheck job beyond the two the plan, RESEARCH and PATTERNS all enumerated, and corrected with the replacement fact. Correcting two of three would meet the letter of the must_have and not its purpose
 - [Phase ?]: Phase 11 O3 gate taken in two stages: rehearse-on-pr then proceed; PR #11 closed before the proving push rather than auto-merged
+- [Phase 12]: 12-02: the needs: edge is documented as producer-to-consumer for HIT-ability, never as ordering correctness -- and the comment states BOTH that it removes the race and that it does not remove the second producer -- XOS-06 forbids ordering becoming a correctness control; a comment that recorded only the race removal would leave the producer count silently wrong
+- [Phase 12]: 12-02: the graph-premise correction supplies a replacement reason at all three sites (ci.yml plus BOTH capture-hashes.mjs attribution sites) rather than deleting the old claim -- D-21 and PATTERNS S-1: a bare deletion leaves a future reader holding a documented argument for undoing the work, which is how Phase 9 shipped a regression
 
 ### Pending Todos
 
@@ -381,8 +384,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-30T15:56:25.183Z
-Stopped at: Completed 12-01-PLAN.md (RED gate: 27 failing assertions)
+Last session: 2026-07-30T16:09:06.479Z
+Stopped at: Completed 12-02-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

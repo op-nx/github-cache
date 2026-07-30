@@ -442,12 +442,50 @@ async function capture(args) {
  * SAME call `captureTargets` makes; the new mode just emits the value that
  * function only ever uses on its throw path. The second argument MUST stay `{}`
  * for the measured reason recorded at that call site.
+ *
+ * SEEDED FROM THE GRAPH, never from a pinned `[PROJECT]`, and that is the
+ * difference between modelling the command and modelling a proxy for it. The
+ * leg's ACTUAL command is `npm run integration`, i.e. `nx run-many -t
+ * integration`, which is INHERENTLY multi-project. Pinning one project was
+ * true-by-circumstance, and it is a guard that silently NARROWS rather than
+ * breaking: add a second project with an `integration` target and the real
+ * command resolves a superset while this mode keeps asserting over the one
+ * project and keeps printing PREMISE OK. Assertion 1's non-emptiness check does
+ * not detect that either -- the set is still non-empty. Same failure shape as
+ * read-integration-hash.mjs's first-match, and the shape this file already guards
+ * against explicitly in `captureTargets`.
+ *
+ * THE SEED IS FILTERED BY TARGET DECLARATION, and that filter is REQUIRED rather
+ * than defensive -- MEASURED, because the obvious form is broken. This workspace's
+ * graph already holds TWO nodes, `@op-nx/github-cache` and the ROOT package
+ * `@op-nx/source`, so "a single-project workspace" was never true of the GRAPH
+ * even while it was true of the publishable package. Handing every node to
+ * `createTaskGraph` throws `Cannot find configuration for task
+ * @op-nx/source:integration`, because that call demands the target exist on every
+ * project it is given. `run-many` does NOT: it seeds only the projects that
+ * DECLARE the target. Filtering reproduces `run-many`'s own selection, which is
+ * the whole point of the mode.
+ *
+ * A second project carrying the target therefore WIDENS this set, and the widened
+ * set fails LOUD: assertions 3 and 4 pin the control set's COUNT and MEMBERSHIP,
+ * so a widened graph reddens there with both observed sets enumerated. That is the
+ * intended direction -- re-choose the control deliberately, never re-count it. An
+ * empty seed needs no throw here: assertion 1 covers it for the premise set and
+ * assertion 3 for the control set, each with a better message than this function
+ * could give.
+ *
+ * `projectGraph.nodes` is the workspace-project map; external npm nodes live in
+ * `externalNodes` and are not included.
  */
 function resolvedTaskIds(projectGraph, targets) {
+  const projects = Object.keys(projectGraph.nodes).filter((name) =>
+    targets.some((target) => projectGraph.nodes[name].data.targets?.[target]),
+  );
+
   const taskGraph = createTaskGraph(
     projectGraph,
     {},
-    [PROJECT],
+    projects,
     targets,
     undefined,
     {},
@@ -521,9 +559,10 @@ async function assertGraphPremise(args) {
   const projectGraph = await createProjectGraphAsync({ exitOnError: false });
 
   // The Windows CI leg's ACTUAL command is `npm run integration`, i.e.
-  // `nx run-many -t integration`. `run-many` over every project in a
-  // single-project workspace is `[PROJECT]`, which is what `resolvedTaskIds`
-  // passes -- so this resolves the command the leg really runs, not a proxy.
+  // `nx run-many -t integration`. `resolvedTaskIds` resolves over EVERY project in
+  // the graph, which is what `run-many` does -- so this tracks the command the leg
+  // really runs rather than a single-project proxy for it. See that function's own
+  // block for why the pinned form was a silently-narrowing guard.
   const premiseTargets = ['integration'];
   const controlTargets = [CONTROL_TARGET];
   const premiseCommand = `nx run-many -t ${premiseTargets.join(' ')}`;

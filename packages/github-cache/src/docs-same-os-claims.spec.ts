@@ -607,6 +607,55 @@ describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS
   }
 });
 
+/**
+ * PHASE 11 ROW A, SECOND HALF -- the OCCURRENCE COUNT, because `toContain` HALF-LOCKS a
+ * phrase that occurs twice.
+ *
+ * Row A's own docstring names its subject explicitly: "**Two** comment blocks in `ci.yml`,
+ * above `hash-parity` and above `hash-parity-compare`". Measured, both of its required
+ * phrases occur TWICE. The table's generic assertion is `toContain`, which is satisfied by
+ * the FIRST occurrence alone -- so deleting the replacement reason from EITHER block, or
+ * reverting one block to the stale "ci.yml is NOT a test input" claim, left row A GREEN.
+ * The row locked one block and believed it locked two.
+ *
+ * This is exactly the trap row B identifies and avoids by naming its job: "a phrase reusing
+ * that wording would pass from the pre-existing occurrence and lock nothing at all". Row A
+ * could not use that technique -- the replacement FACT is the same fact in both blocks and
+ * rewording one to be unique would make the two blocks disagree about a shared truth. So the
+ * count is asserted instead, which changes NO `ci.yml` prose and therefore cannot disturb the
+ * other nine locked phrases. The other eight Phase 10/11 phrases were verified unique
+ * (count 1); only row A's two are duplicated, which is why this guard is scoped to them.
+ *
+ * KEPT ALONGSIDE row A rather than replacing it. The count subsumes the containment, but the
+ * two failures say different things -- "the phrase is gone" and "the phrase survives in only
+ * one of the two blocks" -- and a reader who deleted one block needs the second message, not
+ * the first. Removing row A from the table would also force a rewrite of the header's
+ * five-row Phase 11 arithmetic for no gain.
+ *
+ * `split(phrase).length - 1` counts NON-OVERLAPPING occurrences, which is the right counter
+ * here: these phrases cannot overlap themselves.
+ *
+ * A THIRD occurrence fails too, deliberately. If a future block legitimately carries the same
+ * rationale, update the expected count HERE in the same commit -- the same rule every row in
+ * this file states.
+ */
+describe('Phase 11 row A locks BOTH ci.yml blocks, not just the first (DOCS-08, PARITY-08)', () => {
+  const ROW_A_PHRASES = [
+    "ci.yml IS in nx.json's test inputs (nx.json:69, PARITY-08, Phase 9)",
+    'asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts',
+  ] as const;
+
+  it.each([...ROW_A_PHRASES])(
+    'occurs in ci.yml exactly twice: `%s`',
+    (phrase) => {
+      expect(
+        read('.github/workflows/ci.yml').split(phrase).length - 1,
+        `ci.yml must carry the phrase \`${phrase}\` in BOTH comment blocks -- above hash-parity AND above hash-parity-compare. Row A of DOCS_08_SITES asserts it with toContain, which is satisfied by the FIRST occurrence alone, so deleting the replacement reason from either block would otherwise stay GREEN. Both blocks previously claimed the OPPOSITE (that ci.yml is NOT an nx.json test input); removing the correction from one of them leaves a future reader holding a documented argument for REMOVING the registration, and removing it turns every ci.yml content guard in this file and in dogfood-cross-os.spec.ts into a replay of a pass computed before its subject existed. If a block was legitimately reworded or added, update this expected count in the SAME commit; do not delete the assertion to make the suite green.`,
+      ).toBe(2);
+    },
+  );
+});
+
 describe('the retracted producer-attribution claim appears in no edited file (OBS-03, D-33)', () => {
   // OBS-03 RETRACTS any claim that the mirror answers producer attribution: the
   // Phase 10 `mirrored-by` label can only derive from the PUBLISHING leg's OS, and

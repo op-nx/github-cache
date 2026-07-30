@@ -160,14 +160,32 @@ measured trap that has already made a correct configuration look broken.
 ## 3. What `process.platform` does not cover
 
 `process.platform` is an operating-system read and nothing more. It does not
-cover CPU architecture and it does not cover libc, and this project cannot
-exercise either -- every machine here is arm64.
+cover CPU architecture and it does not cover libc, and arm64-everywhere explains
+only the first.
+
+The two axes are unexercised for two DIFFERENT reasons, and reading the one
+reason as covering both is the mistake this section exists to prevent.
+ARCHITECTURE is unexercised because every machine in this project is arm64. LIBC
+is unexercised because both Linux environments here are glibc -- and
+glibc-versus-musl varies freely WITHIN a single architecture, so being arm64
+everywhere buys you nothing at all on that axis.
 
 So the coverage this recipe claims ends where this project's evidence ends. If
 you cache across an x64 runner and an arm64 runner, or across a glibc image and a
 musl image, the operating-system read alone does not separate them: you need an
 input that names the axis you actually vary. The same `runtime` mechanism carries
 it; only the command changes.
+
+The replacement command must clear the SAME bar section 1 sets, restated here
+because section 1 scopes it to "each operating system you cache across" and you
+are no longer varying the operating system. It must print a NON-EMPTY token; it
+must leave stderr EMPTY, because both streams are hashed and a PID-carrying
+warning gives a permanent 100% MISS that presents as a portability failure rather
+than as a warning; and its value must genuinely DIFFER on the axis you vary.
+Verify all three on your own runners before you trust it. A libc probe is
+materially harder to get right than an operating-system read: the usual
+`process.report.getReport().header.glibcVersionRuntime` is ABSENT on musl, so it
+yields `undefined` -- which prints, and hashes, exactly like a real value.
 
 ## 4. The one cross-OS hazard Nx already closes for you
 

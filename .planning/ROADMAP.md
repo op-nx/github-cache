@@ -555,7 +555,15 @@ prejudged).
      stderr), and the recipe is registered in `nx.json`'s `test` inputs and guarded against
      drift, so it cannot rot silently. (DOCS-07)
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] `12-01-PLAN.md` - RED: the three Windows-leg shape guards and the detector-workflow guard, registered in the same commit (XOS-04, XOS-08, XOS-05)
+- [ ] `12-02-PLAN.md` - GREEN: the three windows-11-arm legs, plus the four claims their existence falsifies (XOS-04, XOS-08, XOS-05)
+- [ ] `12-03-PLAN.md` - the scheduled --skip-nx-cache Windows regression detector, and its command proven on Windows arm64 (XOS-05)
+- [ ] `12-04-PLAN.md` - the single-sourced stderr-immune discriminator, and CORR-04's invariant superseded (DOCS-07)
+- [ ] `12-05-PLAN.md` - DOCS-07: docs/cross-os.md, registered, linked and drift-guarded (DOCS-07)
+- [ ] `12-06-PLAN.md` - the O4 pre-registration, the proof, and the O4 evidence appended to 11-EVIDENCE.md (XOS-05, XOS-04, XOS-08)
 
 **Live-CI close**: XOS-05's HIT is only observable on a real windows-11-arm runner after a
 ubuntu leg has saved the entries.
@@ -608,11 +616,15 @@ Every v0.0.2 requirement maps to exactly one phase.
 | OBS-02 | Phase 11 | Evidence = non-zero `[remote cache]` label count, named per target; Nx's `0%` report line is context only. |
 | XOS-04 | Phase 12 | windows-11-arm `build`/`typecheck`/`test` legs wired through the same sidecar block. |
 | XOS-05 | Phase 12 | O4 proof: those legs HIT on ubuntu-saved entries; the write decision is explicit and recorded. |
+| XOS-08 | Phase 12 | Producer-to-consumer ordering: each Windows leg `needs:` its ONE ubuntu counterpart. Row ADDED 2026-07-30 -- it was missing while this section's own `**Requirements**` line and SC1 both named XOS-08, so the file contradicted itself (Phase 12 CONTEXT D-01). REQUIREMENTS.md is authoritative and says FOUR. |
 | DOCS-07 | Phase 12 | Safe-by-default consumer recipe; portability checklist second, derived from PARITY-01; drift-guarded. |
 
 ## Coverage Validation
 
-**Assertion: 43/43 v0.0.2 requirements map to exactly one phase. No orphans, no duplicates.**
+**Assertion: 44/44 v0.0.2 requirements map to exactly one phase. No orphans, no duplicates.**
+(Was stated as 43/43; corrected 2026-07-30 -- see the note under the per-phase counts. XOS-08 was
+named in Phase 12's `**Requirements**` line and in its SC1, but had no traceability row and was not
+counted.)
 
 Per-phase counts:
 
@@ -621,10 +633,15 @@ Per-phase counts:
 - Phase 9: 8 (VER-01..06, OBS-04, DOCS-08)
 - Phase 10: 11 (CORR-02, CORR-05, RETAIN-04, OBS-03, OBS-05, XOS-06, XOS-07, TRUST-10..13)
 - Phase 11: 7 (XOS-01, XOS-02, XOS-03, TEST-08, TEST-09, TEST-10, OBS-02)
-- Phase 12: 3 (XOS-04, XOS-05, DOCS-07)
+- Phase 12: 4 (XOS-04, XOS-05, XOS-08, DOCS-07)
 
-Total mapped: 7 + 7 + 8 + 11 + 7 + 3 = 43. Source categories: CORR 5, LINT 6, PARITY 5, VER 6,
-XOS 7, RETAIN 1, TRUST 4, DOCS 2, TEST 3, OBS 4 = 43.
+Total mapped: 7 + 7 + 8 + 11 + 7 + 4 = 44. Source categories: CORR 5, LINT 6, PARITY 5, VER 6,
+XOS 8, RETAIN 1, TRUST 4, DOCS 2, TEST 3, OBS 4 = 44.
+
+**Count corrected 2026-07-30.** The Phase 12 tally read 3 and the total read 43 while this file's own
+Phase 12 `**Requirements**` line and SC1 both named XOS-08, and while `REQUIREMENTS.md` (`:658-665`)
+said FOUR. `REQUIREMENTS.md` is authoritative; the traceability row for XOS-08 has been added above and
+the tallies reconciled. The XOS category is 8, not 7 (XOS-01 through XOS-08).
 
 ### Every sequencing-constraint row, and where it is honoured
 
@@ -681,7 +698,8 @@ violate the requirement (RETAIN-04) or produce a non-shippable half-slice.
   publish-matrix corrections and its threat classification are one indivisible change; splitting
   it would ship a half-state that is worse than either end.
 
-- **Phase 12 is intentionally light (3 requirements).** It is not a granularity artifact -- the
+- **Phase 12 is intentionally light (4 requirements -- count corrected 2026-07-30; it read 3, which
+  omitted XOS-08).** It is not a granularity artifact -- the
   Phase 11 -> Phase 12 boundary IS the milestone's mandatory ordering. O1's attribution is
   destroyed the moment O4 is enabled, so the two cannot share a phase however few requirements
   that leaves.

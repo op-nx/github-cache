@@ -765,11 +765,30 @@ jobs:
             # and the rendered matrix job name character for character. Asserting the
             # result is NON-EMPTY is what makes a rename fail loud instead of comparing
             # against an empty string.
-            started=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
+            #
+            # THE STEP OBJECT IS EXTRACTED, NEVER `.started_at` ALONE, because those are
+            # THREE outcomes and not two. Selecting the timestamp directly collapses "the
+            # step is ABSENT" and "the step EXISTS but never STARTED" into the same empty
+            # string, and the single message then blamed a RENAME for both. MEASURED
+            # against a fixture: a step reported `status: queued, started_at: null` -- what
+            # the jobs API returns when the Windows leg dies before reaching its run step,
+            # a wedged `npm ci` being the obvious way -- yields exactly the empty string a
+            # rename yields. So a correct witness printed "a rename in the integration job
+            # must land in the SAME commit", naming an edit nobody made and hiding the
+            # upstream failure that actually happened. Splitting the extraction is what
+            # lets each cause carry its own message.
+            step=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
               "${api}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
-              | jq -r 'first(.jobs[] | select(.name == "integration (windows-11-arm)") | .steps[] | select(.name == "Run the integration target and tee its output") | .started_at) // empty')
+              | jq -c 'first(.jobs[] | select(.name == "integration (windows-11-arm)") | .steps[] | select(.name == "Run the integration target and tee its output")) // empty')
+            if [ -z "${step}" ]; then
+              echo "o3-witness: FAIL -- no step 'Run the integration target and tee its output' in job 'integration (windows-11-arm)'. Both are literal selectors; a rename in the integration job must land in the SAME commit as the change here." >&2
+              exit 1
+            fi
+            started=$(printf '%s' "${step}" | jq -r '.started_at // empty')
             if [ -z "${started}" ]; then
-              echo "o3-witness: FAIL -- no started_at for step 'Run the integration target and tee its output' in job 'integration (windows-11-arm)'. Both are literal selectors; a rename in the integration job must land in the SAME commit as the change here." >&2
+              step_status=$(printf '%s' "${step}" | jq -r '.status // "<absent>"')
+              step_conclusion=$(printf '%s' "${step}" | jq -r '.conclusion // "<absent>"')
+              echo "o3-witness: FAIL -- the step EXISTS but never started (status=${step_status} conclusion=${step_conclusion}), so there is no start time to compare against. The Windows integration leg failed or was skipped UPSTREAM of its run step; this is NOT a rename and no O3 proof is recorded for this run." >&2
               exit 1
             fi
             # The cache side carries sub-second precision and the step side is

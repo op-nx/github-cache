@@ -17,7 +17,7 @@
 // `nx.includedScripts` is an empty array, so it cannot become an Nx target either
 // -- structurally, not by discipline.
 //
-// BOTH GUARDS BELOW THROW, and that is the whole point of the file. Nx writes
+// EVERY GUARD BELOW THROWS, and that is the whole point of the file. Nx writes
 // `run.json` inside a try/catch that swallows every error unless
 // `NX_VERBOSE_LOGGING` is set, so a missing file or a missing task is otherwise
 // SILENT -- and an empty hash would upload cleanly through
@@ -25,6 +25,12 @@
 // fail the leg, never default to an empty hash. Same posture as
 // `capture-hashes.mjs`'s missing-task throw, which likewise enumerates what WAS
 // observed rather than reporting a bare absence.
+//
+// GUARD 3 IS WHY THAT PROMISE IS KEPT RATHER THAN MERELY STATED. Guarding task
+// ABSENCE is not the same as guarding the hash VALUE: a task record carrying
+// `hash: ''` passes an absence check, writes a zero-byte file, uploads cleanly,
+// and surfaces one job later inside o3-witness -- the "one job further from its
+// cause" outcome this design exists to avoid.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 /** The target whose hash this reader exists to lift. */
@@ -58,6 +64,21 @@ if (!task) {
     `read-integration-hash: no \`${TARGET}\` task in ${runJsonPath} -- the target was renamed, ` +
       'deleted, or its run did not reach the task graph. Observed targets: ' +
       `${(run.tasks ?? []).map((entry) => entry.target).join(', ') || '<none>'}`,
+  );
+}
+
+// GUARD 3 (empty/malformed hash). `if-no-files-found: error` only checks that a
+// file EXISTS, so an empty or malformed hash uploads cleanly and becomes a
+// valid-looking cache key one job away from here. This is the UPSTREAM half of
+// the shape check `ci.yml`'s o3-witness step performs on the downloaded record;
+// both exist because the failure must be attributable to the leg that produced
+// it. Nx renders a task hash as an all-decimal string.
+if (typeof task.hash !== 'string' || !/^[0-9]+$/.test(task.hash)) {
+  throw new Error(
+    `read-integration-hash: the \`${TARGET}\` task in ${runJsonPath} carries no usable ` +
+      `hash (got \`${task.hash}\`). Nx renders a task hash as an all-decimal string; an ` +
+      'empty or malformed value would upload cleanly through if-no-files-found: error ' +
+      'and become a valid-looking cache key.',
   );
 }
 

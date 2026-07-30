@@ -165,8 +165,21 @@ env knob, action input or package export (D2-02, PARITY-07).
     work. It is NOT the "tripwire that fires on correct work" class OBS-04 records.
 
   `on: schedule` fires only on the default branch, so the job cannot be proven from the phase
-  branch -- which is exactly why `workflow_dispatch` is included: it closes the "does this job
-  actually run green on windows-11-arm" question before merge, at no cost.
+  branch. **CORRECTED 2026-07-30 by `12-RESEARCH.md` Correction 2 -- the original text here claimed
+  `workflow_dispatch` "closes the question before merge, at no cost". That is FALSE.** GitHub only
+  dispatches a workflow whose file exists on the DEFAULT branch, so a brand-new workflow file on a
+  feature branch cannot be dispatched at all -- it does not appear in the UI and the API rejects it.
+  `cleanup.yml`, the named shape precedent, carries `schedule:` only.
+  **Replacement reason, so the flag is not read as pointless:** keep `workflow_dispatch` because it
+  is how the detector gets re-run ON DEMAND AFTER merge -- delete only the "before merge" claim.
+  What actually closes the pre-merge risk, in order of cost: (1) prove the COMMAND rather than the
+  job -- run `nx run-many -t build typecheck test --skip-nx-cache` on this Windows arm64 workstation
+  with the demand-the-success-line guard (RESEARCH F-5 already did this for `test`: 40 files, 856
+  tests, exit 0); (2) structurally guard the YAML, with `cleanup-workflow.spec.ts` as the in-repo
+  spec-over-a-workflow-file precedent and D-09's registration making it non-stale; (3) treat
+  green-on-runner as a POST-MERGE first-run close, which this repo already has by name
+  (`.planning/codebase/TESTING.md` `## Live-CI first-push close pattern`; `ppe`, `dogfood-*` and
+  `consumer-smoke` are all first-push closes). Do not invent a mechanism.
 
   Rejected: adding `schedule:` to `ci.yml`. It would fire all nineteen jobs on a schedule unless
   every one of them grew an `if:`, and `cleanup.yml`'s own header already records the reason a
@@ -281,10 +294,32 @@ env knob, action input or package export (D2-02, PARITY-07).
   | producer and consumer are in ONE run | D-02's `needs:` edges | no cross-tree commensurability question, which is the ONLY reason O3 needed a push |
   | `o3-witness` and the positive control were GREEN on a PR as well as a push | `11-EVIDENCE.md` calibrated-instruments table | PR-shaped evidence is already established as sound in this repo |
 
-  **The one hard precondition, and it must be written into the plan:** the proving PR is a
-  SAME-REPO branch PR. GitHub's read-only Actions cache for untrusted triggers makes a FORK PR
-  read-only, so the ubuntu leg would save nothing and BOTH legs would MISS -- a run that MISSes
-  everything is not a valid proof (TEST-09's rule, which applies to O4 identically).
+  **CORRECTED 2026-07-30 by `12-RESEARCH.md` Correction 1. The original precondition here read:
+  "the proving PR is a SAME-REPO branch PR. GitHub's read-only Actions cache for untrusted triggers
+  makes a FORK PR read-only, so the ubuntu leg would save nothing and BOTH legs would MISS." That
+  premise is FALSE.** The 2026-06-26 changelog says the opposite verbatim: "any trigger that uses a
+  non-default-branch scope, such as `pull_request` and `release`, keeps read-write caching
+  permission." The read-only rule fires only when an untrusted trigger ALSO runs at the shared
+  default-branch scope (`pull_request_target`, `issue_comment`, fork `workflow_run` cascades) -- not
+  `pull_request`. A PR run writes into its own merge-ref scope (`refs/pull/N/merge`), and BOTH legs
+  of that run share it, which is exactly what O4 needs. This repo already measured it:
+  `11-EVIDENCE.md:997` records both entries written under `refs/pull/11/merge`.
+
+  **The REPLACEMENT reason, and it is STRONGER than the false one:** `ci.yml:3-7` is
+  `on: push: branches: [main]` plus `pull_request:`. A push to the phase branch does not trigger CI
+  AT ALL. So `pull_request` is not the PREFERRED vehicle -- it is the ONLY vehicle short of pushing
+  to `main`, which is precisely what this decision declines. Write that reason into the plan.
+
+  Two precise consequences the plan must carry:
+  1. **The PR-scope entry is ephemeral and isolated.** The proof seeds neither `main`'s cache scope
+     nor the Releases mirror. That is fine (D-17: the proof is a same-run property) -- but SAY so,
+     or a reader will look for a mirror row that never appears.
+  2. **The proof must come from the FIRST run of the PR, never a workflow RE-RUN.** On a re-run the
+     ubuntu leg restores the merge-ref entry the first run saved, so it HITs instead of
+     MISS-and-saving; the Windows HIT is still against Linux-produced bytes, but the
+     producer attribution WITHIN the run evaporates. Phase 11 applied this same discipline as
+     T-11-26 ("Proof taken from a FRESH push, never a workflow re-run"); it transfers verbatim.
+     Pre-register it under D-19.
 
   If the maintainer nonetheless wants a `main` push, the contract is unchanged from Phases 9-11
   (retained backup ref, restore verified by SHA EQUALITY, the restore force-push's own run
@@ -615,7 +650,39 @@ than copied. Every entry is a full relative path.
 </deferred>
 
 <unresolved>
-## UNRESOLVED -- withheld from auto-lock (HIGH impact, NOT-HIGH confidence)
+## U-01 -- RESOLVED 2026-07-30 by `12-RESEARCH.md`
+
+**Withheld from auto-lock at discuss time (HIGH impact, NOT-HIGH confidence); settled empirically by
+`gsd-phase-researcher`, exactly as assigned. The original statement is preserved below the verdict
+because the reasoning that withheld it is what produced the measurement.**
+
+**VERDICT: `node --no-warnings -p process.platform`**, in `nx.json:104` AND the recipe, single-
+sourced per D-15. All three sub-questions were measured, not reasoned:
+
+| Sub-question | Answer | Evidence |
+|---|---|---|
+| Does `hash_runtime` hash stderr? | **YES** -- `hash(&[std_out, std_err].concat())`, both `.trim()`ed | Nx 23.1.0 `packages/nx/src/native/tasks/hashers/hash_runtime.rs:33-35`. The premise five in-repo documents asserted uncited is TRUE and now has its citation |
+| Is stderr empty on both legs today? | **YES** -- `{"stdout":"linux\n","stderr":""}` / `{"stdout":"win32\n","stderr":""}` | `08-ROOT-CAUSE.md:753,2625,3013`. The hazard is LATENT, not live |
+| Which hardening is shell-invariant? | `--no-warnings` (a node flag, not a shell redirect). Nx's shell set is exactly two: `%COMSPEC% /C` or `sh -c` | `command.rs:28-43` |
+
+**The measurement that decides it, which the discussion did not anticipate:** a node warning's text
+carries the **PID** (`(node:29864) Warning: probe`, positive control run in-session; `--no-warnings`
+-> 0 bytes). So a warning does not rotate the hash ONCE -- it varies it on EVERY invocation,
+producing a permanent 100% MISS that presents as a phantom portability failure. That is a far worse
+failure mode than the one-time rotation the requirement anticipated, and it is what makes the
+hardening worth its rotation cost even though the hazard is currently latent.
+
+**Residual, stated rather than glossed:** node's startup-error channel is NOT suppressed by
+`--no-warnings`, and its text is machine- and shell-specific -- but it also empties stdout and exits
+non-zero, so it fails loud instead of silently re-partitioning the cache.
+
+**Nine sites the string change touches are enumerated in `12-RESEARCH.md`**, including two
+exact-equality spec pins and `08-ROOT-CAUSE.md:1589`'s byte-identical CORR-04 invariant, which must
+be **SUPERSEDED with a replacement reason**, never silently violated.
+
+---
+
+### The original UNRESOLVED statement, preserved
 
 - **U-01: the exact stderr-immune discriminator command string.**
 

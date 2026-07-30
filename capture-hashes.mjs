@@ -13,11 +13,21 @@
 //       module importing it would break every consumer install; and
 //   (b) an Nx-CACHED instrument would REPLAY a stale record instead of
 //       measuring, and a cached capture is not a capture. It is invoked
-//       directly (`node capture-hashes.mjs`, the `capture:hashes` npm script,
-//       the ci.yml capture job), never through `nx run`. The root package.json
-//       declares `nx.includedScripts` as an EMPTY array, so adding that script
-//       cannot create an Nx target -- D-01(b) is satisfied STRUCTURALLY, not by
-//       discipline.
+//       directly (`node capture-hashes.mjs`, the `capture:hashes` and
+//       `assert:graph-premise` npm scripts, the ci.yml capture job), never
+//       through `nx run`. The root package.json declares `nx.includedScripts` as
+//       an EMPTY array, so adding those scripts cannot create an Nx target --
+//       D-01(b) is satisfied STRUCTURALLY, not by discipline.
+//
+// WHERE EACH MODE IS EXECUTED, stated because a guard nothing runs is
+// documentation and the reader has no other way to tell:
+//   --install-mode  -- ci.yml's `hash-parity` job, both matrix legs.
+//   --assert-graph-premise -- ci.yml's `hash-parity` job, both matrix legs, and
+//       the `assert:graph-premise` npm script. It runs on BOTH legs on purpose:
+//       the premise is about the WINDOWS leg's resolved graph (D-12, D-14 row 1),
+//       so a ubuntu-only check would assert it on the wrong runner.
+//   --diff  -- manual only, by design. It reads two already-captured records and
+//       measures nothing, so there is nothing for CI to gate on.
 //
 // `nx/src/*` is an internal subpath with no semver guarantee. An Nx major could
 // move it and break this file at IMPORT time. That is the desired failure mode:

@@ -951,10 +951,48 @@ jobs:
         run: |
           set -euo pipefail
           node capture-hashes.mjs --install-mode ci --out "$RECORD"
+      # TEST-08's MECHANICAL PREMISE ASSERTION, and it is wired HERE because an
+      # assertion nothing executes is documentation. The mode landed with no CI step, no
+      # npm script and no test behind it, so its own stated purpose -- "an Nx upgrade that
+      # changes the inferred dependsOn must fail loud instead of quietly weakening the
+      # control" -- was unreachable: an Nx upgrade that changed it would have changed
+      # nothing, because nothing ran the assertion.
+      #
+      # THIS JOB rather than a new one: the mode resolves a task graph and measures no
+      # hash, so it needs no sidecar and no build, and this job has already installed. It
+      # runs on BOTH matrix legs, which is the point -- the premise it asserts is about
+      # the WINDOWS leg's resolved graph (D-12, D-14 row 1), so a ubuntu-only check would
+      # assert it on the wrong runner. Under set -euo pipefail a failed assertion reddens
+      # the leg, and the --out record is the evidence TEST-08 asks for rather than a
+      # discarded pre-flight check.
+      #
+      # --install-mode is deliberately absent and the script REJECTS it here: the mode
+      # measures no hash, so recording an install mode against it would make the record
+      # claim a provenance it never measured.
+      - name: Assert the TEST-08 graph premise on this runner
+        shell: bash
+        env:
+          NX_DAEMON: 'false'
+          PREMISE: graph-premise-${{ matrix.os }}.json
+        run: |
+          set -euo pipefail
+          node capture-hashes.mjs --assert-graph-premise --out "$PREMISE"
       - uses: actions/upload-artifact@v7
         with:
           name: hash-parity-${{ matrix.os }}
           path: hash-parity-${{ matrix.os }}.json
+          if-no-files-found: error
+      # A SEPARATE ARTIFACT, and the name deliberately does NOT match `hash-parity-*`.
+      # hash-parity-compare downloads that pattern with merge-multiple: true and its
+      # loader reads EVERY `.json` in the merged directory, so folding the premise record
+      # into the capture artifact would hand the comparator four records where it demands
+      # exactly two and redden `wrong-record-count` on a CORRECT run -- a tripwire firing
+      # on correct work, which this file already records as the thing that gets guards
+      # disabled.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: graph-premise-${{ matrix.os }}
+          path: graph-premise-${{ matrix.os }}.json
           if-no-files-found: error
 
   # The BUILD-GATING hash-parity comparison (CORR-03, D-15's fourth and last step,

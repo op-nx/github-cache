@@ -753,8 +753,27 @@ jobs:
             # a push, refs/pull/N/merge on a pull request. Filter rather than paginate --
             # the repository holds ~142 entries against a per_page max of 100, and key
             # plus ref reduces that to one or two.
+            #
+            # THE REF IS PERCENT-ENCODED FOR THE URL AND PASSED RAW TO jq, and the split is
+            # the point: the query parameter needs encoding, while `.ref` in the RESPONSE is
+            # the raw value, so encoding the jq --arg too would compare an encoded string
+            # against a decoded one and match nothing. Unencoded, a branch name containing
+            # `&` or `#` ends the parameter early and silently produces a WRONG-BUT-PLAUSIBLE
+            # filter result rather than an error -- the failure shape this job exists to rule
+            # out, arriving through the query string instead of the data.
+            #
+            # `@uri` THEN RESTORING `/` is deliberate and is what makes this change a no-op
+            # on every value this workflow actually sees. Bare `@uri` also escapes the path
+            # separators, turning refs/heads/main into refs%2Fheads%2Fmain and changing a
+            # request that is proven to work today; RFC 3986 lists `/` as legal in a query,
+            # so restoring it is correctness rather than a shortcut. MEASURED: both real
+            # values round-trip byte-identical, while `&`, `#`, `?` and space encode.
+            #
+            # `key` needs no encoding: CR-01's shape check upstream has already proven
+            # ${h_linux} is all-decimal, so the key is URL-safe by construction.
+            ref_query=$(jq -rn --arg r "${GITHUB_REF}" '$r|@uri|gsub("%2F";"/")')
             created=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
-              "${api}/actions/caches?key=${key}&ref=${GITHUB_REF}&per_page=100" \
+              "${api}/actions/caches?key=${key}&ref=${ref_query}&per_page=100" \
               | jq -r --arg key "${key}" --arg ref "${GITHUB_REF}" \
                 'first(.actions_caches[] | select(.key == $key and .ref == $ref) | .created_at) // empty')
             if [ -z "${created}" ]; then

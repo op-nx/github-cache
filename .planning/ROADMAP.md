@@ -87,7 +87,7 @@ Full phase detail, success criteria, traceability, and coverage validation archi
 - [x] **Phase 8: Nx Task-Hash Parity** - Root-cause the cross-OS hash divergence node by node, fix it, and keep `integration` the only target that diverges -- enforced by a build-gating CI measurement. (completed 2026-07-28)
 - [x] **Phase 9: OS-Invariant Actions-Cache Version** - Make the `@actions/cache` version stop depending on the OS: one hardcoded forward-slash path plus `enableCrossOsArchive` at every call site, closed behaviourally by a Windows runner reading back a Linux-written entry. (completed 2026-07-28)
 - [x] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed. (completed 2026-07-29)
-- [ ] **Phase 11: Live Proofs -- O1, O2, O3** - Record the three live proofs in the mandated order, including the producer attribution that enabling O4 destroys forever.
+- [x] **Phase 11: Live Proofs -- O1, O2, O3** - Record the three live proofs in the mandated order, including the producer attribution that enabling O4 destroys forever. (completed 2026-07-30)
 - [ ] **Phase 12: Windows CI Reuse (O4) + Consumer Recipe** - Add the Windows `build`/`typecheck`/`test` legs, prove they HIT on Linux-produced entries, and ship the safe-by-default adoption recipe.
 
 ## Phase Details
@@ -491,7 +491,7 @@ discriminator).
      `Cache: n/m hit` line is explicitly marked NON-DISCRIMINATING in both directions. (TEST-08,
      TEST-10, OBS-02)
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans complete
 
 - [x] 11-01-PLAN.md
 - [x] 11-02-PLAN.md
@@ -499,7 +499,7 @@ discriminator).
 - [x] 11-04-PLAN.md
 - [x] 11-05-PLAN.md
 - [x] 11-06-PLAN.md
-- [ ] 11-07-PLAN.md
+- [x] 11-07-PLAN.md
 
 - [ ] `11-01-PLAN.md` - hash-neutral instruments: the `capture-hashes.mjs` graph-premise mode and the `run.json` reader (TEST-08)
 - [ ] `11-02-PLAN.md` - D-06 pre-flight: warm capture, the authorised `nx reset`, cold capture (XOS-01, XOS-02, TEST-10)
@@ -738,7 +738,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 8. Nx Task-Hash Parity | v0.0.2 | 6/6 | Complete   | 2026-07-28 |
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 8/8 | Complete    | 2026-07-28 |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
-| 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 6/7 | In Progress|  |
+| 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 7/7 | Complete   | 2026-07-30 |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 0/? | Not started | - |
 
 ---

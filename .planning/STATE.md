@@ -4,15 +4,15 @@ milestone: v0.0.2
 milestone_name: framing
 current_phase: 11
 current_phase_name: live-proofs-o1-o2-o3
-status: executing
-last_updated: "2026-07-29T23:09:02.263Z"
+status: verifying
+last_updated: "2026-07-30T00:05:00.360Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 38
-  completed_plans: 32
+  completed_plans: 33
   percent: 17
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 11 (live-proofs-o1-o2-o3) — EXECUTING
 Plan: 7 of 7
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Progress: 4/6 phases complete [####--] 67%
 Last activity: 2026-07-29 — Phase 11 execution started
 
@@ -127,6 +127,7 @@ See 10-EVIDENCE-LIVE-CI.md.
 | Phase 11 P04 | 23min | 2 tasks | 2 files |
 | Phase 11 P05 | 15m | 2 tasks | 2 files |
 | Phase 11 P06 | 25m | 2 tasks | 1 files |
+| Phase 11 P07 | 55m | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -251,6 +252,7 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 11]: 11-06: the ci.yml runner.debug recorder is ECHO-ONLY, never a fatal gate. A gate becomes a permanent tripwire once ACTIONS_STEP_DEBUG is unset, and plan 11-07's read-only pre-flight recovers the fail-during-the-run benefit without a second coupled ci.yml edit
 - [Phase 11]: 11-06: o3-witness does NOT check out the repository (it is curl plus jq with no comparator to build), yet contents: read is RESTATED, because a job-level permissions block REPLACES the workflow grant wholesale rather than merging it
 - [Phase 11]: 11-06: a THIRD stale ci.yml test-inputs comment block was found in the typecheck job beyond the two the plan, RESEARCH and PATTERNS all enumerated, and corrected with the replacement fact. Correcting two of three would meet the letter of the must_have and not its purpose
+- [Phase ?]: Phase 11 O3 gate taken in two stages: rehearse-on-pr then proceed; PR #11 closed before the proving push rather than auto-merged
 
 ### Pending Todos
 
@@ -377,7 +379,7 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-07-29T23:09:02.248Z
+Last session: 2026-07-30T00:04:50.851Z
 Stopped at: Completed 11-06-PLAN.md (GREEN half landed; suite 840 passed / 0 failed)
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.

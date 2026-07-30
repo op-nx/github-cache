@@ -777,9 +777,42 @@ jobs:
             # must land in the SAME commit", naming an edit nobody made and hiding the
             # upstream failure that actually happened. Splitting the extraction is what
             # lets each cause carry its own message.
-            step=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
-              "${api}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
-              | jq -c 'first(.jobs[] | select(.name == "integration (windows-11-arm)") | .steps[] | select(.name == "Run the integration target and tee its output")) // empty')
+            # PAGED EXPLICITLY, because per_page=100 is the endpoint's MAXIMUM and not a
+            # guarantee of completeness. This workflow already runs ~25 job legs; crossing
+            # 100 (a wider matrix, more jobs) would silently TRUNCATE the response, drop the
+            # Windows leg off the page, and make a CORRECT run fail with the absent-step
+            # message below -- the same misattribution one layer up. MEASURED against a
+            # fixture whose first page is 100 filler jobs: the single-page form returns the
+            # empty string and blames a rename, the walk finds the step on page 2. The
+            # sibling caches query is safe by a DIFFERENT mechanism -- it is SERVER-filtered
+            # by key + ref down to one or two rows -- so the two calls do not share this
+            # protection despite looking alike. `gh` is deliberately unavailable here (D-17
+            # sub-lock 4), so this is a plain page walk: stop on the first match, or when a
+            # SHORT page proves there is no next one. The 20-page ceiling is a runaway guard
+            # at 2000 job legs, not a limit any real run approaches.
+            #
+            # The `jobs`-is-an-array check is not defensive noise: without it an error
+            # payload (`{"message":"Not Found"}`) yields `length` 0, breaks the loop, and
+            # arrives at the absent-step message -- reintroducing exactly the wrong-cause
+            # report this block was just corrected for.
+            step=''
+            page=1
+            while [ "${page}" -le 20 ]; do
+              body=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
+                "${api}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100&page=${page}")
+              if [ "$(printf '%s' "${body}" | jq -r 'if (.jobs | type) == "array" then "ok" else "bad" end')" != "ok" ]; then
+                echo "o3-witness: FAIL -- the jobs API returned no \`jobs\` array on page ${page}, so the run's job list was never read. This is an API or permissions fault, not a rename and not a missing step." >&2
+                exit 1
+              fi
+              step=$(printf '%s' "${body}" | jq -c 'first(.jobs[] | select(.name == "integration (windows-11-arm)") | .steps[] | select(.name == "Run the integration target and tee its output")) // empty')
+              if [ -n "${step}" ]; then
+                break
+              fi
+              if [ "$(printf '%s' "${body}" | jq -r '.jobs | length')" -lt 100 ]; then
+                break
+              fi
+              page=$(( page + 1 ))
+            done
             if [ -z "${step}" ]; then
               echo "o3-witness: FAIL -- no step 'Run the integration target and tee its output' in job 'integration (windows-11-arm)'. Both are literal selectors; a rename in the integration job must land in the SAME commit as the change here." >&2
               exit 1

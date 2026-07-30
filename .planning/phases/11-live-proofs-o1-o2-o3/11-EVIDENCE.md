@@ -16,8 +16,10 @@ here, so this measurement cannot be retaken at this commit once they land (D-10,
 
 This record has FOUR sections by design (D-22, TEST-08's own words: "Phase 12 appends the O4 row to
 the same evidence record"). O1, O2 and O3 are all complete below; O3 was owned by plan 11-07 and
-closed by the live push run recorded in its section. O4 is RESERVED for Phase 12 and must be
-neither filled nor deleted here.
+closed by the live push run recorded in its section. O4's slot was RESERVED for Phase 12 -- neither
+to be filled nor deleted by Phase 11 -- and plan 12-06 DISCHARGED that reservation IN PLACE. The O4
+section below now carries its claim, its pre-registered counts and its anti-requirements; its
+VERDICT is PENDING on the first run of the proving pull request.
 
 ---
 
@@ -31,7 +33,7 @@ neither filled nor deleted here.
 | Producer fingerprint, per hit | `test` -> **LINUX**, `integration` -> **WINDOWS**. `build`/`typecheck` UNAVAILABLE with a stated reason (see the table) |
 | Producer ATTRIBUTION, per hit hash (TEST-08's own mandated capture) | **COMPLETE, 4 of 4.** `build`/`typecheck`/`test` -> **LINUX**, `integration` -> **WINDOWS**. The two hashes with no fingerprint are carried by the job-window cross-reference, which resolves a UNIQUE runner OS for all four |
 | **O3 (XOS-03, TEST-09)** -- the Windows `integration` task EXECUTES carrying no remote-cache label, in a run where the `H_linux` entry demonstrably existed | **PROVEN.** All three parts satisfied on push run `30500255530`; witness delta `144s` against a `30s` stated margin; positive control `200` on both legs |
-| **O4 (XOS-04, XOS-05)** | **RESERVED** -- Phase 12 |
+| **O4 (XOS-04, XOS-05)** -- the three `windows-11-arm` legs log the literal `[remote cache]` per resolved target, against Actions-cache entries the ubuntu legs saved in the SAME run, `needs:` ordering producer before consumer | **PENDING -- live-CI, first run of the proving PR.** Pre-registered per-target occurrence counts `build` 1 / `typecheck` 2 / `test` 1, total 4, fixed in `12-06-PLAN.md` BEFORE any run. No observation recorded: no such run exists. See the O4 section |
 
 Both proved halves are LOCAL measurements against an already-warm mirror. **Nothing in O1 or O2
 needed a temporary `main` push.** Only O3 needs the live run (D-20). This is stated explicitly
@@ -999,24 +1001,176 @@ what the witness computed, so the witness needed no change.
 
 ---
 
-## O4 (XOS-04, XOS-05) -- RESERVED
+## O4 (XOS-04, XOS-05)
 
-**Do not fill this section and do not delete it.** Phase 12 appends the O4 row to THIS record --
-TEST-08's own words: "Phase 12 appends the O4 row to the same evidence record". O4 in every form
-(the Windows `build`/`typecheck`/`test` legs, their HIT, the `needs:` producer-to-consumer ordering,
-and the write decision) is out of Phase 11's scope and is gated on XOS-01 being PROVEN here.
+**The reservation that stood here through Phase 11 is DISCHARGED by plan 12-06, and converted rather
+than deleted so a reader can see what the slot was and what filled it.** It read: "Do not fill this
+section and do not delete it. Phase 12 appends the O4 row to THIS record" -- TEST-08's own words,
+"Phase 12 appends the O4 row to the same evidence record". This section is that append, written IN
+PLACE (D-22). There is no `12-EVIDENCE.md`; the section was not relocated and not duplicated.
 
-**Why this section exists as a reservation rather than as work:** enabling O4 makes Windows CI a
-**second producer** of the `build`, `typecheck` and `test` hashes, which **permanently destroys
-O1's producer attribution**. Once a Windows leg can write those hashes, "any such hash in the store
-is Linux-produced" is false, the graph premise transcribed above no longer holds, and no future
-session can re-derive what this record captured. That is precisely why the fingerprint capture above
-happened in this session, at proof time, and why TEST-08 closes the attribution window at Phase 9
-rather than at Phase 12.
+**The reason the reservation existed is retained, because it is still the load-bearing fact about
+this whole record -- and it is now REALISED rather than pending.** Enabling O4 makes Windows CI a
+**second producer** of the `build`, `typecheck` and `test` hashes, which **permanently destroys O1's
+producer attribution**. Once a Windows leg can write those hashes, "any such hash in the store is
+Linux-produced" is false, the graph premise transcribed above no longer establishes attribution, and
+no future session can re-derive what this record captured. That is precisely why the fingerprint
+capture above happened in that session, at proof time, and why TEST-08 closes the attribution window
+at Phase 9 rather than at Phase 12. As of `ci.yml`'s `build-windows`, `typecheck-windows` and
+`test-windows` legs (plan 12-02), the second conjunct is falsified permanently. The claim was
+corrected at three sites in the same commit that added the legs, each with a replacement reason
+rather than a bare deletion: `ci.yml`'s comment block above the premise step, `capture-hashes.mjs`'s
+`FORBIDDEN_TARGETS` docblock, and `capture-hashes.mjs`'s assertion-2 runtime failure message.
 
-Consequence carried forward for Phase 12: TRUST-11's residual risk moves into the XOS-05 write
-decision, and if the Windows legs write, the attribution loss is appended to Phase 10's
-threat-model record.
+**This file is NOT an Nx input**, so nothing about it can serve a stale cached PASS -- and equally,
+no spec can usefully guard it, which is why none is written. Phase 11's Nyquist audit already
+declined that, and this section does not reopen it.
+
+### The CLAIM, stated in full
+
+The three `windows-11-arm` legs -- `build-windows`, `typecheck-windows` and `test-windows` -- each
+log the literal `[remote cache]` per resolved target, against Actions-cache entries that the ubuntu
+`build`, `typecheck` and `test` legs saved IN THE SAME RUN, with each Windows leg's `needs:` edge
+ordering its ONE ubuntu producer before it.
+
+Two clauses of that sentence are doing work and are stated separately so neither can be lost:
+
+- **Same run.** Not "against Linux bytes from some earlier run". The producer and the consumer check
+  out the same tree in the same run, which is what makes the producer attribution readable WITHIN
+  the run and is why D-17 records that this proof has no perishable window.
+- **`needs:` orders, it does not make correct.** The edge exists so the consumer can HIT at all; it
+  is not an ordering CONTROL and nothing in XOS-06 or PROJECT.md's platform-agnosticism row depends
+  on leg order. This mirrors O3's own disclaimer above.
+
+### PRE-REGISTERED counts (D-19), fixed in `12-06-PLAN.md` BEFORE any observation
+
+Named in the PLAN, before the run. Recording a different value is a FINDING, not a reason to re-run,
+and not a reason to adjust the number.
+
+**Derivation, so a mismatch is investigated rather than explained away.** The resolved task set per
+target was MEASURED with `nx run-many -t <target> --graph <file>`, at planning time and again at
+plan-12-06 pre-flight on commit `03b0143`. Both measurements agree.
+
+| Command the Windows leg runs | Resolved tasks | Expected `[remote cache]` OCCURRENCES on that leg |
+|---|---|---|
+| `npm run build` (`nx run-many -t build`) | 1 -- `@op-nx/github-cache:build` | **1** |
+| `npm run typecheck` (`nx run-many -t typecheck`) | 2 -- `@op-nx/github-cache:typecheck` AND `@op-nx/github-cache:build`, via an inferred `dependsOn` | **2** |
+| `npm run test` (`nx run-many -t test`) | 1 -- `@op-nx/github-cache:test` (`dependsOn: ["^build"]` resolves to zero extra tasks in this single-project workspace) | **1** |
+
+**Total expected non-zero `[remote cache]` occurrences across the three Windows legs: 4.** The
+aggregate is recorded, and it is NOT the gate: OBS-02 requires the count named PER TARGET, exactly
+as O1's table above does it. A 3-of-4 outcome is reported as which target missed, never as "mostly
+hit".
+
+**Expected ubuntu producer verdict, per target. All three MISS-and-save, and the reason is an EDIT,
+not a guess:**
+
+| Target | ubuntu leg | Why |
+|---|---|---|
+| `build` | **MISS-and-save** | plan 12-04 edits `packages/github-cache/src/hash-parity/compare.ts`, a NON-spec `src/` file, which is a `build` input. CONTEXT D-19 allowed for a possible `build` HIT on the grounds that a `ci.yml`-only edit does not rotate `build`; that condition does not hold in this phase, and `compare.ts` is why |
+| `typecheck` | **MISS-and-save** | rotated by the new spec files (`typecheck`'s inputs start from `default`, which includes spec files) and by `build`'s rotated declaration outputs, which it hashes via `dependentTasksOutputFiles` |
+| `test` | **MISS-and-save** | rotated many times over: `nx.json`, `ci.yml`, `docs/cross-os.md`, the detector workflow registration, the new spec files, `capture-hashes.mjs` and `eslint.config.mjs` are all explicit or implicit `test` inputs |
+
+**One anticipated ambiguity, named IN ADVANCE so it is not read as a failure.** The ubuntu
+`typecheck` job also resolves a `build` task, and the ubuntu `build` job has no `needs:` relationship
+to it, so the two race for `nx-cache-<H_build>`. Whichever finishes first executes and saves; the
+other HITs. That race predates this phase, it is covered by T-12-02, and NEITHER outcome invalidates
+O4. Record which one happened. Do not treat the `typecheck` job's `build` task HITting as a
+deviation. This is the same shape List 3 above already measured on run `30471772954`, where the
+`build` hash was written by the `typecheck` job rather than by the `build` job.
+
+**How to count.** `rg -o -F "[remote cache]" <log> | wc -l`. NEVER `rg -c`, which counts LINES rather
+than occurrences. `-F` is required because square brackets are a regex character class. Read the
+EXIT CODE: 0 means hits, 1 means a genuine no-match, and **2 means the command FAILED** while
+printing zero lines, which is indistinguishable from absence if only the output is read.
+
+### ANTI-REQUIREMENTS -- each of these would produce a FALSE PASS
+
+Restated here rather than left in a distant rationale, because every one of them is a plausible
+mistake at the moment of reading the log. They are on record BEFORE the observation, which is the
+point of writing them here at all.
+
+1. **A run that MISSes everything is not a valid O4 proof.** TEST-09's rule, applied to O4. A MISS is
+   never self-evidencing in this system: every read fault degrades to a MISS, which is exactly why
+   the gate is the literal `[remote cache]` LABEL and never the absence of an error.
+2. **A workflow RE-RUN is not the proof.** On a re-run the ubuntu leg restores the merge-ref entry
+   the FIRST run saved, so it HITs instead of MISS-and-saving. The Windows HIT would still be
+   against Linux-produced bytes, but the producer attribution WITHIN the run evaporates. Phase 11
+   applied this same discipline as T-11-26 and it transfers verbatim: **the FIRST run of the PR, or
+   nothing.**
+3. **`Cache: n/m hit` is NOT discriminating, in EITHER direction.** A `0%` prints identically for a
+   run with no sidecar at all (measured on run `30169158892`), and a non-zero count includes LOCAL
+   hits. If the line is recorded at all, it is marked NON-DISCRIMINATING IN BOTH DIRECTIONS BESIDE
+   the line (D-20, OBS-02).
+4. **"The job was green" is not evidence unless it is paired with a COUNT** that would differ under
+   the failure hypothesis. TEST-08.
+5. **A green O4 CI is NOT evidence the targets are PORTABLE.** That argument is CIRCULAR, and
+   `REQUIREMENTS.md`'s Out of Scope table names it as such: a restored task does not execute. It is
+   the entire reason the plan 12-03 scheduled Windows regression detector exists. A green O4 leg
+   must not be written up as a portability finding.
+
+Anti-requirement 5 restated in XOS-05's own words, because it is the sharpest sentence in the phase:
+the success signal for O4 -- every target `[remote cache]`, wall time collapsing to sidecar overhead
+-- is the IDENTICAL observation to a Windows-only regression being invisible forever. The
+pre-registered counts above are what separate the two.
+
+### The vehicle, and why it is the ONLY one (D-18, as corrected)
+
+`.github/workflows/ci.yml` is `on: push` restricted to `main`, plus `pull_request`. **A push to the
+phase branch does not trigger CI at all.** So a same-repo pull request is not the PREFERRED vehicle
+for O4 -- it is the ONLY vehicle short of pushing to `main`, which D-18 declines.
+
+**The reason previously recorded in CONTEXT was FALSE and must not be repeated.** It claimed that a
+fork PR gets a read-only Actions cache, so both legs would MISS. GitHub's 2026-06-26 changelog says
+the opposite verbatim: "any trigger that uses a non-default-branch scope, such as `pull_request` and
+`release`, keeps read-write caching permission." The read-only rule fires only when an untrusted
+trigger ALSO runs at the shared default-branch scope, which names `pull_request_target`,
+`issue_comment` and fork `workflow_run` cascades -- not `pull_request`. The correction ships with its
+replacement reason rather than as a bare deletion.
+
+This repo has already MEASURED the scope rather than inheriting it: both entries of PR run
+`30499450423` were written under `refs/pull/11/merge` (recorded in the rehearsal subsection of O3
+above). Both legs of one PR run share that one scope, which is precisely what O4 needs.
+
+### What this proof does NOT need
+
+Stated explicitly, mirroring this file's own habit directly under its status table, so a reader does
+not look for evidence that never appears:
+
+- **No temporary `main` push.** Phases 9, 10 and 11 each needed one for a perishable half. O4 does
+  not: it is a SAME-RUN property (D-17), so the commit that invalidates the `test` hash is the same
+  commit that proves the HIT.
+- **No warm Releases mirror, and no mirror row.** `publish`, `publish-verify`, `dogfood-seed`,
+  `dogfood-verify` and `consumer-smoke` are all push-gated and are SKIPPED on a PR run. This record
+  already documents observing exactly that on the O3 rehearsal. O4 does not need mirror warming.
+- **The PR-scope entry is ephemeral and isolated.** The proof seeds neither `main`'s cache scope nor
+  the Releases mirror; a `refs/pull/N/merge` entry cannot be restored by the base branch or by other
+  pull requests targeting it. That is fine, because the proof is a same-run property -- but it is
+  said here so the absence is read as designed rather than as missing.
+
+### The write decision, recorded as FORCED rather than chosen
+
+The Windows legs write because `selectBackend` hands a CI-trusted run the writable backend; there is
+no consumer-facing knob that makes a trusted leg read-only, and adding one would be a TRUST-05
+violation. The full re-pricing lives where it belongs and is cross-referenced rather than restated
+differently here: `.planning/phases/10-os-invariant-releases-mirror/10-SECURITY.md` `### Q1
+(TRUST-11)`, appended by plan 12-02, which asserts **Leg A** (the `needs:` edge removes the
+concurrent RACE, and only the race) and **Leg B** (it does not remove the SECOND PRODUCER) as
+separately labelled legs.
+
+**The sharpening that keeps this record honest:** on a run where every Windows task RESTORES, the
+Windows legs write NOTHING. So the second-producer fact is a **CAPABILITY** that materialises on a
+Windows MISS -- it is not an observation about the proving run, and a proving run in which all four
+pre-registered counts are MET is precisely a run in which the Windows legs wrote nothing at all.
+Both halves have to be stated or the record is half-true in whichever direction the reader prefers.
+
+### VERDICT
+
+**PENDING -- live-CI, first run of the proving PR.**
+
+Nothing above this line is an observation. The counts, the ubuntu expectations, the anti-requirements
+and the vehicle are all pre-registration, written before any run existed. The observation record is
+below.
 
 ---
 
@@ -1031,7 +1185,12 @@ threat-model record.
 - **A per-hit fingerprint for `build` and `typecheck`.** Their `tsc` artifacts carry no absolute
   path. This is a property of what `tsc` prints, not a defect, and the graph premise covers their
   attribution structurally.
-- **O4.** RESERVED above, and owned by Phase 12. O3 is CLOSED by push run `30500255530`.
+- **O4's live observation.** The O4 section above is FILLED by plan 12-06 with its claim, its
+  pre-registered counts and its five anti-requirements, but its VERDICT is **PENDING -- live-CI,
+  first run of the proving PR**: no such run existed when it was written, and inventing one is the
+  single worst outcome available in that plan. The section is no longer reserved and no longer
+  unfilled; what remains unobservable is the observation itself. O3, by contrast, is CLOSED by push
+  run `30500255530`.
 - **Whether the Windows leg would MISS at a commit where the `integration` hash had NOT rotated.**
   Not observable here: the hash rotated on this commit, so both legs missed for that reason too.
   The witness's existence assertion is what carries the attribution, not the coincidence of a miss.
@@ -1052,7 +1211,7 @@ than an untested one:
 |---|---|---|
 | the `o3-witness` job | that a named cache entry existed before a named step started, by exact `.key` equality plus a `.ref` filter, with a stated 30 s minimum margin | GREEN on a push and on a pull request; its `$GITHUB_REF` filter confirmed correct on BOTH events |
 | the positive control, per `integration` leg | that the sidecar and backend were alive on that leg, acceptance set 200 ALONE | 200 on both legs, on both runs |
-| `capture-hashes.mjs --assert-graph-premise` | the graph premise O1's producer attribution rests on | **Phase 12's XOS-04 CHANGES this premise.** Enabling the Windows `build`/`typecheck`/`test` legs makes Windows CI a second producer, so the assertion's subject moves and the flag must be re-read, not re-run blindly |
+| `capture-hashes.mjs --assert-graph-premise` | the graph premise O1's producer attribution RESTED on | **Phase 12's XOS-04 changed this premise's meaning, and the correction has LANDED (plan 12-02).** The assertion is byte-unchanged and still a real gate on the GRAPH PROPERTY -- `nx run-many -t integration` still resolves no `build`/`typecheck`/`test` task, and it still catches an Nx upgrade that changes the inferred `dependsOn`. What moved is what it ESTABLISHES: it no longer establishes producer attribution, because that rested on a CONJUNCTION with "Windows CI runs only `integration`", which `ci.yml`'s three Windows legs falsify permanently. The claim was rewritten at THREE sites -- `ci.yml`'s comment block above the premise step, `capture-hashes.mjs`'s `FORBIDDEN_TARGETS` docblock, and assertion 2's runtime failure message -- each supplying a replacement reason and pointing at this file's O1 section as the FROZEN attribution record |
 | the `runner.debug` echo recorder | that step debug logging was active, from the EFFECT side | echo-only, so it survives the variable being unset; `1` observed with the variable set, `<unset>` without |
 
 ---

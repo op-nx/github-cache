@@ -1,12 +1,13 @@
 # Cross-OS caching
 
 This document is the recipe for sharing one Nx remote cache across operating
-systems. It renders values that live in configuration, never a re-typed
-paraphrase: the platform discriminator below is read out of this repository's own
-`nx.json`, and the `docs-cross-os` guard
-(`packages/github-cache/src/docs-cross-os.spec.ts`) fails the build until this
-file is back in sync with it. If this document and the configuration disagree,
-the configuration wins.
+systems. It PINS values that live in configuration: the platform discriminator
+below is a byte-identical copy of the one this repository's own `nx.json`
+declares, and the `docs-cross-os` guard
+(`packages/github-cache/src/docs-cross-os.spec.ts`) reads the declared value out
+of `nx.json` and fails the build if this copy drifts from it. Nothing here is
+generated at build time -- do not go looking for a renderer -- and if this
+document and the configuration disagree, the configuration wins.
 
 ## Single sources of truth
 

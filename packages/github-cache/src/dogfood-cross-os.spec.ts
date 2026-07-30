@@ -616,6 +616,19 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       'client at all, so it cannot exhibit the HIT XOS-05 is measured on: the leg goes green ' +
       'having proved nothing. That is the same silent-success failure mode the scheduled ' +
       `regression detector exists to catch. ${RENAME_NOTE}`,
+    cacheClient:
+      `${leg} must PRE-SET the Nx remote cache client vars and then WAIT for the sidecar to ` +
+      'bind. A running sidecar is not what gives Nx a remote cache client -- the ' +
+      'NX_SELF_HOSTED_REMOTE_CACHE_SERVER and NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN values ' +
+      'written to $GITHUB_ENV are, and the readiness poll is what stops the Nx step beating ' +
+      'the sidecar to the port. Delete either and Nx runs LOCAL-CACHE-ONLY: it MISSes on a ' +
+      'fresh runner, executes the target, and the job goes GREEN having cached nothing -- ' +
+      'with the sidecar clause and every other clause for this leg still green, because ' +
+      'nothing else reads these lines. That matters MORE here than on the ubuntu producers: a ' +
+      'producer that silently loses its cache client still builds, whereas these three legs ' +
+      'exist for NOTHING BUT the HIT observation, so a consumer that silently loses its cache ' +
+      "client is a DELETED CONTROL THAT STILL LOOKS PRESENT and makes XOS-05's O4 observation " +
+      `unobtainable with the whole suite green. ${RENAME_NOTE}`,
     noIf:
       `${leg} must declare NO job-level if:. Its ubuntu producer carries none, and that is ` +
       'exactly what makes build/typecheck/test PR-eligible -- which in turn is what makes the ' +
@@ -626,8 +639,16 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
 }
 
 describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)', () => {
-  const { presence, runsOn, needs, timeout, ownTarget, sidecar, noIf } =
-    windowsLegReasons('build-windows', 'build', 'build');
+  const {
+    presence,
+    runsOn,
+    needs,
+    timeout,
+    ownTarget,
+    sidecar,
+    cacheClient,
+    noIf,
+  } = windowsLegReasons('build-windows', 'build', 'build');
 
   // POSITIVE CONTROL, and it comes FIRST for the same reason every other control in this file
   // does: the no-`if:` clause at the end is a `not.toMatch`, which an empty or mis-extracted
@@ -672,6 +693,41 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     expect(block, sidecar).toMatch(/^ {6}- cancel: cache-server$/m);
   });
 
+  // THE CLAUSE THAT GUARDS WHAT ACTUALLY MAKES THIS LEG A CONSUMER, and it is separate
+  // from the sidecar clause above rather than folded into it because the two fail for
+  // different reasons and a combined assertion would report them identically. The sidecar
+  // clause's own failure message states the stake correctly -- "without the sidecar the leg
+  // has no remote cache client at all" -- but a RUNNING SIDECAR is not what gives Nx a
+  // remote cache client. The two NX_SELF_HOSTED_REMOTE_CACHE_* values written to
+  // $GITHUB_ENV are, and ci.yml's own comment above these steps concedes there was no other
+  // guard: "This is an unguarded invariant: nothing fails if it drifts."
+  //
+  // MEASURED, not argued: deleting the whole "Pre-set the Nx cache client vars" step from a
+  // leg leaves the `- uses: ./start-cache-server` clause, the `- cancel: cache-server`
+  // clause and every other clause for that leg GREEN, while Nx runs with the local cache
+  // only, MISSes on a fresh runner, executes the target, and the job passes. The readiness
+  // poll has the same standing: without it the Nx step can start before the sidecar binds,
+  // every request fails, best-effort read degradation kicks in, and the leg is green having
+  // cached nothing. Both mutations were run against these three regexes before this clause
+  // was committed; both go red here and nowhere else (WR-06).
+  //
+  // The same three regexes are repeated verbatim in the typecheck-windows and test-windows
+  // describes below, without this comment -- the file's existing convention, matching
+  // ci.yml's own "only build's copy carries extra comments".
+  it('pre-sets the Nx remote cache client vars and waits for the port, without which the sidecar is inert', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, cacheClient).toMatch(
+      /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http:\/\/127\.0\.0\.1:3000" >> "\$GITHUB_ENV"$/m,
+    );
+    expect(block, cacheClient).toMatch(
+      /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=\$\{token\}" >> "\$GITHUB_ENV"$/m,
+    );
+    expect(block, cacheClient).toMatch(
+      /^ {6}- name: Wait for the loopback sidecar$/m,
+    );
+  });
+
   it('declares NO job-level if:, so the leg stays PR-eligible', () => {
     const block = jobBlock('build-windows');
 
@@ -680,8 +736,16 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
 });
 
 describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-08)', () => {
-  const { presence, runsOn, needs, timeout, ownTarget, sidecar, noIf } =
-    windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck');
+  const {
+    presence,
+    runsOn,
+    needs,
+    timeout,
+    ownTarget,
+    sidecar,
+    cacheClient,
+    noIf,
+  } = windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck');
 
   it('scopes to a real typecheck-windows job block that runs npm run typecheck', () => {
     const block = jobBlock('typecheck-windows');
@@ -722,6 +786,20 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     expect(block, sidecar).toMatch(/^ {6}- cancel: cache-server$/m);
   });
 
+  it('pre-sets the Nx remote cache client vars and waits for the port, without which the sidecar is inert', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, cacheClient).toMatch(
+      /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http:\/\/127\.0\.0\.1:3000" >> "\$GITHUB_ENV"$/m,
+    );
+    expect(block, cacheClient).toMatch(
+      /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=\$\{token\}" >> "\$GITHUB_ENV"$/m,
+    );
+    expect(block, cacheClient).toMatch(
+      /^ {6}- name: Wait for the loopback sidecar$/m,
+    );
+  });
+
   it('declares NO job-level if:, so the leg stays PR-eligible', () => {
     const block = jobBlock('typecheck-windows');
 
@@ -730,8 +808,16 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
 });
 
 describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', () => {
-  const { presence, runsOn, needs, timeout, ownTarget, sidecar, noIf } =
-    windowsLegReasons('test-windows', 'test', 'test');
+  const {
+    presence,
+    runsOn,
+    needs,
+    timeout,
+    ownTarget,
+    sidecar,
+    cacheClient,
+    noIf,
+  } = windowsLegReasons('test-windows', 'test', 'test');
 
   it('scopes to a real test-windows job block that runs npm run test', () => {
     const block = jobBlock('test-windows');
@@ -770,6 +856,20 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
 
     expect(block, sidecar).toMatch(/^ {6}- uses: \.\/start-cache-server$/m);
     expect(block, sidecar).toMatch(/^ {6}- cancel: cache-server$/m);
+  });
+
+  it('pre-sets the Nx remote cache client vars and waits for the port, without which the sidecar is inert', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, cacheClient).toMatch(
+      /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http:\/\/127\.0\.0\.1:3000" >> "\$GITHUB_ENV"$/m,
+    );
+    expect(block, cacheClient).toMatch(
+      /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=\$\{token\}" >> "\$GITHUB_ENV"$/m,
+    );
+    expect(block, cacheClient).toMatch(
+      /^ {6}- name: Wait for the loopback sidecar$/m,
+    );
   });
 
   it('declares NO job-level if:, so the leg stays PR-eligible', () => {

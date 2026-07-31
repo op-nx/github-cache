@@ -931,3 +931,88 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     expect(block, noIf).not.toMatch(/^ {4}if:/m);
   });
 });
+
+/**
+ * T-12-05's ORDERING, which was correct in all eight sidecar blocks and guarded in
+ * NONE of them until this clause. `12-SECURITY.md`'s `## Residual 1` names it and
+ * hands over this exact shape: the mask's index must be less than the token write's
+ * index. It is recorded there as a RATCHET rather than a static gap -- Phase 11's
+ * audit logged it as PRE-EXISTING surface at five masked-token sites, and Phase 12
+ * took the file to EIGHT by copying the sidecar block onto `build-windows`,
+ * `typecheck-windows` and `test-windows`. Three of the eight are this phase's.
+ *
+ * WHAT IS AT STAKE, stated as the consequence rather than the mechanism: the token is
+ * a per-process loopback bearer, but it is written to `$GITHUB_ENV`, so it is live in
+ * every subsequent step's environment and reachable by captured terminal output on a
+ * PUBLIC repository. `::add-mask::` redacts only from the moment it is PROCESSED, so
+ * a mask that lands AFTER its write leaves a window in which the value is live and
+ * unregistered. Until this clause, the protection was carried entirely by D-03's
+ * verbatim-copy discipline across eight hand-maintained copies -- one careless
+ * "cleanup" reordering away from a real leak, with the three `cacheClient` clauses
+ * above and all 24 other Windows-leg clauses still green, because nothing read the
+ * mask line at all.
+ *
+ * WHOLE-FILE AND PAIRWISE, deliberately, rather than the per-leg `jobBlock` scoping
+ * every other clause in this file uses. The usual reason for scoping does not apply:
+ * a file-wide `toContain('::add-mask::')` would be vacuous because the token appears
+ * eight times, but a PAIRWISE ORDERING WITH COUNT EQUALITY is the stronger claim, not
+ * the weaker one -- it says every mask/write pair in the file is correctly ordered,
+ * which no per-job clause can say, and it cannot be satisfied by an unrelated
+ * occurrence. It also covers the five PRE-EXISTING sites that no phase owns, which a
+ * three-leg version would leave exactly as unguarded as they are today.
+ *
+ * The pairing is sound in both failure directions. Delete a mask and the counts
+ * diverge; move a mask past its own write and that pair's comparison inverts.
+ *
+ * COUNT PINNED EXACTLY, never a `>= 1` floor. A floor is satisfied by the first pair,
+ * so seven blocks could lose their mask with this clause still green -- the same
+ * half-locking defect WR-09 and CR-01 both landed on in this phase. MEASURED against
+ * the comment-stripped file, not predicted. If a job legitimately gains or loses a
+ * sidecar block, RE-MEASURE and update this count HERE in the same commit.
+ *
+ * `codeLines` is comment-stripped, which is load-bearing here in the usual direction:
+ * `ci.yml` mentions `::add-mask::` in three separate prose comments explaining the
+ * rule, so a raw read would count 11 and the pairing would be garbage.
+ */
+const MASKED_TOKEN_SITES = 8;
+
+describe('ci.yml masks the sidecar token before writing it (T-12-05)', () => {
+  it('every sidecar block registers the token for redaction BEFORE it reaches $GITHUB_ENV', () => {
+    const maskAt: number[] = [];
+    const writeAt: number[] = [];
+
+    codeLines.forEach((line, index) => {
+      if (/^\s+echo "::add-mask::\$\{token\}"$/.test(line)) {
+        maskAt.push(index);
+      }
+
+      if (
+        /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=\$\{token\}" >> "\$GITHUB_ENV"$/.test(
+          line,
+        )
+      ) {
+        writeAt.push(index);
+      }
+    });
+
+    // POSITIVE CONTROLS FIRST, and both are needed. Two empty arrays are trivially
+    // equal in length and trivially pairwise-ordered, so without these the ordering
+    // assertion below is satisfied by a `ci.yml` that masks nothing at all.
+    expect(
+      writeAt,
+      `ci.yml no longer writes NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN to $GITHUB_ENV at ${MASKED_TOKEN_SITES} sites. That variable is what gives Nx a remote cache client; losing a site silently drops that job to local-cache-only, and it also makes the ordering assertion below vacuous. RE-MEASURE and update MASKED_TOKEN_SITES in the same commit if a sidecar block was legitimately added or removed.`,
+    ).toHaveLength(MASKED_TOKEN_SITES);
+
+    expect(
+      maskAt,
+      `ci.yml has ${maskAt.length} \`::add-mask::\` lines for ${writeAt.length} token writes. Every write must be preceded by its own mask: the value is a bearer token written into $GITHUB_ENV on a PUBLIC repository, and ::add-mask:: redacts only from the moment it is processed. A missing mask is a real disclosure, not a tidiness lapse.`,
+    ).toHaveLength(writeAt.length);
+
+    // THE ORDERING ITSELF. Compared pair by pair rather than as a whole, so the
+    // failure names WHICH block regressed instead of reporting a bare false.
+    expect(
+      maskAt.map((mask, index) => mask < writeAt[index]),
+      `at least one ci.yml sidecar block writes NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN to $GITHUB_ENV BEFORE masking it. mask line indices ${maskAt.join(', ')} against write line indices ${writeAt.join(', ')} (comment-stripped). The masked value is live and unredacted for every log line emitted in that window. The fix is to move the \`echo "::add-mask::\${token}"\` back above the write, never to relax this clause.`,
+    ).toEqual(Array<boolean>(MASKED_TOKEN_SITES).fill(true));
+  });
+});

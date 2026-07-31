@@ -42,7 +42,7 @@ import { describe, expect, it } from 'vitest';
  * and a positive control asserts the extraction is not empty.
  *
  * This spec depends on `{workspaceRoot}/.github/workflows/ci.yml` being in
- * `nx.json`'s `targetDefaults.test.inputs` (PARITY-08, plan 09-01, `nx.json:69`).
+ * `nx.json`'s `targetDefaults.test.inputs` (PARITY-08, plan 09-01).
  * Without it, `ci.yml` is not a hashed input and this spec replays a cached PASS
  * computed before its subject existed.
  */
@@ -315,8 +315,8 @@ describe('ci.yml action-bundle-drift stays PR-eligible (ROBUST-04)', () => {
  *      in `docs-same-os-claims.spec.ts`, whose read is RAW, as five additive
  *      `DOCS_08_SITES` rows keyed on this same file. Two harnesses, one question each.
  *   3. IT CANNOT REPLAY A CACHED PASS COMPUTED BEFORE ITS SUBJECT EXISTED, because
- *      `{workspaceRoot}/.github/workflows/ci.yml` is an `nx.json` `test` input (`nx.json:69`,
- *      PARITY-08, Phase 9). `ci.yml`'s OWN comment blocks above `hash-parity` and
+ *      `{workspaceRoot}/.github/workflows/ci.yml` is an `nx.json` `test` input
+ *      (`targetDefaults.test.inputs`, PARITY-08, Phase 9). `ci.yml`'s OWN comment blocks above `hash-parity` and
  *      `hash-parity-compare` currently claim the OPPOSITE; both are STALE, plan 11-06
  *      corrects them WITH a replacement reason, and the membership fact above was read from
  *      `nx.json` rather than from them.

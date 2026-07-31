@@ -309,7 +309,8 @@ jobs:
       # This is an unguarded invariant: nothing fails
       # if it drifts. CORRECTED, and the replacement fact rather than a bare deletion:
       # this note used to say ci.yml was NOT in nx.json's test inputs, so such a guard
-      # would first need it registered there. PARITY-08 registered it (nx.json:69), and
+      # would first need it registered there. PARITY-08 registered it in
+      # targetDefaults.test.inputs, and
       # dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts now both assert on this
       # file, so the precondition is already met -- only the drift guard itself would be
       # new work. cleanup-workflow.spec.ts remains the precedent for the shape.
@@ -1185,7 +1186,7 @@ jobs:
   # registration -- and removing it would turn every ci.yml content guard into a replay of
   # a pass computed before its subject existed, which is exactly how Phase 9 shipped a
   # regression. So, read from the config rather than from a comment:
-  # ci.yml IS in nx.json's test inputs (nx.json:69, PARITY-08, Phase 9)
+  # ci.yml IS in nx.json's targetDefaults.test.inputs (PARITY-08, Phase 9)
   # -- so an edit to this file rotates the `test` hash and no ci.yml guard can go stale
   # behind a cache hit. This file's job shape and its comment prose are now
   # asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts
@@ -1426,7 +1427,7 @@ jobs:
   # here. The replacement fact rather than a bare deletion, because a deletion would leave
   # the case for REMOVING the registration standing unopposed -- which is how Phase 9
   # shipped a regression:
-  # ci.yml IS in nx.json's test inputs (nx.json:69, PARITY-08, Phase 9)
+  # ci.yml IS in nx.json's targetDefaults.test.inputs (PARITY-08, Phase 9)
   # -- so an edit here rotates the `test` hash, and this job's own shape and the prose
   # below are
   # asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts

@@ -389,8 +389,15 @@ const DOCS_08_SITES = [
      * `ci.yml`, above `hash-parity` and above `hash-parity-compare`, currently assert that
      * this file is NOT in `nx.json`'s `test` inputs and that a spec asserting on its content
      * would therefore serve a stale cached PASS. Both are STALE and assert the OPPOSITE of
-     * current fact: `nx.json:69` is `{workspaceRoot}/.github/workflows/ci.yml`, registered by
-     * PARITY-08 in Phase 9.
+     * current fact: `nx.json`'s `targetDefaults.test.inputs` lists
+     * `{workspaceRoot}/.github/workflows/ci.yml`, registered by PARITY-08 in Phase 9.
+     *
+     * CITED BY KEY, NEVER BY LINE. This row previously said `nx.json:69`, which was off by
+     * one -- the entry sits at line 70 -- and would have rotted again on any insertion above
+     * it. A line number is unverifiable from the phrase itself, so a wrong one stays green
+     * forever and correcting it reddens two assertions (this row and the occurrence count
+     * below). The key path is stable under insertion and is what
+     * `nx-target-inputs.spec.ts` asserts structurally.
      *
      * WHAT THIS ROW LOCKS IS THE REPLACEMENT REASON, not the absence of the wrong one. A bare
      * deletion of the stale claim would leave a future reader holding a documented argument
@@ -408,7 +415,7 @@ const DOCS_08_SITES = [
     file: '.github/workflows/ci.yml',
     bucket: 'additive',
     required: [
-      "ci.yml IS in nx.json's test inputs (nx.json:69, PARITY-08, Phase 9)",
+      "ci.yml IS in nx.json's targetDefaults.test.inputs (PARITY-08, Phase 9)",
       'asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts',
     ],
     forbidden: [],
@@ -641,7 +648,7 @@ describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS
  */
 describe('Phase 11 row A locks BOTH ci.yml blocks, not just the first (DOCS-08, PARITY-08)', () => {
   const ROW_A_PHRASES = [
-    "ci.yml IS in nx.json's test inputs (nx.json:69, PARITY-08, Phase 9)",
+    "ci.yml IS in nx.json's targetDefaults.test.inputs (PARITY-08, Phase 9)",
     'asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts',
   ] as const;
 

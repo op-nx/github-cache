@@ -669,12 +669,65 @@ describe('the retracted producer-attribution claim appears in no edited file (OB
   // from this phase forward the ubuntu leg can mirror a Windows-produced entry and
   // would label it `linux` -- so the claim would be wrong in exactly the cross-OS
   // case it would be invoked for. Same character-class technique, same reason.
+  //
+  // SCOPED TO A SENTENCE, NOT TO THE FILE -- a deliberate narrowing, argued rather
+  // than assumed. The bare `whose byte[s]` probe this replaced is ordinary English
+  // about byte REACHABILITY, and the repo already contains it under a meaning that
+  // has nothing to do with attribution: `actions-cache-backend.ts`'s
+  // GITHUB_WORKSPACE/cwd mismatch error says "a reported HIT whose bytes are
+  // unreachable". That file is one plausible `EDITED_FILES` addition away from
+  // turning a CORRECT sentence into a red test named for producer attribution, and
+  // the failure message would instruct its author to delete the sentence.
+  //
+  // The retracted claim is a CO-OCCURRENCE: whose-bytes AND a producer. Neither half
+  // alone is the claim -- "whose bytes are unreachable" attributes nothing, and
+  // "produced on windows-11-arm" is a fact this repo states freely. Requiring both
+  // inside ONE sentence is what distinguishes them, and it is why this is a
+  // re-aiming rather than a weakening: every phrasing of the retracted claim still
+  // trips it, and the controls below pin that both directions still discriminate.
   const retracted = /whose byte[s]/i;
+  const attribution = /produc(?:e[rd]|es|ing|tion)/i;
+
+  function claimsProducerAttribution(text: string): boolean {
+    return text
+      .split(/(?<=[.;])\s+/)
+      .some(
+        (sentence) => retracted.test(sentence) && attribution.test(sentence),
+      );
+  }
 
   it.each([...EDITED_FILES])('%s makes no such claim', (file) => {
     expect(
-      read(file),
-      `${file} claims the mirror answers which producer's bytes a reader received. OBS-03 explicitly RETRACTS that claim -- the label is the PUBLISHING leg's OS, not the producing one. Remove it; do not weaken this guard.`,
-    ).not.toMatch(retracted);
+      claimsProducerAttribution(read(file)),
+      `${file} claims the mirror answers which producer's bytes a reader received. OBS-03 explicitly RETRACTS that claim -- the label is the PUBLISHING leg's OS, not the producing one. Remove the claim; do not widen this guard's escape hatch.`,
+    ).toBe(false);
+  });
+
+  // NON-VACUITY, BOTH DIRECTIONS. A narrowed predicate that matches nothing is
+  // indistinguishable from a deleted one, and a narrowed predicate that still
+  // matches the innocent sentence bought nothing. Both are asserted so neither can
+  // rot into the other.
+  it('still catches the retracted claim when the two halves share a sentence', () => {
+    expect(
+      claimsProducerAttribution(
+        'The label tells a reader whose bytes the producer wrote.',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not fire on the byte-reachability sentence already in the repo', () => {
+    expect(
+      claimsProducerAttribution(
+        'They are not, so @actions/cache would extract under one and this backend would read under the other -- a reported HIT whose bytes are unreachable, which handleGet then converts to a silent 404 (VER-04).',
+      ),
+    ).toBe(false);
+  });
+
+  it('does not fire when the two halves sit in different sentences', () => {
+    expect(
+      claimsProducerAttribution(
+        'A reported HIT whose bytes are unreachable becomes a MISS. The entry was produced on windows-11-arm.',
+      ),
+    ).toBe(false);
   });
 });

@@ -85,6 +85,17 @@ a per-target exception.
   version-affecting change in between is the signal that something else is wrong
   -- most likely the runtime token's Actions-cache read scope.
 
+  **Upgrading to v0.0.2 rotates the Release asset name too, on top of the cache
+  version.** The name dropped its OS component: an asset that was
+  `<hash>-<os>` is now `nx-cache-<hash>`. The reader derives the new name only
+  and has no fallback to the old one, so on the first run after the upgrade
+  **every asset mirrored before v0.0.2 reads as a MISS** and stays that way until
+  it is re-mirrored under the new name. Nothing is lost and nothing is wrong:
+  the old assets remain prunable -- cleanup accepts both shapes -- and age out
+  through the normal retention window. This is a one-time cost at the upgrade,
+  and it is a second axis from the cache-version rotation above; the two land in
+  the same run, so expect one all-MISS publish, not two.
+
   It is gated by a **separate** sync allowlist (`isSyncTrusted`: `push` /
   `schedule` on the default branch), never by the write gate -- widening
   write-trust must never widen sync, or a pull-request-influenced entry could

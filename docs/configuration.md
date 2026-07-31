@@ -109,6 +109,29 @@ is no knob to change it. A `PUT` whose body exceeds it is rejected with `413`. T
 limit matches the roughly 2 GiB GitHub Releases asset ceiling, so a single cache
 entry never exceeds what the mirror can store.
 
+## Where the sidecar writes on disk
+
+From v0.0.2 the sidecar stages each cache entry as a transient archive under
+`<workspace>/.nx/cache/`, relative to the process working directory. It used to
+use the system temp directory; the move is what makes the `@actions/cache` cache
+version independent of the OS that computed it, so a Windows job can read what a
+Linux job wrote.
+
+Three consequences worth knowing, none of them configurable:
+
+- **`.nx/cache` must be gitignored.** Nx's own scaffolding does this by default,
+  so most workspaces already comply. If yours does not, a multi-megabyte archive
+  becomes briefly visible to Nx's workspace file map.
+- **Nothing may clear `.nx/cache` while the sidecar is running.** The directory is
+  created once, when the server starts. A step that runs `nx reset` (or otherwise
+  empties `.nx/cache`) mid-job makes the next write fail with a `500` rather than
+  a MISS, because writes are deliberately fail-closed. Run `nx reset` _before_
+  starting the sidecar, never between start and teardown.
+- **Archives land on the workspace volume, not the temp volume.** Identical on
+  GitHub-hosted runners, where both are the same disk. On a self-hosted runner
+  with a separate temp mount, size the workspace volume for your largest cache
+  entry (bounded by the 2 GiB body limit above).
+
 ## Two limits to know about
 
 ### The GitHub Actions cache is capped at 10 GB per repository

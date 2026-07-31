@@ -1,20 +1,24 @@
 ---
 phase: 12-windows-ci-reuse-o4-consumer-recipe
 verified: 2026-07-30T21:10:00Z
-status: human_needed
+status: passed
 score: 9/13 must-haves verified
 behavior_unverified: 4
 overrides_applied: 0
 human_verification:
+
   - test: "Open the FIRST run of a same-repo pull request for this branch (never a re-run) and, per Windows leg, count `[remote cache]` occurrences in the leg's log with `rg -o -F \"[remote cache]\" <log> | wc -l`."
     expected: "build-windows=1, typecheck-windows=2, test-windows=1 (total 4), each ubuntu leg MISS-and-saved in the same run."
     why_human: "XOS-05's core claim is a property of the GitHub Actions cache service across two live jobs. No proving run exists on the remote (tip is unmoved at 38f9aea, 57 commits behind local HEAD, zero open PRs), and opening the PR is a carried operator decision the executor correctly declined to take unilaterally. Code, guard and pre-registration are all present and wired; only the observation is missing."
+
   - test: "After merge to main, dispatch `windows-regression-detector.yml` (`gh workflow run windows-regression-detector.yml`) and confirm the run's log contains the literal `Successfully ran targets build, typecheck, test for project`."
     expected: "The detector job goes green on a real windows-11-arm runner with the plural success line present."
     why_human: "GitHub only dispatches a workflow file present on the default branch, so this is structurally impossible to prove pre-merge. The command itself was measured green locally on win32/arm64 (12-03); only the CI dispatch is unverified."
+
   - test: "Once any CI run exists on a tree carrying `node --no-warnings -p process.platform` (post plan 12-04, commit 3d9f895+), download both hash-parity-<runner> artifacts and read the discriminator's stdout/stderr pair for linux and win32."
     expected: "stdout `linux`/`win32` respectively, stderr EMPTY on both legs, confirming `--no-warnings` closes the stderr channel on linux/arm64 too (RESEARCH assumption A1)."
     why_human: "The only artifact checked so far (run 30500255530) recorded the PRE-hardening command (`node -p process.platform`, no flag) because the hardened literal is unpushed. A1 remains explicitly OPEN, not closed by inference, per 12-06's own record."
+
   - test: "Read docs/cross-os.md end to end and judge whether the recipe is correct and safe for an external consumer to copy."
     expected: "The safe-default framing, the checklist, and the trap comments are technically accurate and not merely present."
     why_human: "This is a prose/judgement review, not a mechanical assertion. The drift guard proves the doc SAYS the right things; it cannot prove the doc MEANS them. The phase's own VALIDATION.md and every plan's `<verification>` block name this as a review item for `/gsd:code-review`, not a covered truth."

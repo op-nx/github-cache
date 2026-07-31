@@ -204,7 +204,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  *
  * The records are JSON downloaded from a CI artifact, so they are untrusted input
  * crossing a job boundary: truncated, empty, or shaped differently than declared.
- * `nx-target-inputs.spec.ts:243-255` states the rule this reuses -- a type on a
+ * `nx-target-inputs.spec.ts`'s `parseNxJson` cast note states the rule this reuses
+ * (search that file for `ASSERTION about`) -- a type on a
  * value parsed from disk is an ASSERTION about the file, not a check of it, so
  * indexing it without narrowing produces `TypeError: Cannot read properties of
  * undefined`, a crash where a comprehensible assertion failure belongs. Both are
@@ -414,7 +415,10 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
   // divergent `integration` is the declared discriminator". The record can REFUTE
   // that premise directly, so it is checked rather than assumed. The gap is
   // otherwise covered only from the other side, by
-  // `nx-target-inputs.spec.ts:329-336` pinning the command string byte-identical,
+  // `nx-target-inputs.spec.ts`'s `integration declares exactly the byte-identical
+  // discriminator command` (and its post-merge twin, `keeps the byte-identical
+  // discriminator once project.json is merged over targetDefaults`) pinning the
+  // command string byte-identical,
   // which proves the input is DECLARED -- the substitution the header itself calls
   // the tempting wrong answer.
   //

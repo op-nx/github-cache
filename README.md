@@ -13,7 +13,26 @@ already have.
 ## Quickstart (5 minutes)
 
 **Prerequisites:** an Nx workspace on Nx 21 or later (the self-hosted remote
-cache API) and a GitHub Actions workflow.
+cache API), a GitHub Actions workflow, and a job whose working directory is the
+workspace root -- the directory that holds `nx.json`.
+
+That last one is a hard precondition, checked at startup: the sidecar refuses to
+start unless `nx.json` sits in the process working directory and that directory
+matches `GITHUB_WORKSPACE`. Both are startup checks rather than read faults, so
+they fail the step loudly instead of degrading to a MISS. The reason is that the
+cache archive path is workspace-relative (see
+[Advanced usage](docs/advanced.md)), so a working directory anywhere else would
+have this action read a different file than the one it wrote -- silently, and as
+a wrong result rather than a rebuild.
+
+Two layouts trip it today, and neither is currently supported:
+
+- An Nx workspace in a subdirectory (`frontend/`, `web/`, most polyglot repos).
+- `actions/checkout` with a `path:` input, which leaves `GITHUB_WORKSPACE` as the
+  parent of the checkout.
+
+If you need either, open an issue rather than working around it with a `cd` --
+the archive anchor, not the check, is what would need to move.
 
 Add the sidecar as a background step in your existing build job. Because a
 background step cannot export environment variables to later steps, you set the

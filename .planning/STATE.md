@@ -5,9 +5,9 @@ milestone_name: framing
 current_phase: 12
 current_phase_name: windows-ci-reuse-o4-consumer-recipe
 status: complete
-last_updated: "2026-07-31T08:55:00.000Z"
+last_updated: "2026-07-31T12:50:43.691Z"
 last_activity: 2026-07-31
-last_activity_desc: Phase 12 post-completion gates closed -- secure, validate, learnings
+last_activity_desc: Milestone v0.0.2 shipped -- PR #12
 progress:
   total_phases: 6
   completed_phases: 6
@@ -32,7 +32,7 @@ Plan: 6 of 6
 Status: all gates closed -- verification passed, UAT 4/4, threats_open 0, nyquist_compliant true,
 learnings extracted and pooled
 Progress: 6/6 phases complete [######] 100%
-Last activity: 2026-07-31 -- Phase 12 post-completion gates closed
+Last activity: 2026-07-31 -- Milestone v0.0.2 shipped, PR #12
 
 **Milestone v0.0.2 is ready for `/gsd:audit-milestone`.** All six phases (7 through 12) are Complete
 in the ROADMAP table, 39 of 39 plans executed, and every v0.0.2 requirement is closed in

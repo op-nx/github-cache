@@ -473,7 +473,7 @@ export async function run(): Promise<void> {
     }
 
     core.setFailed(
-      `github-cache dogfood: unknown operation '${operation}' (expected 'seed', 'mirror-seed' or 'verify').`,
+      `github-cache dogfood: unknown operation '${operation}' (expected 'publish', 'seed', 'mirror-seed' or 'verify').`,
     );
   } finally {
     // Drain and close on EVERY path -- success and failure alike -- so the process

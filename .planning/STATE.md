@@ -4,16 +4,16 @@ milestone: v0.0.2
 milestone_name: framing
 current_phase: 12
 current_phase_name: windows-ci-reuse-o4-consumer-recipe
-status: verifying
-last_updated: "2026-07-30T20:51:44.142Z"
-last_activity: 2026-07-30
-last_activity_desc: Phase 12 execution started
+status: complete
+last_updated: "2026-07-31T08:55:00.000Z"
+last_activity: 2026-07-31
+last_activity_desc: Phase 12 post-completion gates closed -- secure, validate, learnings
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 45
-  completed_plans: 38
-  percent: 17
+  completed_phases: 6
+  total_plans: 39
+  completed_plans: 39
+  percent: 100
 ---
 
 # Project State
@@ -23,27 +23,43 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 12 — windows-ci-reuse-o4-consumer-recipe
+**Current focus:** milestone v0.0.2 is feature-complete -- all six phases closed
 
 ## Current Position
 
-Phase: 12 (windows-ci-reuse-o4-consumer-recipe) — EXECUTING
+Phase: 12 (windows-ci-reuse-o4-consumer-recipe) -- COMPLETE
 Plan: 6 of 6
-Status: Phase complete -- ready for verification
-Progress: 4/6 phases complete [####--] 67%
-Last activity: 2026-07-30 — Phase 12 execution started
+Status: all gates closed -- verification passed, UAT 4/4, threats_open 0, nyquist_compliant true,
+learnings extracted and pooled
+Progress: 6/6 phases complete [######] 100%
+Last activity: 2026-07-31 -- Phase 12 post-completion gates closed
 
-**PERISHABLE, and it gates plans 11-02 and 11-03.** The warm Releases mirror holding the four hashes
-this workstation computes was published 2026-07-29T16:44Z, and cleanup prunes past 30 days, so the
-O1/O2 measurement window closes around 2026-08-28. The workstation graph is WARM right now, so 11-02's
-warm `capture:hashes` reading must be taken BEFORE its `nx reset` or that number is unrecoverable.
-Plans 11-05 and 11-06 rotate three of the four hashes, so neither may run before 11-03 is captured.
+**Milestone v0.0.2 is ready for `/gsd:audit-milestone`.** All six phases (7 through 12) are Complete
+in the ROADMAP table, 39 of 39 plans executed, and every v0.0.2 requirement is closed in
+REQUIREMENTS.md. Phase 12's four -- XOS-04, XOS-05, XOS-08, DOCS-07 -- closed last, at this step
+rather than per-plan, because every plan deliberately skipped `requirements.mark-complete` after it
+falsely closed all three XOS rows on 12-01's RED-only plan.
 
-Prior phase, unchanged: Phase 10 (OS-Invariant Releases Mirror) is COMPLETE, 8 of 8 plans, all four
-gates closed -- verification passed, threats_open 0, nyquist_compliant true, learnings extracted.
-12/12 requirements closed; the two live-CI items (OBS-05 per-leg read-back, XOS-07 full-task-set
-census) were observed on run 30471772954 via a temporary push to main, since restored to fe25a3f.
-See 10-EVIDENCE-LIVE-CI.md.
+Phase 12's live-CI half is OBSERVED, not inferred. O4 was measured on run 30586177358, the FIRST run
+of same-repo PR #12: `[remote cache]` counted per Windows leg at 1/2/1 (total 4), matching counts
+pre-registered in `f5d03b0` BEFORE the run, with every ubuntu leg MISS-and-saved in the same run.
+The scheduled detector went green on run 30603713356 on a real `windows-11-arm` runner. Both are
+recorded in 11-EVIDENCE.md's O4 section and 12-UAT.md.
+
+RESEARCH assumption A1 is CLOSED by measurement -- both hash-parity artifacts from run 30586177358
+carry the hardened `node --no-warnings -p process.platform` with empty stderr and differing stdout.
+`12-VERIFICATION.md:20` and `12-SECURITY.md` still describe it as open; both were correct for the
+trees they audited and are superseded by 12-VALIDATION.md rather than back-edited.
+
+Two non-blocking residuals carried forward, both recorded in 12-SECURITY.md: the `::add-mask::`
+ordering in `ci.yml` is now guarded (commit `e73f49c`) after this phase took it from 5 sites to 8;
+and code review's CR-01 showed a green structural guard can sit over a wrong payload, which is why
+`RENDERED_DISCRIMINATOR_SITES` is pinned at an exact 4 rather than a floor.
+
+Prior phase: Phase 11 (Live Proofs O1-O2-O3) is COMPLETE, 7 of 7 plans. Phase 10 (OS-Invariant
+Releases Mirror) is COMPLETE, 8 of 8, 12/12 requirements closed; its two live-CI items were observed
+on run 30471772954 via a temporary push to main, since restored to fe25a3f. See
+10-EVIDENCE-LIVE-CI.md.
 
 ## Performance Metrics
 

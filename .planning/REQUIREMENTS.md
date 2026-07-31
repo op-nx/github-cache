@@ -356,11 +356,11 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   (`8865876519165210738` vs `1822904335635353663`), so CORR-04's mechanism is confirmed working at
   this commit. (O3)
 
-- [ ] **XOS-04**: `ci.yml` runs `build`, `typecheck` and `test` on a windows-11-arm leg in addition
+- [x] **XOS-04**: `ci.yml` runs `build`, `typecheck` and `test` on a windows-11-arm leg in addition
   to the ubuntu leg. Without this there is no Windows job that could exhibit O4's HIT. Note the
   `integration` matrix is NOT the wiring precedent here -- see XOS-08.
 
-- [ ] **XOS-05**: Those Windows legs get a cache HIT for all three targets from entries saved by
+- [x] **XOS-05**: Those Windows legs get a cache HIT for all three targets from entries saved by
   the ubuntu leg. Whether they also WRITE is an explicit recorded decision; if they write, the loss
   of clean Linux attribution is recorded alongside TRUST-11/12, **and a scheduled
   `--skip-nx-cache` windows-11-arm job becomes required rather than optional** -- once Windows
@@ -368,7 +368,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   otherwise invisible forever, and the success signal for O4 (every target `[remote cache]`, wall
   time collapsing to sidecar overhead) is the identical observation. (O4)
 
-- [ ] **XOS-08**: The O4 proof has an explicit producer-to-consumer ordering: the Windows legs
+- [x] **XOS-08**: The O4 proof has an explicit producer-to-consumer ordering: the Windows legs
   declare `needs:` on the corresponding ubuntu jobs, mirroring `dogfood-seed` -> `dogfood-verify`.
   The `integration` matrix precedent does NOT transfer -- its two legs compute DIFFERENT hashes, so
   parallelism is harmless; the new legs compute the SAME hash, so run in parallel they both MISS,
@@ -449,7 +449,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 ### Documentation (DOCS)
 
-- [ ] **DOCS-07**: A consumer-facing cross-OS adoption recipe whose PRIMARY instruction is
+- [x] **DOCS-07**: A consumer-facing cross-OS adoption recipe whose PRIMARY instruction is
   safe-by-default: declare the platform discriminator across all cacheable targets first, then
   remove it per target only after proving that target's output is portable. The portability
   checklist is the SECOND section, framed as how to earn a removal, and its items are derived from
@@ -655,10 +655,10 @@ honour table: `.planning/ROADMAP.md`.
 | TEST-09 | Phase 11 | Complete (all three parts on push run 30500255530: inequality CITED from CORR-03(b), o3-witness delta 144s against a 30s margin, positive control 200 on both legs; see 11-EVIDENCE.md O3) |
 | TEST-10 | Phase 11 | Complete |
 | OBS-02 | Phase 11 | Complete |
-| XOS-04 | Phase 12 | Pending |
-| XOS-05 | Phase 12 | Pending (live-CI only; carries the conditional scheduled-detector clause) |
-| XOS-08 | Phase 12 | Pending (`needs:` ordering -- without it the HIT cannot occur) |
-| DOCS-07 | Phase 12 | Pending |
+| XOS-04 | Phase 12 | Complete (three `windows-11-arm` legs in `ci.yml`; reuse OBSERVED live on run 30586177358, the FIRST run of same-repo PR #12; see 11-EVIDENCE.md O4) |
+| XOS-05 | Phase 12 | Complete (live-CI: `[remote cache]` counted per leg at 1/2/1, total 4, matching the counts pre-registered in `f5d03b0` before the run; every ubuntu leg MISS-and-saved in the same run. The conditional scheduled-detector clause is discharged too -- run 30603713356 went green on a real `windows-11-arm` runner with the plural success line present and zero `[remote cache]` markers) |
+| XOS-08 | Phase 12 | Complete (bare single-producer `needs:` scalar per leg, guarded in `dogfood-cross-os.spec.ts`; the ordering is what made the 1:1 per-target attribution readable within run 30586177358) |
+| DOCS-07 | Phase 12 | Complete (`docs/cross-os.md`, safe default FIRST, registered as an `nx.json` `test` input in the same commit as the doc and drift-guarded; the stderr-immune discriminator is single-sourced and A1 closed by measurement on both legs; recipe accuracy reviewed in 12-UAT.md test 4 after code-review finding CR-01 was fixed) |
 
 **Coverage:** 50 requirements, 50 mapped, 0 orphans, 0 duplicates. Distribution: Phase 7 = 7,
 Phase 8 = 9, Phase 9 = 11, Phase 10 = 12, Phase 11 = 7, Phase 12 = 4. Verified mechanically by

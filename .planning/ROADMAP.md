@@ -756,7 +756,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 9. OS-Invariant Actions-Cache Version | v0.0.2 | 8/8 | Complete    | 2026-07-28 |
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 7/7 | Complete    | 2026-07-30 |
-| 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 6/6 | In Progress | - |
+| 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 6/6 | Complete    | 2026-07-31 |
 
 ---
 *v0.0.2 roadmap created 2026-07-26 from `.planning/REQUIREMENTS.md` (43 requirements, revised

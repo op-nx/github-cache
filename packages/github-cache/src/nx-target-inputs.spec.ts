@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import type { NxJsonConfiguration } from 'nx/src/config/nx-json.js';
 import type { TargetConfiguration } from 'nx/src/config/workspace-json-project-json.js';
 import {
@@ -244,6 +244,50 @@ describe('typecheck declares the outputs its command actually writes (PARITY-01,
       '{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}.map',
       '{projectRoot}/out-tsc/vitest/tsconfig.spec.tsbuildinfo',
     ]);
+  });
+
+  // THE PREMISE THE PIN ABOVE RESTS ON, asserted rather than assumed.
+  //
+  // The seven entries were enumerated from ONE project's tsconfig layout --
+  // `packages/github-cache`, where they cover 136 of 136 emitted files. But
+  // `targetDefaults` applies to EVERY project in the workspace. A second project
+  // with a different `outDir` or `tsBuildInfoFile` would inherit this exact list,
+  // and its `typecheck` HIT would then restore a strictly SMALLER set than its
+  // command emits -- a silent partial restore, which is the same failure class
+  // PARITY-01 fixed, wearing a green build.
+  //
+  // The list is a superset for the one project that exists, so this is a
+  // forward-looking guard, not a live break. It is cheap because the premise is
+  // mechanically checkable: `package.json` declares `workspaces: ["packages/*"]`,
+  // so counting the project directories under `packages/` counts the projects that
+  // can inherit the pin.
+  //
+  // WHEN THIS GOES RED, the fix is NOT to widen the list -- a union of two layouts
+  // over-declares for both. Move the block to `packages/github-cache/project.json`,
+  // where it applies to the project it was measured against, and let the new
+  // project declare its own.
+  //
+  // CEILING, recorded rather than left to be discovered: this reads the filesystem,
+  // and a sibling `packages/<new>/package.json` is NOT in this target's declared
+  // inputs -- no `test` input covers another project's root. So the commit that
+  // ADDS a second project can serve a cached PASS here, and the guard first bites
+  // on the next cold run. That is the PARITY-08 staleness shape, accepted knowingly
+  // and only here: the fact this asserts lives in the directory tree and in no
+  // hashed file, so there is nothing better to key on. It still converts a silent
+  // partial restore into a named failure, which is the whole gain.
+  it('has exactly one project that can inherit the workspace-wide pin', () => {
+    const packagesDir = new URL('../../', import.meta.url);
+    const projects = readdirSync(packagesDir, {
+      withFileTypes: true,
+    })
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          existsSync(new URL(`${entry.name}/package.json`, packagesDir)),
+      )
+      .map((entry) => entry.name);
+
+    expect(projects).toEqual(['github-cache']);
   });
 });
 

@@ -5,9 +5,10 @@
 
 **Date:** 2026-08-02
 **Phase:** 13-read-only-actions-cache-backend
-**Mode:** `--analyze --auto --chain` -- no user prompts; every option auto-resolved to the
-recommended choice EXCEPT the one rated HIGH-IMPACT x NOT-HIGH-CONFIDENCE, which policy requires
-be recorded UNRESOLVED instead of auto-locked.
+**Mode:** `--analyze --auto --chain` -- every option auto-resolved to the recommended choice
+EXCEPT the one rated HIGH-IMPACT x NOT-HIGH-CONFIDENCE. That one was ESCALATED to the maintainer
+(a human was in the loop, so an UNRESOLVED record was not the terminal action), who reframed its
+axis and locked half of it. See the escalated area below.
 **Areas discussed:** Backend shape, Read-only selection signal, Leg conversion and gating, Gate
 threshold, Stale-rationale correction, Gate pinning, Adjacent-stance confirmation, Do-nothing
 baseline
@@ -35,25 +36,42 @@ that the hidden object remains writable at runtime.
 
 ---
 
-## Read-only selection signal (D-02) -- UNRESOLVED, BLOCKER
+## Read-only selection signal -- ESCALATED TO THE MAINTAINER, then partly LOCKED
+
+`--auto` declined to lock this (HIGH IMPACT x NOT-HIGH CONFIDENCE -- the trap quadrant), and
+because a human was in the loop it was ESCALATED rather than left terminal. The maintainer then
+reframed the axis: the original framing asked env-knob-vs-internal-route, but the real axis is
+**EVENT-derived vs ROLE-derived**.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| (a) Narrowing env knob read by `selectBackend` | Env is the existing context bag; monotonic (can only remove capability); 8 documented knobs establish the shape | (leaning, NOT locked) |
-| (b) Project-local route via the internal dogfood action | No consumer-contract change; but `main` resolves to `dist/action/index.js`, so it needs a build before the leg that exists to measure `npm run build` | |
-| (c) Input on the public `start-cache-server` action | Strict superset of (a)'s cost | |
-| (d) Construction-time factory flag | -- | REJECTED (see below) |
+| By ROLE (per-leg) | Consumer legs read-only, ubuntu producer still writes; keeps the pre-merge gate and `dogfood-seed`'s PUT | check (maintainer, 2026-08-02) |
+| By EVENT (RW only on write-eligible `{push,schedule}` + default branch) | Dissolves the signal question entirely -- no knob at all | REJECTED |
+| Event band PLUS role signal | Presented as a hybrid | REJECTED -- not actually a hybrid |
+| Construction-time factory flag | -- | REJECTED (TRUST-05, see D-03) |
 
-**Auto-selection:** NONE. `[auto] Read-only selection signal -- HIGH IMPACT x NOT-HIGH
-CONFIDENCE: trap quadrant. Recorded as an UNRESOLVED BLOCKER in CONTEXT.md with competing options
-and a resolution criterion, per the no-auto-lock policy.`
-**Notes:** The tie-breaker is a project constraint, not a technical fact: PROJECT.md forbids this
-repo's CI needs leaking into the consumer contract, while option (b)'s build-ordering defect lands
-on `build-windows` -- the single leg the phase exists for. Research must reach a verdict before
-planning begins. The structural finding that made this a gray area at all: producer-vs-consumer
-ROLE is not derivable from any GitHub-supplied environment fact, because the Windows legs run on
-push / same-repo PR and are correctly TRUSTED. Some author-supplied signal is unavoidable; only
-its shape is open.
+**Maintainer's decision:** by ROLE, keep the pre-merge gate. D-02 stays open on SHAPE only.
+**Notes / corrections to the analysis as presented:**
+
+- The event-derived option and the "hybrid" both die on the same fact, and the maintainer's
+  statement of it is sharper than the one offered: **TRUST-05's asymmetry is a one-way ratchet.**
+  A signal may only narrow RW -> RO, never widen RO -> RW. So a read-only `pull_request` base can
+  never be widened back for `dogfood-seed` (`action/index.ts:320,336`). The hybrid is therefore
+  not a hybrid at all -- it inherits the `dogfood-seed` break UNFIXABLY. Both were presented with
+  the collision noted; the ratchet is why the collision has no escape.
+- The ROLE signal buys a property neither alternative can: **inductive**, not per-run. If the
+  consumer legs never write, no Windows-produced entry for those hashes can ever exist, so any HIT
+  is necessarily Linux-produced. The analysis as presented rested D-04's soundness on the XOS-08
+  `needs:` edge; that was weaker than what the phase actually delivers, and CONTEXT.md was
+  corrected to separate liveness (`needs:`) from correctness (read-only-ness).
+- **How the open shape question must be weighed** (maintainer instruction): a narrowing knob IS
+  TRUST-05-compatible, because TRUST-05 forbids REQUESTING write, not DECLINING it. Rejecting
+  option (a) on TRUST-05 grounds is a MISREAD and must not be made or accepted. Its real and only
+  cost is public API surface on a shipped package for a dogfooding-only need.
+- A further candidate the maintainer added for research to CARRY: the witness / `created_at`
+  variant, with its defect pre-recorded -- it does not close laundering (a previous run's
+  Windows-written entry predates the current leg and passes the witness), and tightening it to
+  "created within this run" reddens every PR that does not rotate a hash.
 
 ---
 

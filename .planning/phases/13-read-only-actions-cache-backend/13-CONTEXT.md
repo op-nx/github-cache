@@ -65,38 +65,64 @@ computation a second place to drift.
   only defense against the silent all-MISS this phase would otherwise make invisible, since a
   read-only leg has no write path whose failure would surface.
 
-- **D-02 (BLOCKER -- UNRESOLVED, must NOT be auto-decided): what runtime context signal makes
-  `selectBackend` return the read-only Actions-cache backend?**
-  IMPACT: HIGH -- a consumer-visible env knob is a frozen-ish public contract
-  (`src/test/consumer-contract.ts` enumerates exactly 8 today and both `public-surface.spec.ts`
-  and `docs-adoption.spec.ts` pin it). CONFIDENCE: NOT HIGH -- two defensible options pull in
-  opposite directions and the tie-breaker is a project constraint, not a technical fact. This is
-  the documented trap quadrant, so it is recorded here rather than locked.
+- **D-02a (LOCKED by maintainer, 2026-08-02): the read-only backend is selected per-LEG by ROLE,
+  never per-EVENT.** IMPACT: HIGH. CONFIDENCE: HIGH -- decided by the maintainer after the
+  event-derived alternative was analysed and found unfixable.
 
-  **The structural problem, stated precisely so research does not re-derive it:** `selectBackend`
-  derives RW-vs-RO from runtime context alone (`lib/select-backend.ts:29-60`). The three Windows
-  legs run on `push` / same-repo `pull_request`, which `isWriteTrusted` reports as **trusted** --
-  correctly. They are not untrusted; they are **consumers by role**. Producer-vs-consumer role is
-  NOT derivable from any GitHub-supplied environment fact, so some workflow-author-supplied signal
-  is unavoidable. The only open question is its SHAPE and where it is documented.
+  **The event-derived alternative and why it is REJECTED.** It is genuinely attractive at first
+  glance: narrow RW to the write-ELIGIBLE band (`isSyncTrusted`'s shape -- `{push, schedule}` on
+  the default branch) and give the merely-write-TRUSTED band (`pull_request`, `release`) the
+  read-only Actions backend. That derives the signal from context alone and dissolves the whole
+  knob question. It is rejected because **TRUST-05's asymmetry is a one-way ratchet**: a signal may
+  only narrow RW -> RO, never widen RO -> RW. So a read-only `pull_request` BASE can never be
+  widened back for the one job that legitimately needs to write on a PR --
+  `dogfood-seed`, which drives a scripted PUT through `serve()` -> `selectBackend` and asserts a
+  hard 200 (`action/index.ts:320,336`). Event-derived RO therefore reverts quick task
+  `260801-vyy`'s CR-18 fix and there is no composition that restores it. This also disposes of the
+  "event band PLUS role signal" hybrid: narrowing composes downward only, so the hybrid inherits
+  the same break unfixably. Do not re-raise either.
+
+  **What the ROLE signal buys that no event band or timestamp check can -- record this, it is the
+  load-bearing argument.** If the consumer legs never write, then **no Windows-produced entry for
+  those hashes can ever exist**, so any HIT on those legs is NECESSARILY Linux-produced. The
+  property is **inductive**, not per-run: it does not depend on the XOS-08 `needs:` edge, on job
+  ordering, or on anything being true of the current run. That is strictly stronger than the
+  intra-run argument in D-04, and it is why this shape was chosen over the alternatives.
+
+- **D-02b (OPEN -- research must resolve, planning must not begin with it open): what SHAPE does
+  the role signal take?** IMPACT: HIGH -- a consumer-visible env knob is a frozen-ish public
+  contract (`src/test/consumer-contract.ts` enumerates exactly 8 today; both
+  `public-surface.spec.ts` and `docs-adoption.spec.ts` pin it). CONFIDENCE: NOT HIGH.
+
+  Producer-vs-consumer role is not derivable from any GitHub-supplied environment fact, so a
+  workflow-author-supplied signal is unavoidable. Only its shape is open.
 
   | Option | Pros | Cons |
   |---|---|---|
-  | (a) New narrowing env knob read by `selectBackend` (e.g. a `*_READ_ONLY` var) | Env IS the existing context bag, so the "one backend per process, context-selected" model is unchanged; monotonic -- it can only REMOVE capability, so TRUST-05 (nothing may REQUEST write) holds by construction; 8 documented knobs already establish the shape and the review diff | Grows the consumer contract for a need this repo's CI raised. PROJECT.md Constraints: "changes made for this repo's own CI/hashing must never leak into the consumer contract" |
+  | (a) New narrowing env knob read by `selectBackend` (e.g. a `*_READ_ONLY` var) | Env IS the existing context bag, so the "one backend per process, context-selected" model is unchanged; 8 documented knobs already establish the shape and the review diff | Grows the consumer contract for a need this repo's CI raised. PROJECT.md Constraints: "changes made for this repo's own CI/hashing must never leak into the consumer contract" |
   | (b) Project-local route -- a read-only serve entrypoint reachable only from the INTERNAL dogfood action | Zero consumer-contract change; honours the dogfood-stays-consumer-safe invariant literally | `packages/github-cache/action.yml` resolves `main` from `dist/action/index.js`, so it needs a build FIRST -- and `build-windows` exists to measure `npm run build`. Chicken-and-egg on the very leg that matters most. A second committed bundle avoids it but adds a second `check:action` drift surface |
   | (c) Input on the public `start-cache-server` action | The three legs already `uses: ./start-cache-server`, so wiring is one line | Strictly a superset of (a)'s cost: it changes `EXPECTED_ACTION_INPUTS` *and* needs a runtime channel into `serve()` anyway |
   | (d) Construction-time flag on the backend factory | -- | REJECTED ON SIGHT (see D-03) |
 
-  **Leaning, for research to confirm or refute:** (a). A job that must never write is a real
-  consumer need, not a dogfood hack, which is the distinction the PROJECT.md constraint actually
-  draws -- and (b)'s build-ordering defect lands on the one leg the phase exists for. But this is
-  a LEANING recorded under an explicit low-confidence flag, not a decision. **Research MUST reach
-  a verdict on D-02 and record it; planning MUST NOT begin with it open.**
+  **HOW TO WEIGH IT -- maintainer instruction, 2026-08-02.** The signal must be **strictly
+  narrowing**. TRUST-05 forbids REQUESTING write; it does not forbid DECLINING it. A narrowing
+  knob is therefore **TRUST-05-compatible**, and any argument that rejects option (a) on TRUST-05
+  grounds is a MISREAD -- do not make it, and do not accept it from a reviewer. Option (a)'s real
+  and only cost is **public API surface on a shipped package for a dogfooding-only need**. Weigh
+  it there.
 
-  **Resolution criterion:** the winning option is the one that (i) cannot express "give me write
-  capability", (ii) does not add a second cache-version computation or a second drift-guarded
-  bundle, and (iii) works on `build-windows` without building the package before the measured
-  `npm run build`.
+  **Resolution criterion:** the winning option is the one that (i) can only narrow, never widen,
+  (ii) does not add a second cache-version computation or a second drift-guarded bundle, and
+  (iii) works on `build-windows` without building the package before the measured `npm run build`.
+
+- **D-02c (candidate to CARRY, with its defect pre-recorded): the witness / `created_at`
+  variant.** Research must carry it as a comparison point rather than ignoring it -- but it does
+  NOT close laundering, and the reason is recorded here so the comparison starts from the right
+  place. An entry written by a PREVIOUS run's Windows leg predates the current leg and passes any
+  "the entry is older than me" witness. Tightening the witness to "created within THIS run" then
+  reddens every PR that does NOT rotate a hash -- the healthy case, where the ubuntu producer
+  legitimately HITs and writes nothing. Both directions fail; record which one the variant would
+  pick and why it is still worse than making the write unrepresentable.
 
 - **D-03 (LOCKED, and the WHY is recorded so it is not re-raised): a construction-time
   `readOnly` argument on `createActionsCacheBackend()` is REJECTED.** IMPACT: MEDIUM.
@@ -118,12 +144,17 @@ computation a second place to drift.
   `[remote cache]` counts become GATED at `>= 1` per leg.** IMPACT: HIGH. CONFIDENCE: HIGH --
   this is CR-18's original ask and the phase goal verbatim.
 
-  The gate is sound only once the leg cannot write, and the soundness argument is: XOS-08 gives
-  each Windows leg `needs:` its ONE ubuntu counterpart, so the producer runs **earlier in the same
-  run**. Whether ubuntu HIT (entry already present) or MISSed-and-SAVEd (entry present by the time
-  the edge releases), the entry exists when the Windows leg reads. A read-only leg that reports
-  zero therefore means cross-OS restore is genuinely dead -- there is no self-produced entry a
-  re-run could launder, which is the single defect that made this gate unsound before.
+  **The soundness argument is INDUCTIVE, not per-run (D-02a).** Once the consumer legs cannot
+  write, no Windows-produced entry for those hashes can ever exist, so any HIT on those legs is
+  NECESSARILY Linux-produced -- regardless of run ordering, re-runs, or what any earlier run did.
+  That is the property the role signal buys and the reason a re-run can no longer launder a zero
+  into a green.
+
+  XOS-08's `needs:` edge remains the LIVENESS argument (it is why the entry is present at all:
+  the ubuntu producer runs earlier in the same run and either HIT, leaving the entry in place, or
+  MISSed-and-SAVEd it). Keep the two separate -- `needs:` explains why the gate is not
+  spuriously red; read-only-ness explains why a green means what it says. An earlier draft rested
+  correctness on the `needs:` edge alone; that was weaker than what this phase actually delivers.
 
   Convert all three, not a subset: one writable leg left behind keeps a launderable path open and
   invites a future reader to "make the others consistent" in the wrong direction.
@@ -325,6 +356,21 @@ does not violate D-01's one-read-call-site criterion. Do not "unify" it with the
 
 A leg that cannot write can only get a `[remote cache]` label from a genuine restore of the ubuntu
 producer's entry -- so unlike today's writable legs, a re-run cannot launder a zero into a green.
+
+### Platform assumption research MUST confirm, not inherit
+
+**Claim:** a PR run RESTORES from the default-branch (base) cache scope while SAVING into its own
+merge-ref scope.
+
+The three Windows legs' PR behaviour depends on the READ half: it is what makes a non-hash-rotating
+PR HIT from main's entries rather than going cold. It is GitHub-documented but has never been
+reproduced in this repo, and inherited-but-unreproduced platform behaviour is exactly what quick
+task `260801-vyy` GA-2 refused to bet a gating check on.
+
+The WRITE half is no longer an assumption: yesterday's dogfood run on PR #12 wrote into the merge-ref
+scope, which is direct in-repo evidence. Confirm the READ half the same way -- by observation, in
+this repo -- before the gate depends on it. If it does not hold, D-04's threshold and its
+skip/expected-zero conditions need revisiting, not the backend shape.
 
 ### What the gate still does not cover
 

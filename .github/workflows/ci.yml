@@ -165,8 +165,22 @@ jobs:
   #     backend there as well (pull_request is host-gated-trusted on github.com).
   #     Read-only on PRs is enforced by GitHub's PLATFORM -- cache scope isolation
   #     (a PR write lands in the PR ref's scope, invisible to the default branch)
-  #     plus the read-only-cache token for untrusted triggers, whose saveCache
-  #     no-ops through the backend's benign 409 path -- NOT by this code.
+  #     -- NOT by this code. The restriction is on the DEFAULT BRANCH'S SCOPE and
+  #     never on a run's own writes: GitHub documents that only high-trust triggers
+  #     can create or overwrite caches IN THE DEFAULT BRANCH'S SCOPE, while a
+  #     pull_request run -- fork included -- still CREATES its cache, in the merge
+  #     ref (refs/pull/.../merge).
+  #       CORRECTED. This clause used to end "plus the read-only-cache token for
+  #     untrusted triggers, whose saveCache no-ops through the backend's benign 409
+  #     path", which dropped the scope qualifier and turned CONTAINMENT into DENIAL
+  #     -- contradicting the scope-isolation half of its own sentence, and implying
+  #     the integration job's 200-only positive control must redden on every fork
+  #     PR. It does not: that probe reads the same merge-ref scope its own save just
+  #     wrote. Dropping the qualifier is an easy misreading, which is why the
+  #     qualifier is now spelled in capitals rather than assumed.
+  #       CITED from GitHub's docs, not reproduced here -- this repo has had no fork
+  #     PR on record. Same standing, and the same caveat, as the !cancelled()-past-a-
+  #     FAILED-needs citation on the publish job.
   #   * NOT push-gated, unlike the proof jobs: push runs WRITE the entries, PR runs
   #     READ the default-branch ones. `if: github.event_name == 'push'` here would
   #     throw away the whole PR read benefit.
@@ -831,22 +845,27 @@ jobs:
       # leave both steps green while destroying the control, so do not reuse the poll's
       # deadbeef hash here either.
       #
-      # AN UNTESTED CASE, recorded because this block did not consider it and the next
-      # person to meet it will be reading a red gate. "The key is known-present after the
-      # task's own save" is the premise below, and the `build` job's own comment states
-      # something that would contradict it on a FORK pull request: that untrusted
-      # triggers get a read-only cache token "whose saveCache no-ops through the
-      # backend's benign 409 path". If that is right, a fork PR saves nothing, this probe
-      # gets 404, and BOTH matrix legs go red blaming a dead sidecar that was alive.
-      # Exactly one of the two blocks is wrong and this repo cannot say which: it has had
-      # no fork PR on record, and same-repo branch PRs (every run to date) write to their
-      # own cache scope normally, so the case has never been exercised.
-      #   DELIBERATELY NOT "FIXED" BY WIDENING THE ACCEPTANCE SET. Admitting 404 here
-      # would destroy the control on the one failure it exists to detect -- a dead
-      # sidecar masquerading as a MISS -- to accommodate a case nobody has observed.
-      # Widening a real guard on an untested hypothesis is the wrong trade in that
-      # direction. If a fork PR ever reddens here, the fix is to gate this step on the
-      # trigger, not to loosen it.
+      # THE FORK-PR CASE, RESOLVED -- the premise HOLDS on a fork, so this control needs
+      # no trigger gate and keeps its 200-only acceptance set. It was briefly recorded
+      # here as an open contradiction: the `build` job's comment claimed untrusted
+      # triggers get a token "whose saveCache no-ops", which would mean a fork PR saves
+      # nothing, this probe 404s, and BOTH legs go red blaming a dead sidecar that was
+      # alive.
+      #   THAT CLAIM WAS THE WRONG ONE, and it is corrected at its own site. GitHub's
+      # read-only restriction is SCOPED: only high-trust triggers can create or overwrite
+      # caches in the DEFAULT BRANCH'S SCOPE, while a pull_request run -- fork included --
+      # still CREATES its cache, in the merge ref (refs/pull/.../merge). This step's GET
+      # runs inside that same run and therefore reads that same scope, so "the key is
+      # known-present after the task's own save" holds on a fork exactly as it does on the
+      # same-repo branch PRs every run to date has exercised.
+      #   The misreading is named because it is an easy one to repeat: drop the "in the
+      # default branch's scope" qualifier and containment reads as denial. CITED from
+      # GitHub's docs, not reproduced -- no fork PR on record -- with the same standing as
+      # the !cancelled() citation on the publish job.
+      #   IF A FORK PR EVER DOES REDDEN HERE, that is new evidence about the platform, and
+      # the fix is to gate this step on the trigger. Never admit 404 into the acceptance
+      # set: that would destroy the control on the one failure it exists to detect, a dead
+      # sidecar masquerading as a cache MISS.
       #
       # No retry loop, deliberately: the key is known-present after the task's own save,
       # so a retry could only paper over a real failure. And a 200 can only have come

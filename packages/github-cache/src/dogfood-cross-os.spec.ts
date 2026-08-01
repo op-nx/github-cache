@@ -682,6 +682,17 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       'exist for NOTHING BUT the HIT observation, so a consumer that silently loses its cache ' +
       "client is a DELETED CONTROL THAT STILL LOOKS PRESENT and makes XOS-05's O4 observation " +
       `unobtainable with the whole suite green. ${RENAME_NOTE}`,
+    cacheObservation:
+      `${leg} must TEE its Nx output and RECORD the remote-cache label count. Without ` +
+      'it the leg has no runtime cache observation at all: a leg that MISSED and ' +
+      'executed locally exits 0 identically to one that HIT, so the three legs that ' +
+      'exist for NOTHING BUT the HIT observation cannot report the one thing they are ' +
+      'for. The concrete loss is an @actions/cache bump that breaks cross-OS restore -- ' +
+      'all three legs stay GREEN, hash-parity stays green because it compares hashes ' +
+      'rather than storage, and dogfood-verify is push-gated, so the bump PR merges ' +
+      'with no signal anywhere. This clause is about the RECORD existing, never about ' +
+      'its VALUE: the count is deliberately not gated, because reddening on a ' +
+      `legitimate zero is OBS-04's lesson repeating. ${RENAME_NOTE}`,
     backendToken:
       `${leg} must pass GITHUB_TOKEN into the sidecar step's own \`env:\`, and this clause is ` +
       'SEPARATE from the cacheClient one above because the two produce the SAME green-having-' +
@@ -715,6 +726,7 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     ownTarget,
     sidecar,
     cacheClient,
+    cacheObservation,
     backendToken,
     noIf,
   } = windowsLegReasons('build-windows', 'build', 'build');
@@ -726,7 +738,9 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
   it('scopes to a real build-windows job block that runs npm run build', () => {
     const block = jobBlock('build-windows');
 
-    expect(block, presence).toMatch(/^ {6}- run: npm run build$/m);
+    expect(block, presence).toMatch(
+      /^ {10}npm run build 2>&1 | tee build-nx.log$/m,
+    );
   });
 
   it('runs on the windows-11-arm runner -- the CONSUMER half of XOS-04', () => {
@@ -750,9 +764,11 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
   it('runs the build target its NAME claims, and neither of the other two', () => {
     const block = jobBlock('build-windows');
 
-    expect(block, ownTarget).toMatch(/^ {6}- run: npm run build$/m);
-    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run typecheck$/m);
-    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run test$/m);
+    expect(block, ownTarget).toMatch(
+      /^ {10}npm run build 2>&1 | tee build-nx.log$/m,
+    );
+    expect(block, ownTarget).not.toMatch(/^ {10}npm run typecheck 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^ {10}npm run test 2>&1/m);
   });
 
   it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
@@ -802,6 +818,17 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
   // because none of them reach the token the sidecar's backend selection depends on.
   // MEASURED the same way the cacheClient clause was: deleting the `env:` block from a
   // leg's `- uses: ./start-cache-server` step leaves every other clause for that leg GREEN.
+  it('tees its Nx output and records the remote-cache count, so the leg observes something', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, cacheObservation).toMatch(
+      /^ {6}- name: Run the build target and tee its output$/m,
+    );
+    expect(block, cacheObservation).toMatch(
+      /^ {6}- name: Record the remote-cache label occurrence count for this leg$/m,
+    );
+  });
+
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
     const block = jobBlock('build-windows');
 
@@ -826,6 +853,7 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     ownTarget,
     sidecar,
     cacheClient,
+    cacheObservation,
     backendToken,
     noIf,
   } = windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck');
@@ -833,7 +861,9 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
   it('scopes to a real typecheck-windows job block that runs npm run typecheck', () => {
     const block = jobBlock('typecheck-windows');
 
-    expect(block, presence).toMatch(/^ {6}- run: npm run typecheck$/m);
+    expect(block, presence).toMatch(
+      /^ {10}npm run typecheck 2>&1 | tee typecheck-nx.log$/m,
+    );
   });
 
   it('runs on the windows-11-arm runner -- the CONSUMER half of XOS-04', () => {
@@ -857,9 +887,11 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
   it('runs the typecheck target its NAME claims, and neither of the other two', () => {
     const block = jobBlock('typecheck-windows');
 
-    expect(block, ownTarget).toMatch(/^ {6}- run: npm run typecheck$/m);
-    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run build$/m);
-    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run test$/m);
+    expect(block, ownTarget).toMatch(
+      /^ {10}npm run typecheck 2>&1 | tee typecheck-nx.log$/m,
+    );
+    expect(block, ownTarget).not.toMatch(/^ {10}npm run build 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^ {10}npm run test 2>&1/m);
   });
 
   it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
@@ -880,6 +912,17 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     );
     expect(block, cacheClient).toMatch(
       /^ {6}- name: Wait for the loopback sidecar$/m,
+    );
+  });
+
+  it('tees its Nx output and records the remote-cache count, so the leg observes something', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, cacheObservation).toMatch(
+      /^ {6}- name: Run the typecheck target and tee its output$/m,
+    );
+    expect(block, cacheObservation).toMatch(
+      /^ {6}- name: Record the remote-cache label occurrence count for this leg$/m,
     );
   });
 
@@ -907,6 +950,7 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     ownTarget,
     sidecar,
     cacheClient,
+    cacheObservation,
     backendToken,
     noIf,
   } = windowsLegReasons('test-windows', 'test', 'test');
@@ -914,7 +958,9 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
   it('scopes to a real test-windows job block that runs npm run test', () => {
     const block = jobBlock('test-windows');
 
-    expect(block, presence).toMatch(/^ {6}- run: npm run test$/m);
+    expect(block, presence).toMatch(
+      /^ {10}npm run test 2>&1 | tee test-nx.log$/m,
+    );
   });
 
   it('runs on the windows-11-arm runner -- the CONSUMER half of XOS-04', () => {
@@ -938,9 +984,11 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
   it('runs the test target its NAME claims, and neither of the other two', () => {
     const block = jobBlock('test-windows');
 
-    expect(block, ownTarget).toMatch(/^ {6}- run: npm run test$/m);
-    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run build$/m);
-    expect(block, ownTarget).not.toMatch(/^ {6}- run: npm run typecheck$/m);
+    expect(block, ownTarget).toMatch(
+      /^ {10}npm run test 2>&1 | tee test-nx.log$/m,
+    );
+    expect(block, ownTarget).not.toMatch(/^ {10}npm run build 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^ {10}npm run typecheck 2>&1/m);
   });
 
   it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
@@ -961,6 +1009,17 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     );
     expect(block, cacheClient).toMatch(
       /^ {6}- name: Wait for the loopback sidecar$/m,
+    );
+  });
+
+  it('tees its Nx output and records the remote-cache count, so the leg observes something', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, cacheObservation).toMatch(
+      /^ {6}- name: Run the test target and tee its output$/m,
+    );
+    expect(block, cacheObservation).toMatch(
+      /^ {6}- name: Record the remote-cache label occurrence count for this leg$/m,
     );
   });
 

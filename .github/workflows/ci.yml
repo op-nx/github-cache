@@ -479,7 +479,30 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
-      - run: npm run build
+      # Tee'd, and named, for the reason the integration job's copy states: the bare
+      # `- run:` form leaves this leg with NO runtime cache observation at all. A leg
+      # that MISSED and executed locally exits 0 identically to one that HIT, so these
+      # three -- which exist for NOTHING BUT the HIT observation -- could not report the
+      # one thing they are for. An @actions/cache bump that broke cross-OS restore would
+      # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
+      # dogfood-verify is push-gated, so the bump PR would merge with no signal anywhere.
+      # Under set -euo pipefail the tee preserves a failing Nx exit code.
+      - name: Run the build target and tee its output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee build-nx.log
+      # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
+      # Gating on a non-zero count would redden a CORRECT leg on the first run after any
+      # version-affecting change, which is OBS-04's lesson about guards that fail on
+      # correct work. The `|| true` keeps a legitimate zero printing 0 instead of
+      # aborting the pipeline under pipefail.
+      - name: Record the remote-cache label occurrence count for this leg
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$({ grep -o -F '[remote cache]' build-nx.log || true; } | wc -l | tr -d '[:space:]')
+          echo "remote-cache label occurrences on windows-11-arm (build): ${count} -- RECORDED, never gated"
       - cancel: cache-server
 
   typecheck-windows:
@@ -529,7 +552,30 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
-      - run: npm run typecheck
+      # Tee'd, and named, for the reason the integration job's copy states: the bare
+      # `- run:` form leaves this leg with NO runtime cache observation at all. A leg
+      # that MISSED and executed locally exits 0 identically to one that HIT, so these
+      # three -- which exist for NOTHING BUT the HIT observation -- could not report the
+      # one thing they are for. An @actions/cache bump that broke cross-OS restore would
+      # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
+      # dogfood-verify is push-gated, so the bump PR would merge with no signal anywhere.
+      # Under set -euo pipefail the tee preserves a failing Nx exit code.
+      - name: Run the typecheck target and tee its output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run typecheck 2>&1 | tee typecheck-nx.log
+      # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
+      # Gating on a non-zero count would redden a CORRECT leg on the first run after any
+      # version-affecting change, which is OBS-04's lesson about guards that fail on
+      # correct work. The `|| true` keeps a legitimate zero printing 0 instead of
+      # aborting the pipeline under pipefail.
+      - name: Record the remote-cache label occurrence count for this leg
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$({ grep -o -F '[remote cache]' typecheck-nx.log || true; } | wc -l | tr -d '[:space:]')
+          echo "remote-cache label occurrences on windows-11-arm (typecheck): ${count} -- RECORDED, never gated"
       - cancel: cache-server
 
   test-windows:
@@ -579,7 +625,30 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
-      - run: npm run test
+      # Tee'd, and named, for the reason the integration job's copy states: the bare
+      # `- run:` form leaves this leg with NO runtime cache observation at all. A leg
+      # that MISSED and executed locally exits 0 identically to one that HIT, so these
+      # three -- which exist for NOTHING BUT the HIT observation -- could not report the
+      # one thing they are for. An @actions/cache bump that broke cross-OS restore would
+      # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
+      # dogfood-verify is push-gated, so the bump PR would merge with no signal anywhere.
+      # Under set -euo pipefail the tee preserves a failing Nx exit code.
+      - name: Run the test target and tee its output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test 2>&1 | tee test-nx.log
+      # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
+      # Gating on a non-zero count would redden a CORRECT leg on the first run after any
+      # version-affecting change, which is OBS-04's lesson about guards that fail on
+      # correct work. The `|| true` keeps a legitimate zero printing 0 instead of
+      # aborting the pipeline under pipefail.
+      - name: Record the remote-cache label occurrence count for this leg
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$({ grep -o -F '[remote cache]' test-nx.log || true; } | wc -l | tr -d '[:space:]')
+          echo "remote-cache label occurrences on windows-11-arm (test): ${count} -- RECORDED, never gated"
       - cancel: cache-server
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),

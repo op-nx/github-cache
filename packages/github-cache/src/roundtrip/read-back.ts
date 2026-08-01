@@ -202,6 +202,14 @@ async function assertPublishedByThisLeg(
 }
 
 /**
+ * The page ceiling for the walk below, expressed in ASSETS rather than pages so it stays
+ * meaningful if `ASSETS_PER_PAGE` changes. 10,000 is two orders of magnitude above the
+ * live cache-mirror-202607 shard (122 assets) and above anything monthly sharding plus
+ * the retention window can produce, so a healthy walk can never reach it.
+ */
+const MAX_ASSET_PAGES = Math.ceil(10_000 / ASSETS_PER_PAGE);
+
+/**
  * Every page of ONE shard's asset list, returning the named asset or `undefined`.
  *
  * PAGINATE, and do NOT read the release payload's inline `assets` array. That snapshot is
@@ -218,6 +226,20 @@ async function assertPublishedByThisLeg(
  * and an inlined copy per shard is the drift this bin's own single-source rules forbid.
  * Returning `undefined` rather than throwing is what lets the caller distinguish "not in
  * THIS shard, try an older one" from "in no shard at all" -- the caller owns that verdict.
+ *
+ * BOUNDED, because the loop's ONLY exit was a short page. `per_page` is a REQUEST, not a
+ * promise: GitHub is documented to cap or clamp it, and a proxy, a GHES build or a future
+ * API change that silently serves 30 per page turns `batch.length < ASSETS_PER_PAGE` into
+ * a condition that is false on EVERY page. The walk then requests page 1, 2, 3 ... for as
+ * long as the endpoint keeps answering -- once past the real last page GitHub returns an
+ * empty array, which is `0 < 100` and does terminate, but a clamped-but-non-empty page is
+ * an unbounded request storm against the API on a job whose only other stop is
+ * `timeout-minutes`. AbortSignal.timeout bounds each REQUEST and nothing bounded the
+ * COUNT.
+ *
+ * Reaching `MAX_ASSET_PAGES` is therefore a FAULT and throws with the shard named --
+ * `publish-verify` is a proof job, and a silent `undefined` here would read as "the asset
+ * was never published", sending the reader to the publish path instead of to the walk.
  */
 async function findAssetInRelease(
   repo: string,
@@ -226,7 +248,7 @@ async function findAssetInRelease(
   tag: string,
   headers: Record<string, string>,
 ): Promise<{ label: string | null } | undefined> {
-  for (let page = 1; ; page++) {
+  for (let page = 1; page <= MAX_ASSET_PAGES; page++) {
     const listResponse = await fetch(
       `${GITHUB_API}/repos/${repo}/releases/${releaseId}/assets?per_page=${ASSETS_PER_PAGE}&page=${page}`,
       { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
@@ -249,6 +271,14 @@ async function findAssetInRelease(
       return undefined;
     }
   }
+
+  throw new Error(
+    `read-back: asset list for shard ${tag} did not terminate within ` +
+      `${MAX_ASSET_PAGES} pages of ${ASSETS_PER_PAGE}. A healthy shard cannot reach ` +
+      'this -- suspect an endpoint that clamps per_page below the requested value, ' +
+      'which makes the short-page exit condition false on every page. This is NOT ' +
+      '"the asset was never published"; the walk itself is at fault.',
+  );
 }
 
 /**

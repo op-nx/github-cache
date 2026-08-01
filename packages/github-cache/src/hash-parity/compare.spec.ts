@@ -590,18 +590,54 @@ describe('a record cannot FORGE the success line through the failure detail', ()
 });
 
 describe('the comparator constants are content-pinned, never snapshotted', () => {
-  // Explicit deep-equality, the `sync-gate.spec.ts:208-217` pin. EXPECTED_TARGETS
-  // must stay in lockstep with `capture-hashes.mjs`'s TARGETS: a drift here makes
-  // the gate assert about targets that were never measured, which reads as a
-  // missing hash rather than as a spec bug.
-  it('EXPECTED_TARGETS deep-equals the instrument five-target list (D-05)', () => {
-    expect([...EXPECTED_TARGETS]).toEqual([
-      'build',
-      'typecheck',
-      'test',
-      'integration',
-      'lint',
-    ]);
+  // READ FROM THE INSTRUMENT, not re-authored here. This assertion used to deep-equal
+  // `EXPECTED_TARGETS` against a hand-written five-element literal while its own comment
+  // claimed that kept it "in lockstep with `capture-hashes.mjs`'s TARGETS". It could not:
+  // BOTH sides of that comparison lived in this file. Dropping a target from the
+  // instrument left this test green while the comparator went on asserting about a target
+  // that was never measured -- which surfaces as `a.targets[target].hash` being
+  // `undefined`, i.e. as a missing hash rather than as the spec bug it is. A gate that
+  // cannot fail for the reason it names is a gate someone deletes.
+  //
+  // Same shape as the `SUCCESS_PREFIX` group below: read the other file's source, extract
+  // the constant, and assert the EXTRACTION first so a regex that silently stopped
+  // matching fails loud instead of quietly emptying the assertion derived from it.
+  //
+  // READ, not imported: `capture-hashes.mjs` is a bin that exports nothing, and adding a
+  // spec-only export to it would trip the `fallow` dead-code gate. The source scan is the
+  // house pattern.
+  //
+  // Sound as an Nx input: `{workspaceRoot}/capture-hashes.mjs` is ALREADY a declared
+  // `test` input (nx.json), so this read cannot replay a stale PASS across a change to
+  // the instrument -- which would have reintroduced the LINT-04 hole in the very test
+  // written to close a lockstep gap.
+  const instrumentTargets = /^const TARGETS = \[([^\]]+)\];/m
+    .exec(
+      readFileSync(
+        new URL('../../../../capture-hashes.mjs', import.meta.url),
+        'utf8',
+      ),
+    )?.[1]
+    ?.split(',')
+    .map((entry) => entry.trim().replace(/^'|'$/g, ''));
+
+  it('the instrument declares its target list where this spec can read it (D-05)', () => {
+    expect(
+      instrumentTargets,
+      'capture-hashes.mjs must declare `const TARGETS = [...];` as a single-line array ' +
+        'of single-quoted names. If the declaration was legitimately reshaped, update ' +
+        'this extraction in the SAME commit -- the lockstep assertion below is built ' +
+        'from it, so a failed extraction empties it silently instead of failing loud.',
+    ).toEqual(['build', 'typecheck', 'test', 'integration', 'lint']);
+  });
+
+  it('EXPECTED_TARGETS stays in lockstep with the instrument TARGETS (D-05)', () => {
+    expect(
+      [...EXPECTED_TARGETS],
+      'The comparator asserts about the targets the instrument MEASURES. Drift here ' +
+        'makes the gate assert about a target that was never captured, which reads as a ' +
+        'missing hash rather than as a spec bug.',
+    ).toEqual(instrumentTargets);
   });
 
   it('INVARIANT_TARGETS deep-equals the four that must be IDENTICAL (D-20, D-21)', () => {

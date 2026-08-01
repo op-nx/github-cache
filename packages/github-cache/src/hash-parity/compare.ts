@@ -490,12 +490,33 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
   // would assert that a healthy run writes to stderr. Its PRESENCE is required
   // because Nx's `hash_runtime` hashes both streams, and its VALUE is evidence for
   // whoever reads a red gate.
-  if (a.discriminator.stdout === b.discriminator.stdout) {
+  // TRIMMED, because TRIMMED IS WHAT NX HASHES. The instrument records both streams
+  // VERBATIM on purpose (`capture-hashes.mjs`: "a trimmed value is a different
+  // value") -- that is right for a RECORD, whose job is to preserve evidence. It is
+  // wrong for THIS comparison, whose question is not "did the two legs print
+  // different bytes" but "did the two legs feed different TOKENS into the hash".
+  // `docs/cross-os.md` states the rule this clause has to match: Nx trims both
+  // streams before concatenating them.
+  //
+  // Untrimmed, two legs printing `linux\n` and `linux\r\n` -- or `linux ` and
+  // `linux` -- have IDENTICAL hashed tokens, so the discriminator has collapsed,
+  // and yet the raw strings differ and this clause would PASS. It would then hand
+  // the divergent `integration` hash an attribution the evidence does not support,
+  // which is the one thing it exists to prevent.
+  //
+  // Not reachable on the CURRENT command (`win32` and `linux` differ in content, not
+  // only in whitespace), and that is exactly why it is worth fixing now:
+  // `docs/cross-os.md` invites replacing the command for the architecture and libc
+  // axes -- "The same `runtime` mechanism carries it; only the command changes" --
+  // and a CRLF-versus-LF pair is the first thing a Windows leg produces.
+  if (a.discriminator.stdout.trim() === b.discriminator.stdout.trim()) {
     return fail(
       'discriminator-not-platform-sensitive',
-      'the platform discriminator printed the SAME value on both legs ' +
-        `(${JSON.stringify(a.discriminator.stdout)} on ${a.meta.os} and on ` +
-        `${b.meta.os}), so the divergent \`${DIVERGENT_TARGET}\` hash is NOT ` +
+      'the platform discriminator fed the SAME token into the hash on both legs ' +
+        `(${JSON.stringify(a.discriminator.stdout)} on ${a.meta.os} and ` +
+        `${JSON.stringify(b.discriminator.stdout)} on ${b.meta.os}; Nx TRIMS ` +
+        `both streams, so these are one token), so the divergent ` +
+        `\`${DIVERGENT_TARGET}\` hash is NOT ` +
         'attributable to it. Some OTHER input became OS-sensitive, and clause (c) ' +
         `cannot see it because \`${DIVERGENT_TARGET}\` is excluded from the ` +
         'invariant set by construction (CORR-04). Localise it with ' +

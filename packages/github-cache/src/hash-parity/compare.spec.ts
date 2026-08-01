@@ -323,6 +323,42 @@ describe('the discriminator must have DISCRIMINATED on these two legs (D-20)', (
     expect(detailOf(verdict)).toContain(DIVERGENT_TARGET);
   });
 
+  // WHITESPACE-ONLY, which is the same collapse wearing a different byte sequence.
+  // Nx TRIMS both streams before hashing them (`docs/cross-os.md`), so `linux\n` and
+  // `linux\r\n` are ONE token: the discriminator has stopped discriminating even
+  // though the recorded strings differ. A raw `!==` reads that as healthy and hands
+  // the divergent `integration` hash an attribution nothing supports. The instrument
+  // records verbatim on purpose -- right for a record, wrong for this comparison.
+  //
+  // Unreachable on the CURRENT command, and pinned anyway: `docs/cross-os.md`
+  // invites replacing it for the architecture and libc axes, and a CRLF-versus-LF
+  // pair is the first thing a Windows leg produces.
+  it('FAILS on a whitespace-only difference, because Nx hashes the TRIMMED stream', () => {
+    const [a, b] = validPair();
+    b.discriminator.stdout = `${a.discriminator.stdout.trim()}\r\n`;
+
+    const verdict = compareHashParity([a, b]);
+
+    expect(reasonOf(verdict)).toBe('discriminator-not-platform-sensitive');
+    expect(
+      detailOf(verdict),
+      'The detail must name BOTH raw values, or an operator reading it sees one ' +
+        'string claimed to be on both legs and concludes the comparator is confused ' +
+        'rather than that the two collapse to one token.',
+    ).toContain('Nx TRIMS');
+  });
+
+  // NON-VACUITY CONTROL for the trim: a pair whose trimmed values genuinely DIFFER
+  // must still pass. Without it, `.trim()` on both sides could be replaced by a
+  // constant and every failing case above would still fail.
+  it('still PASSES a pair whose trimmed values genuinely differ', () => {
+    const [a, b] = validPair();
+    a.discriminator.stdout = 'linux\n';
+    b.discriminator.stdout = 'win32\r\n';
+
+    expect(reasonOf(compareHashParity([a, b]))).toBe('PASS');
+  });
+
   // ORDERING CONTROL, and it is the reason this clause sits after clause (b) rather
   // than before it. Identical streams AND identical hashes is a discriminator that
   // is simply GONE, which is clause (b)'s named reason and the more useful blame. A

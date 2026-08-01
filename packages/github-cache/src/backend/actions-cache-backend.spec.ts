@@ -623,4 +623,34 @@ describe('createActionsCacheBackend asserts the cwd/GITHUB_WORKSPACE conjunction
 
     expect(existsSync(CACHE_ARCHIVE_DIR)).toBe(true);
   });
+
+  // THE SECOND HALF, and the construction-time test above cannot stand in for it: that one
+  // proves the directory exists when the process STARTS, and says nothing about a directory
+  // that disappears while the process is alive. Moving the archive into `.nx/cache` -- a
+  // directory Nx itself deletes -- is what made that reachable, and cache-archive-path.ts
+  // already names it ("Resetting under a running sidecar deletes the directory the next
+  // put()'s writeFile needs, which ENOENTs into a 500").
+  //
+  // The deletion is staged AFTER construction on purpose: that is the whole distinction
+  // between the two tests, and doing it before would just re-run the one above.
+  it('re-creates the archive directory on put() when it vanished after construction (VER-07)', async () => {
+    vi.stubEnv('GITHUB_WORKSPACE', undefined);
+    process.chdir(fixtureAbsolute);
+    saveCache.mockResolvedValue(42);
+
+    const backend = createActionsCacheBackend();
+
+    // `nx reset` under a running sidecar, reproduced exactly.
+    rmSync(CACHE_ARCHIVE_DIR, { recursive: true, force: true });
+
+    expect(existsSync(CACHE_ARCHIVE_DIR)).toBe(false);
+
+    // Without the self-heal this REJECTS with ENOENT: writeFile is not a ReserveCacheError,
+    // so it rethrows past the fail-closed guard, becomes a 500, and the Nx client skips the
+    // write without failing the build -- green build, permanently cold cache.
+    await expect(backend.put(HASH, Buffer.from('tar-bytes'))).resolves.toBe(
+      'stored',
+    );
+    expect(existsSync(CACHE_ARCHIVE_DIR)).toBe(true);
+  });
 });

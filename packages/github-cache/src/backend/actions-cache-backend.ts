@@ -166,6 +166,30 @@ export function createActionsCacheBackend(): CacheBackend {
     put(hash: Hash, bytes: Buffer): Promise<PutResult> {
       return withHashLock(hash, async () => {
         const path = cacheArchivePath(hash);
+
+        // VER-07, SECOND HALF -- and it is the write path catching up to the read path
+        // rather than a new guarantee. The construction-time mkdir above establishes the
+        // directory ONCE per serve() process; nothing re-establishes it if it disappears
+        // while the process is alive. That is not hypothetical here: moving the archive out
+        // of tmpdir() and into `.nx/cache` put it somewhere NX ITSELF DELETES, and
+        // cache-archive-path.ts already names the case -- "Resetting under a running sidecar
+        // deletes the directory the next put()'s writeFile needs, which ENOENTs into a 500."
+        //
+        // The read path never had this exposure: extractTar calls io.mkdirP, so a restore
+        // recreates what it needs and self-heals. So the SAME deletion is invisible on reads
+        // and fatal on writes -- which is why the bug looks intermittent, and why the fix
+        // belongs on this side only.
+        //
+        // The consequence of leaving it at construction is silent: writeFile ENOENTs,
+        // rethrows (it is not a ReserveCacheError, so the fail-closed guard below does not
+        // catch it), becomes a 500, and the Nx client SKIPS the write without failing the
+        // build. Green build, permanently cold cache, no error a consumer would ever see.
+        //
+        // Idempotent and once per put, not per process: `recursive: true` is a no-op when
+        // the directory is already there, which is every call but the pathological one. The
+        // sync form matches the construction-time call for the reason stated there.
+        mkdirSync(CACHE_ARCHIVE_DIR, { recursive: true });
+
         await writeFile(path, bytes);
 
         try {

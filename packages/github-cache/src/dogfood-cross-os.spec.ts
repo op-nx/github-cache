@@ -682,6 +682,21 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       'exist for NOTHING BUT the HIT observation, so a consumer that silently loses its cache ' +
       "client is a DELETED CONTROL THAT STILL LOOKS PRESENT and makes XOS-05's O4 observation " +
       `unobtainable with the whole suite green. ${RENAME_NOTE}`,
+    backendToken:
+      `${leg} must pass GITHUB_TOKEN into the sidecar step's own \`env:\`, and this clause is ` +
+      'SEPARATE from the cacheClient one above because the two produce the SAME green-having-' +
+      'cached-nothing outcome by DIFFERENT mechanisms, and a combined assertion would report ' +
+      'them identically. cacheClient governs whether NX has a remote cache CLIENT; this ' +
+      'governs whether the sidecar has a usable BACKEND. Without the token `selectBackend` ' +
+      'takes its documented degrade branch (select-backend.ts: an absent token is "just a ' +
+      'not-yet-write-capable context") and returns the read-only MEMORY backend, which answers ' +
+      'MISS forever. The readiness poll CANNOT catch it: the poll accepts 404, and 404 is ' +
+      'exactly what a never-populated memory backend returns for the probe hash, so a dead ' +
+      'backend and a healthy empty one are indistinguishable to it BY CONSTRUCTION. Nx then ' +
+      'MISSes every task, executes the target and the job goes GREEN -- with the sidecar, ' +
+      'cacheClient, ownTarget and every other clause for this leg still green, because nothing ' +
+      'else reads this line. Same standing as cacheClient: these three legs exist for NOTHING ' +
+      `BUT the HIT observation, so this is a DELETED CONTROL THAT STILL LOOKS PRESENT. ${RENAME_NOTE}`,
     noIf:
       `${leg} must declare NO job-level if:. Its ubuntu producer carries none, and that is ` +
       'exactly what makes build/typecheck/test PR-eligible -- which in turn is what makes the ' +
@@ -700,6 +715,7 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     ownTarget,
     sidecar,
     cacheClient,
+    backendToken,
     noIf,
   } = windowsLegReasons('build-windows', 'build', 'build');
 
@@ -781,6 +797,19 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     );
   });
 
+  // THE FOURTH MECHANISM, and the one the three clauses above leave open. The step can
+  // carry its sidecar, its two NX_* writes and its readiness poll and STILL cache nothing,
+  // because none of them reach the token the sidecar's backend selection depends on.
+  // MEASURED the same way the cacheClient clause was: deleting the `env:` block from a
+  // leg's `- uses: ./start-cache-server` step leaves every other clause for that leg GREEN.
+  it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, backendToken).toMatch(
+      /^ {10}GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}$/m,
+    );
+  });
+
   it('declares NO job-level if:, so the leg stays PR-eligible', () => {
     const block = jobBlock('build-windows');
 
@@ -797,6 +826,7 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     ownTarget,
     sidecar,
     cacheClient,
+    backendToken,
     noIf,
   } = windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck');
 
@@ -853,6 +883,14 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     );
   });
 
+  it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, backendToken).toMatch(
+      /^ {10}GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}$/m,
+    );
+  });
+
   it('declares NO job-level if:, so the leg stays PR-eligible', () => {
     const block = jobBlock('typecheck-windows');
 
@@ -869,6 +907,7 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     ownTarget,
     sidecar,
     cacheClient,
+    backendToken,
     noIf,
   } = windowsLegReasons('test-windows', 'test', 'test');
 
@@ -922,6 +961,14 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     );
     expect(block, cacheClient).toMatch(
       /^ {6}- name: Wait for the loopback sidecar$/m,
+    );
+  });
+
+  it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, backendToken).toMatch(
+      /^ {10}GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}$/m,
     );
   });
 

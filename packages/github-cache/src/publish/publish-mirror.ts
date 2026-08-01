@@ -142,7 +142,7 @@ async function ensureShardRelease(
  * The out-of-band publish/mirror engine (D-02/D-03/D-05/D-11/D-12, TEST-03,
  * ROBUST-01/02/05, TRUST-07, OBS-01). Enumerate default-branch Actions-cache entries,
  * mirror ONLY the server-produced keys via isServerProducedKey (D-16/D-08/TRUST-08),
- * restore each hash's bytes on THIS OS leg, and upload to the current-month shard
+ * restore each hash's bytes on this leg, and upload to the current-month shard
  * release without ever overwriting:
  *
  * - Enumeration (whole-run): a listCacheEntries fault propagates so the bin fails loud.
@@ -150,9 +150,16 @@ async function ensureShardRelease(
  *   suffix) are mirrored, the prefix sliced to the hash; a foreign key OR a
  *   `nx-cache-<non-hex>` key is filtered out BEFORE restore, never mirrored as a public
  *   asset (the hardening the Phase 4 startsWith-only subset lacked).
- * - Restore (D-03): a foreign-OS or evicted entry MISSes its same-OS restore and is
- *   skipped -- never an error. The shard release is ensured LAZILY, only once there is a
- *   restorable entry, so an all-MISS leg never creates an empty release.
+ * - Restore (D-03): an entry this leg cannot restore -- evicted, or written under a
+ *   different cache version -- MISSes and is skipped, never an error.
+ *   Restore is NOT same-OS. VER-01 made the archive path OS-invariant and VER-03 set
+ *   `enableCrossOsArchive`, so a foreign-OS entry is restorable here and is
+ *   mirrored rather than skipped. This header claimed the opposite for the whole of
+ *   Phase 9, 90 lines above the same file's own corrected statement of it at the
+ *   `mirrored-by` hoist -- because publish-mirror.ts sat only in EDITED_FILES, whose
+ *   scan is the producer-attribution one and reads no same-OS claim at all. It now
+ *   carries a DOCS_08_SITES row of its own. The shard release is ensured LAZILY, only
+ *   once there is a restorable entry, so an all-MISS leg never creates an empty release.
  * - ~2 GiB boundary (D-12/ROBUST-02): a pre-upload bytes.byteLength check counts an
  *   oversized entry as a per-item failure (core.error + `failed++` + continue) BEFORE any
  *   upload -- never truncate or drop. The loop does not abort, so the accumulated counts

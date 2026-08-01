@@ -109,6 +109,33 @@ const DOCS_08_SITES = [
   },
   {
     /**
+     * CORRECTION, DOCS-08 site 1b -- the one the Phase 9 sweep MISSED, found only by a
+     * later review. `publish-mirror.ts` was in `EDITED_FILES` and therefore scanned,
+     * but `EDITED_FILES` feeds the producer-ATTRIBUTION guard alone; no row here read
+     * it for a same-OS claim, so its module header kept describing pre-VER-01 restore
+     * ("a foreign-OS or evicted entry MISSes its same-OS restore") for the whole of
+     * Phase 9 -- 90 lines above the same file's own corrected statement of the exact
+     * same fact at the `mirrored-by` hoist. A file can be in one scan's scope and
+     * outside the other's, and that gap is what this row closes.
+     *
+     * The `forbidden` pattern is the STALE claim's distinguishing phrase, not the
+     * words `same-OS`: this header must stay free to say restore is NOT same-OS,
+     * which is the corrected wording the `required` rows pin.
+     *
+     * The one-line rule this table's header states cost a red on the way in: the
+     * first `required` phrase here wrapped across a comment line and failed against
+     * text that said exactly the right thing. Live, not theoretical.
+     */
+    file: 'packages/github-cache/src/publish/publish-mirror.ts',
+    bucket: 'correction',
+    required: [
+      'Restore is NOT same-OS.',
+      'a foreign-OS entry is restorable here',
+    ],
+    forbidden: [/MISSes its same-[O]S restore/, /on THIS [O]S leg/],
+  },
+  {
+    /**
      * CORRECTION, DOCS-08 site 2 -- the outright false one, AND the stated
      * justification for the `keep BOTH legs` instruction two lines below it. A bare
      * deletion would leave that instruction unsupported and a later reader would

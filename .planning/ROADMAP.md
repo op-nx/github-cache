@@ -576,9 +576,9 @@ ubuntu leg has saved the entries.
 **Goal:** Make "read the Actions cache, never write it" a representable backend, so the three
 Windows reuse legs can be GATED on a genuine cross-OS HIT instead of merely recording one.
 
-**Requirements**: TBD (run /gsd-plan-phase 13)
+**Requirements**: VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10.
 **Depends on:** Phase 12
-**Plans:** 0 plans
+**Plans:** 6 plans
 
 **Why this exists.** CR-18 (PR #12 round-3 review) found the three Windows reuse legs RECORDED
 but never GATED. Quick task `260801-vyy` closed the pre-merge signal gap by widening the
@@ -627,7 +627,17 @@ contradict CORR-01 or TRUST-05 before planning.
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 13 to break down)
+- [ ] `13-01-PLAN.md` - register the seven requirement IDs in both traceability files, plus the THREAT-MODEL residual note and the Case-B live-CI item (VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10)
+- [ ] `13-02-PLAN.md` - the composed read-only Actions-cache factory, and the package-scope `@actions/cache` importer scan (VER-08, VER-09)
+- [ ] `13-03-PLAN.md` - the strictly-narrowing `CACHE_READ_ONLY` knob, read as `selectBackend`'s LAST branch (TRUST-14)
+- [ ] `13-04-PLAN.md` - the ninth consumer knob enumerated and documented, and the fifth backend-selection outcome (DOCS-10)
+- [ ] `13-05-PLAN.md` - three read-only Windows legs, their counts gated at the floor, and every stale rationale corrected in the same commit (XOS-09, TEST-11, DOCS-09)
+- [ ] `13-06-PLAN.md` - the pre-registered counts, the proving run, and `13-EVIDENCE.md` (XOS-09, TEST-11)
+
+**Live-CI close**: XOS-09's gate is only observable on a real `windows-11-arm` runner after a ubuntu
+leg has saved the entries. The Q4 base-scope READ half (Case B) is carried as a separate, later
+item -- this phase's own landing commit rotates all three hashes, so every leg takes the intra-run
+merge-ref path (Case A) and cannot exhibit it. Plan 13-01 registers the full procedure.
 
 ## Traceability
 

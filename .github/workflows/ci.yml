@@ -9,9 +9,29 @@ on:
 permissions:
   contents: read
 
+# Supersede an in-flight run only when a NEWER commit lands on the SAME pull request.
+# This workflow fans out to twenty-two jobs, three of which are multi-minute Windows-arm
+# legs, so a rapid re-push otherwise pays for the whole matrix twice with the first copy
+# already obsolete.
+#
+# `cancel-in-progress` IS CONDITIONAL, and the condition is the load-bearing part. On a
+# `push` to main this workflow WRITES: `publish` uploads Release assets and `dogfood-seed`
+# PUTs a cache entry. Cancelling one of those mid-upload is how a shard acquires a
+# zero-byte asset under a name a reader will resolve and a publisher will never overwrite
+# -- first-write-wins arbitration is keyed on the FILENAME, so a torn asset is permanent
+# until the retention window rolls it off. Push runs therefore queue rather than cancel;
+# only pull-request runs, which write nothing outside their own merge-ref cache scope,
+# are superseded.
+#
+# The group is keyed on `github.ref` so the two event kinds cannot share a group either.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   format-check:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -36,6 +56,7 @@ jobs:
   # block exists precisely so lint output does not depend on whether build ran.
   lint:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -80,6 +101,7 @@ jobs:
   # diff-scoped gating once the repo grows large enough to want it.
   fallow:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -98,6 +120,7 @@ jobs:
   # named job so a drift surfaces as a red action-bundle-drift job.
   action-bundle-drift:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -120,6 +143,7 @@ jobs:
   # runs npm run build before the guard. Dependency-free node guard; distinct job.
   pack-check:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -143,6 +167,7 @@ jobs:
   # (expect a human_needed/live confirm on the CI run).
   ppe:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: ./ppe

@@ -1,7 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isEntrypoint } from '../lib/is-entrypoint.js';
-import { compareHashParity, EXPECTED_TARGETS } from './compare.js';
+import {
+  collapseToOneLine,
+  compareHashParity,
+  EXPECTED_TARGETS,
+} from './compare.js';
 
 /**
  * The CI bin around `compareHashParity` (D-19). `ci.yml`'s `hash-parity-compare`
@@ -101,8 +105,18 @@ if (isEntrypoint(import.meta.url)) {
   try {
     run(process.argv[2] ?? DEFAULT_RECORDS_DIR);
   } catch (error) {
+    // THROUGH THE SAME CHOKE POINT AS EVERY `fail()` DETAIL, and it has to be.
+    // The messages that reach here are built from record BYTES: `readRecords`
+    // hands downloaded artifact content to `JSON.parse`, which embeds the
+    // offending input VERBATIM -- newlines included -- in `Unexpected token ...
+    // is not valid JSON`. Printed raw, that lands in the one line
+    // `ci.yml`'s `grep -q '^hash-parity: PARITY OK'` reads, so a record could
+    // make the FAILURE path emit a line the SUCCESS grep matches. The `^` anchor
+    // is the other half; collapsing here is this module's half, and routing to
+    // compare.ts's exported collapse rather than re-authoring the regex is what
+    // keeps the neutralisation ONE place, as that block claims.
     console.error(
-      `hash-parity: PARITY FAILED -- ${error instanceof Error ? error.message : String(error)}`,
+      `hash-parity: PARITY FAILED -- ${collapseToOneLine(error instanceof Error ? error.message : String(error))}`,
     );
     process.exitCode = 1;
   }

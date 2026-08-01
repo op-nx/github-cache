@@ -215,6 +215,17 @@ export type ParityVerdict =
  * line. Neither half suffices alone. This half is the one this module owns, and
  * `compare.spec.ts` pins it.
  *
+ * THE COLLAPSE IS EXPORTED because "the single place" was not true of the one
+ * path that does not go through `fail` at all. `assert-parity.ts` wraps `run()`
+ * in a top-level try/catch and printed `error.message` RAW into the same
+ * `hash-parity: PARITY FAILED` line the grep reads -- and the messages reaching
+ * it are built from record BYTES: `JSON.parse` embeds the offending input
+ * verbatim, newlines included, in `Unexpected token ... is not valid JSON`. So
+ * the throw path was protected only by V8's ~10-character cap on that quoted
+ * snippet, an implementation detail of the runtime rather than the choke point
+ * this block credits. Exporting the collapse and calling it there makes the
+ * claim above true of EVERY path instead of every path but one.
+ *
  * CORRECTED (Phase 12), and supplying the REPLACEMENT FACT is the point rather
  * than retracting the old sentence. This block used to say the anchor "cannot be
  * pinned from a spec", on the ground that `ci.yml` was not a declared `test`
@@ -223,16 +234,21 @@ export type ParityVerdict =
  * `{workspaceRoot}/.github/workflows/ci.yml` IS a `test` input (`nx.json`,
  * PARITY-08, Phase 9, pinned by name in `nx-target-inputs.spec.ts`), and
  * `dogfood-cross-os.spec.ts` pins the sibling `o3-witness` job's
- * `grep -q '^o3-witness: EXISTENCE OK'` expression by exactly this mechanism. So
- * the `hash-parity-compare` job's `^hash-parity: PARITY OK` anchor is PINNABLE
- * and simply is not pinned YET -- an OPEN GAP, never an impossibility. A bare
+ * `grep -q '^o3-witness: EXISTENCE OK'` expression by exactly this mechanism. The
+ * `hash-parity-compare` job's `^hash-parity: PARITY OK` anchor is now pinned the
+ * same way, in `compare.spec.ts`'s "the hash-parity-compare gate agrees with the
+ * bin it runs" group -- so BOTH halves of the two-half defence are guarded. A bare
  * deletion of the old sentence would have left a future reader holding a
- * documented argument that one half of a two-half injection defence this same
- * comment calls load-bearing is UNGUARDABLE, which is a documented reason not to
- * guard it. Do not read the old wording as that reason.
+ * documented argument that one half of a defence this same comment calls
+ * load-bearing is UNGUARDABLE, which is a documented reason not to guard it. Do
+ * not read the old wording as that reason.
  */
+export function collapseToOneLine(detail: string): string {
+  return detail.replace(/[\r\n]+/g, ' ');
+}
+
 function fail(reason: ParityFailureReason, detail: string): ParityVerdict {
-  return { ok: false, reason, detail: detail.replace(/[\r\n]+/g, ' ') };
+  return { ok: false, reason, detail: collapseToOneLine(detail) };
 }
 
 /** A non-null, non-array object -- what every map in the record must be. */

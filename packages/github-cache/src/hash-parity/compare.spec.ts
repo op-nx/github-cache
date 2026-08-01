@@ -24,6 +24,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  collapseToOneLine,
   compareHashParity,
   DIVERGENT_TARGET,
   EXPECTED_TARGETS,
@@ -697,5 +698,52 @@ describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)'
         'goes red on a bad exit code, so the loss of the INDEPENDENT second signal ' +
         'shows up nowhere.',
     ).toContain(`grep -q '^${successPrefix}' hash-parity.log`);
+  });
+
+  // The THROW path, which is the one `fail()` never sees. Everything the
+  // comparator REFUSES goes through compare.ts's collapse; everything the bin
+  // THROWS -- and `readRecords` throws on record bytes, via `JSON.parse`, whose
+  // message embeds the offending input verbatim including newlines -- reached
+  // `console.error` raw. The line it lands on is the same one the anchored grep
+  // above reads, so this is the same two-half defence with one half missing on
+  // one path, not a separate concern.
+  //
+  // A SOURCE SCAN rather than a spawn, matching the extraction above: driving the
+  // bin would need the built `dist/`, which this unit spec deliberately does not
+  // depend on. It asserts the CALL, so re-authoring the regex inline here would
+  // still fail -- which is the point, because a second authored copy is how the
+  // single choke point stops being single.
+  it('routes its throw path through the comparator collapse, not a raw error.message', () => {
+    expect(
+      assertParitySource,
+      'assert-parity.ts must import `collapseToOneLine` from ./compare.js and wrap ' +
+        'the caught error in it. compare.ts calls itself "THE SINGLE PLACE untrusted ' +
+        'record content is neutralised"; a raw `error.message` on the catch makes that ' +
+        'false for the one path that does not go through fail(), and leaves the ' +
+        "success-prefix injection blocked only by V8's cap on the snippet it quotes " +
+        'back -- a runtime detail, not a control.',
+    ).toContain('import {\n  collapseToOneLine,');
+    expect(assertParitySource).toContain(
+      'collapseToOneLine(error instanceof Error ? error.message : String(error))',
+    );
+    expect(
+      /console\.error\(\s*`hash-parity: PARITY FAILED -- \$\{error instanceof Error/.test(
+        assertParitySource,
+      ),
+      'The unsanitised shape `${error instanceof Error ? ...}` must not be ' +
+        'interpolated directly into the PARITY FAILED line.',
+    ).toBe(false);
+  });
+
+  it('collapses CR/LF so injected record text cannot START a line (the half this module owns)', () => {
+    expect(collapseToOneLine('a\nhash-parity: PARITY OK')).toBe(
+      'a hash-parity: PARITY OK',
+    );
+    expect(collapseToOneLine('a\r\n\r\nb')).toBe('a b');
+    expect(
+      collapseToOneLine('nothing to collapse'),
+      'A string with no line break must survive byte-for-byte, or the collapse is ' +
+        'mangling authored detail rather than neutralising injected content.',
+    ).toBe('nothing to collapse');
   });
 });

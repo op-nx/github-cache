@@ -66,17 +66,22 @@ import { afterAll, describe, expect, it } from 'vitest';
  * upload side only checks that a file EXISTS -- a zero-byte `integration-hash.txt` would
  * upload cleanly and surface one job later inside `o3-witness`, further from its cause.
  *
- * STALENESS CAVEAT, recorded rather than hidden, and it is the one weakness of this file.
- * `read-integration-hash.mjs` is a workspace-ROOT file, and `nx.json` enumerates every
- * workspace-root input as an explicit path -- there is no `{workspaceRoot}/*.mjs` glob
- * anywhere in it, which `capture-hashes.mjs`'s own header states as the reason those root
- * instruments are hash-neutral. So editing the instrument ALONE rotates no target hash, and
- * `nx integration` may replay a cached PASS over a weakened guard. The fix is one line --
- * add `{workspaceRoot}/read-integration-hash.mjs` to `targetDefaults.integration.inputs` --
- * and it is exactly the move PARITY-08 made in phase 9 for `ci.yml`, for exactly this
- * reason. Until it lands, this guard is PROBABILISTIC rather than deterministic: it still
- * reddens on any commit that also touches a registered input, which in practice is most of
- * them, but a lone edit to the instrument can slip past.
+ * THE STALENESS CAVEAT THIS BLOCK USED TO CARRY IS CLOSED, and the record is kept rather
+ * than deleted because the caveat's own reasoning is what a future reader needs. It said
+ * this guard was PROBABILISTIC: `read-integration-hash.mjs` is a workspace-ROOT file,
+ * `nx.json` enumerates root inputs as explicit paths with no `{workspaceRoot}/*.mjs` glob,
+ * so a LONE edit to the instrument rotated no hash and `nx integration` could replay a
+ * cached PASS over a weakened guard. It named the one-line fix and asked for it.
+ *
+ * The fix landed: `{workspaceRoot}/read-integration-hash.mjs` IS in
+ * `targetDefaults.integration.inputs`, the move PARITY-08 made for `ci.yml`. This guard is
+ * now DETERMINISTIC -- an edit to the instrument rotates the `integration` hash and this
+ * spec re-runs.
+ *
+ * That registration is load-bearing and is pinned BY NAME in `nx-target-inputs.spec.ts`.
+ * Deleting it does not fail anything here; it silently reinstates the exact stale-PASS
+ * defect described above, which is why the pin exists somewhere a reader of `nx.json`
+ * will meet it.
  *
  * Placed at the package-source root rather than in a subdirectory because its subject is a
  * workspace-root instrument, not a cohesive module (`.planning/codebase/TESTING.md` spec

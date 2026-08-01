@@ -32,12 +32,15 @@ import { describe, expect, it } from 'vitest';
  * usage text -- all three mode lines -- which no module-resolution error can produce, and
  * every other case additionally pins the specific message rather than the exit code alone.
  *
- * STALENESS CAVEAT, the same one `read-integration-hash.integration.spec.ts` records:
- * `capture-hashes.mjs` is a workspace-ROOT file and `nx.json` enumerates workspace-root
- * inputs as explicit paths, with no `{workspaceRoot}` `.mjs` glob, so editing the
- * instrument alone rotates no target hash and `nx test` may replay a cached PASS.
- * Registering the file in `targetDefaults.test.inputs` is the one-line fix, and it is the
- * same move PARITY-08 made for `ci.yml`.
+ * THE STALENESS CAVEAT THIS BLOCK USED TO CARRY IS CLOSED, the same one
+ * `read-integration-hash.integration.spec.ts` records closing. It said that because
+ * `capture-hashes.mjs` is a workspace-ROOT file and `nx.json` enumerates root inputs as
+ * explicit paths with no `{workspaceRoot}` `.mjs` glob, editing the instrument alone
+ * rotated no target hash and `nx test` could replay a cached PASS. The one-line fix it
+ * asked for landed: `{workspaceRoot}/capture-hashes.mjs` IS in
+ * `targetDefaults.test.inputs`, the same move PARITY-08 made for `ci.yml`, and it is
+ * pinned by name in `nx-target-inputs.spec.ts` because deleting it reinstates the defect
+ * silently.
  */
 const SCRIPT = fileURLToPath(
   new URL('../../../capture-hashes.mjs', import.meta.url),

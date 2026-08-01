@@ -10,12 +10,21 @@
 // not consumer surface" -- PROJECT.md requires that changes made for this repo's
 // own CI/hashing never leak into the consumer contract.
 //
-// Root-level is ALSO what keeps this file hash-neutral (D-10 row 4), which is why
-// it may land before the perishable O1/O2 window: `nx.json` enumerates every
-// workspace-root input as an explicit path and there is no `{workspaceRoot}/*.mjs`
-// glob anywhere in it, so this file matches no input and rotates NOTHING. Root
-// `nx.includedScripts` is an empty array, so it cannot become an Nx target either
-// -- structurally, not by discipline.
+// Root-level is what let this file land BEFORE the perishable O1/O2 window: `nx.json`
+// enumerates every workspace-root input as an explicit path and there is no
+// `{workspaceRoot}/*.mjs` glob anywhere in it, so at the time it was written this file
+// matched no input and rotated NOTHING (D-10 row 4). Root `nx.includedScripts` is an
+// empty array, so it cannot become an Nx target either -- structurally, not by
+// discipline.
+//
+// THAT IS NO LONGER TRUE OF THE HASH, and the sentence is corrected rather than deleted
+// because the window it explains is why the file exists where it does. Once the O1/O2
+// evidence was captured, `{workspaceRoot}/read-integration-hash.mjs` was registered in
+// `targetDefaults.integration.inputs` -- deliberately, to close the stale-cached-PASS
+// hole its own integration spec had recorded against itself. So editing THIS FILE now
+// ROTATES THE `integration` HASH: the very hash the O3 proof measures. It is hash-neutral
+// no longer, and a reader reaching for this file mid-proof needs to know that before
+// touching it.
 //
 // EVERY GUARD BELOW THROWS, and that is the whole point of the file. Nx writes
 // `run.json` inside a try/catch that swallows every error unless

@@ -23,6 +23,13 @@ permissions:
 # only pull-request runs, which write nothing outside their own merge-ref cache scope,
 # are superseded.
 #
+# READ THAT ENUMERATION PRECISELY: since CR-18, `dogfood-seed` PUTs on same-repo PR runs
+# too, so the cancellable runs are exactly the ones that now perform that PUT. It is safe,
+# and the reason is recorded here rather than left to be re-derived: the seed key is
+# nx-cache-<GITHUB_RUN_ID>, so a torn PR-side upload leaves at most an absent entry under
+# a run id that is never reused. There is no first-write-wins filename arbitration to
+# poison -- that hazard belongs to the Release-asset uploads, which stay push-only.
+#
 # The group is keyed on `github.ref` so the two event kinds cannot share a group either.
 concurrency:
   group: ci-${{ github.ref }}
@@ -206,9 +213,10 @@ jobs:
   #       CITED from GitHub's docs, not reproduced here -- this repo has had no fork
   #     PR on record. Same standing, and the same caveat, as the !cancelled()-past-a-
   #     FAILED-needs citation on the publish job.
-  #   * NOT push-gated, unlike the proof jobs: push runs WRITE the entries, PR runs
-  #     READ the default-branch ones. `if: github.event_name == 'push'` here would
-  #     throw away the whole PR read benefit.
+  #   * NOT push-gated -- like the dogfood proof pair since CR-18, and unlike the
+  #     publish pair: push runs WRITE the entries, PR runs READ the default-branch
+  #     ones. `if: github.event_name == 'push'` here would throw away the whole PR
+  #     read benefit.
   #   * The NX_* vars stay strictly per-job. Hoisting them to workflow `env:` would
   #     point every sidecar-less proof job at a dead server, so each of their Nx
   #     invocations would try (and fail) to reach 127.0.0.1:3000.
@@ -523,12 +531,14 @@ jobs:
       # that MISSED and executed locally exits 0 identically to one that HIT, so these
       # three -- which exist for NOTHING BUT the HIT observation -- could not report the
       # one thing they are for. An @actions/cache bump that broke cross-OS restore would
-      # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
-      # the dogfood canary would not catch it either: dogfood-verify drives a DIRECT
-      # scripted PUT/GET on a run-scoped key, so it never observes whether a REAL Nx
-      # build/typecheck/test task got a remote HIT. These per-target records are the
-      # only runtime observation of that -- and on a fork pull request, where the
-      # dogfood pair is skipped, the only cross-OS signal at all.
+      # leave all three GREEN and hash-parity green (it compares hashes, not storage).
+      # The dogfood canary DOES catch that bump -- that is its stated job as the
+      # ROBUST-03 upgrade canary, its verify leg MISSes and reddens, and since CR-18 it
+      # does so on same-repo PRs too. But it catches a DIFFERENT thing from these
+      # records: it drives a DIRECT scripted PUT/GET on a run-scoped key, so it never
+      # observes whether a REAL Nx build/typecheck/test task got a remote HIT. These
+      # per-target records are the only runtime observation of THAT -- and on a fork
+      # pull request, where the dogfood pair is skipped, the only cross-OS signal at all.
       # Under set -euo pipefail the tee preserves a failing Nx exit code.
       - name: Run the build target and tee its output
         shell: bash
@@ -544,8 +554,8 @@ jobs:
       # gate, because it reads as coverage. The run-scoped, provenance-checked
       # dogfood-verify canary is the gate instead.
       # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
-      # this leg INTRA-run -- its ubuntu producer repopulates the entry seconds earlier
-      # in the SAME run -- so the cross-run "first run after a version-affecting change
+      # this leg INTRA-run -- its ubuntu producer repopulates the entry earlier in the
+      # SAME run -- so the cross-run "first run after a version-affecting change
       # legitimately sees a zero" argument, which an earlier version of this comment
       # rested on, never applied to these three legs at all.
       # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
@@ -610,12 +620,14 @@ jobs:
       # that MISSED and executed locally exits 0 identically to one that HIT, so these
       # three -- which exist for NOTHING BUT the HIT observation -- could not report the
       # one thing they are for. An @actions/cache bump that broke cross-OS restore would
-      # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
-      # the dogfood canary would not catch it either: dogfood-verify drives a DIRECT
-      # scripted PUT/GET on a run-scoped key, so it never observes whether a REAL Nx
-      # build/typecheck/test task got a remote HIT. These per-target records are the
-      # only runtime observation of that -- and on a fork pull request, where the
-      # dogfood pair is skipped, the only cross-OS signal at all.
+      # leave all three GREEN and hash-parity green (it compares hashes, not storage).
+      # The dogfood canary DOES catch that bump -- that is its stated job as the
+      # ROBUST-03 upgrade canary, its verify leg MISSes and reddens, and since CR-18 it
+      # does so on same-repo PRs too. But it catches a DIFFERENT thing from these
+      # records: it drives a DIRECT scripted PUT/GET on a run-scoped key, so it never
+      # observes whether a REAL Nx build/typecheck/test task got a remote HIT. These
+      # per-target records are the only runtime observation of THAT -- and on a fork
+      # pull request, where the dogfood pair is skipped, the only cross-OS signal at all.
       # Under set -euo pipefail the tee preserves a failing Nx exit code.
       - name: Run the typecheck target and tee its output
         shell: bash
@@ -631,8 +643,8 @@ jobs:
       # gate, because it reads as coverage. The run-scoped, provenance-checked
       # dogfood-verify canary is the gate instead.
       # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
-      # this leg INTRA-run -- its ubuntu producer repopulates the entry seconds earlier
-      # in the SAME run -- so the cross-run "first run after a version-affecting change
+      # this leg INTRA-run -- its ubuntu producer repopulates the entry earlier in the
+      # SAME run -- so the cross-run "first run after a version-affecting change
       # legitimately sees a zero" argument, which an earlier version of this comment
       # rested on, never applied to these three legs at all.
       # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
@@ -697,12 +709,14 @@ jobs:
       # that MISSED and executed locally exits 0 identically to one that HIT, so these
       # three -- which exist for NOTHING BUT the HIT observation -- could not report the
       # one thing they are for. An @actions/cache bump that broke cross-OS restore would
-      # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
-      # the dogfood canary would not catch it either: dogfood-verify drives a DIRECT
-      # scripted PUT/GET on a run-scoped key, so it never observes whether a REAL Nx
-      # build/typecheck/test task got a remote HIT. These per-target records are the
-      # only runtime observation of that -- and on a fork pull request, where the
-      # dogfood pair is skipped, the only cross-OS signal at all.
+      # leave all three GREEN and hash-parity green (it compares hashes, not storage).
+      # The dogfood canary DOES catch that bump -- that is its stated job as the
+      # ROBUST-03 upgrade canary, its verify leg MISSes and reddens, and since CR-18 it
+      # does so on same-repo PRs too. But it catches a DIFFERENT thing from these
+      # records: it drives a DIRECT scripted PUT/GET on a run-scoped key, so it never
+      # observes whether a REAL Nx build/typecheck/test task got a remote HIT. These
+      # per-target records are the only runtime observation of THAT -- and on a fork
+      # pull request, where the dogfood pair is skipped, the only cross-OS signal at all.
       # Under set -euo pipefail the tee preserves a failing Nx exit code.
       - name: Run the test target and tee its output
         shell: bash
@@ -718,8 +732,8 @@ jobs:
       # gate, because it reads as coverage. The run-scoped, provenance-checked
       # dogfood-verify canary is the gate instead.
       # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
-      # this leg INTRA-run -- its ubuntu producer repopulates the entry seconds earlier
-      # in the SAME run -- so the cross-run "first run after a version-affecting change
+      # this leg INTRA-run -- its ubuntu producer repopulates the entry earlier in the
+      # SAME run -- so the cross-run "first run after a version-affecting change
       # legitimately sees a zero" argument, which an earlier version of this comment
       # rested on, never applied to these three legs at all.
       # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
@@ -1251,9 +1265,11 @@ jobs:
   # red for a reason the record has not established yet -- and D-18 forbids softening
   # that with continue-on-error.
   #
-  # NOT push-gated, unlike the proof jobs. Every job in this file that carries that
-  # gate does so because it WRITES (seeds a cache entry, publishes a release asset).
-  # This one only measures. Same rule the read-side jobs state at :170-172.
+  # NOT push-gated -- like the dogfood proof pair since CR-18, and unlike the publish
+  # pair. Every job in this file that STILL carries that gate does so because it WRITES
+  # (publishes a release asset, round-trips through a write-trusted sidecar) or because
+  # it reads back something only the push path produces (publish-verify, which is itself
+  # read-only). This one only measures. Same rule the read-side jobs state at :170-172.
   #
   # fail-fast: false carries a SECOND reason here on top of the one at :392-393 ("so
   # a Windows-only failure never hides the Ubuntu result"): with fail-fast ON, a
@@ -1536,10 +1552,12 @@ jobs:
   # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
   # covers checkout plus an artifact download, and this job requests no secret.
   #
-  # NO EVENT GATE. Every job in this file carrying `if: github.event_name == 'push'`
-  # does so because it WRITES (seeds a cache entry, publishes a release asset). This
-  # one only reads and asserts -- same rule the read-side jobs state at :170-172. A
-  # gate that only runs on the default branch is not a gate on a pull request.
+  # NO EVENT GATE. Every job in this file STILL carrying `if: github.event_name ==
+  # 'push'` does so because it WRITES (publishes a release asset, round-trips through a
+  # write-trusted sidecar) or because it reads back something only the push path
+  # produces (publish-verify, which is itself read-only). This one only reads and
+  # asserts -- same rule the read-side jobs state at :170-172. A gate that only runs on
+  # the default branch is not a gate on a pull request.
   #
   # CHECKOUT REF pinned to the PR head SHA, as in the capture job (see its CHECKOUT
   # REF paragraph at :525-535 for the full reasoning). The narrower reason HERE: the
@@ -1673,16 +1691,19 @@ jobs:
     # Generic hang insurance -- see the build job. A hung step otherwise holds a runner
     # for the 360-minute account default.
     #
-    # WHY THIS JOB AND THE TWO PUBLISH JOBS, and not every job in the file: these three
-    # are the push-only background ones. Nobody watches them the way a PR author watches
-    # a check, so a hang here is invisible rather than merely slow -- the job is not RED,
-    # it is simply never done, and the next push starts a fresh one.
+    # WHY THIS JOB AND THE TWO PUBLISH JOBS, and not every job in the file: the publish
+    # pair is push-only background work, and nobody watches that the way a PR author
+    # watches a check, so a hang there is invisible rather than merely slow -- the job is
+    # not RED, it is simply never done, and the next push starts a fresh one. This job
+    # inherited the same cap when it was push-only too. Since CR-18 it is PR-visible, and
+    # the cap is strictly correct either way: a capped PR check fails loud, an uncapped
+    # one just hangs.
     #
     # The short PR gates (format-check, lint, fallow, action-bundle-drift, pack-check,
-    # ppe) are still uncapped and are deliberately left so in this commit. A hang there
-    # blocks a visible required check on somebody's open PR, which is self-reporting.
-    # Named rather than left as an apparent oversight, so a reader does not have to
-    # re-derive whether the omission was considered.
+    # ppe) are still uncapped and are deliberately left so. A hang there blocks a visible
+    # required check on somebody's open PR, which is self-reporting. Named rather than
+    # left as an apparent oversight, so a reader does not have to re-derive whether the
+    # omission was considered.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7

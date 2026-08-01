@@ -124,12 +124,70 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
       'condition is a decision to make, not a drive-by fix. The `if:` must also stay ON ' +
       'ONE LINE: jobBlock joins its lines with a newline, so a folded or wrapped YAML ' +
       'scalar defeats this single-line anchor while the workflow keeps behaving -- ' +
-      'prettier is MEASURED not to rewrap the one-line form. Anchored at FOUR spaces ' +
-      "because a job's own keys sit one level under the two-space job key; unanchored, " +
-      'a step-level `if:` (eight spaces) would satisfy it.';
+      'measured against the prettier version pinned when this was written, so if a ' +
+      'bump ever rewraps the line, FIX THE PIN rather than deleting it. Anchored at ' +
+      "FOUR spaces because a job's own keys sit one level under the two-space job key; " +
+      'unanchored, a step-level `if:` (eight spaces) would satisfy it. The clause below ' +
+      'covers the direction this one structurally cannot see.';
 
     expect(jobBlock('dogfood-seed'), reason).toMatch(trigger);
     expect(jobBlock('dogfood-verify'), reason).toMatch(trigger);
+  });
+
+  // THE DIRECTION THE CLAUSE ABOVE STRUCTURALLY CANNOT SEE, and it is a separate case
+  // because it is a different regression with a different repair. That anchor ends
+  // `\s*$`, and `$` under /m matches at the end of ANY line -- so the engine satisfies
+  // it with zero-width at the end of the pinned line and NEVER INSPECTS WHAT FOLLOWS.
+  // YAML plain scalars continue onto more-indented following lines, so appending one
+  // rewrites the effective condition while the anchor above stays GREEN. MEASURED, not
+  // theorized: `&& false` (the jobs never run again, CR-18 reopens), `|| ...head.repo.fork`
+  // (the exact fork widening the reason above calls a decision rather than a drive-by
+  // fix), and a blank line before either, ALL passed the anchor above before this clause
+  // existed. That is the same cannot-fail-for-its-stated-reason defect the clause above
+  // warns about, one level up.
+  //
+  // Asserted as "the next line is a job key" rather than as "no line starts with && or
+  // ||": the positive form rejects ANY deeper-indented continuation whatever it starts
+  // with, and rejects a blank line too, which a token-based check would let through.
+  it('the dogfood `if:` is a COMPLETE scalar -- no YAML continuation line folds extra logic in', () => {
+    const scalarEndsAtTheLine = /^ {4}if: .*\n {0,4}\S/m;
+    const reason =
+      'A line more-indented than the job key now follows a dogfood `if:`, so YAML folds ' +
+      'it INTO the condition. The effective gate is no longer what the line reads as, ' +
+      'and the whole-line anchor in the clause above cannot see it: that anchor ends ' +
+      '`\\s*$`, which `/m` satisfies with zero width at the end of the pinned line. The ' +
+      'two drifts this catches are `&& false` (both dogfood jobs stop running and CR-18 ' +
+      'reopens silently) and `|| github.event.pull_request.head.repo.fork` (fork PRs ' +
+      'admitted, which is a decision to take deliberately, not by continuation). If the ' +
+      'condition genuinely needs to grow, keep it on ONE line and update BOTH clauses in ' +
+      'the same commit.';
+
+    expect(jobBlock('dogfood-seed'), reason).toMatch(scalarEndsAtTheLine);
+    expect(jobBlock('dogfood-verify'), reason).toMatch(scalarEndsAtTheLine);
+  });
+
+  // THE PRECONDITION BOTH CLAUSES ABOVE ASSUME AND NEITHER CAN SEE. They prove each job's
+  // `if:` PERMITS a pull_request run; they say nothing about whether one ever happens.
+  // Deleting `pull_request:` from ci.yml's workflow-level `on:` block leaves both `if:`
+  // lines byte-identical, reopens CR-18 completely -- and takes every other PR gate in
+  // the file with it -- with every clause in this file still green. Verified absent:
+  // nothing else in the tree asserts anything about ci.yml's `on:` block, though
+  // cleanup-workflow.spec.ts and windows-regression-detector.spec.ts both pin their OWN
+  // workflow's triggers, so this is a real gap rather than a missing idiom.
+  //
+  // Scoped to the `on:` block by construction: the inner alternation consumes only
+  // INDENTED lines, so the match cannot run past the next top-level key and be satisfied
+  // by some unrelated `pull_request:` elsewhere in the file.
+  it('ci.yml is pull_request-triggered at all -- the precondition the CR-18 job gates rest on', () => {
+    expect(
+      codeLines.join('\n'),
+      'ci.yml no longer declares `pull_request:` in its workflow-level `on:` block. That ' +
+        'reopens CR-18 in full -- the dogfood pair can never be SCHEDULED on a PR no ' +
+        'matter what its `if:` permits -- and it silently disables every other ' +
+        'PR-eligible gate in the file (action-bundle-drift, hash-parity, the three ' +
+        'Windows legs, o3-witness) at the same time. The job-level trigger clauses above ' +
+        'cannot detect this: both `if:` lines stay byte-identical through it.',
+    ).toMatch(/^on:\n(?:[ \t]+.*\n|[ \t]*\n)* {2}pull_request:/m);
   });
 });
 
@@ -720,10 +778,12 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       'exist for NOTHING BUT the HIT observation cannot report the one thing they are ' +
       'for. The concrete loss is an @actions/cache bump that breaks cross-OS restore -- ' +
       'all three legs stay GREEN, hash-parity stays green because it compares hashes ' +
-      'rather than storage, and the dogfood canary does not cover it either: ' +
-      'dogfood-verify drives a DIRECT scripted PUT/GET on a run-scoped key, so it never ' +
-      'observes whether a REAL Nx build/typecheck/test task got a remote HIT, and it is ' +
-      'skipped outright on a fork pull request. This clause is about the RECORD ' +
+      'rather than storage. The dogfood canary DOES catch that bump -- its verify leg ' +
+      'MISSes and reddens, on same-repo PRs too since CR-18 -- but it catches a ' +
+      'DIFFERENT thing from these records: it drives a DIRECT scripted PUT/GET on a ' +
+      'run-scoped key, so it never observes whether a REAL Nx build/typecheck/test task ' +
+      'got a remote HIT, and it is skipped outright on a fork pull request. Those ' +
+      'per-target records are what these clauses guard. This clause is about the RECORD ' +
       'existing, never about its VALUE: the count is deliberately not gated because it ' +
       'is LAUNDERABLE -- this leg writes through a WRITABLE sidecar, so a broken ' +
       'cross-OS restore makes it MISS, execute and SAVE its own entry, and a re-run of ' +

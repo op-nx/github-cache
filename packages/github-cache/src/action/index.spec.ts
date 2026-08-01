@@ -74,8 +74,13 @@ vi.mock('../lib/github-identity.js', async (orig) => {
 // platform-dependent: on ubuntu -- the only OS the `test` job runs (ci.yml:337-338, Windows
 // legs are XOS-04/Phase 12) -- the ambient value IS `'linux'`, so the correct form and the
 // substituted form are both green and CI samples the property at a rate of ZERO. The
-// substitution reddens only the live `dogfood-verify (windows-11-arm)` leg, which is
-// push-gated to `main` and therefore unobservable before a merge.
+// substitution reddens only the live `dogfood-verify (windows-11-arm)` leg, which before
+// CR-18 was push-gated to `main` and unobservable pre-merge. That leg now runs on
+// same-repo pull requests, which RAISES the live sampling rate but does not retire this
+// mock: the leg is still skipped on fork PRs, it is a CI job rather than a spec, and the
+// point here is a machine-INDEPENDENT check that holds on whatever runner executes the
+// suite. A live job sampling the property elsewhere is not a reason to sample it at ZERO
+// here.
 //
 // Stubbing the ambient value is what makes the check machine-INDEPENDENT: LINT-02 bans
 // reading the real platform in a spec (eslint.config.mjs, the no-restricted-syntax ban)
@@ -468,7 +473,7 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
       // producer's OS are DIFFERENT strings in one message. A verify branch that derived its
       // expectation from the ambient platform cannot produce this line at all -- it would
       // setFailed with the provenance mismatch instead, and it would do so on EVERY runner
-      // rather than only on the push-gated Windows leg.
+      // rather than only on the Windows leg.
       expect(core.info).toHaveBeenCalledWith(
         expect.stringContaining(
           `cache HIT for run-1 on ${readerOs} with bytes matching a '${SEED_PRODUCER_OS}'-produced payload`,

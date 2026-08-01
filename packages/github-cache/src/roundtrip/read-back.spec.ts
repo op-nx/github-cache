@@ -8,6 +8,7 @@ import {
   resolveRepoIdentity,
 } from '../lib/local-context.js';
 import { mirrorSeedHash } from '../lib/mirror-seed.js';
+import { shardTag } from '../lib/retention.js';
 import {
   CACHE_OS_VALUES,
   cachePlatform,
@@ -425,9 +426,61 @@ describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U
       // rather than paginate forever.
       serveShard([decoyRows(ASSETS_PER_PAGE), []]);
 
-      await expect(run()).rejects.toThrow('no asset named');
+      await expect(run()).rejects.toThrow('holds an asset named');
     },
   );
+
+  // THE MONTH-BOUNDARY REGRESSION, authored against the defect rather than around it.
+  // `publish` uploads into the shard current at ITS clock; `publish-verify` runs a whole
+  // job later. Across a UTC month boundary those are two different shards, and this bin
+  // used to re-derive ONE tag from its own clock while the reader whose HIT it validates
+  // walks the retention window. The result was a red publish-verify on a fully correct
+  // publisher, reader and label -- reported as "a transport or permission fault", because
+  // the release lookup 404 hit assertResponseOk before the month-boundary message could be
+  // reached.
+  //
+  // The fixture is the shape of the defect, not a re-statement of the fix: the CURRENT
+  // shard 404s (it does not exist yet -- nothing has been published into the new month) and
+  // an OLDER shard holds the asset. Against the single-tag version this throws; against the
+  // walk it passes.
+  it('resolves an asset the publisher left in the PREVIOUS month shard', async () => {
+    const os = DEFAULT_READER_OS;
+
+    cachePlatformMock.mockReturnValue(os);
+    get.mockResolvedValue({
+      kind: 'hit',
+      bytes: dogfoodBody(mirrorSeedHash(HASH, os), os),
+    });
+
+    const currentShard = shardTag();
+    const seenTags: string[] = [];
+
+    fetchMock.mockImplementation((input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname.includes('/releases/tags/')) {
+        const tag = url.pathname.split('/').pop() ?? '';
+
+        seenTags.push(tag);
+
+        // The newest shard has not been created yet -- exactly what a push straddling
+        // midnight on the 1st sees.
+        return Promise.resolve(
+          tag === currentShard
+            ? jsonResponse({ message: 'Not Found' }, 404)
+            : jsonResponse({ id: RELEASE_ID }),
+        );
+      }
+
+      return Promise.resolve(jsonResponse([ownSeedRow(os, mirroredBy(os))]));
+    });
+
+    await expect(run()).resolves.toBeUndefined();
+    // The current shard was tried FIRST and its 404 did not abort the run: newest-first,
+    // same order the reader uses.
+    expect(seenTags[0]).toBe(currentShard);
+    expect(seenTags.length).toBeGreaterThan(1);
+  });
 
   it.each(CACHE_OS_VALUES)(
     'a %s reader fails loud on a non-404 fault from the asset listing',

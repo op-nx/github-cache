@@ -16,7 +16,7 @@ import {
   releaseAssetName,
   type CacheOs,
 } from '../lib/release-asset-name.js';
-import { shardTag } from '../lib/retention.js';
+import { resolveMaxAgeDays, shardTagsForWindow } from '../lib/retention.js';
 
 /**
  * GitHub REST API origin, page size and request bound for the publisher-label read. All
@@ -112,57 +112,74 @@ async function assertPublishedByThisLeg(
     );
   }
 
-  const tag = shardTag();
+  // WALK THE SAME WINDOW THE READER WALKED, newest-first, rather than re-deriving ONE tag
+  // from the clock. This used to read `shardTag()` -- the current month only -- while the
+  // reader whose HIT it is validating walks shardTagsForWindow (releases-backend.ts, D-08).
+  // The two disagree across a UTC month boundary, and the gap between the two reads is a
+  // whole job: `publish` uploads into the shard current at ITS clock, then `publish-verify`
+  // runs minutes later. A push publishing at 2026-07-31T23:58Z and verifying at
+  // 2026-08-01T00:03Z got a correct HIT from the reader's walk and then a 404 on
+  // `cache-mirror-202608`, reddening the job on a fully correct publisher, reader and
+  // label -- and the 404 arrived through assertResponseOk, which blames "a transport or
+  // permission fault". The one message that names the month boundary is on the
+  // asset-not-found branch below, which that earlier throw made unreachable in exactly the
+  // scenario it describes.
+  //
+  // A guard that fails on correct work gets disabled, which is OBS-04's own lesson and the
+  // same reasoning the pagination fix below already applies one concern over.
+  //
+  // THE 404-VERSUS-FAULT SPLIT IS NOW EARNED HERE, where assertResponseOk's header says it
+  // is deliberately not copied from releases-backend.ts. That refusal rested on this bin
+  // "having already observed a HIT and so having exactly ONE outcome for every non-ok
+  // status" -- true of the ASSET LIST, whose release id is in hand, and false of the
+  // RELEASE LOOKUP, whose shard is a guess until it resolves. So the split is applied to
+  // the lookup ONLY: a 404 means try an older shard, every other status is still a fault,
+  // and the asset list keeps its single-outcome treatment unchanged.
+  const tags = shardTagsForWindow(resolveMaxAgeDays(process.env));
   const headers = {
     authorization: `Bearer ${token}`,
     accept: 'application/vnd.github+json',
     'x-github-api-version': '2022-11-28',
   };
-  const releaseResponse = await fetch(
-    `${GITHUB_API}/repos/${repo}/releases/tags/${tag}`,
-    { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
-  );
-
-  assertResponseOk(releaseResponse, `release lookup for shard ${tag}`);
-
-  const release = (await releaseResponse.json()) as { id: number };
   const assetName = releaseAssetName(hash);
   let asset: { label: string | null } | undefined;
+  let tag: string | undefined;
 
-  // PAGINATE, and do NOT read the release payload's inline `assets` array. That snapshot is
-  // a non-paginated FIRST PAGE -- the publisher's own recorded Pitfall 4, which is why
-  // createPublishClient.listReleaseAssets paginates too -- and the live cache-mirror-202607
-  // shard already holds 122 assets, so this leg's seed asset can legitimately sit beyond
-  // page one. A single-page read would therefore redden publish-verify on a CORRECT
-  // implementation, and a guard that fails on correct work gets disabled (OBS-04's lesson).
-  // RESEARCH's recommendation named the tags endpoint without naming the cap; this is that
-  // correction. Increment until a SHORT page, matching the reader's own walk.
-  for (let page = 1; asset === undefined; page++) {
-    const listResponse = await fetch(
-      `${GITHUB_API}/repos/${repo}/releases/${release.id}/assets?per_page=${ASSETS_PER_PAGE}&page=${page}`,
+  for (const candidate of tags) {
+    const releaseResponse = await fetch(
+      `${GITHUB_API}/repos/${repo}/releases/tags/${candidate}`,
       { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
     );
 
-    assertResponseOk(listResponse, `asset list page ${page} of shard ${tag}`);
+    if (releaseResponse.status === 404) {
+      continue;
+    }
 
-    const batch = (await listResponse.json()) as {
-      name: string;
-      label: string | null;
-    }[];
+    assertResponseOk(releaseResponse, `release lookup for shard ${candidate}`);
 
-    asset = batch.find((candidate) => candidate.name === assetName);
+    const release = (await releaseResponse.json()) as { id: number };
 
-    if (batch.length < ASSETS_PER_PAGE) {
+    tag = candidate;
+    asset = await findAssetInRelease(
+      repo,
+      release.id,
+      assetName,
+      candidate,
+      headers,
+    );
+
+    if (asset !== undefined) {
       break;
     }
   }
 
   if (asset === undefined) {
     throw new Error(
-      `github-cache round-trip read-back: shard ${tag} holds no asset named ${assetName} ` +
-        'after every page was walked, yet the reader resolved a HIT for it. Suspect a ' +
-        'month-boundary shard walk (the reader tries older shards, this check reads only ' +
-        'the current one) or an asset deleted between the two reads.',
+      `github-cache round-trip read-back: no shard in [${tags.join(', ')}] holds an asset ` +
+        `named ${assetName} after every page of every existing shard was walked, yet the ` +
+        'reader resolved a HIT for it. The reader walks this same window, so a month ' +
+        'boundary is NOT the explanation. Suspect an asset deleted between the two reads, ' +
+        'or a retention window that no longer covers what the reader read.',
     );
   }
 
@@ -185,15 +202,71 @@ async function assertPublishedByThisLeg(
 }
 
 /**
+ * Every page of ONE shard's asset list, returning the named asset or `undefined`.
+ *
+ * PAGINATE, and do NOT read the release payload's inline `assets` array. That snapshot is
+ * a non-paginated FIRST PAGE -- the publisher's own recorded Pitfall 4, which is why
+ * createPublishClient.listReleaseAssets paginates too -- and the live cache-mirror-202607
+ * shard already holds 122 assets, so this leg's seed asset can legitimately sit beyond
+ * page one. A single-page read would therefore redden publish-verify on a CORRECT
+ * implementation, and a guard that fails on correct work gets disabled (OBS-04's lesson).
+ * RESEARCH's recommendation named the tags endpoint without naming the cap; this is that
+ * correction. Increment until a SHORT page, matching the reader's own walk.
+ *
+ * EXTRACTED, not rewritten: the body is the pre-existing loop moved verbatim behind a
+ * parameterised release id, because the shard walk above needs to run it once per shard
+ * and an inlined copy per shard is the drift this bin's own single-source rules forbid.
+ * Returning `undefined` rather than throwing is what lets the caller distinguish "not in
+ * THIS shard, try an older one" from "in no shard at all" -- the caller owns that verdict.
+ */
+async function findAssetInRelease(
+  repo: string,
+  releaseId: number,
+  assetName: string,
+  tag: string,
+  headers: Record<string, string>,
+): Promise<{ label: string | null } | undefined> {
+  for (let page = 1; ; page++) {
+    const listResponse = await fetch(
+      `${GITHUB_API}/repos/${repo}/releases/${releaseId}/assets?per_page=${ASSETS_PER_PAGE}&page=${page}`,
+      { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+    );
+
+    assertResponseOk(listResponse, `asset list page ${page} of shard ${tag}`);
+
+    const batch = (await listResponse.json()) as {
+      name: string;
+      label: string | null;
+    }[];
+
+    const found = batch.find((candidate) => candidate.name === assetName);
+
+    if (found !== undefined) {
+      return found;
+    }
+
+    if (batch.length < ASSETS_PER_PAGE) {
+      return undefined;
+    }
+  }
+}
+
+/**
  * Fail loud on any non-ok response from the label read. Discrimination is STRUCTURAL on
  * res.status only, never body text (the D-11 discipline copied from releases-backend.ts).
  *
- * What is deliberately NOT copied is that module's 404-versus-fault SPLIT. It exists there
- * because the reader has TWO outcomes -- a 404 means try the next shard, anything else is a
- * fault -- while this bin has already observed a HIT and so has exactly ONE outcome for
- * every non-ok status: fail. The status is named in the message, which is what an operator
- * needs to tell an absent shard (404) from a rate limit (403); a second branch would add a
- * code path with no distinct behaviour behind it.
+ * What is deliberately NOT copied is that module's 404-versus-fault SPLIT, and the scope of
+ * that refusal is NARROWER than it first reads. It applies to every call this helper serves
+ * -- the asset-list pages, whose release id is already in hand, so a 404 there is a fault
+ * with no second interpretation. It does NOT apply to the RELEASE LOOKUP in the shard walk
+ * above, where the shard is a guess until it resolves and a 404 legitimately means "try an
+ * older shard"; that call therefore checks for 404 itself BEFORE delegating here, and this
+ * helper never sees it. The original wording grounded the refusal in this bin "having
+ * already observed a HIT and so having exactly ONE outcome" -- true of the asset list, and
+ * false of a lookup whose tag the bin chose, which is how the month-boundary defect got in.
+ *
+ * The status is named in the message, which is what an operator needs to tell an absent
+ * shard (404) from a rate limit (403).
  */
 function assertResponseOk(response: Response, what: string): void {
   if (response.ok) {

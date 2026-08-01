@@ -1491,6 +1491,20 @@ jobs:
     # satisfies the server's ^[a-f0-9]{1,512}$ hash validator with no massaging.
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job. A hung step otherwise holds a runner
+    # for the 360-minute account default.
+    #
+    # WHY THIS JOB AND THE TWO PUBLISH JOBS, and not every job in the file: these three
+    # are the push-only background ones. Nobody watches them the way a PR author watches
+    # a check, so a hang here is invisible rather than merely slow -- the job is not RED,
+    # it is simply never done, and the next push starts a fresh one.
+    #
+    # The short PR gates (format-check, lint, fallow, action-bundle-drift, pack-check,
+    # ppe) are still uncapped and are deliberately left so in this commit. A hang there
+    # blocks a visible required check on somebody's open PR, which is self-reporting.
+    # Named rather than left as an apparent oversight, so a reader does not have to
+    # re-derive whether the omission was considered.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -1775,6 +1789,11 @@ jobs:
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job. 20 rather than 15, matching the other
+    # matrix jobs, and it must accommodate max-parallel: 1 above: the two legs are
+    # SERIALIZED, but timeout-minutes is per-LEG, not per-job, so the serialization does
+    # not eat into this bound.
+    timeout-minutes: 20
     # A job-level permissions block REPLACES the workflow grant (contents: read) WHOLESALE --
     # it does NOT merge. So this block MUST restate BOTH scopes: contents: write (create the
     # month-shard release + upload assets) AND actions: read (getActionsCacheList; omitting it
@@ -1944,6 +1963,9 @@ jobs:
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job. 20 rather than 15, matching the
+    # other matrix jobs: the windows-11-arm leg is consistently the slow one.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

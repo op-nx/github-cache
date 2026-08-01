@@ -53,6 +53,27 @@ export const EXPECTED_TARGETS = [
 ] as const;
 
 /**
+ * A target this module has established is PRESENT on both records. `targetFault`'s
+ * presence loop below is driven from EXPECTED_TARGETS and from nothing else, so a
+ * name outside that tuple is one nothing checked for.
+ *
+ * The two constants below are `satisfies`-bound to it, which is the difference
+ * between a compile error and a crash. Clauses (b) and (c) index `a.targets[...]`
+ * directly on the strength of that loop having run; with `noUncheckedIndexedAccess`
+ * off, a fifth invariant target added HERE but not to EXPECTED_TARGETS type-checks
+ * clean, skips the presence check, and throws `TypeError: Cannot read properties of
+ * undefined` -- a crash where `shapeFault`'s own doc block requires a named reason,
+ * and one the security domain reads as denial-of-service plus blame misdirection.
+ *
+ * `compare.spec.ts` already catches this at RUN time; the bind moves it to `tsc`,
+ * where the author of the fifth target is standing. The sibling `meta` field gets
+ * this for free -- `HashParityRecord.meta` is keyed on REQUIRED_META_KEYS, so
+ * LIKE_FOR_LIKE_META_KEYS is STRUCTURALLY a subset -- while `targets` is a
+ * `Record<string, ...>` and can enforce nothing. This closes that asymmetry.
+ */
+type ExpectedTarget = (typeof EXPECTED_TARGETS)[number];
+
+/**
  * The four that must be IDENTICAL across platforms. `lint` is the FOURTH clause
  * per D-21 and the roadmap's success criterion 6 -- Phase 7's D-35 handed it over
  * explicitly, and measuring it without asserting on it would waste that
@@ -63,10 +84,10 @@ export const INVARIANT_TARGETS = [
   'typecheck',
   'test',
   'lint',
-] as const;
+] as const satisfies readonly ExpectedTarget[];
 
 /** The one target that must DIFFER, because it declares a platform runtime input. */
-export const DIVERGENT_TARGET = 'integration';
+export const DIVERGENT_TARGET = 'integration' satisfies ExpectedTarget;
 
 /**
  * The seven D-04 `meta` fields required non-empty. The instrument emits ten more,

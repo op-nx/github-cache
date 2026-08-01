@@ -634,19 +634,17 @@ jobs:
         run: |
           set -euo pipefail
           npm run typecheck 2>&1 | tee typecheck-nx.log
-      # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
-      # Gating on a non-zero count would be a LAUNDERABLE gate rather than coverage.
-      # This leg writes through a WRITABLE sidecar, so a broken cross-OS restore makes
-      # it MISS, execute the target, and SAVE its own entry -- and a re-run of the same
-      # commit then HITs that self-produced entry, taking a `count >= 1` check green
-      # with cross-OS reuse still dead. A gate a re-run can launder is worse than no
-      # gate, because it reads as coverage. The run-scoped, provenance-checked
-      # dogfood-verify canary is the gate instead.
-      # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
-      # this leg INTRA-run -- its ubuntu producer repopulates the entry earlier in the
-      # SAME run -- so the cross-run "first run after a version-affecting change
-      # legitimately sees a zero" argument, which an earlier version of this comment
-      # rested on, never applied to these three legs at all.
+      # RECORDED, never GATED -- the build-windows leg above carries the full rationale;
+      # this is the one-line form. A `count >= 1` gate here would be LAUNDERABLE, not
+      # coverage: the leg writes through a WRITABLE sidecar, so a broken cross-OS restore
+      # makes it save its own entry and a re-run of the same commit HITs that. The
+      # run-scoped, provenance-checked dogfood-verify canary is the gate instead.
+      #
+      # Stated ONCE rather than three times over: the argument was 13 lines verbatim on
+      # each of the three legs, which triples the blast radius of the next correction --
+      # and this file is the evidence that N-copy prose drifts PARTIALLY. The same commit
+      # that widened the dogfood trigger had to fix eight sites making one stale claim,
+      # several of them copies that a previous edit had missed. Don't re-expand this.
       # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
       # pipeline under pipefail.
       - name: Record the remote-cache label occurrence count for this leg
@@ -723,19 +721,17 @@ jobs:
         run: |
           set -euo pipefail
           npm run test 2>&1 | tee test-nx.log
-      # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
-      # Gating on a non-zero count would be a LAUNDERABLE gate rather than coverage.
-      # This leg writes through a WRITABLE sidecar, so a broken cross-OS restore makes
-      # it MISS, execute the target, and SAVE its own entry -- and a re-run of the same
-      # commit then HITs that self-produced entry, taking a `count >= 1` check green
-      # with cross-OS reuse still dead. A gate a re-run can launder is worse than no
-      # gate, because it reads as coverage. The run-scoped, provenance-checked
-      # dogfood-verify canary is the gate instead.
-      # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
-      # this leg INTRA-run -- its ubuntu producer repopulates the entry earlier in the
-      # SAME run -- so the cross-run "first run after a version-affecting change
-      # legitimately sees a zero" argument, which an earlier version of this comment
-      # rested on, never applied to these three legs at all.
+      # RECORDED, never GATED -- the build-windows leg above carries the full rationale;
+      # this is the one-line form. A `count >= 1` gate here would be LAUNDERABLE, not
+      # coverage: the leg writes through a WRITABLE sidecar, so a broken cross-OS restore
+      # makes it save its own entry and a re-run of the same commit HITs that. The
+      # run-scoped, provenance-checked dogfood-verify canary is the gate instead.
+      #
+      # Stated ONCE rather than three times over: the argument was 13 lines verbatim on
+      # each of the three legs, which triples the blast radius of the next correction --
+      # and this file is the evidence that N-copy prose drifts PARTIALLY. The same commit
+      # that widened the dogfood trigger had to fix eight sites making one stale claim,
+      # several of them copies that a previous edit had missed. Don't re-expand this.
       # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
       # pipeline under pipefail.
       - name: Record the remote-cache label occurrence count for this leg

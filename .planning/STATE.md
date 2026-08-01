@@ -154,6 +154,20 @@ on run 30471772954 via a temporary push to main, since restored to fe25a3f. See
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 13 added 2026-08-01: Read-Only Actions-Cache Backend. Added to v0.0.2 (not deferred to a
+  later milestone) by maintainer instruction. Origin: CR-18 from the PR #12 round-3 code review.
+  Quick task `260801-vyy` closed CR-18's pre-merge signal gap by widening the dogfood provenance
+  canary to same-repo PRs, but left the three Windows legs' `[remote cache]` counts ungated on
+  purpose -- those legs write, so a broken cross-OS restore self-heals into a green on re-run,
+  making a `count >= 1` gate launderable. Phase 13 removes that confound structurally so the
+  counts become soundly gateable, which is what CR-18 originally asked for. Carries an explicit
+  research gate on the named risk: two Actions-cache backends means two places for the
+  cache-version computation to drift, and an OS-dependent cache version is the exact bug Phase 9
+  existed to fix. "Do nothing" is a listed candidate outcome -- the dogfood canary already gates
+  the storage layer pre-merge, so this phase buys the Nx-task layer, not the storage layer.
+
 ### Decisions
 
 Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 backing those decisions is .planning/THREAT-MODEL.md. Recent decisions affecting current work:

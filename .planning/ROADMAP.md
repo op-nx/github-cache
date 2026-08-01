@@ -23,7 +23,7 @@ bug fix.
 ## Milestones
 
 - [x] **v0.0.1 Greenfield MVP Rebuild** -- Phases 0-6 (shipped 2026-07-22) -- full detail: [milestones/v0.0.1-ROADMAP.md](milestones/v0.0.1-ROADMAP.md)
-- [ ] **v0.0.2 OS-invariant cross-OS sharing** -- Phases 7-12
+- [ ] **v0.0.2 OS-invariant cross-OS sharing** -- Phases 7-13
 
 ## v0.0.2 framing
 
@@ -53,9 +53,12 @@ every local gate AND the verifier and took five live pushes to close. Phases 9-1
 `Live-CI close` line naming what can only be closed on a real runner, and a default-branch push
 is a hard precondition of the Phase 11 proofs (the mirror must be warm under the new scheme).
 
-**Granularity:** standard (6 phases). **Mode:** `mvp` is marked on the three phases that build
+**Granularity:** standard (7 phases -- 6 at creation, plus Phase 13 added 2026-08-01 out of the
+PR #12 code review; see its entry for why it is in v0.0.2 rather than deferred). **Mode:** `mvp`
+is marked on the three phases that build
 shippable capability (9, 10, 12); Phase 7 is toolchain adoption and Phase 8 is measurement and
-configuration, so MVP slicing does not apply to them. Phase 11 is proof-LED but NOT proof-only --
+configuration, so MVP slicing does not apply to them. Phase 13 is a correctness/observability
+phase with a research-first gate, so MVP slicing does not apply to it either. Phase 11 is proof-LED but NOT proof-only --
 the 2026-07-26 research found it carries real implementation (new `ci.yml` probe steps for the
 re-specified O3 proof, and new task-graph assertion tooling for TEST-08), so MVP slicing still
 does not apply but plan capacity must be allocated. TDD stays globally on
@@ -89,6 +92,7 @@ Full phase detail, success criteria, traceability, and coverage validation archi
 - [x] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed. (completed 2026-07-29)
 - [x] **Phase 11: Live Proofs -- O1, O2, O3** - Record the three live proofs in the mandated order, including the producer attribution that enabling O4 destroys forever. (completed 2026-07-30)
 - [ ] **Phase 12: Windows CI Reuse (O4) + Consumer Recipe** - Add the Windows `build`/`typecheck`/`test` legs, prove they HIT on Linux-produced entries, and ship the safe-by-default adoption recipe.
+- [ ] **Phase 13: Read-Only Actions-Cache Backend** - Make "read the Actions cache, never write it" representable, so the three Windows reuse legs can be GATED on a genuine cross-OS HIT rather than recording a launderable one -- without giving the cache-version computation a second place to drift.
 
 ## Phase Details
 
@@ -567,6 +571,64 @@ prejudged).
 **Live-CI close**: XOS-05's HIT is only observable on a real windows-11-arm runner after a
 ubuntu leg has saved the entries.
 
+### Phase 13: Read-Only Actions-Cache Backend
+
+**Goal:** Make "read the Actions cache, never write it" a representable backend, so the three
+Windows reuse legs can be GATED on a genuine cross-OS HIT instead of merely recording one.
+
+**Requirements**: TBD (run /gsd-plan-phase 13)
+**Depends on:** Phase 12
+**Plans:** 0 plans
+
+**Why this exists.** CR-18 (PR #12 round-3 review) found the three Windows reuse legs RECORDED
+but never GATED. Quick task `260801-vyy` closed the pre-merge signal gap by widening the
+`dogfood-seed`/`dogfood-verify` provenance canary to same-repo pull requests, but deliberately
+did NOT gate the legs' `[remote cache]` counts, because that gate is **launderable**: those legs
+write through a writable sidecar, so a broken cross-OS restore makes them MISS, execute, and SAVE
+their own entry -- and a re-run of the same commit then HITs that self-produced entry, taking a
+`count >= 1` check green with cross-OS reuse still dead. A gate a re-run can launder is worse
+than no gate, because it reads as coverage.
+
+A read-only Actions-cache backend removes the confound structurally: a leg that cannot write can
+only get a `[remote cache]` label from a genuine restore of the ubuntu producer's entry. That is
+what makes the count soundly gateable, and it closes the one layer the dogfood canary explicitly
+does not cover -- dogfood proves the STORAGE round-trip via a scripted PUT/GET, and by its own
+comment never observes whether a REAL Nx task got a remote HIT.
+
+**The named risk this phase must research, not assume away.** Two Actions-cache backends means
+**two places for the cache-version computation to drift** -- and an OS-dependent cache version is
+precisely the bug Phase 9 existed to fix. A copy-paste second backend would reintroduce this
+milestone's own root cause behind a guard that looks like coverage. Research must compare at
+minimum:
+
+- **Shared read core + writable variant adds `put`** -- one version computation, two exports.
+- **Capability narrowing at the seam** -- construct the writable backend and expose it through a
+  read-only adapter, so there is literally one implementation.
+- **A construction-time flag** -- rejected on sight for TRUST-05 (RW-vs-RO is which factory
+  constructs the backend, never a caller-facing mode flag), but record WHY so it is not re-raised.
+- **Do nothing** -- keep the counts as diagnostics. The honest baseline: the dogfood canary
+  already gates the storage layer pre-merge, so this phase buys the Nx-task layer, not the
+  storage layer.
+
+The chosen shape must make version drift **unrepresentable**, not merely guarded. If research
+cannot find a shape that does, that is a finding and the phase should shrink to a documented
+decision rather than ship a second version computation.
+
+**Prior art already in the tree:** `ReadableBackend` (no `put`) / `WritableBackend` and the
+`isWritableBackend` discriminator (`backend/types.ts`); the server already answers a PUT to a
+read-only backend with the contract's 403; `memory-backend.ts` is the existing structural
+read-only precedent. So the port exists -- only an Actions-cache implementer of it is missing.
+
+**Adjacent locked stance, check before planning:** `PROJECT.md` Out of Scope lists "Local
+read-write mode - by design local is read-only only; only CI may write". That stance is
+implemented by pointing untrusted contexts at the *Releases* store. Read-only against the *same*
+store CI writes is a new position, not a gap in the existing one -- confirm it does not
+contradict CORR-01 or TRUST-05 before planning.
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 13 to break down)
+
 ## Traceability
 
 Every v0.0.2 requirement maps to exactly one phase.
@@ -757,6 +819,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 7/7 | Complete    | 2026-07-30 |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 6/6 | Complete    | 2026-07-31 |
+| 13. Read-Only Actions-Cache Backend | v0.0.2 | 0/0 | Not planned | -- |
 
 ---
 *v0.0.2 roadmap created 2026-07-26 from `.planning/REQUIREMENTS.md` (43 requirements, revised

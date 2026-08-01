@@ -16,14 +16,22 @@ already have.
 cache API), a GitHub Actions workflow, and a job whose working directory is the
 workspace root -- the directory that holds `nx.json`.
 
-That last one is a hard precondition, checked at startup: the sidecar refuses to
-start unless `nx.json` sits in the process working directory and that directory
-matches `GITHUB_WORKSPACE`. Both are startup checks rather than read faults, so
-they fail the step loudly instead of degrading to a MISS. The reason is that the
+That last one is a hard precondition, checked at startup on the path that can
+write: when the sidecar resolves the Actions cache backend it refuses to start
+unless `nx.json` sits in the process working directory and that directory matches
+`GITHUB_WORKSPACE`. Both are startup checks rather than read faults, so they fail
+the step loudly instead of degrading to a MISS. A read-only context -- a fork
+pull request, or a local run -- never constructs that backend, so it never reaches
+the check; it also never writes an archive, so the mismatch below cannot bite it.
+Hold to the precondition anyway: the same workflow becomes write-trusted the
+moment it runs on your default branch. The reason is that the
 cache archive path is workspace-relative (see
 [Advanced usage](docs/advanced.md)), so a working directory anywhere else would
-have this action read a different file than the one it wrote -- silently, and as
-a wrong result rather than a rebuild.
+have this action extract under one anchor and read under the other. The cache
+would then never serve anything again: `@actions/cache` reports a hit, the bytes
+are unreachable, the sidecar turns that into a 404, and every task rebuilds. It
+is a permanent silent all-MISS -- slow, never wrong -- and the startup check
+exists because nothing about it looks like a failure while it is happening.
 
 Two layouts trip it today, and neither is currently supported:
 

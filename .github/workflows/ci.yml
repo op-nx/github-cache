@@ -524,7 +524,11 @@ jobs:
       # three -- which exist for NOTHING BUT the HIT observation -- could not report the
       # one thing they are for. An @actions/cache bump that broke cross-OS restore would
       # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
-      # dogfood-verify is push-gated, so the bump PR would merge with no signal anywhere.
+      # the dogfood canary would not catch it either: dogfood-verify drives a DIRECT
+      # scripted PUT/GET on a run-scoped key, so it never observes whether a REAL Nx
+      # build/typecheck/test task got a remote HIT. These per-target records are the
+      # only runtime observation of that -- and on a fork pull request, where the
+      # dogfood pair is skipped, the only cross-OS signal at all.
       # Under set -euo pipefail the tee preserves a failing Nx exit code.
       - name: Run the build target and tee its output
         shell: bash
@@ -532,10 +536,20 @@ jobs:
           set -euo pipefail
           npm run build 2>&1 | tee build-nx.log
       # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
-      # Gating on a non-zero count would redden a CORRECT leg on the first run after any
-      # version-affecting change, which is OBS-04's lesson about guards that fail on
-      # correct work. The `|| true` keeps a legitimate zero printing 0 instead of
-      # aborting the pipeline under pipefail.
+      # Gating on a non-zero count would be a LAUNDERABLE gate rather than coverage.
+      # This leg writes through a WRITABLE sidecar, so a broken cross-OS restore makes
+      # it MISS, execute the target, and SAVE its own entry -- and a re-run of the same
+      # commit then HITs that self-produced entry, taking a `count >= 1` check green
+      # with cross-OS reuse still dead. A gate a re-run can launder is worse than no
+      # gate, because it reads as coverage. The run-scoped, provenance-checked
+      # dogfood-verify canary is the gate instead.
+      # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
+      # this leg INTRA-run -- its ubuntu producer repopulates the entry seconds earlier
+      # in the SAME run -- so the cross-run "first run after a version-affecting change
+      # legitimately sees a zero" argument, which an earlier version of this comment
+      # rested on, never applied to these three legs at all.
+      # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
+      # pipeline under pipefail.
       - name: Record the remote-cache label occurrence count for this leg
         shell: bash
         run: |
@@ -597,7 +611,11 @@ jobs:
       # three -- which exist for NOTHING BUT the HIT observation -- could not report the
       # one thing they are for. An @actions/cache bump that broke cross-OS restore would
       # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
-      # dogfood-verify is push-gated, so the bump PR would merge with no signal anywhere.
+      # the dogfood canary would not catch it either: dogfood-verify drives a DIRECT
+      # scripted PUT/GET on a run-scoped key, so it never observes whether a REAL Nx
+      # build/typecheck/test task got a remote HIT. These per-target records are the
+      # only runtime observation of that -- and on a fork pull request, where the
+      # dogfood pair is skipped, the only cross-OS signal at all.
       # Under set -euo pipefail the tee preserves a failing Nx exit code.
       - name: Run the typecheck target and tee its output
         shell: bash
@@ -605,10 +623,20 @@ jobs:
           set -euo pipefail
           npm run typecheck 2>&1 | tee typecheck-nx.log
       # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
-      # Gating on a non-zero count would redden a CORRECT leg on the first run after any
-      # version-affecting change, which is OBS-04's lesson about guards that fail on
-      # correct work. The `|| true` keeps a legitimate zero printing 0 instead of
-      # aborting the pipeline under pipefail.
+      # Gating on a non-zero count would be a LAUNDERABLE gate rather than coverage.
+      # This leg writes through a WRITABLE sidecar, so a broken cross-OS restore makes
+      # it MISS, execute the target, and SAVE its own entry -- and a re-run of the same
+      # commit then HITs that self-produced entry, taking a `count >= 1` check green
+      # with cross-OS reuse still dead. A gate a re-run can launder is worse than no
+      # gate, because it reads as coverage. The run-scoped, provenance-checked
+      # dogfood-verify canary is the gate instead.
+      # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
+      # this leg INTRA-run -- its ubuntu producer repopulates the entry seconds earlier
+      # in the SAME run -- so the cross-run "first run after a version-affecting change
+      # legitimately sees a zero" argument, which an earlier version of this comment
+      # rested on, never applied to these three legs at all.
+      # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
+      # pipeline under pipefail.
       - name: Record the remote-cache label occurrence count for this leg
         shell: bash
         run: |
@@ -670,7 +698,11 @@ jobs:
       # three -- which exist for NOTHING BUT the HIT observation -- could not report the
       # one thing they are for. An @actions/cache bump that broke cross-OS restore would
       # leave all three GREEN, hash-parity green (it compares hashes, not storage), and
-      # dogfood-verify is push-gated, so the bump PR would merge with no signal anywhere.
+      # the dogfood canary would not catch it either: dogfood-verify drives a DIRECT
+      # scripted PUT/GET on a run-scoped key, so it never observes whether a REAL Nx
+      # build/typecheck/test task got a remote HIT. These per-target records are the
+      # only runtime observation of that -- and on a fork pull request, where the
+      # dogfood pair is skipped, the only cross-OS signal at all.
       # Under set -euo pipefail the tee preserves a failing Nx exit code.
       - name: Run the test target and tee its output
         shell: bash
@@ -678,10 +710,20 @@ jobs:
           set -euo pipefail
           npm run test 2>&1 | tee test-nx.log
       # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
-      # Gating on a non-zero count would redden a CORRECT leg on the first run after any
-      # version-affecting change, which is OBS-04's lesson about guards that fail on
-      # correct work. The `|| true` keeps a legitimate zero printing 0 instead of
-      # aborting the pipeline under pipefail.
+      # Gating on a non-zero count would be a LAUNDERABLE gate rather than coverage.
+      # This leg writes through a WRITABLE sidecar, so a broken cross-OS restore makes
+      # it MISS, execute the target, and SAVE its own entry -- and a re-run of the same
+      # commit then HITs that self-produced entry, taking a `count >= 1` check green
+      # with cross-OS reuse still dead. A gate a re-run can launder is worse than no
+      # gate, because it reads as coverage. The run-scoped, provenance-checked
+      # dogfood-verify canary is the gate instead.
+      # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
+      # this leg INTRA-run -- its ubuntu producer repopulates the entry seconds earlier
+      # in the SAME run -- so the cross-run "first run after a version-affecting change
+      # legitimately sees a zero" argument, which an earlier version of this comment
+      # rested on, never applied to these three legs at all.
+      # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
+      # pipeline under pipefail.
       - name: Record the remote-cache label occurrence count for this leg
         shell: bash
         run: |
@@ -1612,14 +1654,21 @@ jobs:
   # server inert behind a green result (Pitfall 6). NO job-level permission block is
   # added on purpose: the runtime cache credentials (injected only into a JS action)
   # are independent of the workflow token grant, and a job-level block would REPLACE
-  # the workflow-level grant wholesale rather than extend it. Both jobs run ONLY on
-  # the default-branch push trigger, because the write gate trusts no other trigger
-  # (push/schedule only) and the read-only path is exhaustively unit-tested instead.
+  # the workflow-level grant wholesale rather than extend it. Both jobs run on the
+  # default-branch push trigger AND on SAME-REPO pull requests, so the cross-OS proof
+  # is available BEFORE a merge rather than only after one. A `pull_request` run is
+  # write-trusted here -- HOST_GATED_EVENTS in lib/trust.ts admits it, and
+  # isWriteTrusted returns trusted for it on github.com -- and the entry it writes
+  # lands in the PR's own merge-ref scope, invisible to main's cache, ageing out under
+  # the standard 7-day-unaccessed policy. FORK pull requests are DELIBERATELY excluded
+  # rather than overlooked: fork `pull_request` cache behaviour is CITED from GitHub's
+  # docs and has never been reproduced in this repo, so a gating check is not bet on
+  # it, and merged code still gets this proof through the push path.
   # action.yml's main points into the build output, so each job builds first.
   dogfood-seed:
     # run id as the cache hash: unique per run and already all-decimal, so it
     # satisfies the server's ^[a-f0-9]{1,512}$ hash validator with no massaging.
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04-arm
     # Generic hang insurance -- see the build job. A hung step otherwise holds a runner
     # for the 360-minute account default.
@@ -1684,7 +1733,13 @@ jobs:
     # what four of the five bundle sites actually run. action-bundle-drift (no `if:`, so
     # it runs on PRs too) is the only control tying the two together. The misreading is
     # natural, so it is recorded here where a reader will look.
-    if: github.event_name == 'push'
+    #
+    # SAME CONDITION AS dogfood-seed, belt-and-braces. `needs: dogfood-seed` plus the
+    # default success() status check would already SKIP this job when the seed skips
+    # (a skipped need skips its dependents; it is never left queued and never fails),
+    # so the restated condition is redundant by construction -- and kept anyway,
+    # matching the publish / publish-verify pairing this file already uses.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     needs: dogfood-seed
     strategy:
       fail-fast: false
@@ -2082,9 +2137,11 @@ jobs:
   # ACTIONS_RUNTIME_TOKEN), so this is a plain `node` step, not a JS action. It needs only
   # the workflow-default contents: read -- for the asset download and for the release and
   # asset-listing reads the label check makes -- so it adds NO job-level permissions block
-  # and never touches the write gate. Mirrors the dogfood-verify shape: push-gated, needs
-  # the producer, a MISS fails the job loud (the reader swallows faults to a MISS, so any
-  # MISS is a round-trip failure).
+  # and never touches the write gate. Mirrors dogfood-verify's shape in the two respects
+  # that matter here: it needs the producer, and a MISS fails the job loud (the reader
+  # swallows faults to a MISS, so any MISS is a round-trip failure). NOT in its trigger --
+  # dogfood-verify now also runs on same-repo pull requests, whereas this job stays
+  # push-only, because the mirrored asset it reads back is written by the push path alone.
   publish-verify:
     if: github.event_name == 'push'
     needs: publish

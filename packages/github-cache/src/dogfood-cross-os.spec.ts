@@ -106,6 +106,31 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
     expect(seed, reason).not.toMatch(/matrix/);
     expect(seed, reason).toMatch(/runs-on:\s*ubuntu-24\.04-arm/);
   });
+
+  it('both dogfood jobs are SCHEDULED on same-repo pull requests, not push-only (CR-18)', () => {
+    const trigger =
+      /^ {4}if: github\.event_name == 'push' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository\s*$/m;
+    const reason =
+      'dogfood-seed and dogfood-verify must BOTH carry the two-clause trigger ' +
+      "`if: github.event_name == 'push' || " +
+      'github.event.pull_request.head.repo.full_name == github.repository`. Reverting ' +
+      'either job to push-only reopens CR-18: cross-OS Actions-cache reuse would again ' +
+      'have NO pre-merge signal, and every other clause in this file would stay green ' +
+      'while it did. BOTH halves of the disjunction are matched on purpose -- a regex ' +
+      'looking only for the push half survives exactly that revert, which is the ' +
+      'cannot-fail-for-its-stated-reason defect this clause exists to avoid. Fork pull ' +
+      'requests are excluded DELIBERATELY, because fork `pull_request` cache behaviour ' +
+      'is cited from GitHub docs and never reproduced in this repo; widening this ' +
+      'condition is a decision to make, not a drive-by fix. The `if:` must also stay ON ' +
+      'ONE LINE: jobBlock joins its lines with a newline, so a folded or wrapped YAML ' +
+      'scalar defeats this single-line anchor while the workflow keeps behaving -- ' +
+      'prettier is MEASURED not to rewrap the one-line form. Anchored at FOUR spaces ' +
+      "because a job's own keys sit one level under the two-space job key; unanchored, " +
+      'a step-level `if:` (eight spaces) would satisfy it.';
+
+    expect(jobBlock('dogfood-seed'), reason).toMatch(trigger);
+    expect(jobBlock('dogfood-verify'), reason).toMatch(trigger);
+  });
 });
 
 /**
@@ -258,10 +283,15 @@ describe('ci.yml publish waits on every job that produces a NEW mirrored key (XO
  * not depend on either number and was never wrong. Re-measure before restating.
  *
  * Nothing in the tree asserted that shape. Adding `if: github.event_name == 'push'` to it
- * -- the same gate that makes VER-06 and OBS-04 unobservable pre-merge, and therefore the
+ * -- the same gate that still leaves OBS-04 unobservable until a merge, and therefore the
  * edit a reader is most likely to make while believing they are being consistent -- would
  * silently drop the committed bundle's only standing sampler to push-to-`main` only, while
  * every spec in this file and every other ci.yml guard stayed green.
+ *
+ * OBS-04 ALONE, and the narrowing is load-bearing rather than tidying: this paragraph used
+ * to name VER-06 alongside it, which stopped being true in the commit that widened both
+ * dogfood jobs to same-repo pull requests (CR-18). VER-06 is now PR-observable; OBS-04 is
+ * the surviving example, because its `[remote cache]` counts are RECORDED and never GATED.
  */
 describe('ci.yml action-bundle-drift stays PR-eligible (ROBUST-04)', () => {
   // POSITIVE CONTROL, and it has to come first for the same reason the job-block control
@@ -284,8 +314,9 @@ describe('ci.yml action-bundle-drift stays PR-eligible (ROBUST-04)', () => {
         'and every `- uses: ./start-cache-server` site executes THAT file rather than the ' +
         'in-job build the `- uses: ./packages/github-cache` sites (both dogfood jobs among ' +
         'them) use. Gating it on an event drops ROBUST-04 from "every PR and ' +
-        'every push" to push-only, which is exactly the gate that already makes VER-06 and ' +
-        'OBS-04 unobservable before a merge.',
+        'every push" to push-only, which is exactly the gate that still leaves OBS-04 ' +
+        'unobserved until a merge lands. VER-06 is no longer an example of it: the ' +
+        'dogfood pair now runs on same-repo pull requests too (CR-18).',
     ).not.toMatch(/^ {4}if:/m);
   });
 });
@@ -689,10 +720,15 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       'exist for NOTHING BUT the HIT observation cannot report the one thing they are ' +
       'for. The concrete loss is an @actions/cache bump that breaks cross-OS restore -- ' +
       'all three legs stay GREEN, hash-parity stays green because it compares hashes ' +
-      'rather than storage, and dogfood-verify is push-gated, so the bump PR merges ' +
-      'with no signal anywhere. This clause is about the RECORD existing, never about ' +
-      'its VALUE: the count is deliberately not gated, because reddening on a ' +
-      `legitimate zero is OBS-04's lesson repeating. ${RENAME_NOTE}`,
+      'rather than storage, and the dogfood canary does not cover it either: ' +
+      'dogfood-verify drives a DIRECT scripted PUT/GET on a run-scoped key, so it never ' +
+      'observes whether a REAL Nx build/typecheck/test task got a remote HIT, and it is ' +
+      'skipped outright on a fork pull request. This clause is about the RECORD ' +
+      'existing, never about its VALUE: the count is deliberately not gated because it ' +
+      'is LAUNDERABLE -- this leg writes through a WRITABLE sidecar, so a broken ' +
+      'cross-OS restore makes it MISS, execute and SAVE its own entry, and a re-run of ' +
+      'the same commit then HITs that self-produced entry and takes a `count >= 1` ' +
+      `check green with cross-OS reuse dead. ${RENAME_NOTE}`,
     backendToken:
       `${leg} must pass GITHUB_TOKEN into the sidecar step's own \`env:\`, and this clause is ` +
       'SEPARATE from the cacheClient one above because the two produce the SAME green-having-' +

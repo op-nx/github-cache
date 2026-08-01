@@ -762,6 +762,23 @@ jobs:
       # leave both steps green while destroying the control, so do not reuse the poll's
       # deadbeef hash here either.
       #
+      # AN UNTESTED CASE, recorded because this block did not consider it and the next
+      # person to meet it will be reading a red gate. "The key is known-present after the
+      # task's own save" is the premise below, and the `build` job's own comment states
+      # something that would contradict it on a FORK pull request: that untrusted
+      # triggers get a read-only cache token "whose saveCache no-ops through the
+      # backend's benign 409 path". If that is right, a fork PR saves nothing, this probe
+      # gets 404, and BOTH matrix legs go red blaming a dead sidecar that was alive.
+      # Exactly one of the two blocks is wrong and this repo cannot say which: it has had
+      # no fork PR on record, and same-repo branch PRs (every run to date) write to their
+      # own cache scope normally, so the case has never been exercised.
+      #   DELIBERATELY NOT "FIXED" BY WIDENING THE ACCEPTANCE SET. Admitting 404 here
+      # would destroy the control on the one failure it exists to detect -- a dead
+      # sidecar masquerading as a MISS -- to accommodate a case nobody has observed.
+      # Widening a real guard on an untested hypothesis is the wrong trade in that
+      # direction. If a fork PR ever reddens here, the fix is to gate this step on the
+      # trigger, not to loosen it.
+      #
       # No retry loop, deliberately: the key is known-present after the task's own save,
       # so a retry could only paper over a real failure. And a 200 can only have come
       # from a real cache-service hit -- the backend calls restoreCache BEFORE any local

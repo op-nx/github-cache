@@ -837,4 +837,46 @@ describe('ci.yml is a test input, so no spec can assert on a replayed ci.yml (PA
       'nx.json no longer declares {workspaceRoot}/docs/cross-os.md as a `test` input, so docs-cross-os.spec.ts can replay a PASS computed before the doc it asserts on was edited. Restore the entry; do not weaken the guard.',
     ).toContain('{workspaceRoot}/docs/cross-os.md');
   });
+
+  // THE TWO WORKSPACE-ROOT INSTRUMENTS, and they were the only registrations in
+  // either list that no clause here read. Every sibling entry above is pinned;
+  // these two arrived later, from a different direction -- each closing a
+  // stale-cached-PASS hole its OWN spec had recorded against itself in a
+  // STALENESS CAVEAT -- and the pin that keeps them from silently regressing did
+  // not arrive with them.
+  //
+  // WHAT DELETING EITHER COSTS, and why the absence of a pin is worse for these
+  // two than for a docs entry. `capture-hashes-cli.spec.ts` and
+  // `read-integration-hash.integration.spec.ts` assert on the CLI BEHAVIOUR of
+  // two workspace-root `.mjs` files: which argument combinations are refused,
+  // and which guards throw. `nx.json` enumerates workspace-root inputs as
+  // explicit paths and carries no `{workspaceRoot}/*.mjs` glob, so without these
+  // entries a LONE edit to either instrument rotates no hash at all and Nx
+  // replays the verdict computed before the edit. The instrument can be weakened
+  // -- a refusal removed, a throw softened -- and its own spec never runs to say
+  // so. That is PARITY-08's defect exactly, in the two files whose headers
+  // describe it most precisely.
+  //
+  // The `integration` entry is the sharper of the two: `read-integration-hash.mjs`
+  // feeds the O3 existence proof, so a replayed PASS there is a proof asserting
+  // over a record its own reader may no longer produce.
+  //
+  // Two clauses, not one parameterised loop over the pair: they key on DIFFERENT
+  // targets (`test` vs `integration`) and a combined failure would not say which
+  // list lost its entry. The merged-configuration clause is not duplicated for
+  // either, for the reason given twice above -- a `project.json` inputs array
+  // replaces its list wholesale, so it drops every entry or none.
+  it('nx.json declares capture-hashes.mjs as a test input', () => {
+    expect(
+      nxJson.targetDefaults.test.inputs,
+      'nx.json no longer declares {workspaceRoot}/capture-hashes.mjs as a `test` input, so capture-hashes-cli.spec.ts can replay a PASS computed before the instrument it asserts on was edited -- the exact staleness its own header records as CLOSED. Restore the entry; do not weaken the guard.',
+    ).toContain('{workspaceRoot}/capture-hashes.mjs');
+  });
+
+  it('nx.json declares read-integration-hash.mjs as an integration input', () => {
+    expect(
+      nxJson.targetDefaults.integration.inputs,
+      'nx.json no longer declares {workspaceRoot}/read-integration-hash.mjs as an `integration` input, so read-integration-hash.integration.spec.ts can replay a PASS computed before the instrument it asserts on was edited -- the exact staleness its own header records as CLOSED, on the instrument the O3 proof reads. Restore the entry; do not weaken the guard.',
+    ).toContain('{workspaceRoot}/read-integration-hash.mjs');
+  });
 });

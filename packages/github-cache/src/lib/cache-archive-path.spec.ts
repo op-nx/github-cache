@@ -74,6 +74,27 @@ const strippedSubject = strippedSourceOf(SUBJECT_LINES);
 // claiming the token was absent. A reader who "tidies" a bracket pair away breaks the
 // searchability property without breaking the assertion, which is the harmless direction;
 // a reader who spells a token in the prose breaks it silently, which is not.
+//
+// THE LAST THREE CLOSE THE GAP THE FIRST ELEVEN LEFT, and it was the widest one. The
+// original list bans the path BUILDERS and the two named temp-directory reads, but the
+// subject's own lock forbids something broader -- "reaching for" any machine-dependent
+// value -- and the single most obvious way to do that was unlisted. A direct
+// ambient-platform read needs no import at all, so the exact-import-list check (clause
+// 2b) cannot see it either, and NEITHER can the workspace lint rule: eslint.config.mjs
+// scopes the ambient-platform ban to `**/*.{test,spec}.*`, which is this file and not its
+// subject. So a one-line branch on the running platform inside the ONE module whose
+// literal IS the @actions/cache cache version would have passed every guard standing over
+// it -- and it rotates the version on exactly one OS, which is the silent
+// half-the-matrix MISS that Phase 9 spent itself removing.
+//
+// The broad one is deliberately broad: this module is a true leaf that must read NOTHING
+// ambient, so the whole global is banned rather than the two accessors on it. The two
+// narrow ones are kept alongside it because a bare destructured or renamed import reaches
+// the accessor without naming the global.
+//
+// NOTE the case-sensitivity that makes the narrow pair safe here: the subject spells
+// `CACHE_ARCHIVE_DIR` and `cacheArchivePath`, whose `ARCH`/`Arch` do not match a
+// lowercase word-bounded needle. That is why both carry `\b` AND stay lowercase.
 const FORBIDDEN = [
   /\bj[o]in\b/,
   /\bre[s]olve\b/,
@@ -86,6 +107,9 @@ const FORBIDDEN = [
   /n[o]de:os/,
   /RUNNER_TEM[P]/,
   /isAbs[o]lute/,
+  /\bpr[o]cess\b/,
+  /\bpl[a]tform\b/,
+  /\bar[c]h\b/,
 ] as const;
 
 // The probe token is DERIVED from the needle's own source by removing the brackets and

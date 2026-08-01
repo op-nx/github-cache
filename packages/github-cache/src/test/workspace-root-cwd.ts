@@ -68,6 +68,35 @@ import { CACHE_ARCHIVE_DIR } from '../lib/cache-archive-path.js';
  * test -- the failure to avoid. The mkdir lands in this hook instead, and it uses the
  * CACHE_ARCHIVE_DIR constant rather than a second authored copy of the directory literal.
  *
+ * LOCK 5 -- GITHUB_WORKSPACE IS PINNED HERE FOR THE SAME REASON THE CWD IS, and leaving it
+ * ambient was a HOLE rather than a simplification. VER-04's guard is a CONJUNCTION: it probes
+ * `nx.json` at the cwd AND compares `resolve(GITHUB_WORKSPACE)` against `resolve(cwd)`
+ * (actions-cache-backend.ts). Entering the workspace root satisfies only the first conjunct, so
+ * before this hook pinned the variable the three consuming specs read it straight out of the
+ * ambient environment. MEASURED on this checkout: `nx test` passes 920/920 with the variable
+ * unset (`resolve('')` is the cwd, so the comparison passes by accident) and fails 23 tests
+ * across three files with `GITHUB_WORKSPACE` pointing anywhere else -- while
+ * `capture-hashes.mjs` reports the `test` task hash BYTE-IDENTICAL in both environments
+ * (12649867231869123682), because nx.json declares no `env` input for it.
+ *
+ * That is a task whose result is not a function of its declared inputs -- the exact defect
+ * class this milestone exists to remove -- and XOS-04 makes it worse rather than academic: the
+ * `test` entry is now cross-OS shareable, so a PASS computed under one GITHUB_WORKSPACE is
+ * served verbatim to a run under another.
+ *
+ * THE FIX IS TO REMOVE THE DEPENDENCE, NOT TO DECLARE IT. Adding `{ "env":
+ * "GITHUB_WORKSPACE" }` to `targetDefaults.test.inputs` would make the hash honest and the
+ * cache useless: the variable is set on every runner and unset on every developer machine, so
+ * local and CI could never share a `test` entry again -- surrendering the milestone's own
+ * headline outcome to fix a spec-fixture gap. Pinning it here makes the specs hermetic
+ * instead, which is what keeps the hash's OS- and host-invariance TRUE rather than merely
+ * declared.
+ *
+ * The restore is exact rather than convenient: an originally-UNSET variable is `delete`d back
+ * to unset, never written as `''`. The two are interchangeable to VER-04 (both `resolve` to
+ * the cwd) and NOT interchangeable to anything else that reads the environment, and a fixture
+ * that leaves a new key behind is the LOCK 1 leak in a different costume.
+ *
  * REJECTED ALTERNATIVE, recorded so it is not silently re-litigated: a global `setupFiles`
  * entry in vitest.config.mts would fix all 35 spec files at once. NOT taken -- the measured
  * recommendation covers the three files that actually need it, while a global chdir changes
@@ -76,14 +105,26 @@ import { CACHE_ARCHIVE_DIR } from '../lib/cache-archive-path.js';
 export function enterWorkspaceRootCwd(): () => void {
   // Captured FIRST, before anything can throw -- see LOCK 1.
   const originalCwd = process.cwd();
+  const originalGithubWorkspace = process.env.GITHUB_WORKSPACE;
   // Four levels up from src/test/: src/ -> github-cache/ -> packages/ -> workspace root.
   // The same idiom cleanup-workflow.spec.ts uses from src/cleanup/.
   const workspaceRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
   process.chdir(workspaceRoot);
+  // LOCK 5. Pinned to the SAME resolved directory the chdir just entered, so VER-04's
+  // second conjunct holds for a reason the spec controls rather than by accident.
+  process.env.GITHUB_WORKSPACE = workspaceRoot;
   mkdirSync(CACHE_ARCHIVE_DIR, { recursive: true });
 
   return () => {
     process.chdir(originalCwd);
+
+    if (originalGithubWorkspace === undefined) {
+      delete process.env.GITHUB_WORKSPACE;
+
+      return;
+    }
+
+    process.env.GITHUB_WORKSPACE = originalGithubWorkspace;
   };
 }

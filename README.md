@@ -20,11 +20,13 @@ That last one is a hard precondition, checked at startup on the path that can
 write: when the sidecar resolves the Actions cache backend it refuses to start
 unless `nx.json` sits in the process working directory and that directory matches
 `GITHUB_WORKSPACE`. Both are startup checks rather than read faults, so they fail
-the step loudly instead of degrading to a MISS. A read-only context -- a fork
-pull request, or a local run -- never constructs that backend, so it never reaches
-the check; it also never writes an archive, so the mismatch below cannot bite it.
-Hold to the precondition anyway: the same workflow becomes write-trusted the
-moment it runs on your default branch. The reason is that the
+the step loudly instead of degrading to a MISS. **A pull request -- fork included
+-- reaches this check**: on `github.com` a `pull_request` run is write-trusted, so
+it resolves the Actions cache backend like any other. What makes a PR read-only in
+practice is GitHub's own cache scope isolation -- its writes land in the PR's merge
+ref, invisible to your default branch -- and that containment happens well after
+this startup check has already run. A local run is the only context that genuinely
+never constructs the backend. The reason the precondition matters is that the
 cache archive path is workspace-relative (see
 [Advanced usage](docs/advanced.md)), so a working directory anywhere else would
 have this action extract under one anchor and read under the other. The cache

@@ -122,11 +122,13 @@ Three consequences worth knowing, none of them configurable:
 - **`.nx/cache` must be gitignored.** Nx's own scaffolding does this by default,
   so most workspaces already comply. If yours does not, a multi-megabyte archive
   becomes briefly visible to Nx's workspace file map.
-- **Nothing may clear `.nx/cache` while the sidecar is running.** The directory is
-  created once, when the server starts. A step that runs `nx reset` (or otherwise
-  empties `.nx/cache`) mid-job makes the next write fail with a `500` rather than
-  a MISS, because writes are deliberately fail-closed. Run `nx reset` _before_
-  starting the sidecar, never between start and teardown.
+- **Clearing `.nx/cache` mid-job costs you the archives, not the sidecar.** The
+  directory is established when the server starts and re-created on every write,
+  so a step that runs `nx reset` (or otherwise empties `.nx/cache`) between start
+  and teardown no longer breaks the write that follows it. What it does do is
+  delete the archives already written, so each entry it removed comes back as a
+  MISS. Running `nx reset` _before_ starting the sidecar is still the tidier
+  order; it is no longer a correctness requirement.
 - **Archives land on the workspace volume, not the temp volume.** Identical on
   GitHub-hosted runners, where both are the same disk. On a self-hosted runner
   with a separate temp mount, size the workspace volume for your largest cache

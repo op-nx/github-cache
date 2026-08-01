@@ -51,8 +51,11 @@ import type { Hash } from './cache-key.js';
  * re-measure, not an assumption to inherit.
  *
  * `nx reset` deletes this directory, so the local proof order is RESET FIRST, THEN start
- * the sidecar (D-36 / TEST-10). Resetting under a running sidecar deletes the directory
- * the next put()'s writeFile needs, which ENOENTs into a 500.
+ * the sidecar (D-36 / TEST-10). Resetting under a running sidecar USED TO delete the
+ * directory the next put()'s writeFile needs and ENOENT into a 500; put() now re-creates
+ * it on every write (VER-07's second half, actions-cache-backend.ts). The reset therefore
+ * costs the archives already written -- each one a later MISS -- and no longer the write
+ * itself. The proof order stands as the tidier sequence, not as a correctness rule.
  *
  * ponytail: CROSS-PROCESS INVARIANT, documented not enforced. This path is
  * deterministic per hash and therefore SHARED by every process using this backend.

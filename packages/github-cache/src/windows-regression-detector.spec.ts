@@ -54,18 +54,23 @@ const codeLines = (
   .join('\n');
 
 /**
- * The success line Nx prints for a THREE-target run, naming all three in `-t` argument order.
+ * The success line Nx prints for a FOUR-target run, naming all four in `-t` argument order.
  *
  * The short form -- the bare `Successfully ran target` prefix -- is VACUOUS here and is
  * deliberately not used. Source-traced to
  * `node_modules/nx/dist/src/tasks-runner/life-cycles/formatting-utils.js:37`, Nx FILTERS the
  * printed target list down to targets that actually resolved a task, so if `typecheck` silently
- * stopped resolving, the line becomes `Successfully ran targets build, test for project ...`
- * and the short needle still matches a two-of-three run. The `lint` job's needle works only
- * because it names its one target.
+ * stopped resolving, the line becomes `Successfully ran targets build, test, lint for project ...`
+ * and the short needle still matches a three-of-four run. The `lint` job in `ci.yml` gets away
+ * with a short needle only because it names its one target.
+ *
+ * `lint` is the FOURTH target because it is in `INVARIANT_TARGETS` (compare.ts) alongside the
+ * other three. The detector exists to catch an input that became OS-sensitive, and omitting one
+ * of the four invariants meant an OS-sensitive `lint` input was the one regression this detector
+ * structurally could not see.
  */
 const MULTI_TARGET_SUCCESS_LINE =
-  'Successfully ran targets build, typecheck, test for project';
+  'Successfully ran targets build, typecheck, test, lint for project';
 
 const RESTORE_NOTE =
   'If the workflow was legitimately reworked, update this describe in the SAME commit; do not ' +
@@ -94,7 +99,7 @@ describe('windows-regression-detector.yml workflow config -- the XOS-05 detector
       'detector gets re-run ON DEMAND AFTER merge. GitHub only dispatches a workflow whose ' +
       'file exists on the DEFAULT branch, so it cannot close this question before a merge and ' +
       'must never be documented as if it could. push and pull_request are forbidden because a ' +
-      'cache-bypassing three-target Windows run on every PR is a cost this phase is not ' +
+      'cache-bypassing four-target Windows run on every PR is a cost this phase is not ' +
       `paying, and ci.yml already covers those events. ${RESTORE_NOTE}`;
 
     expect(codeLines, reason).toMatch(/^on:\s*\n\s*schedule:/m);
@@ -127,26 +132,26 @@ describe('windows-regression-detector.yml workflow config -- the XOS-05 detector
     expect(runsOnLines, reason).toHaveLength(1);
   });
 
-  // ONE LINE CARRYING BOTH THE THREE TARGETS AND THE FLAG, never a file-wide
+  // ONE LINE CARRYING BOTH THE FOUR TARGETS AND THE FLAG, never a file-wide
   // `toContain('--skip-nx-cache')`. A bare containment ties the flag to nothing: it stays
   // green while the flag MIGRATES onto a different command in a second step -- an
-  // `nx reset --skip-nx-cache` warm-up, say -- with the three-target run keeping the cache
+  // `nx reset --skip-nx-cache` warm-up, say -- with the four-target run keeping the cache
   // and replaying Linux artifacts, which this clause's own reason calls "a slower copy of
   // the ci.yml Windows legs". The literal below contains no `.` and no other metacharacter,
   // so it can only match CONTIGUOUSLY and therefore only on ONE line. MEASURED against the
   // written workflow, and measured against the mutation too: dropping the flag from the
   // run-many line no longer leaves this clause green.
-  it('bypasses the Nx cache on the SAME invocation that runs the three targets', () => {
+  it('bypasses the Nx cache on the SAME invocation that runs the four targets', () => {
     expect(
       codeLines,
       'The detector must pass --skip-nx-cache ON THE run-many INVOCATION ITSELF. At Nx ' +
         '23.1.0 that skips the cache READ and the cache WRITE, so the run genuinely executes ' +
-        'the three targets on Windows instead of replaying Linux-produced artifacts. Without ' +
+        'the four targets on Windows instead of replaying Linux-produced artifacts. Without ' +
         'it this workflow is a slower copy of the ci.yml Windows legs and detects nothing at ' +
         'all. Asserted as one contiguous line rather than as a file-wide containment, because ' +
         'a containment is satisfied by the flag sitting on any OTHER command in any other ' +
         `step. ${RESTORE_NOTE}`,
-    ).toMatch(/nx run-many -t build typecheck test --skip-nx-cache/);
+    ).toMatch(/nx run-many -t build typecheck test lint --skip-nx-cache/);
   });
 
   it('proves the run happened, rather than inferring it from an exit code', () => {

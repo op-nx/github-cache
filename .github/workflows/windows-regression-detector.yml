@@ -42,7 +42,7 @@ on:
   # addition is deliberate, and its justification is post-merge re-runs.
   workflow_dispatch:
 
-# Least privilege: this job checks out, installs and runs three targets, and
+# Least privilege: this job checks out, installs and runs four targets, and
 # writes nothing -- no Releases asset, no Actions-cache entry, no package. It
 # therefore does not copy cleanup.yml's write scope (cleanup needs one because
 # it DELETES release assets), and it requests no Actions scope either.
@@ -58,9 +58,10 @@ jobs:
   detect:
     runs-on: windows-11-arm
     # 20 rather than the 15 the ci.yml jobs carry: this is the only job in the
-    # repository whose wall time is FULL cold execution of all three targets
+    # repository whose wall time is FULL cold execution of all four targets
     # rather than a cache restore, so it needs more headroom than a leg that
-    # HITs.
+    # HITs. `lint` joined the set without raising this: it is the cheapest of
+    # the four and the ceiling was already sized for the three expensive ones.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -81,24 +82,24 @@ jobs:
       # Exit 0 is NOT sufficient, and that is the whole reason this is a
       # scripted step rather than a bare `- run:`. nx run-many with no matching
       # target ANYWHERE prints "NX No tasks were run" and exits 0 (measured in
-      # this repo). Worse for a three-target run: source-traced at
+      # this repo). Worse for a four-target run: source-traced at
       # node_modules/nx/dist/src/tasks-runner/life-cycles/formatting-utils.js:37
       # Nx FILTERS the printed target list down to targets that actually
       # resolved a task, so a needle matching only the singular prefix still
-      # PASSES when two of the three ran. The needle below therefore names all
-      # three, in -t argument order. The trade: it pins the -t ARGUMENT ORDER
+      # PASSES when three of the four ran. The needle below therefore names all
+      # four, in -t argument order. The trade: it pins the -t ARGUMENT ORDER
       # too, so reordering the flags reddens a CORRECT run -- and the fix for
       # that is to update the needle and its clause in
       # windows-regression-detector.spec.ts in the SAME commit, never to
       # shorten the needle.
       #
-      # One invocation rather than three single-target steps: one graph load on
+      # One invocation rather than four single-target steps: one graph load on
       # the slowest runner in the fleet, and Nx already names the failing target
       # in its own output.
       #
       # NO_COLOR is MORE load-bearing here than in ci.yml's lint job, not less.
       # Nx bolds each target name INDIVIDUALLY while the ", " separators are
-      # not, so with colour on the combined line carries three escape-sequence
+      # not, so with colour on the combined line carries four escape-sequence
       # pairs interleaved with the commas and a plain-text match cannot fire. A
       # gate that always fails gets deleted just as fast as one that never
       # fires.
@@ -109,11 +110,11 @@ jobs:
       # correct -- this project's never-use-grep rule governs the agent's own
       # shell, not workflow bodies, and ci.yml's lint job already uses grep -q
       # for exactly this purpose.
-      - name: Execute build, typecheck and test on Windows with the Nx cache bypassed
+      - name: Execute build, typecheck, test and lint on Windows with the Nx cache bypassed
         shell: bash
         env:
           NO_COLOR: '1'
         run: |
           set -euo pipefail
-          npm exec -- nx run-many -t build typecheck test --skip-nx-cache 2>&1 | tee detector.log
-          grep -q 'Successfully ran targets build, typecheck, test for project' detector.log
+          npm exec -- nx run-many -t build typecheck test lint --skip-nx-cache 2>&1 | tee detector.log
+          grep -q 'Successfully ran targets build, typecheck, test, lint for project' detector.log

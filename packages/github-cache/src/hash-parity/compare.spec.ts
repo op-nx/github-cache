@@ -21,6 +21,7 @@
  * is absent IS an occurrence of the token, and a check satisfiable by prose is
  * Phase 7's wrong-token lesson recurring.
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   compareHashParity,
@@ -480,10 +481,18 @@ describe('a record cannot FORGE the success line through the failure detail', ()
   // `meta.os`, and the escaping is defended only by the third test. A reader
   // deleting that test is deleting the only cover the quoting has.
   //
-  // A THIRD half is not pinnable here at all: the `^` anchor on the grep, without
-  // which the payload still matches as a MID-LINE substring of the failure line.
-  // `ci.yml` is not a declared `test` input (PARITY-08, deferred to Phase 9), so
-  // a spec asserting on its content would serve a stale cached PASS.
+  // THE THIRD HALF -- the `^` anchor on the grep, without which the payload still
+  // matches as a MID-LINE substring of the failure line -- is pinned by the
+  // `hash-parity-compare` describe at the foot of this file, NOT here. This block
+  // used to say it was "not pinnable here at all", on the ground that `ci.yml` was
+  // not a declared `test` input (PARITY-08, deferred to Phase 9) and a spec reading
+  // it would serve a stale cached PASS. Both halves of that are now false:
+  // `{workspaceRoot}/.github/workflows/ci.yml` IS a `test` input, and `compare.ts`'s
+  // own header already carried the correction in prose while this spec still
+  // asserted the impossibility. The reason it is a SEPARATE describe rather than a
+  // clause here: this group's assertions are prefix-AGNOSTIC on purpose (above), and
+  // the anchor pin is necessarily prefix-SPECIFIC, so folding them together would
+  // undo the property the paragraph above is protecting.
   const PAYLOAD = '\nhash-parity: PARITY OK';
 
   const VECTORS: readonly (readonly [
@@ -599,5 +608,83 @@ describe('the comparator constants are content-pinned, never snapshotted', () =>
     expect([...REQUIRED_META_KEYS]).toEqual(
       expect.arrayContaining([...LIKE_FOR_LIKE_META_KEYS]),
     );
+  });
+});
+
+/**
+ * The OTHER end of the gate: `assert-parity.ts`'s success line and the `ci.yml`
+ * expression that reads it, pinned against each other.
+ *
+ * WHY THIS IS NOT COVERED BY ANYTHING ABOVE. `assert-parity.ts` is, by its own
+ * header, "the one part of the gate with no unit test standing behind it" -- the
+ * bin is kept small enough to review by eye instead. That is a reasonable trade for
+ * its file-reading and printing, but it left the ONE value in it that is a CONTRACT
+ * with another file unguarded: `SUCCESS_PREFIX` has to match the `hash-parity-compare`
+ * step's grep BYTE FOR BYTE, and nothing read either side.
+ *
+ * THE TWO FAILURES THIS CLOSES, both silent-green:
+ *   1. Re-spell `SUCCESS_PREFIX` (or the grep) and the step's second signal can
+ *      never match. Under `pipefail` the job then goes red only when the exit code
+ *      already said so -- collapsing the deliberately-independent second signal into
+ *      the exit-code-alone check D-23 calls insufficient, with nothing announcing the
+ *      loss.
+ *   2. Drop the `^` and the anchor half of the log-injection defence is gone, which
+ *      `compare.ts`'s `fail` header calls load-bearing and explicitly says it does
+ *      NOT own ("Neither half suffices alone").
+ *
+ * ONE ASSERTION COVERS BOTH because the prefix is read from `assert-parity.ts`'s own
+ * source rather than re-authored here: the expression is built from that value, so a
+ * re-spelling on either side and a deleted anchor all land as the same red.
+ *
+ * READ FROM SOURCE, not imported. Importing the bin to export its constant would put
+ * a spec-only export on a module whose surface is deliberately empty, and this repo
+ * gates on `fallow dead-code`. The source scan is the house pattern
+ * (`cache-archive-path.spec.ts` scans its module's text for the same class of reason).
+ *
+ * PRECEDENT: the sibling `o3-witness` job's `grep -q '^o3-witness: EXISTENCE OK'` is
+ * pinned exactly this way in `dogfood-cross-os.spec.ts`. This job was the only one of
+ * the two left unguarded.
+ */
+describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)', () => {
+  const workspaceRoot = new URL('../../../../', import.meta.url);
+  const assertParitySource = readFileSync(
+    new URL('assert-parity.ts', import.meta.url),
+    'utf8',
+  );
+  const ciYml = readFileSync(
+    new URL('.github/workflows/ci.yml', workspaceRoot),
+    'utf8',
+  );
+
+  // The extraction is its own test, and it comes FIRST: every assertion below is
+  // built from this value, so a regex that silently stopped matching would make the
+  // rest of the group assert about `undefined` instead of about the gate.
+  const successPrefix = /const SUCCESS_PREFIX = '([^']+)';/.exec(
+    assertParitySource,
+  )?.[1];
+
+  it('states its success prefix as a single-quoted literal the gate can be built from', () => {
+    expect(
+      successPrefix,
+      "assert-parity.ts must declare `const SUCCESS_PREFIX = '...';`. If the " +
+        'declaration was legitimately reshaped, update this extraction in the SAME ' +
+        'commit -- every assertion in this group is derived from it, so a failed ' +
+        'extraction silently empties them rather than failing loud.',
+    ).toBe('hash-parity: PARITY OK');
+  });
+
+  it('greps for that exact prefix, ANCHORED, so the failure path cannot satisfy the success signal', () => {
+    expect(
+      ciYml,
+      "ci.yml's `hash-parity-compare` job must carry " +
+        `\`grep -q '^${successPrefix}' hash-parity.log\`. The ^ is half of a ` +
+        'two-half log-injection defence: compare.ts collapses CR/LF in every detail ' +
+        'so injected text cannot START a line, and this anchor is what stops the same ' +
+        'text matching as a MID-LINE substring of the failure line. Neither half ' +
+        'suffices alone, and compare.ts explicitly does not own this one. Deleting ' +
+        'the anchor, the grep, or re-spelling either side is silent: the step still ' +
+        'goes red on a bad exit code, so the loss of the INDEPENDENT second signal ' +
+        'shows up nowhere.',
+    ).toContain(`grep -q '^${successPrefix}' hash-parity.log`);
   });
 });

@@ -1,6 +1,9 @@
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { enterWorkspaceRootCwd } from './test/workspace-root-cwd.js';
 
 /**
  * THE CLI CONTRACT OF `capture-hashes.mjs` (TEST-08, D-12, D-13).
@@ -51,7 +54,11 @@ function capture(...args: string[]) {
     encoding: 'utf8',
   });
 
-  return { status: result.status, stderr: result.stderr };
+  return {
+    status: result.status,
+    stderr: result.stderr,
+    stdout: result.stdout,
+  };
 }
 
 describe('capture-hashes.mjs rejects an invocation it cannot honour (TEST-08)', () => {
@@ -135,5 +142,109 @@ describe('capture-hashes.mjs rejects an invocation it cannot honour (TEST-08)', 
     ).not.toBe(0);
     expect(result.stderr).toContain('is REQUIRED and has NO default');
     expect(result.stderr).toContain('it was missing');
+  });
+});
+
+/**
+ * `--diff` IS THE TOOL BOTH DIVERGENCE MESSAGES SEND THE OPERATOR TO, so a difference it
+ * cannot see is a difference nobody localises. `compare.ts` ends both
+ * `discriminator-not-platform-sensitive` and `invariant-target-diverged` with "Localise it
+ * with `node capture-hashes.mjs --diff <recordA.json> <recordB.json>`", and the field-level
+ * `projectConfiguration` partition is the half that answers WHICH FIELD moved.
+ *
+ * THE SHAPE UNDER TEST IS THIS MILESTONE'S OWN ROOT CAUSE. Phase 8 traced every rotated hash
+ * to `targets.typecheck.outputs` -- seven entries on linux, one on win32 -- so an
+ * empty-versus-absent container in exactly that field family is the case the instrument must
+ * not be blind to. Before the empty-container clause in `flatten`, both records flattened to
+ * the SAME map (the recursion's loop body never runs on `[]`, and the leaf assignment is
+ * unreachable for it), so the partition printed three zero buckets for two nodes whose JSON
+ * genuinely differs.
+ *
+ * NEGATIVE CONTROL FIRST, and it is not decoration: every assertion here reads the partition
+ * counts, and a `--diff` that failed to load, or a fixture path that never resolved, would
+ * print no partition at all and let a "the bucket does not say (0)" assertion pass vacuously.
+ * The identical-records case pins `only-in-A (0)` AND a non-zero `same`, which only a run
+ * that really flattened both records can produce.
+ *
+ * NO GRAPH IS BUILT HERE either, so this stays a unit spec: `--diff` reads two files and
+ * returns before `createProjectGraphAsync` is reached, which is the same property the block
+ * above depends on.
+ *
+ * The relative `mkdtempSync` prefix and the `enterWorkspaceRootCwd` hook are the house
+ * pattern, borrowed from `actions-cache-backend.spec.ts`: `.nx/cache` is gitignored exactly
+ * and invisible to Nx's file map, so the fixtures leave no `git status` entry and perturb no
+ * task hash -- which matters more than usual here, because `capture-hashes.mjs` records
+ * `workingTreeClean`.
+ */
+describe('capture-hashes.mjs --diff localises a projectConfiguration divergence (CORR-03)', () => {
+  let restoreCwd: () => void;
+  let fixtureRoot: string;
+  let fixtureAbsolute: string;
+
+  beforeAll(() => {
+    restoreCwd = enterWorkspaceRootCwd();
+    fixtureRoot = mkdtempSync('.nx/cache/diff-');
+    fixtureAbsolute = resolve(fixtureRoot);
+  });
+
+  afterAll(() => {
+    rmSync(fixtureAbsolute, { recursive: true, force: true });
+    restoreCwd();
+  });
+
+  /** Write one record carrying only the field-level half `--diff` partitions. */
+  function record(name: string, projectConfiguration: unknown): string {
+    const path = `${fixtureAbsolute}/${name}.json`;
+
+    writeFileSync(path, JSON.stringify({ targets: {}, projectConfiguration }));
+
+    return path;
+  }
+
+  it('reports NOTHING for two byte-identical records -- the control for the cases below', () => {
+    const configuration = { targets: { typecheck: { outputs: ['dist'] } } };
+    const result = capture(
+      '--diff',
+      record('same-a', configuration),
+      record('same-b', configuration),
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('only-in-A (0)');
+    expect(result.stdout).toContain('only-in-B (0)');
+    expect(result.stdout).toContain('value-changed (0)');
+    expect(
+      result.stdout,
+      'A non-zero `same` is what proves the run actually flattened both records. Without it every "(0)" assertion below would also pass on a --diff that printed no partition at all.',
+    ).toContain('same: 1');
+  });
+
+  it('reports an EMPTY array against an ABSENT key -- the targets.typecheck.outputs shape Phase 8 root-caused', () => {
+    const result = capture(
+      '--diff',
+      record('empty-a', { targets: { typecheck: { outputs: [] } } }),
+      record('empty-b', { targets: { typecheck: {} } }),
+    );
+
+    expect(result.status).toBe(0);
+    expect(
+      result.stdout,
+      'An empty container must flatten to a KEY. Emitting nothing for it makes it indistinguishable from an absent key, so the partition answers "no difference" for two nodes that genuinely differ and genuinely moved the hash -- and sends the operator looking at every field except the one that moved.',
+    ).toContain('targets.typecheck.outputs');
+    expect(result.stdout).toContain('only-in-A (1)');
+  });
+
+  it('distinguishes an empty ARRAY from an empty OBJECT rather than conflating them', () => {
+    const result = capture(
+      '--diff',
+      record('kind-a', { targets: { typecheck: { outputs: [] } } }),
+      record('kind-b', { targets: { typecheck: { outputs: {} } } }),
+    );
+
+    expect(result.status).toBe(0);
+    expect(
+      result.stdout,
+      'They are different JSON and Nx hashes them differently, so a marker that collapsed both to one token would report `same` for a real divergence.',
+    ).toContain('value-changed (1)');
   });
 });

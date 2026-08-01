@@ -752,7 +752,31 @@ async function assertGraphPremise(args) {
   process.stdout.write(serialised);
 }
 
-/** Flatten an object to dotted leaf paths with JSON-encoded leaf values. */
+/**
+ * Flatten an object to dotted leaf paths with JSON-encoded leaf values.
+ *
+ * AN EMPTY CONTAINER IS A LEAF, and that clause is load-bearing rather than tidy. Without
+ * it the recursion's `for...of` body never runs on `[]` or `{}` and the leaf assignment is
+ * unreachable for them, so an empty container emits NO KEY AT ALL -- indistinguishable from
+ * an absent one. `partition` then reports `only-in-A (0) / only-in-B (0) / value-changed (0)`
+ * for two nodes that genuinely differ and genuinely moved the hash.
+ *
+ * That is not a hypothetical shape here: this milestone's ROOT CAUSE was
+ * `targets.typecheck.outputs` holding seven entries on linux and one on win32, and both of
+ * `compare.ts`'s divergence messages send the operator to `--diff` to localise exactly that
+ * field family. An empty-vs-absent `outputs` answering "no difference" points them away from
+ * the only field that moved.
+ *
+ * The marker distinguishes `[]` from `{}` so an empty array and an empty object are not
+ * conflated either -- they are different JSON and Nx hashes them differently.
+ *
+ * ponytail: the marker covers EMPTY containers only. Ceiling = a NON-empty array still
+ * flattens identically to an object with the same numeric keys (`{t:['a','b']}` and
+ * `{t:{0:'a',1:'b'}}` both yield `t.0`/`t.1`), so that pair still reports `same`. Left
+ * alone deliberately: a `ProjectConfiguration` node never swaps an array for a
+ * numeric-keyed object, whereas empty-vs-absent is routine. Upgrade path if it ever
+ * matters is stamping the container kind at every level, not only at the empty ones.
+ */
 function flatten(value, prefix, out) {
   if (value === null || typeof value !== 'object') {
     out[prefix] = JSON.stringify(value);
@@ -760,7 +784,15 @@ function flatten(value, prefix, out) {
     return out;
   }
 
-  for (const [key, child] of Object.entries(value)) {
+  const entries = Object.entries(value);
+
+  if (entries.length === 0) {
+    out[prefix] = Array.isArray(value) ? '[]' : '{}';
+
+    return out;
+  }
+
+  for (const [key, child] of entries) {
     flatten(child, prefix === '' ? key : `${prefix}.${key}`, out);
   }
 

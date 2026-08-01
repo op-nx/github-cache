@@ -145,10 +145,16 @@ export default [
       // this glob. Ceiling = a global this file starts using that is not one of the
       // four (say `Buffer`) reads as a `no-undef` error rather than being resolved;
       // upgrade path is adding the name here, only if that ever happens. Taken over
-      // the one-line-shorter `'no-undef': 'off'` because `.cjs` is the ONLY place in
-      // the repo where `no-undef` is live at all (it is disabled for ts/tsx/mts/cts),
-      // so switching it off here would give up the typo check on the one file that
-      // still has one.
+      // the one-line-shorter `'no-undef': 'off'` because `.cjs` is the only place where
+      // `no-undef` is both live AND LINTED. It is disabled for ts/tsx/mts/cts, but it
+      // stays LIVE for `.mjs` -- what saves those files is that nothing reaches them:
+      // `nx run-many -t lint` resolves the one package project and never sees the
+      // root-level `.mjs`. Running eslint over `capture-hashes.mjs` and
+      // `read-integration-hash.mjs` directly reports 35 `no-undef` errors on
+      // `process`/`console`, so this is coverage we do not have rather than a rule we
+      // turned off -- it is the deferred second scope this file's header records, not
+      // something this block covers. Switching `no-undef` off here would give up the
+      // typo check on the one file that IS linted with it on.
       globals: {
         require: 'readonly',
         module: 'writable',

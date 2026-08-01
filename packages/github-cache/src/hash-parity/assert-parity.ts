@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isEntrypoint } from '../lib/is-entrypoint.js';
 import { compareHashParity, EXPECTED_TARGETS } from './compare.js';
-import type { HashParityRecord } from './compare.js';
 
 /**
  * The CI bin around `compareHashParity` (D-19). `ci.yml`'s `hash-parity-compare`
@@ -82,9 +81,13 @@ function run(directory: string): void {
     return;
   }
 
-  // Backed by the verdict: a successful comparison has already narrowed both
-  // records, so this reads validated fields rather than asserting unread ones.
-  const [a, b] = records as readonly [HashParityRecord, HashParityRecord];
+  // Taken FROM the verdict, not re-asserted about `records`. The comparator is the
+  // only thing that narrows these two, and it now hands back what it validated --
+  // so this reads checked values with no cast standing between them and the file.
+  // That matters more here than anywhere else in the gate: this is the one file
+  // with no unit test behind it, so an unchecked assertion here is the one nothing
+  // would have caught.
+  const [a, b] = verdict.records;
   const hashes = EXPECTED_TARGETS.map(
     (target) => `${target}=${a.targets[target].hash}/${b.targets[target].hash}`,
   ).join(' ');

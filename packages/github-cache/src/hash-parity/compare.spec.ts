@@ -140,10 +140,21 @@ function child(
 }
 
 describe('compareHashParity -- the positive control (CORR-03)', () => {
-  it('PASSES a genuinely-correct two-record pair and names both platforms', () => {
-    const verdict = compareHashParity(validPair());
+  // Still EXACT equality, not a partial match: the success shape is the thing under
+  // test, so an extra field appearing here must be a reviewable diff. `records` is
+  // asserted to be the pair that went IN -- the comparator narrows those two and
+  // hands them back for `assert-parity.ts` to read, and returning anything else
+  // (a copy, a reordering) would silently break the caller that indexes them.
+  it('PASSES a genuinely-correct two-record pair, naming both platforms and returning what it validated', () => {
+    const pair = validPair();
 
-    expect(verdict).toEqual({ ok: true, platforms: [LINUX, WINDOWS] });
+    const verdict = compareHashParity(pair);
+
+    expect(verdict).toEqual({
+      ok: true,
+      platforms: [LINUX, WINDOWS],
+      records: pair,
+    });
   });
 });
 

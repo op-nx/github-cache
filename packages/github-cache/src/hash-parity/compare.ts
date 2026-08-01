@@ -164,9 +164,29 @@ export type ParityFailureReason =
  */
 export const LIKE_FOR_LIKE_META_KEYS = ['commit', 'nxVersion', 'arch'] as const;
 
-/** Discriminated verdict: parity holds between the two named platforms, or it does not, WITH the reason. */
+/**
+ * Discriminated verdict: parity holds between the two named platforms, or it does
+ * not, WITH the reason.
+ *
+ * THE SUCCESS VARIANT CARRIES THE RECORDS IT VALIDATED, and that is load-bearing
+ * rather than convenience. `compareHashParity` is the only thing that narrows the
+ * two untrusted records -- `shapeFault` runs inside it -- and its caller then wants
+ * to READ them to print the hashes. Handing back only `platforms` left
+ * `assert-parity.ts` to re-assert the narrowing by hand
+ * (`records as readonly [HashParityRecord, HashParityRecord]`), a cast whose
+ * soundness rested on a comment pointing back at `verdict.ok`.
+ *
+ * That cast sat in the ONE file this design deliberately leaves untested -- the bin
+ * is kept small enough to review by eye instead -- so it was an unchecked assertion
+ * in precisely the place with no test to catch it being wrong. Returning what was
+ * validated deletes the assertion rather than documenting it.
+ */
 export type ParityVerdict =
-  | { readonly ok: true; readonly platforms: readonly [string, string] }
+  | {
+      readonly ok: true;
+      readonly platforms: readonly [string, string];
+      readonly records: readonly [HashParityRecord, HashParityRecord];
+    }
   | {
       readonly ok: false;
       readonly reason: ParityFailureReason;
@@ -484,5 +504,5 @@ export function compareHashParity(records: readonly unknown[]): ParityVerdict {
     }
   }
 
-  return { ok: true, platforms: [a.meta.os, b.meta.os] };
+  return { ok: true, platforms: [a.meta.os, b.meta.os], records: [a, b] };
 }

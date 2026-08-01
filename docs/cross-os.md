@@ -81,7 +81,7 @@ wholesale, discriminator included.
 Read the inferred list BEFORE you replace it:
 
 ```bash
-nx show project <project> --json | jq '.targets["<target>"].inputs'
+npm exec -- nx show project <project> --json | jq '.targets["<target>"].inputs'
 ```
 
 Reproduce every entry, then append the discriminator. An input you drop is an

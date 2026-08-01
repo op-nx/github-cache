@@ -62,6 +62,24 @@ Thumbs.db
 /integration-hash.txt
 /o3-witness.log
 
+# The remaining workspace-ROOT logs the CI jobs tee, for the SAME reason as the two
+# above and completing that set: `build-nx.log`, `typecheck-nx.log` and `test-nx.log`
+# (the three Windows reuse legs' runtime cache observation), `lint.log`,
+# `hash-parity.log` (the `^hash-parity: PARITY OK` grep target) and `detector.log`
+# (windows-regression-detector.yml). Only the two O3 logs were listed, which made the
+# rule look like an O3 special case rather than what it is: a `tee` at the workspace
+# root leaves an UNTRACKED file, and `capture-hashes.mjs` records `workingTreeClean`
+# from `git status --porcelain`, so any of these sitting beside a capture pegs that
+# field to false and destroys the signal it exists to carry. Latent today only because
+# no job both tees and captures in one checkout -- which is a scheduling accident, not
+# a guarantee, and the hash-parity job already tees `hash-parity.log`.
+/build-nx.log
+/typecheck-nx.log
+/test-nx.log
+/lint.log
+/hash-parity.log
+/detector.log
+
 # op-nx/github-cache act test harness (test-only, never a runtime dep)
 .act-cache
 .act-artifacts

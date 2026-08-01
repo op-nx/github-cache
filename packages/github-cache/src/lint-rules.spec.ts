@@ -775,7 +775,23 @@ describe('every extant CORR-05 violation is caught while it still exists (LINT-0
   // integration path, and that survives untouched. Nor is this table's HISTORICAL doc
   // block deleted when its rows go -- a removed miscount lock is indistinguishable from
   // a miscount that never existed.
-  it('CORR-05 is now TRUE: zero extant ambient-platform reads remain in unit specs', () => {
+  // THE NAME STATES WHAT IS ASSERTED, which is the LEDGER being empty -- not the
+  // repo-wide property. Those are different claims and this test can only make the
+  // first: `CORR_05_SITES` is a hand-maintained table, so a violation reintroduced
+  // tomorrow and never written down here would leave this green. It was previously
+  // named "CORR-05 is now TRUE: zero extant ambient-platform reads remain in unit
+  // specs", which claimed the second, and a reader auditing coverage would have
+  // credited this file with a guarantee nothing here computes.
+  //
+  // NOT UPGRADED to a real `lintFiles` sweep over the spec tree, deliberately. That
+  // would duplicate the `lint` TARGET, which already runs these exact rules over
+  // every file and fails the build -- and a second, slower copy of an existing gate
+  // inside `test` is cost without coverage. The repo-wide property has two real
+  // owners already: `lint` enforces it on the actual tree, and `EVASION_SHAPES`
+  // above proves the rule fires on every evasion shape rather than merely existing.
+  // This assertion's job is narrower and still worth its line: it is what keeps the
+  // emptied table from becoming a describe that silently emits ZERO tests.
+  it('the CORR-05 ledger is EMPTY -- every extant violation left with its site', () => {
     expect(CORR_05_SITES).toEqual([]);
   });
 });

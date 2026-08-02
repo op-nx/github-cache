@@ -696,8 +696,8 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
  * the SAME token -- so every clause below is anchored at its indent level: a job's own keys at
  * FOUR spaces, their step children at SIX.
  *
- * AND EVERY CLAUSE IS SCOPED TO `jobBlock(<leg>)`, never to the file. `windows-11-arm` occurs 10
- * times in the COMMENT-STRIPPED `ci.yml` this guard actually reads (25 times in the raw file),
+ * AND EVERY CLAUSE IS SCOPED TO `jobBlock(<leg>)`, never to the file. `windows-11-arm` occurs 13
+ * times in the COMMENT-STRIPPED `ci.yml` this guard actually reads (29 times in the raw file),
  * so a whole-file `toContain('windows-11-arm')` passes unconditionally whatever these three jobs
  * actually say.
  *
@@ -706,10 +706,14 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
  * this phase's own `ci.yml` edit landed, and never re-measured -- these guards were authored RED,
  * so the number was frozen against a tree that did not yet contain the three legs -- and (b) the
  * RAW count, when `codeLines` strips every `#` line, so the reading that supports the vacuity
- * argument is the comment-stripped one. It was 7 stripped / 19 raw at `0251bd3`, and is 10
- * stripped / 25 raw at HEAD. The ARGUMENT holds at any of these numbers; the number is this
- * file's own house standard, which is MEASURED, not predicted. Re-measure BOTH readings when
- * `ci.yml` next changes shape.
+ * argument is the comment-stripped one. It was 7 stripped / 19 raw at `0251bd3`, 10 stripped /
+ * 25 raw when that correction landed, and is 13 stripped / 29 raw at HEAD, re-measured against
+ * the POST-edit file after XOS-09 converted these three legs. It drifted to 13/29 in the commits
+ * that widened the dogfood pair to same-repo pull requests (CR-18), NOT in the XOS-09 edit, which
+ * added no `windows-11-arm` line -- which is the point: the reading rots on any `ci.yml` change,
+ * not only on one that touches these jobs. The ARGUMENT holds at any of these numbers; the number
+ * is this file's own house standard, which is MEASURED, not predicted. Re-measure BOTH readings
+ * when `ci.yml` next changes shape.
  *
  * NO COMMENT-PHRASE ASSERTION BELONGS HERE. `codeLines` strips every `#` line, so a comment lock
  * placed in this file is vacuous by construction; the sidecar-invariant and graph-premise prose
@@ -731,8 +735,8 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
     runsOn:
       `${leg} must run on windows-11-arm. It is the CONSUMER half of XOS-04, and a leg that ` +
       'quietly moved back to ubuntu proves nothing about cross-OS reuse while staying green. ' +
-      'Asserted against this job block alone: `windows-11-arm` occurs 10 times in the ' +
-      'COMMENT-STRIPPED ci.yml this guard reads (25 in the raw file), so a whole-file match ' +
+      'Asserted against this job block alone: `windows-11-arm` occurs 13 times in the ' +
+      'COMMENT-STRIPPED ci.yml this guard reads (29 in the raw file), so a whole-file match ' +
       `would pass unconditionally. ${RENAME_NOTE}`,
     needs:
       `${leg} must declare \`needs: ${producer}\` -- a BARE SCALAR naming exactly ONE ` +
@@ -963,8 +967,14 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
   // Same regex shape as the two cacheClient writes above, and for the same reason: anchored
   // at the leg's real indent, with `>> "$GITHUB_ENV"` pinned at end-of-line so a mention in
   // some other position cannot satisfy it. Non-vacuity is free here in one direction --
-  // `codeLines` is comment-stripped, so a knob named only in a `#` line cannot pass -- and
-  // MEASURED in the other, below.
+  // `codeLines` is comment-stripped, so a knob named only in a `#` line cannot pass.
+  //
+  // MEASURED, not argued (MUTATION 2 of 3, run before this clause was committed): deleting
+  // the single `echo "CACHE_READ_ONLY=1"` line from typecheck-windows' pre-set step reddens
+  // this clause for typecheck-windows ALONE -- one failure in the file. The two cacheClient
+  // writes and the readiness-poll clause for that SAME leg stay GREEN, which is the reading
+  // that matters: the two clauses share a step, so without this measurement this one could
+  // be riding on its neighbour. Both other legs stay green too, so the clause is per-leg.
   it('declines the write via CACHE_READ_ONLY, which is what makes the gate below sound', () => {
     const block = jobBlock('build-windows');
 
@@ -984,6 +994,20 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
   // rationale comment on purpose: `codeLines` strips every `#` line, so a comment lock here
   // would be vacuous by construction, while the echo is CODE and is also the only one of the
   // two an operator ever sees.
+  //
+  // MEASURED, not argued, in the two directions a gate can be lost, both run before this
+  // clause was committed.
+  // MUTATION 1 of 3, deleting the whole gate step from build-windows: exactly two clauses
+  // redden, both for build-windows -- this one, and the cacheObservation clause that pins the
+  // step's name. The positive control, the `needs:` anchor, the tee'd-run clause, the sidecar
+  // and cacheClient clauses and both other legs all stay GREEN. That run is also the direct
+  // disproof of the `exit 1` trap: the mutated block has NO gate of any kind and still
+  // contains the readiness poll's `exit 1`, so an `/exit 1/` clause would have stayed green
+  // over a leg with the gate deleted.
+  // MUTATION 3 of 3, changing this leg's `-lt 1` to a comparison that can never fire (run on
+  // test-windows): that leg's copy of this clause reddens ALONE. Nothing else moves -- in
+  // particular the readOnlyLeg clause above stays green, so the knob and the comparison are
+  // independently pinned rather than one covering for the other.
   it('gates that count at a floor of 1 rather than only printing it (XOS-09)', () => {
     const block = jobBlock('build-windows');
 

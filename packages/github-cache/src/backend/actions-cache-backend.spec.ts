@@ -666,11 +666,15 @@ describe('exactly ONE module in the whole package reaches @actions/cache (VER-09
   // the ROADMAP's named risk for this phase (two places for the cache-version computation
   // to drift) realised behind a guard that reads as coverage.
   //
-  // MEASURED, not argued, the way dogfood-cross-os.spec.ts:886-893 records its own: a
-  // throwaway non-spec module under this root importing @actions/cache turns THIS clause
-  // RED while the ordered-member and single-import clauses above stay GREEN. That asymmetry
-  // IS the gap VER-09 closes. The mutation was run before this clause was committed and the
-  // throwaway deleted afterwards; re-run it if the scan's shape ever changes.
+  // MEASURED, not argued, the way dogfood-cross-os.spec.ts:886-893 records its own. A
+  // throwaway `backend/probe-actions-cache-mutation.ts` -- a non-spec module importing
+  // @actions/cache and calling restoreCache with the same five positionals -- was added to
+  // this tree, and the file scored 1 failed / 30 passed: THIS clause RED, and the
+  // ordered-member and single-import clauses above it GREEN, alongside every other clause
+  // in the file. That asymmetry IS the gap VER-09 closes, and it is the whole reason this
+  // clause exists rather than being redundant with the two above it. The throwaway was
+  // deleted immediately (the suite returned to 31 passed) and never committed; re-run the
+  // mutation if the scan's shape ever changes.
   //
   // Exact array, never a bare count -- the :524-525 convention. `length === 1` is satisfied
   // by a tree that DELETED the real importer and added a different one (Phase 8 D-23).

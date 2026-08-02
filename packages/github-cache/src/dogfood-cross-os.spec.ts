@@ -1265,6 +1265,98 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
 });
 
 /**
+ * T-13-05-D1's SCOPE LIMIT, and the ONE direction the three `gatedCount` clauses above
+ * cannot see. Those three read `not.toContain('RECORDED, never gated')` per Windows leg,
+ * which catches a leg quietly REVERTING to record-without-gate -- the UNDER-sweep. The
+ * threat this phase actually registered was the opposite one: XOS-09 converted three
+ * `[remote cache]` records into gates and deliberately left TWO records unconverted, and
+ * an over-eager sweep of the marker string would have deleted two claims that are still
+ * TRUE.
+ *
+ * Until this block, that scope limit was stated in the plan as "asserted mechanically"
+ * and asserted NOWHERE. `13-SECURITY.md` caught it: both survivors were intact and
+ * correct, but deleting either reddened nothing -- the declared control was absent and
+ * only its current outcome was right. That is the same defect class this phase exists to
+ * remove (a guard that reads as coverage without being it), so it is closed here rather
+ * than accepted.
+ *
+ * THE TWO SURVIVORS ARE TRUE, which is why they must not be swept:
+ *   1. `runner.debug` -- a recorded FACT about the run's own logging, not a cache
+ *      observation. There is no floor it could be compared against.
+ *   2. the `integration` leg's per-OS count -- that job still SAVES, so its count is
+ *      exactly the launderable number XOS-09 removed from the other three. Gating it
+ *      would re-introduce the confound rather than close it.
+ *
+ * EACH IS IDENTIFIED BY ITS OWN SURROUNDING TOKEN (`RUNNER_DEBUG_OBSERVED`, `LEG_OS`)
+ * rather than by the shared marker, so the two cannot cover for each other: a sweep that
+ * deletes one leaves the other's clause green and reddens exactly one case. Both live in
+ * the `integration` job block, so both are scoped to it and neither can be satisfied by a
+ * Windows leg.
+ *
+ * COUNT PINNED EXACTLY, never a floor -- the same rule `MASKED_TOKEN_SITES` records
+ * below. "Exactly two survivors" is the registered claim, so a floor of 2 would be
+ * satisfied by a third record appearing somewhere new, which is the under-sweep direction
+ * leaking back in through a job the per-leg clauses do not read. MEASURED against the
+ * comment-stripped file, not predicted: `ci.yml` carries the marker on two `echo` lines
+ * and in no comment, so the stripped count and the raw count agree at 2 today.
+ */
+const RECORD_ONLY_SURVIVOR_SITES = 2;
+
+describe('ci.yml keeps exactly the two record-only diagnostics XOS-09 did not convert (T-13-05-D1)', () => {
+  it('keeps the runner.debug record, which has no floor to be gated against', () => {
+    const block = jobBlock('integration');
+
+    expect(
+      block,
+      'The `runner.debug` record-only diagnostic is gone from the integration job. ' +
+        "XOS-09 converted the three Windows legs' [remote cache] records into gates and " +
+        'left this one deliberately unconverted: it reports whether step debug logging is ' +
+        'active, which is a fact about the RUN and not a cache observation, so there is no ' +
+        'floor it could be compared against. Deleting it is the OVER-sweep direction of ' +
+        'T-13-05-D1 -- the three per-leg `not.toContain` clauses above are silent on it, so ' +
+        'without this clause the deletion reddens nothing at all.',
+    ).toMatch(
+      /^ {10}echo "runner\.debug=\$\{RUNNER_DEBUG_OBSERVED:-<unset>\} -- RECORDED, never gated"$/m,
+    );
+  });
+
+  it('keeps the integration leg per-OS count, which is still launderable and must NOT be gated', () => {
+    const block = jobBlock('integration');
+
+    expect(
+      block,
+      "The integration leg's per-OS [remote cache] count is gone from the integration job. " +
+        'It is the second deliberate survivor, and it is ungated for a REASON rather than by ' +
+        'omission: unlike the three Windows legs, this job still SAVES, so its count is ' +
+        'exactly the launderable number XOS-09 removed elsewhere -- a broken cross-OS restore ' +
+        'makes it MISS, execute and SAVE, and a re-run of the same commit then HITs that ' +
+        'self-produced entry. Gating this one would re-introduce the confound the phase ' +
+        'removed. The record stays, and it stays ungated.',
+    ).toMatch(
+      /^ {10}echo "remote-cache label occurrences on \$\{LEG_OS\}: \$\{count\} -- RECORDED, never gated"$/m,
+    );
+  });
+
+  it('carries the marker on exactly two lines, so neither an over-sweep nor a new ungated record passes', () => {
+    const sites = codeLines.filter((line) =>
+      line.includes('RECORDED, never gated'),
+    );
+
+    expect(
+      sites,
+      `Expected exactly ${RECORD_ONLY_SURVIVOR_SITES} record-only diagnostics in the ` +
+        'comment-stripped `ci.yml`. FEWER means an over-sweep deleted a claim that is still ' +
+        'true (T-13-05-D1). MORE means a new [remote cache] record landed UNGATED somewhere ' +
+        'the three per-leg clauses do not read, which is the launderable shape XOS-09 exists ' +
+        'to remove. Pinned exactly rather than as a floor for the same reason ' +
+        '`MASKED_TOKEN_SITES` is: a floor of 2 is satisfied by the two survivors alone and ' +
+        'would let a third record appear in silence. If a record is legitimately added or ' +
+        'converted, RE-MEASURE and update this constant HERE in the same commit.',
+    ).toHaveLength(RECORD_ONLY_SURVIVOR_SITES);
+  });
+});
+
+/**
  * T-12-05's ORDERING, which was correct in all eight sidecar blocks and guarded in
  * NONE of them until this clause. `12-SECURITY.md`'s `## Residual 1` names it and
  * hands over this exact shape: the mask's index must be less than the token write's

@@ -9,7 +9,7 @@ asvs_level: 1
 block_on: high
 register_authored_at_plan_time: true
 audited_at: 2026-08-02
-audited_head: 7968f21
+audited_head: 80f3066
 ---
 
 # Phase 13 -- Security
@@ -56,7 +56,7 @@ Two live GitHub Actions runs were queried directly (`gh run view`), not taken fr
 | T-13-02-E1 | Elevation of Privilege | a `readOnly` argument re-entering the factory | high | mitigate | closed | Both factories declared with ZERO parameters (`actions-cache-backend.ts:88`, `:242`). `selectBackend.length === 0` pinned at `select-backend.spec.ts:303-310`, plus the behavioral override-shaped-keys clause at `:312-340`. `PutResult = 'stored' \| 'conflict'` at `backend/types.ts:8` -- no `'forbidden'` member anywhere in non-spec source. |
 | T-13-02-D1 | Denial of Service | dropping the VER-07 construction-time `mkdirSync` | medium | mitigate | closed | Construction `mkdirSync(CACHE_ARCHIVE_DIR, ...)` at `actions-cache-backend.ts:172`, inherited by the writable factory through the composition CALL at `:244`; per-call `mkdirSync` intact at `:271`. Both halves guarded: `actions-cache-backend.spec.ts:805-819` (removes the dir FIRST, then constructs via the WRITABLE factory) and `:830-849` (deletes AFTER construction, then drives `put`). |
 | T-13-02-R1 | Repudiation | a VER-04 message naming a function that did not run | medium | mitigate | closed (guard caveat) | Both VER-04 throws name the factory that actually runs: `actions-cache-backend.ts:141` and `:158` use the `createReadOnlyActionsCacheBackend:` prefix, and the write path reaches them BY CALLING it. See "Mitigations verified as state, not as standing guards" below -- the declared `git grep -c "createActionsCacheBackend:" == 0` is not literally zero and is not wired as a test. |
-| T-13-03-E1 | Elevation of Privilege | knob check placed BEFORE an existing narrowing branch | high | mitigate | closed (guard caveat) | Branch order re-measured by this audit at HEAD: first-occurrence offsets in `select-backend.ts` are `resolveGitHubToken(env)` 2961 < `CACHE_READ_ONLY` 3296 < `return createActionsCacheBackend()` 5245 -> "branch order OK", exit 0. The STANDING guard is behavioral: the exhaustive narrowing table at `select-backend.spec.ts:401-448` over five enumerated env shapes, each row PINNING its un-knobbed outcome (`:432`), asserting the implication by negating the QUANTIFIER (`widened(...) === false`, `:439`) rather than by an `if`-guard, plus throw-parity in BOTH directions (`:446`). Paired non-vacuous clause at `:375-391` distinguishes the read-only ACTIONS backend from the memory-degrade one by driving `get()`. |
+| T-13-03-E1 | Elevation of Privilege | knob check placed BEFORE an existing narrowing branch | high | mitigate | closed (2026-08-02, `cbe69ce`) -- **previously closed on a FALSE basis, see the correction below** | Branch order holds at HEAD: first-occurrence offsets in `select-backend.ts` are `resolveGitHubToken(env)` 2961 < `CACHE_READ_ONLY` 3296 < `return createActionsCacheBackend()` 5245. The STANDING guard is the behavioral clause at `select-backend.spec.ts:450-491`, `keeps the memory-degrade branch AHEAD of the knob ... (TRUST-14, T-13-03-E1)`, added by `cbe69ce`. It drives a token-less write-trusted env WITH the knob set and asserts `restoreCache` was never reached, with an in-test positive control on the same mock so an inert mock cannot satisfy it. Mutation-reproduced by this audit: hoisting the knob above the token branch gives 1 failed / 978 passed with THIS clause reddening alone. The exhaustive narrowing table at `:401-448` remains valuable but does NOT cover this threat -- see "Correction" below. |
 | T-13-03-E2 | Elevation of Privilege | a second `selectBackend` parameter or a `ServeOptions.readOnly` field | high | mitigate | closed | `selectBackend.length === 0` at `select-backend.spec.ts:303-310`. `src/serve.ts` is NOT in the phase diff, so the `:22-28` comment lock is untouched. The knob is an env-bag KEY read inline at `select-backend.ts:67`. |
 | T-13-03-V1 | Input Validation (ASVS V5) | hostile/malformed `CACHE_READ_ONLY` value | low | accept | closed | Basis CONFIRMED: `select-backend.ts:67` is bare truthiness (`if (env.CACHE_READ_ONLY)`); the VALUE is never read, parsed, or interpolated into a command, path or URL -- the name occurs exactly ONCE in the module. Zero-count for the exact-string-parser form holds (`git grep -c -E "=== 'true'\|=== \"true\"" -- select-backend.ts` -> exit 1). Fail-safe direction pinned by `select-backend.spec.ts:455-464` (six typo values still narrow) and `:466-479` (only unset/empty leaves write intact). |
 | T-13-03-T1 | Tampering | bundle drift | high | mitigate | closed | Bundle regenerated in the SAME commit `cbf60e6` alongside `select-backend.ts` + `memory-backend.ts`. The bundle carries the branch in the CORRECT last position: `start-cache-server/index.js:68710-68712` (`if (env.CACHE_READ_ONLY) return createReadOnlyActionsCacheBackend();` after the token check, before `return createActionsCacheBackend()`). Same live `action-bundle-drift` green as T-13-02-T2. |
@@ -171,21 +171,16 @@ the live `action-bundle-drift` green on run `30744366870` still applies verbatim
 
 ## Mitigations verified as STATE, not as standing guards
 
-These three are marked CLOSED because the security property is verifiable at HEAD by
-direct measurement (the ASVS L1 standard configured for this phase). Recorded separately
-because the register's declared MECHANISM is a one-time acceptance check rather than a
-committed test -- at this project's own mutation-measurement standard, "asserted but not
-standing" is worth naming. None of these is a blocker.
+**TWO remain** (T-13-02-R1 and T-13-05-D2). They are marked CLOSED because the security
+property is verifiable at HEAD by direct measurement (the ASVS L1 standard configured for
+this phase). Recorded separately because the register's declared MECHANISM is a one-time
+acceptance check rather than a committed test -- at this project's own
+mutation-measurement standard, "asserted but not standing" is worth naming. Neither is a
+blocker. The numbering below is kept so the retraction in slot 1 stays legible.
 
-1. **T-13-03-E1, the branch-position half.** `13-03-SUMMARY.md` coverage item D3 records
-   the check as a script run once at execution time ("mechanical first-occurrence check:
-   `indexOf(...) < indexOf(...) < indexOf(...)` -> 'branch order OK', exit 0"). No spec
-   reads `select-backend.ts` source for ordering. This audit RE-RAN the check at HEAD and
-   it passes (2961 < 3296 < 5245). The EoP property itself is separately covered by the
-   standing narrowing table, which does catch the dangerous reorderings: moving the knob
-   above the fail-closed identity throw breaks throw-parity at `select-backend.spec.ts:446`.
-   A move above `isWriteTrusted` would NOT redden the table -- but that move also does not
-   widen (read-only -> read-only), so it is a wrong-backend defect rather than an EoP.
+1. **T-13-03-E1 -- REMOVED from this list, superseded by `cbe69ce`.** It now HAS a standing
+   guard, so it no longer belongs here. Its former entry was also WRONG in a way worth
+   preserving rather than deleting -- see "Correction" immediately below.
 
 2. **T-13-02-R1, the zero-count grep.** The declared criterion is
    `git grep -c "createActionsCacheBackend:" == 0`. At HEAD it is NOT zero: one hit at
@@ -205,8 +200,68 @@ standing" is worth naming. None of these is a blocker.
 
 **T-13-05-D1 is deliberately NOT in this list.** It was never a "state, not a guard" case
 -- at `e6b3268` it was a fully OPEN finding, and `7968f21` closed it with three standing,
-mutation-measured clauses. It is the only one of the four that now has a real guard. The
-three above were not touched by that fix and keep their caveat unchanged.
+mutation-measured clauses. T-13-02-R1 and T-13-05-D2 were untouched by both `7968f21` and
+`cbe69ce` and keep their caveat exactly as first written.
+
+---
+
+## Correction -- what this audit got WRONG about T-13-03-E1 (2026-08-02, `cbe69ce`)
+
+**Retained deliberately.** A future reader who trusts the original sentence would
+re-derive the same false comfort, so the error is recorded rather than quietly edited out.
+
+**What the initial pass wrote** (`## Mitigations verified as STATE`, item 1, at `e6b3268`):
+
+> The EoP property itself is separately covered by the standing narrowing table, which does
+> catch the dangerous reorderings: moving the knob above the fail-closed identity throw
+> breaks throw-parity at `select-backend.spec.ts:446`. A move above `isWriteTrusted` would
+> NOT redden the table -- but that move also does not widen (read-only -> read-only), so it
+> is a wrong-backend defect rather than an EoP.
+
+The first half is true. **The second half is FALSE, and the reasoning behind it was the
+real defect.** Found by `gsd-nyquist-auditor` during `/gsd:validate-phase 13`.
+
+**Why it is false.** `outcomeOf` (`select-backend.spec.ts:352-358`) folds the result
+through `isWritableBackend`, which collapses BOTH read-only outcomes -- the memory-degrade
+stub and the read-only ACTIONS backend -- into the single token `'read-only'`. So on the
+table's `['no resolvable token', { GH_TOKEN: '' }, 'read-only']` row, hoisting the knob
+above the token branch changes WHICH backend is built while leaving the row's observable
+outcome identical: `widened('read-only','read-only')` is false, the un-knobbed pin still
+matches, and throw-parity still holds. The row passes over a bypassed fail-safe branch.
+The two pre-existing degrade tests at `:255-265` and `:267-279` are blind twice over --
+they assert only `isWritableBackend(...) === false` and never set the knob at all.
+
+**Why the "wrong-backend, not EoP" dismissal was wrong.** I reasoned that a
+read-only -> read-only transition cannot be an elevation. But the memory stub reaches NO
+external store, while the read-only Actions backend reaches the LIVE Actions cache. A
+token-less write-trusted context that the code deliberately degrades to an inert stub
+would instead have been handed a live cache reader. That is a real capability increase,
+and it is precisely T-13-03-E1's registered shape -- "the knob check placed before an
+existing narrowing branch" -- so dismissing it on the `isWritableBackend` axis was reading
+the threat through the same collapsed lens that made the table blind.
+
+**Reproduced by this audit, not accepted on report.** The mutation was applied to
+`select-backend.ts` (a hoisted copy of the knob branch inserted immediately above the
+`resolveGitHubToken` degrade branch), the suite run, and the file restored in one atomic
+scripted cycle with a trap:
+
+| Step | Result |
+|---|---|
+| precondition | `git diff --quiet -- select-backend.ts` -> clean at HEAD |
+| under the mutation | **1 failed / 978 passed (979)**, `Test Files 1 failed \| 41 passed` |
+| the single failure | `select-backend.spec.ts > TRUST-14 ... > keeps the memory-degrade branch AHEAD of the knob ... (TRUST-14, T-13-03-E1)`, asserting `expected "vi.fn()" to not be called at all, but actually been called 1 times` -- i.e. `restoreCache` WAS reached, so the token-less env really did get a live Actions backend |
+| restore | `git checkout --` then `git diff --quiet` -> byte-exact; tree back to only the pre-existing untracked `.gitkeep` |
+| clean baseline at HEAD | `npx nx test github-cache --skip-nx-cache` -> 42 files, **979 passed**, `Cache: Skipped` |
+
+The new clause reddens **ALONE**. That is also the direct empirical confirmation of the
+pre-fix claim without needing a second mutation: since exactly one clause catches the
+hoist, a tree without that clause is GREEN under it -- which is the 978-green result the
+nyquist auditor reported.
+
+**Method note.** Reproducing a source mutation cannot be done without transiently writing
+the source file. It was mutated and restored inside a single `trap`-guarded script, proven
+byte-exact afterwards, and no change was left behind. `13-SECURITY.md` remains the only
+file this audit has committed to the record.
 
 ---
 
@@ -272,6 +327,7 @@ authored at plan time and verified as written.
 |------------|------|------|---------------|--------|-----------------|---------------------|------|----------|--------|
 | 2026-08-02 | initial | `e6b3268` | 27 | 26 | 0 | 1 (T-13-05-D1, medium) | 1 | high | gsd-security-auditor |
 | 2026-08-02 | re-audit of the T-13-05-D1 closure | `7968f21` | 27 | 27 | 0 | 0 | 1 | high | gsd-security-auditor |
+| 2026-08-02 | re-audit of the T-13-03-E1 closure; self-correction of a FALSE coverage claim from the initial pass | `80f3066` | 27 | 27 | 0 | 0 | 1 | high | gsd-security-auditor |
 
 Branch `gsd/v0.0.2-os-invariant-cross-os-sharing` throughout.
 
@@ -279,16 +335,26 @@ Live runs queried (initial pass): `30744366870` (proving run, `success`, head `6
 and `30745558383` (gate fail-path, `failure` by design, head `bafd7be`, branch deleted and
 not an ancestor of HEAD).
 
-Re-audit pass: `7968f21` verified by reproducing all three mutations in memory, by an
-uncached `npx nx test github-cache --skip-nx-cache` (42 files, 978 passed) with the three
-new clauses named individually as passing, and by confirming `nx.json:70` keeps `ci.yml` a
-hashed `test` input so the clauses cannot replay a stale PASS. The initial pass's evidence
-carries forward unchanged: no bundle-reachable source moved between `631a2e7` and
-`7968f21`.
+Re-audit pass 2 (`7968f21`): verified by reproducing all three T-13-05-D1 mutations in
+memory, by an uncached run (42 files, 978 passed) with the three new clauses named
+individually as passing, and by confirming `nx.json:70` keeps `ci.yml` a hashed `test`
+input so the clauses cannot replay a stale PASS.
 
-Implementation files were NOT modified by either pass. `13-SECURITY.md` is the only file
-this agent has written; `git status --porcelain` was clean of source edits before and after
-the mutation reproduction.
+Re-audit pass 3 (`80f3066`): verified by reproducing the T-13-03-E1 hoist against
+`select-backend.ts` in a `trap`-guarded mutate/run/restore cycle (1 failed / 978 passed,
+the new clause reddening alone; source restored byte-exact) and by a clean uncached
+baseline (42 files, **979 passed**). This pass also RETRACTED a false coverage claim the
+initial pass had made -- see the Correction section.
+
+Evidence carried forward, re-checked each pass: `git diff --name-only 631a2e7..HEAD` over
+`start-cache-server`, `packages/github-cache/src/backend`, `select-backend.ts`, `serve.ts`,
+`.github` and `docs` is EMPTY, so no bundle-reachable source has moved since the proving
+run and the live `action-bundle-drift` green still applies at `80f3066`. Everything
+committed since the initial audit is a `*.spec.ts` or a planning doc.
+
+Implementation files were NOT modified by any pass. `13-SECURITY.md` is the only file this
+agent has written to the record; the one transient source mutation in pass 3 was restored
+byte-exact and verified with `git diff --quiet`.
 
 ---
 
@@ -298,10 +364,12 @@ the mutation reproduction.
 - [x] All 27 CLOSED -- no open threats at ANY severity, so `threats_open: 0` does not depend on the `block_on: high` filter
 - [x] Every `accept` disposition's stated BASIS was independently confirmed, not taken on trust
 - [x] Accepted risks documented in the Accepted Risks Log
-- [x] The T-13-05-D1 closure was re-verified by reproducing its mutations, not accepted on report
-- [x] Case B and assumption A1 remain recorded as known-open, NOT closed, and were untouched by that closure
+- [x] The T-13-05-D1 and T-13-03-E1 closures were each re-verified by reproducing their mutations, not accepted on report
+- [x] A FALSE coverage claim made by the initial pass is retracted in writing rather than silently edited out
+- [x] Case B and assumption A1 remain recorded as known-open, NOT closed, and were untouched by either closure
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-08-02 at `7968f21` -- ships clean. The three residual
-"asserted but not standing" caveats (T-13-03-E1, T-13-02-R1, T-13-05-D2) are recorded above
-as notes, not findings; none is a blocker and none was introduced by this phase's fix.
+**Approval:** verified 2026-08-02 at `80f3066` -- ships clean. TWO residual "asserted but
+not standing" caveats remain (T-13-02-R1, T-13-05-D2), recorded above as notes rather than
+findings; neither is a blocker. T-13-03-E1 and T-13-05-D1 both left that category during
+this phase's audit cycle and now carry standing, mutation-measured guards.

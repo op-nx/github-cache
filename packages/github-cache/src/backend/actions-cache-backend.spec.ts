@@ -1,6 +1,7 @@
 import {
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -24,7 +25,11 @@ import {
 } from '../lib/cache-archive-path.js';
 import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
 import { enterWorkspaceRootCwd } from '../test/workspace-root-cwd.js';
-import { createActionsCacheBackend } from './actions-cache-backend.js';
+import {
+  createActionsCacheBackend,
+  createReadOnlyActionsCacheBackend,
+} from './actions-cache-backend.js';
+import { isWritableBackend } from './types.js';
 
 // First module mock in this repository. @actions/cache only actually works inside
 // a JS action on real CI, so every unit layer MUST mock it and prove the backend
@@ -217,6 +222,77 @@ describe('createActionsCacheBackend put (ROBUST-03)', () => {
     await expect(backend.put(HASH, Buffer.from('tar-bytes'))).rejects.toThrow();
 
     expect(existsSync(cacheArchivePath(HASH))).toBe(false);
+  });
+});
+
+describe('createReadOnlyActionsCacheBackend is read-only BY CONSTRUCTION (VER-08)', () => {
+  // BEHAVIOURAL, never an identity check against a factory. `expect(backend).toBe(...)` or
+  // a comparison against the factory reference passes while a smuggled flag still hands
+  // back something writable -- the failure mode select-backend.spec.ts:307-335 records
+  // having shipped once. `isWritableBackend` reads the SAME structural fact the server
+  // reads when it answers a PUT with the contract's 403 (`'put' in backend`,
+  // types.ts:46-50), so a green here is the property the server actually depends on.
+  it('has NO put, so isWritableBackend is false and a write is unrepresentable (VER-08)', () => {
+    const backend = createReadOnlyActionsCacheBackend();
+
+    expect(isWritableBackend(backend)).toBe(false);
+    expect('put' in backend).toBe(false);
+  });
+
+  // The other half, and it is not decoration: the composition must ADD put, never move it.
+  // A refactor that made both factories read-only would leave the clause above green and
+  // silently kill every write in CI.
+  it('leaves the writable factory writable -- the composition ADDS put (VER-08)', () => {
+    const backend = createActionsCacheBackend();
+
+    expect(isWritableBackend(backend)).toBe(true);
+  });
+});
+
+describe('both factories share ONE get closure, so they restore identically (VER-08, D-01)', () => {
+  // The phase's acceptance criterion in one assertion. Two backends that HAPPEN to agree
+  // today are precisely the ROADMAP's named risk -- an OS-dependent cache version is the bug
+  // Phase 9 existed to fix -- so what is asserted is the WHOLE recorded argument array from
+  // EACH factory, matching the positional-pin convention at :409-430. Indexing single
+  // positions says nothing about positions 2-4, which is exactly where enableCrossOsArchive
+  // lives and exactly where a copy-pasted second read site would drift.
+  it('produces the same HIT and the SAME whole restoreCache argument array from either factory (VER-08, D-01)', async () => {
+    const path = cacheArchivePath(HASH);
+    const key = cacheKeyFor(HASH);
+    const bytes = Buffer.from('tar-bytes');
+    // A real restoreCache recreates the archive on disk before get reads it; simulate that
+    // per call so the second factory's get is non-vacuous after the first one's `rm`.
+    restoreCache.mockImplementation(async () => {
+      await writeFile(path, bytes);
+
+      return key;
+    });
+
+    const fromReadOnly = await createReadOnlyActionsCacheBackend().get(HASH);
+    const fromWritable = await createActionsCacheBackend().get(HASH);
+
+    expect(fromReadOnly).toEqual({ kind: 'hit', bytes });
+    expect(fromWritable).toEqual(fromReadOnly);
+    // Asserted against the LITERAL, not merely calls[0] against calls[1]: two calls that
+    // agree on a WRONG array would satisfy a calls-equal-each-other comparison, and
+    // "identically wrong" is the exact outcome this clause exists to reject.
+    expect(restoreCache.mock.calls).toStrictEqual([
+      [[path], key, undefined, undefined, true],
+      [[path], key, undefined, undefined, true],
+    ]);
+  });
+
+  it('returns a miss from either factory when restoreCache resolves undefined (VER-08)', async () => {
+    restoreCache.mockResolvedValue(undefined);
+
+    await expect(
+      createReadOnlyActionsCacheBackend().get(HASH),
+    ).resolves.toEqual({
+      kind: 'miss',
+    });
+    await expect(createActionsCacheBackend().get(HASH)).resolves.toEqual({
+      kind: 'miss',
+    });
   });
 });
 
@@ -543,6 +619,91 @@ describe('the module reaches @actions/cache at exactly three places (VER-03 clau
   });
 });
 
+/** The package source root, workspace-relative -- see the VER-09 clause on why. */
+const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
+
+/**
+ * The module specifier in any quoted form, including a deep subpath -- an
+ * `@actions/cache/lib/internal/...` import reaches the same library and would evade a
+ * bare-name match. NOT anchored to `import`, so a `require(...)` or a dynamic
+ * `await import(...)` is caught too.
+ */
+const ACTIONS_CACHE_SPECIFIER = /['"]@actions\/cache(?:\/[^'"]*)?['"]/;
+
+/**
+ * The same line-leading comment strip the two file-scoped clauses above use, applied per
+ * file. It is REQUIRED, not defensive: five non-spec modules name `@actions/cache` in
+ * PROSE today (action/index.ts, lib/cache-archive-path.ts, lib/compression-method.ts,
+ * publish/publish-mirror.ts and this module's own header), so an unstripped scan would be
+ * red before the phase changed anything -- and a spurious red on a drift guard is how a
+ * later reader talks themselves into weakening it.
+ *
+ * The strip pipeline at :501-510 is deliberately NOT refactored into this helper: the
+ * phase's own confirmation that the composed shape is right is that the VER-03 clauses
+ * pass with ZERO edits, and rewiring their input would forfeit that signal for a six-line
+ * saving.
+ */
+function importsActionsCache(file: string): boolean {
+  const code = readFileSync(file, 'utf8')
+    .split('\n')
+    .filter(
+      (line) =>
+        !BACKEND_COMMENT_MARKERS.some((marker) =>
+          line.trim().startsWith(marker),
+        ),
+    )
+    .join('\n');
+
+  return ACTIONS_CACHE_SPECIFIER.test(code);
+}
+
+describe('exactly ONE module in the whole package reaches @actions/cache (VER-09)', () => {
+  // WHAT THIS CLAUSE SEES THAT THE TWO ABOVE IT STRUCTURALLY CANNOT: a FUTURE SIBLING
+  // module carrying its own cache.restoreCache. Both clauses above resolve their subject as
+  // `new URL('./actions-cache-backend.ts', import.meta.url)` -- ONE NAMED FILE -- so a
+  // `readonly-actions-cache-backend.ts` next door with a second
+  // `(paths, key, undefined, undefined, true)` call produces ZERO failures there. That is
+  // the ROADMAP's named risk for this phase (two places for the cache-version computation
+  // to drift) realised behind a guard that reads as coverage.
+  //
+  // MEASURED, not argued, the way dogfood-cross-os.spec.ts:886-893 records its own: a
+  // throwaway non-spec module under this root importing @actions/cache turns THIS clause
+  // RED while the ordered-member and single-import clauses above stay GREEN. That asymmetry
+  // IS the gap VER-09 closes. The mutation was run before this clause was committed and the
+  // throwaway deleted afterwards; re-run it if the scan's shape ever changes.
+  //
+  // Exact array, never a bare count -- the :524-525 convention. `length === 1` is satisfied
+  // by a tree that DELETED the real importer and added a different one (Phase 8 D-23).
+  //
+  // Path resolution reuses the workspace-root cwd that src/test/workspace-root-cwd.ts
+  // already entered file-wide, rather than a second root idiom. Two consequences: the scan
+  // must run INSIDE the `it` (the hook has not run at collection time, unlike the
+  // import.meta.url reads above), and every path it yields is workspace-relative by
+  // construction, so the expected literal needs no normalisation beyond the separator.
+  it(`is the ONLY non-spec module under ${PACKAGE_SOURCE_ROOT} that imports @actions/cache (VER-09)`, () => {
+    // `encoding` is named rather than left to the default so the overload resolves to
+    // string[]; without it the return type widens to `string[] | Buffer[]` and the
+    // normalisation below does not typecheck.
+    const importers = readdirSync(PACKAGE_SOURCE_ROOT, {
+      encoding: 'utf8',
+      recursive: true,
+    })
+      // A FIXED, unconditional string transform, and deliberately NOT `node:path`'s `sep`
+      // -- which LINT-02/CORR-06 bans in a unit spec because it derives an expectation from
+      // the running machine. This normalisation reads the same on every OS: `readdirSync`
+      // emits `\` separators on Windows and none on POSIX, so the same tree yields the same
+      // array either way, which is the whole point of an OS-invariant guard.
+      .map((entry) => `${PACKAGE_SOURCE_ROOT}/${entry.replaceAll('\\', '/')}`)
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'))
+      .filter(importsActionsCache)
+      .sort();
+
+    expect(importers).toStrictEqual([
+      `${PACKAGE_SOURCE_ROOT}/backend/actions-cache-backend.ts`,
+    ]);
+  });
+});
+
 describe('createActionsCacheBackend asserts the cwd/GITHUB_WORKSPACE conjunction at construction (VER-04) and creates the archive directory (VER-07)', () => {
   // A throwaway workspace under the ROOT .nx/cache, which is gitignored (.gitignore:41
   // covers `.nx/cache` specifically, not `.nx/` wholesale) and invisible to Nx's file map
@@ -604,6 +765,35 @@ describe('createActionsCacheBackend asserts the cwd/GITHUB_WORKSPACE conjunction
     process.chdir(fixtureAbsolute);
 
     expect(() => createActionsCacheBackend()).toThrow(/GITHUB_WORKSPACE/);
+  });
+
+  // BOTH conjuncts from the READ-ONLY factory, in this describe rather than a second
+  // harness: the fixture roots, the chdir restore and the GITHUB_WORKSPACE stub above are
+  // exactly what these need, and a parallel harness is a second thing to keep in step.
+  //
+  // They matter MORE on the read-only path than on the writable one. A read-only leg has no
+  // write whose failure would surface, so an undetected cwd/GITHUB_WORKSPACE divergence
+  // presents as "cross-OS restore is broken" instead of naming its cause -- and this phase
+  // exists to make those legs' restore counts a GATE, so a mis-anchored read-only leg would
+  // redden the gate while pointing at the wrong subsystem.
+  //
+  // Asserted on the message's SUBSTANCE -- which invariant failed -- never on a
+  // function-name prefix. The prefix is exactly what the source change pairs with this
+  // commit, so a test pinned to it would have to be edited by the change it guards.
+  it('THROWS from the READ-ONLY factory when the cwd has no nx.json (VER-04 conjunct 1, VER-08)', () => {
+    vi.stubEnv('GITHUB_WORKSPACE', undefined);
+    process.chdir(siblingAbsolute);
+
+    expect(() => createReadOnlyActionsCacheBackend()).toThrow(/nx\.json/);
+  });
+
+  it('THROWS from the READ-ONLY factory when GITHUB_WORKSPACE points at a sibling directory (VER-04 conjunct 2, VER-08)', () => {
+    vi.stubEnv('GITHUB_WORKSPACE', siblingAbsolute);
+    process.chdir(fixtureAbsolute);
+
+    expect(() => createReadOnlyActionsCacheBackend()).toThrow(
+      /GITHUB_WORKSPACE/,
+    );
   });
 
   // Asserting the THROWs above, not only the happy path, is the point: a VER-04 suite that

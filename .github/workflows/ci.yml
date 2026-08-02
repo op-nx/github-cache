@@ -393,7 +393,7 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
-      - run: npm run typecheck
+      - run: npx nx build github-cache
       - cancel: cache-server
 
   test:

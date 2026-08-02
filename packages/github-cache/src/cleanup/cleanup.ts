@@ -163,3 +163,5 @@ export async function cleanupMirror(
 
   return { pruned, failed, scanned };
 }
+// A1 observation touch (throwaway branch obs/a1-403-path, never merged): rotates the
+// build/typecheck/test task hashes so main's base-scope entries cannot satisfy them.

@@ -4,16 +4,16 @@ milestone: v0.0.2
 milestone_name: framing
 current_phase: 13
 current_phase_name: read-only-actions-cache-backend
-status: executing
-last_updated: "2026-08-02T10:59:38.640Z"
+status: complete
+last_updated: "2026-08-02T12:34:05.000Z"
 last_activity: 2026-08-02
-last_activity_desc: "Completed 13-06: the pre-registered counts, the proving run and 13-EVIDENCE.md"
+last_activity_desc: "Phase 13 COMPLETE -- audit tail closed: secure (27/27), validate (nyquist_compliant), learnings (46 items, pooled)"
 progress:
   total_phases: 7
-  completed_phases: 1
-  total_plans: 51
+  completed_phases: 7
+  total_plans: 45
   completed_plans: 45
-  percent: 14
+  percent: 100
 ---
 
 # Project State
@@ -27,13 +27,57 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 ## Current Position
 
-Phase: 13 (read-only-actions-cache-backend) -- EXECUTING
+Phase: 13 (read-only-actions-cache-backend) -- COMPLETE
 Plan: 6 of 6
-Status: 13-06 complete -- all six plans executed. The phase's behavioural proof is run 30744366870,
-recorded in 13-EVIDENCE.md against counts pre-registered in the commit that IS that run's head
-Progress: 6/7 phases complete [########--] 86%
-Last activity: 2026-08-02 -- Completed 13-06: the pre-registered counts, the proving run and
-13-EVIDENCE.md
+Status: COMPLETE. All six plans executed, verified 7/7, and the full audit tail closed this session:
+secure-phase 27/27 threats closed, validate-phase nyquist_compliant, learnings extracted and pooled
+Progress: 7/7 phases complete [##########] 100%
+Last activity: 2026-08-02 -- Closed the Phase 13 audit tail; milestone v0.0.2 now awaits
+/gsd:audit-milestone
+
+**BOTH AUDIT GATES FOUND REAL GAPS, and neither was visible by reading.** Each found a mechanical
+control that a plan DECLARED and that did not exist -- and in both cases the STATE was correct, so
+nothing looked broken. Had either workflow's clean-path short-circuit been taken (secure-phase skips
+its auditor at `threats_open:0`; validate-phase writes VALIDATION.md inline when its gap analysis
+finds nothing), both would have shipped as "verified".
+
+- **T-13-05-D1** (medium): 13-05 declared "exactly two survivors, asserted mechanically". No
+  assertion existed. The three per-leg `not.toContain` clauses cover only the UNDER-sweep direction;
+  deleting either surviving diagnostic reddened nothing. Closed by `7968f21` -- both survivors pinned
+  by their OWN surrounding token (`RUNNER_DEBUG_OBSERVED`, `LEG_OS`) so they cannot cover for each
+  other, plus a marker-site count pinned at exactly 2. Mutation-proven three ways.
+- **T-13-03-E1** (HIGH, the serious one): `select-backend.ts:33-35` and `:80-81` both claimed the
+  "knob is checked last" guarantee was asserted mechanically. The `indexOf` check was a one-shot from
+  plan 13-03 that never became a clause. Hoisting the knob above `resolveGitHubToken` -- exactly the
+  registered shape -- left **978/978 GREEN**. The exhaustive narrowing table is blind to it because
+  `outcomeOf` collapses both read-only outcomes into one token, so `widened()` stays false while the
+  fail-safe branch is bypassed. Real consequence: knob set + no resolvable token would build a LIVE
+  Actions-cache backend instead of the memory stub. Closed by `cbe69ce`.
+
+The security audit had found T-13-03-E1's guard was not standing and then DISMISSED it, reasoning
+through `isWritableBackend` -- the same lens that blinds the table. It retracted that in writing on a
+third pass (`934bd98`). Two audits asking different questions were needed; neither found it alone.
+
+Phase 13's live-CI half is OBSERVED for Case A only, now on THREE runs. Run 30744366870 (attempt 1,
+`pull_request`, head 631a2e7) shows all three read-only Windows legs green at gate counts 1 / 2 / 1
+against a floor of 1, matching counts pre-registered in 631a2e7 -- which IS that run's head, so the
+prediction was provably in the tree the run measured. Every ubuntu producer was reached: `typecheck`
+MISS-and-saved both `build` and `typecheck` (0/2), `test` MISS-and-saved (0/1), and `build` HIT the
+entry the `typecheck` job wrote, the race named in advance. Sent equals received per entry (137951 /
+98227 / 1309). Independently re-verified during the security audit: 631a2e7 introduced 13-EVIDENCE.md
+as 203 insertions / 0 deletions and the file's first 203 lines at HEAD are byte-identical to it, so
+the record is pure append and was never back-edited, and `gh run view 30744366870` returns that same
+sha as `headSha`. Run 30745558383 proved the FAIL path (`build-windows` red AT THE GATE STEP at count
+0, other two green at 2/1 as a same-run positive control). Run 30746080731 reproduced 1 / 2 / 1 on
+head e6b3268 -- but note the scope: every commit between 631a2e7 and e6b3268 touches only
+`.planning/`, so no task hash rotated and it consumed the SAME producer entries. It reproduces the
+observation; it is not an independent Case-A instance.
+
+TWO ITEMS STAY OPEN BY DESIGN and both audits were explicitly instructed not to close them: the
+Case-B base-scope read (unprovable by a landing commit that rotates all three hashes) and RESEARCH
+assumption A1 (no Windows task MISSed, so no PUT was attempted and the 403 path never ran). A1
+carries a stated observation condition -- a partial miss on the two-task `typecheck-windows` leg
+clears the floor, stays green, and produces exactly one 403.
 
 **Milestone v0.0.2 gained a SEVENTH phase.** Phases 7 through 12 are Complete in the ROADMAP table
 (39 of 39 plans), but `/gsd:audit-milestone` now waits on Phase 13, added by maintainer instruction
@@ -41,18 +85,6 @@ to close CR-18. Phase 12's four -- XOS-04, XOS-05, XOS-08, DOCS-07 -- closed at 
 rather than per-plan, because every plan deliberately skipped `requirements.mark-complete` after it
 falsely closed all three XOS rows on 12-01's RED-only plan. Phase 13's seven are registered Pending
 for exactly the same reason and close only as their code lands in 13-02..13-06.
-
-Phase 13's live-CI half is OBSERVED for Case A only. Run 30744366870 (attempt 1, `pull_request`,
-head 631a2e7) shows all three read-only Windows legs green at gate counts 1 / 2 / 1 against a floor
-of 1, matching counts pre-registered in 631a2e7 -- which IS that run's head, so the prediction was
-provably in the tree the run measured. Every ubuntu producer was reached: `typecheck` MISS-and-saved
-both `build` and `typecheck` (0/2), `test` MISS-and-saved (0/1), and `build` HIT the entry the
-`typecheck` job wrote, the race named in advance. Sent equals received per entry (137951 / 98227 /
-1309). TWO items stay OPEN and must not be read as closed by that green: the Case-B base-scope read
-(this commit rotates all three hashes, so every leg took the intra-run merge-ref path) and RESEARCH
-assumption A1 (no Windows task MISSed, so no PUT was attempted and the 403 path was never
-exercised). A1 now carries a stated observation condition -- a partial miss on the two-task
-`typecheck-windows` leg clears the floor, stays green, and produces exactly one 403.
 
 Phase 12's live-CI half is OBSERVED, not inferred. O4 was measured on run 30586177358, the FIRST run
 of same-repo PR #12: `[remote cache]` counted per Windows leg at 1/2/1 (total 4), matching counts
@@ -536,7 +568,32 @@ Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates
 
 ## Operator Next Steps
 
-- Plan the first v0.0.2 phase with `/gsd:plan-phase 7` (lint toolchain; it must precede the parity work because `@nx/eslint` inference changes `hash_project_config`)
-- Before Phase 10 executes, capture or cite the pre-rename O2 baseline -- it is unrecoverable once CORR-02 lands
-- Decide whether to open a PR for `gsd/v0.0.2-os-invariant-cross-os-sharing` (pushed 2026-07-26, no PR yet). Planning-only content, so there is no CI gate riding on it; note the 5 push-gated jobs stay `skipped` on a feature branch because `on.push` is `branches: [main]`
-- Regenerate `.planning/codebase/*` via `/gsd:map-codebase` -- it was mapped 2026-07-22 against v0.0.1 and PROJECT.md already flags it as stale. v0.0.2 invalidates it materially: renamed asset scheme, new archive path, a new inferred `lint` target, ESLint in the toolchain (carried over from the consumed `HANDOFF.json`)
+*Rewritten 2026-08-02 at Phase 13 close. The previous list was stale: its first two items (plan
+Phase 7; capture the pre-rename O2 baseline before Phase 10) were completed milestones ago, and the
+third said `gsd/v0.0.2-os-invariant-cross-os-sharing` had no PR when PR #12 has been open since.*
+
+- **Run `/gsd:audit-milestone`.** All seven v0.0.2 phases are Complete (45 of 45 plans) with every
+  post-completion gate closed, so nothing else blocks it.
+- **Case B remains the one behavioural item v0.0.2 has not observed.** It needs a SEPARATE PR after
+  Phase 13 lands on `main`, touching no declared `build`/`typecheck`/`test` input -- any commit that
+  rotates the three task hashes forces the intra-run merge-ref path (Case A) and cannot exhibit it.
+  Verify RESEARCH assumption A2 against the live Nx graph first. Procedure in RESEARCH.md Q4;
+  tracked as ROADMAP Phase 13 Live-CI item 2.
+- **RESEARCH assumption A1 (the 403 log-noise path) is answered but not closed.** Unexercised
+  because every Windows task HIT, so no PUT was attempted. Observation condition: a partial miss on
+  the two-task `typecheck-windows` leg clears the floor, stays green, and produces exactly one 403.
+- **Merge PR #12.** Note the 5 push-gated jobs (`consumer-smoke`, `dogfood-seed`, `dogfood-verify`,
+  `publish`, `publish-verify`) stay `skipped` on a feature branch because `on.push` is
+  `branches: [main]` -- structurally unreachable on a PR, not a defect.
+- **One follow-up sits outside Phase 13:** `packages/github-cache/src/dogfood-cross-os.spec.ts:349-352`
+  conflates OBS-04 with what is actually OBS-02's subject. Two executors and the verifier each
+  declined to edit it because the referent of "its" is ambiguous and one reading would delete a true
+  claim. The verifier traced it to Phase 12's `fee5fbe`, so it now has a diagnosis rather than an
+  ambiguity.
+- **`docs/versioning.md:15-17` lists only four of the six package type exports** (`ReadableBackend`
+  and `WritableBackend` are missing). Pre-existing, uncovered by any guard -- `docs-adoption.spec.ts`
+  pins versioning.md's env-knob group only, which is why the drift survived. Logged in 13-04.
+- **Regenerate `.planning/codebase/*` via `/gsd:map-codebase`** -- mapped 2026-07-22 against v0.0.1
+  and already flagged stale in PROJECT.md. v0.0.2 invalidates it materially: renamed asset scheme,
+  new archive path, a new inferred `lint` target, ESLint in the toolchain, and now a second
+  Actions-cache backend behind `selectBackend`.

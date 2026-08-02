@@ -763,7 +763,7 @@ honour table: `.planning/ROADMAP.md`.
 | VER-09 | Phase 13 | Complete |
 | TRUST-14 | Phase 13 | Complete |
 | XOS-09 | Phase 13 | Complete (three read-only Windows legs gated at a floor of 1 in `ci.yml`; the gate OBSERVED green live on run 30744366870, attempt 1, at gate counts 1 / 2 / 1 against counts pre-registered in that run's own head commit 631a2e7. **Case A only** -- the base-scope read half stays open as ROADMAP Phase 13 Live-CI item 2. See 13-EVIDENCE.md) |
-| TEST-11 | Phase 13 | Complete (six per-leg clauses in `dogfood-cross-os.spec.ts`, non-vacuity proven by three recorded mutations. Local mutation proves the CLAUSES can fail; the live gate REDDENING on a real cross-OS restore failure is not observed and was deliberately not induced -- see 13-EVIDENCE.md) |
+| TEST-11 | Phase 13 | Complete (six per-leg clauses in `dogfood-cross-os.spec.ts`, non-vacuity proven by three recorded mutations, plus the two-direction survivor pin added by `7968f21`. The live gate REDDENING was subsequently OBSERVED on run 30745558383 -- `build-windows` red at the gate step at count 0 carrying the gate's own `::error::`, with `typecheck-windows` and `test-windows` green at 2 and 1 as a same-run positive control. Note the scope: the perturbation produced the zero by skipping the cache, not by breaking a restore; that a broken restore yields zero is carried by the inductive read-only argument. See 13-EVIDENCE.md ADDENDUM) |
 | DOCS-09 | Phase 13 | Complete |
 | DOCS-10 | Phase 13 | Complete |
 

@@ -515,3 +515,39 @@ an ancestor of any retained ref.
 **TEST-11: PROVEN, live.** The gate's fail path executes as designed on a real `windows-11-arm`
 runner -- correct step, correct annotation, non-zero exit, job red -- with a same-run positive
 control isolating the cause to the count.
+
+---
+
+## ADDENDUM 2 -- reproduction on a second head (run 30746080731)
+
+Recorded during the phase audit tail, after the four previously-unpushed commits were pushed to
+PR #12. Appended, never back-edited, on the same append-only discipline as ADDENDUM 1.
+
+**Observation.** Run `30746080731`, event `pull_request`, head `e6b3268`, conclusion `success`.
+All three read-only Windows legs green at the gate, at the counts read out of their own gate lines:
+
+| Leg | Gate-printed count | Floor |
+|-----|--------------------|-------|
+| `build-windows` | 1 | 1 |
+| `typecheck-windows` | 2 | 1 |
+| `test-windows` | 1 | 1 |
+
+1 / 2 / 1 -- identical to the counts pre-registered in `631a2e7` and observed on the proving run
+`30744366870`.
+
+### What this DOES add
+
+A second independent execution of the gate, on a different head, three runs after the
+pre-registration. The gate is not a one-run artifact.
+
+### What this does NOT add, stated because over-reading a green is the mistake CR-18 caught
+
+- **It is not an independent Case-A instance.** Every commit between `631a2e7` and `e6b3268`
+  touches only `.planning/`, which is in no Nx target's declared input set. No task hash rotated,
+  so this run consumed the SAME producer entries the proving run did. It reproduces the
+  observation; it does not re-derive it from a fresh producer.
+- **Case B is untouched.** Still open, still ROADMAP Phase 13 Live-CI item 2. A run whose hashes
+  did not rotate cannot exhibit the base-scope read by construction.
+- **Assumption A1 is untouched.** Every task HIT again, so again no PUT was attempted and no 403
+  path was exercised. The stated observation condition is unchanged: a partial miss on the
+  two-task `typecheck-windows` leg clears the floor, stays green, and produces exactly one 403.

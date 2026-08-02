@@ -159,6 +159,7 @@ describe('public consumer surface (DOCS-05)', () => {
     expect([...EXPECTED_ENV_KNOBS].sort()).toEqual([
       'CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION',
       'CACHE_MIRROR_MAX_AGE_DAYS',
+      'CACHE_READ_ONLY',
       'GH_TOKEN',
       'GITHUB_REPOSITORY',
       'GITHUB_TOKEN',

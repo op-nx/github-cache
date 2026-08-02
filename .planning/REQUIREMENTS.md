@@ -543,7 +543,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   outcome-COUNT sites are NOT this requirement: `docs/configuration.md:92` and `docs/versioning.md`
   belong to DOCS-10, because neither ever argued the counts could not be gated.
 
-- [ ] **DOCS-10**: The knob D-02b lands on is documented and its arrival is reconciled everywhere the
+- [x] **DOCS-10**: The knob D-02b lands on is documented and its arrival is reconciled everywhere the
   backend-selection outcome count is written down. It gets a `docs/configuration.md` table row AND a
   `### <KNOB>` resolution section (`docs-adoption.spec.ts` asserts each knob is documented), and a
   listing in `docs/versioning.md`'s consumer env-knob group -- a pure addition, with no prior false
@@ -765,7 +765,7 @@ honour table: `.planning/ROADMAP.md`.
 | XOS-09 | Phase 13 | Pending |
 | TEST-11 | Phase 13 | Pending |
 | DOCS-09 | Phase 13 | Pending |
-| DOCS-10 | Phase 13 | Pending |
+| DOCS-10 | Phase 13 | Complete |
 
 **Coverage:** 57 requirements, 57 mapped, 0 orphans, 0 duplicates. Distribution: Phase 7 = 7,
 Phase 8 = 9, Phase 9 = 11, Phase 10 = 12, Phase 11 = 7, Phase 12 = 4, Phase 13 = 7. Verified

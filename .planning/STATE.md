@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 13
 current_phase_name: read-only-actions-cache-backend
 status: executing
-last_updated: "2026-08-02T01:05:02.153Z"
+last_updated: "2026-08-02T01:17:28.187Z"
 last_activity: 2026-08-02
-last_activity_desc: "Completed 13-03: the last-branch narrowing CACHE_READ_ONLY knob"
+last_activity_desc: "Completed 13-04: the public-API cost of the CACHE_READ_ONLY knob"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 51
-  completed_plans: 42
+  completed_plans: 43
   percent: 14
 ---
 
@@ -28,10 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 13 (read-only-actions-cache-backend) -- EXECUTING
-Plan: 4 of 6
-Status: 13-03 complete -- selectBackend has a fifth outcome: a strictly-narrowing CACHE_READ_ONLY
-knob read as its LAST branch, so "can only narrow" is control flow rather than a comment; TRUST-14
-closed
+Plan: 5 of 6
+Status: 13-04 complete -- CACHE_READ_ONLY is the ninth EXPECTED_ENV_KNOBS entry (landed as a
+hand-edited literal, not a snapshot regen), documented on all three doc surfaces, and the
+backend-selection outcome count reads five everywhere with the count itself now spec-pinned and
+mutation-proven; DOCS-10 closed
 Progress: 6/7 phases complete [########--] 86%
 Last activity: 2026-08-02 -- Completed 13-03: the last-branch narrowing CACHE_READ_ONLY knob
 
@@ -156,6 +157,7 @@ on run 30471772954 via a temporary push to main, since restored to fe25a3f. See
 | Phase 13 P01 | 22m | 3 tasks | 3 files |
 | Phase 13 P02 | 20min | 3 tasks | 3 files |
 | Phase 13 P03 | 7min | 3 tasks | 4 files |
+| Phase 13 P04 | 8min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -311,6 +313,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 13]: 13-02: put's lookupOnly probe stays a SECOND restoreCache on the write path only, with enableCrossOsArchive at the 5th positional -- probing at a different cache version reports absent for a present entry and every Windows write would answer a spurious 409. It does not violate D-01's one-read-site criterion.
 - [Phase 13]: 13-03: CACHE_READ_ONLY is read INLINE with bare truthiness as selectBackend's LAST branch -- position is the narrowing guarantee, checked by first-occurrence order, not by comment
 - [Phase 13]: 13-03: the knob name and the exact-string equality form it rejects are each written ONCE (in prose where needed), because mechanical greps on the same file are what guard them
+- [Phase 13]: 13-04: land the contract guard's RED rather than pre-empt it -- Editing EXPECTED_ENV_KNOBS first and observing public-surface.spec.ts fail (1 failed | 13 passed) before hand-editing the inline literal is the whole point of the explicit-assertion-list idiom -- the failure IS the reviewable artifact a snapshot regen would hide.
+- [Phase 13]: 13-04: disambiguate the NEW spec clause, not the old one -- The pre-existing writable-Actions clause matches /Actions-cache backend/i, which the new read-only row also contains. The fifth-outcome clause is line-scoped and requires the knob name, so only the new row satisfies it; the old clause stays loose because it is still correct for the outcome it names.
+- [Phase 13]: 13-04: pin a documented COUNT against prose, never a row tally -- A tally re-derives the number from the same table it checks, so it agrees with itself while the sentence above the table lies. The clause asserts the prose sentence a reader actually reads; mutation-measured at 1 failed | 42 passed.
 
 ### Pending Todos
 
@@ -438,8 +443,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-08-02T01:05:02.139Z
-Stopped at: Completed 13-03-PLAN.md
+Last session: 2026-08-02T01:17:28.173Z
+Stopped at: Completed 13-04-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

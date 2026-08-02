@@ -489,7 +489,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   Actions cache's boundary is ref scope, not OS) is offered as INPUT to that audit, not as its
   conclusion.
 
-- [ ] **TRUST-14**: The producer-vs-consumer ROLE signal is a strictly-narrowing env knob read by
+- [x] **TRUST-14**: The producer-vs-consumer ROLE signal is a strictly-narrowing env knob read by
   `selectBackend` as its LAST branch -- per D-02a the signal is per-LEG by ROLE and never per-EVENT
   (an event-derived signal cannot be widened back for `dogfood-seed`, which legitimately writes on a
   `pull_request`), and per D-02b its shape is an env knob, the only option that works on
@@ -761,7 +761,7 @@ honour table: `.planning/ROADMAP.md`.
 | DOCS-07 | Phase 12 | Complete (`docs/cross-os.md`, safe default FIRST, registered as an `nx.json` `test` input in the same commit as the doc and drift-guarded; the stderr-immune discriminator is single-sourced and A1 closed by measurement on both legs; recipe accuracy reviewed in 12-UAT.md test 4 after code-review finding CR-01 was fixed) |
 | VER-08 | Phase 13 | Complete |
 | VER-09 | Phase 13 | Complete |
-| TRUST-14 | Phase 13 | Pending |
+| TRUST-14 | Phase 13 | Complete |
 | XOS-09 | Phase 13 | Pending |
 | TEST-11 | Phase 13 | Pending |
 | DOCS-09 | Phase 13 | Pending |

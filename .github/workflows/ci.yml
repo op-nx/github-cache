@@ -556,11 +556,17 @@ jobs:
       # per-target records are the only runtime observation of THAT -- and on a fork
       # pull request, where the dogfood pair is skipped, the only cross-OS signal at all.
       # Under set -euo pipefail the tee preserves a failing Nx exit code.
+      # THROWAWAY PERTURBATION -- do not merge. Forces this ONE leg to zero
+      # `[remote cache]` labels so the XOS-09 gate below is observed taking its FAIL
+      # path on a real windows-11-arm runner. typecheck-windows and test-windows are
+      # deliberately left UNPERTURBED in this same run as the positive control: if they
+      # stay green while this leg reddens, the red is caused by the count and not by the
+      # environment. Branch gsd/13-gate-failpath-proof only; revert after recording.
       - name: Run the build target and tee its output
         shell: bash
         run: |
           set -euo pipefail
-          npm run build 2>&1 | tee build-nx.log
+          npm run build -- --skip-nx-cache 2>&1 | tee build-nx.log
       # GATED at a floor of 1, and the floor is sound ONLY because the step above made
       # this leg unable to write. The silent failure that ungated it until XOS-09: a
       # leg that can save launders its own failure, because a broken cross-OS restore

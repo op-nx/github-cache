@@ -35,8 +35,8 @@ computation a second place to drift.
 
 ### Backend shape (the roadmap's named research gate)
 
-- **D-01 (RESEARCH-GATED, not locked): the read-only backend must be the SAME implementation as
-  the writable one's read path, not a second one.** IMPACT: HIGH. CONFIDENCE: HIGH on the
+- **D-01 (RESEARCH-GATED, not locked):** the read-only backend must be the SAME implementation as
+  the writable one's read path, not a second one. IMPACT: HIGH. CONFIDENCE: HIGH on the
   *criterion*, MEDIUM on the *final shape* -- and the ROADMAP explicitly mandates a research
   comparison here, so auto-mode records a recommendation rather than pre-empting that gate.
 
@@ -65,8 +65,8 @@ computation a second place to drift.
   only defense against the silent all-MISS this phase would otherwise make invisible, since a
   read-only leg has no write path whose failure would surface.
 
-- **D-02a (LOCKED by maintainer, 2026-08-02): the read-only backend is selected per-LEG by ROLE,
-  never per-EVENT.** IMPACT: HIGH. CONFIDENCE: HIGH -- decided by the maintainer after the
+- **D-02a (LOCKED by maintainer, 2026-08-02):** the read-only backend is selected per-LEG by ROLE,
+  never per-EVENT. IMPACT: HIGH. CONFIDENCE: HIGH -- decided by the maintainer after the
   event-derived alternative was analysed and found unfixable.
 
   **The event-derived alternative and why it is REJECTED.** It is genuinely attractive at first
@@ -89,8 +89,8 @@ computation a second place to drift.
   ordering, or on anything being true of the current run. That is strictly stronger than the
   intra-run argument in D-04, and it is why this shape was chosen over the alternatives.
 
-- **D-02b (OPEN -- research must resolve, planning must not begin with it open): what SHAPE does
-  the role signal take?** IMPACT: HIGH -- a consumer-visible env knob is a frozen-ish public
+- **D-02b (OPEN -- research must resolve, planning must not begin with it open):** what SHAPE does
+  the role signal take? IMPACT: HIGH -- a consumer-visible env knob is a frozen-ish public
   contract (`src/test/consumer-contract.ts` enumerates exactly 8 today; both
   `public-surface.spec.ts` and `docs-adoption.spec.ts` pin it). CONFIDENCE: NOT HIGH.
 
@@ -115,8 +115,8 @@ computation a second place to drift.
   (ii) does not add a second cache-version computation or a second drift-guarded bundle, and
   (iii) works on `build-windows` without building the package before the measured `npm run build`.
 
-- **D-02c (candidate to CARRY, with its defect pre-recorded): the witness / `created_at`
-  variant.** Research must carry it as a comparison point rather than ignoring it -- but it does
+- **D-02c (candidate to CARRY, with its defect pre-recorded):** the witness / `created_at`
+  variant. Research must carry it as a comparison point rather than ignoring it -- but it does
   NOT close laundering, and the reason is recorded here so the comparison starts from the right
   place. An entry written by a PREVIOUS run's Windows leg predates the current leg and passes any
   "the entry is older than me" witness. Tightening the witness to "created within THIS run" then
@@ -124,8 +124,8 @@ computation a second place to drift.
   legitimately HITs and writes nothing. Both directions fail; record which one the variant would
   pick and why it is still worse than making the write unrepresentable.
 
-- **D-03 (LOCKED, and the WHY is recorded so it is not re-raised): a construction-time
-  `readOnly` argument on `createActionsCacheBackend()` is REJECTED.** IMPACT: MEDIUM.
+- **D-03 (LOCKED, and the WHY is recorded so it is not re-raised):** a construction-time
+  `readOnly` argument on `createActionsCacheBackend()` is REJECTED. IMPACT: MEDIUM.
   CONFIDENCE: HIGH -- this is settled project law, not a judgement call.
 
   TRUST-05: RW-vs-RO is **which factory constructs the backend**, never a caller-facing mode flag.
@@ -140,8 +140,8 @@ computation a second place to drift.
 
 ### Gating the three Windows legs (what the phase is FOR)
 
-- **D-04 (LOCKED): all three Windows legs move to the read-only backend, and their
-  `[remote cache]` counts become GATED at `>= 1` per leg.** IMPACT: HIGH. CONFIDENCE: HIGH --
+- **D-04 (LOCKED):** all three Windows legs move to the read-only backend, and their
+  `[remote cache]` counts become GATED at `>= 1` per leg. IMPACT: HIGH. CONFIDENCE: HIGH --
   this is CR-18's original ask and the phase goal verbatim.
 
   **The soundness argument is INDUCTIVE, not per-run (D-02a).** Once the consumer legs cannot
@@ -167,16 +167,16 @@ computation a second place to drift.
   `build-windows` 1, `typecheck-windows` 2, `test-windows` 1 -- keep the per-target numbers as
   printed diagnostics, gate on the floor.
 
-- **D-06 (LOCKED): every stale comment justifying the ungated counts must be corrected in the
-  SAME commit that gates them.** IMPACT: MEDIUM. CONFIDENCE: HIGH.
+- **D-06 (LOCKED):** every stale comment justifying the ungated counts must be corrected in the
+  SAME commit that gates them. IMPACT: MEDIUM. CONFIDENCE: HIGH.
   The laundering rationale is currently written into `ci.yml` at all three legs and into
   `dogfood-cross-os.spec.ts`'s `cacheObservation` reason string. Once the legs cannot write, that
   rationale is FALSE, and a comment carrying a false reason is a documented argument for undoing
   the work. This repo has corrected exactly this class of defect four times on this branch
   (`fd75d83`, `7e777b3`, `9e949e4`, and quick task `260801-vyy` itself).
 
-- **D-07 (LOCKED): the new gate is pinned in a spec, or a silent revert to a writable sidecar
-  reopens CR-18 with every other clause still green.** IMPACT: MEDIUM. CONFIDENCE: HIGH -- it is
+- **D-07 (LOCKED):** the new gate is pinned in a spec, or a silent revert to a writable sidecar
+  reopens CR-18 with every other clause still green. IMPACT: MEDIUM. CONFIDENCE: HIGH -- it is
   the house idiom (CR-17's precedent, and `dogfood-cross-os.spec.ts` already pins job shapes from
   disk). Prefer the existing `dogfood-cross-os.spec.ts`; it already owns cross-OS CI shape.
   Guard the SEMANTIC change (the legs are read-only AND their counts are asserted), not just the
@@ -184,8 +184,8 @@ computation a second place to drift.
 
 ### Adjacent stances confirmed before planning (roadmap asked for this explicitly)
 
-- **D-08 (LOCKED): read-only against the SAME store CI writes does not contradict PROJECT.md's
-  "Local read-write mode" Out of Scope line, CORR-01, or TRUST-05.** IMPACT: MEDIUM.
+- **D-08 (LOCKED):** read-only against the SAME store CI writes does not contradict PROJECT.md's
+  "Local read-write mode" Out of Scope line, CORR-01, or TRUST-05. IMPACT: MEDIUM.
   CONFIDENCE: HIGH -- each is checkable against its own text.
   - The Out of Scope line bans LOCAL WRITE. This phase adds a CI-side READ-ONLY position: strictly
     less capability, in the same direction the stance points.

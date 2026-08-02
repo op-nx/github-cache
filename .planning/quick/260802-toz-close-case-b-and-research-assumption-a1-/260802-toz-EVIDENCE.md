@@ -218,3 +218,122 @@ see the UNPLANNED FINDING section. All three ubuntu producers and all three Wind
 **Actions** cache this baseline measures, and it runs AFTER the producers. A later reader running
 `gh run view 30767511870` will see `failure` next to a baseline claimed off it; that is expected,
 and this paragraph is why it is not a contradiction.
+
+---
+
+## OBSERVATION 1 -- Case B: PROVEN
+
+**Run `30768540898`**, event `pull_request`, draft PR #14, head `7188a66` -- which IS the
+pre-registration commit, so the prediction was provably in the tree the run measured.
+
+### The producers HIT. Nothing was written this run.
+
+The primary discriminator (C3), measured on all three ubuntu producers:
+
+| Producer | Observed | `Sent` |
+|----------|----------|--------|
+| ubuntu `build` | `Cache hit for: nx-cache-6303782621882711279` | NONE |
+| ubuntu `typecheck` | `Cache hit for: nx-cache-11553684120103592295` and `...6303782621882711279` | NONE |
+| ubuntu `test` | `Cache hit for: nx-cache-11565398464176149070` | NONE |
+
+Not one `Sent <n> of <n>` line on any producer, and no `Failed to save: Unable to reserve`
+anywhere -- so C2's race artifact is absent and C4's eviction alternative is excluded, because the
+keys observed ARE the baseline keys rather than new ones.
+
+### The Windows legs restored the BASELINE keys, byte for byte
+
+| Leg | `Cache hit for:` | `Received` | Baseline `Sent` | Gate count |
+|-----|------------------|-----------|-----------------|------------|
+| `build-windows` | `nx-cache-6303782621882711279` | 137951 | 137951 | 1 |
+| `typecheck-windows` | `nx-cache-11553684120103592295` | 98227 | 98227 | 2 |
+| | + `nx-cache-6303782621882711279` (build dep) | 137951 | 137951 | |
+| `test-windows` | `nx-cache-11565398464176149070` | 1299 | 1299 | 1 |
+
+Counts **1 / 2 / 1**, exactly as pre-registered. All three legs GREEN.
+
+### Why this is Case B and not Case A
+
+Nothing was saved during this run -- every producer HIT and emitted no bytes. So there was no
+same-run merge-ref entry in existence for the Windows legs to have restored. The PR's own
+merge-ref scope was a fresh, empty ref. The keys the Windows legs restored are byte-identical to
+the ones `main`'s scope received from run `30767511870`. The entries therefore came from a scope
+populated BEFORE the run started. That is Case B.
+
+### What this does NOT prove (stated in the pre-registration, unchanged)
+
+- It does not distinguish BASE-branch scope from DEFAULT-branch scope; for a PR off `main` they
+  are the same ref. The narrower claim -- restored from a scope populated before the run, outside
+  this run's merge ref -- is what the gate's soundness actually needs, and that is what is proven.
+- It says nothing about portability. A restored task does not execute.
+
+### UNPLANNED FINDING -- the O3 witness is not Case-B-safe
+
+The run's overall conclusion is `failure`, from ONE job: `o3-witness`, at the step
+`Assert the H_linux cache entry existed before the Windows integration step started`. The three
+read-only legs are all `success`.
+
+This is not a flake and not a defect in Case B -- it is a real limitation the observation exposed.
+`o3-witness` asserts a CREATION ordering: that the linux entry came into existence before the
+Windows integration step began. On a Case-B run nothing is created at all, because every producer
+HITs, so an assertion phrased over in-run creation has no event to observe. The witness silently
+assumes the Case-A shape.
+
+Consequence for a real merge: the FIRST PR after Phase 13 lands that touches no declared input
+will redden `o3-witness` for this reason. That is a false red -- the cross-OS property holds, as
+the three green read-only legs in this very run show. Logged as a follow-up, not fixed here.
+
+---
+
+## OBSERVATION 2 -- assumption A1: ANSWERED, still not fully CLOSED
+
+**Run `30768554184`**, event `pull_request`, draft PR #15, head `6e982aa`, conclusion **success**.
+
+### The partial-miss condition was achieved exactly as pre-registered
+
+| Leg | Gate count | Predicted | Conclusion |
+|-----|-----------|-----------|------------|
+| `typecheck-windows` | **1** | 1 | success |
+| `build-windows` | 1 | 1 (control) | success |
+| `test-windows` | 1 | 1 (control) | success |
+
+A count of 1 is NOT below the floor of 1, so the gate PASSED and the leg stayed GREEN -- the
+predicted outcome, not an accident.
+
+### A task genuinely EXECUTED -- measured, not inferred
+
+The decisive line, from the tee'd Nx summary on `typecheck-windows`:
+
+```
+Nx read the output from the cache instead of running the command for 1 out of 2
+```
+
+against the Case-B run's control on the same leg, `2 out of 2`. One of the two tasks was restored
+(`build`) and the other (`typecheck`) MISSed and RAN. That is the partial miss, observed rather
+than assumed.
+
+### The finding: the refused store produces NO log noise at all
+
+`typecheck-windows` contains **zero** occurrences of `403` and no store-failure wording of any
+kind. The 55 `403` tokens elsewhere in the run belong to unrelated jobs (`build`, `integration`,
+`ppe`, `fallow`) and are incidental HTTP noise, not sidecar responses -- none of those jobs runs a
+read-only backend.
+
+So A1's practical question -- *does the read-only 403 generate log noise a reader would have to
+triage?* -- is answered: **no, none.** This is consistent by construction with `server.ts:129`,
+which answers with `res.statusCode = 403; res.end()`: an empty body, and the server logs nothing.
+
+### Why this is ANSWERED but NOT CLOSED
+
+Absence of noise is consistent with two different worlds: a PUT was attempted and silently
+refused, or no PUT was attempted at all. Nothing in the captured output distinguishes them,
+because the server logs nothing on the 403 path and Nx printed nothing about storing. Inferring
+"the PUT happened" from Nx's normal behaviour would be exactly the reasoning this project forbids
+-- the same shape as reading a MISS as evidence.
+
+**What would close it:** instrumenting the sidecar to record refused PUTs (a counter or a single
+stderr line), then re-running this same perturbation. That is a code change and is out of scope
+for an observation task.
+
+**Net movement:** A1 goes from *unexercised* -- no PUT ever attempted on any run -- to *the
+condition has now been exercised on a real `windows-11-arm` runner, and produced no observable
+noise*. The residual is instrumentation, not behaviour.

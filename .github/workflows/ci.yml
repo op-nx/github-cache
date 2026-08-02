@@ -493,7 +493,22 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Sidecar dogfood block -- see the build job above.
+      # Sidecar dogfood block -- see the build job above, plus one line the ubuntu
+      # producers deliberately do not carry: CACHE_READ_ONLY.
+      #
+      # That knob is ROLE, not TRUST (TRUST-14, D-02a). This leg is a CONSUMER of the
+      # ubuntu producer's entry, and producer-versus-consumer role is not derivable
+      # from any GitHub-supplied env fact: `push` and same-repo `pull_request` are both
+      # correctly write-TRUSTED, and GitHub exposes no per-job read-only lever. The
+      # workflow author supplies the one thing the runner cannot. Declining the write
+      # is what makes the count gate at the end of this job SOUND -- see that step.
+      #
+      # It goes in THIS step rather than in the sidecar's own `env:` because a REGULAR
+      # step's $GITHUB_ENV writes reach later steps while a BACKGROUND step's do not,
+      # which start-cache-server/action.yml's own comment records. And it can only
+      # NARROW: select-backend.ts reads it as the LAST branch, after every branch that
+      # has already returned a read-only backend or thrown, so it cannot resurrect an
+      # outcome control never reaches it from (TRUST-05, D-02b).
       - name: Pre-set the Nx cache client vars for the sidecar
         shell: bash
         run: |
@@ -502,6 +517,7 @@ jobs:
           token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
           echo "::add-mask::${token}"
           echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+          echo "CACHE_READ_ONLY=1" >> "$GITHUB_ENV"
       - uses: ./start-cache-server
         id: cache-server
         background: true
@@ -545,27 +561,46 @@ jobs:
         run: |
           set -euo pipefail
           npm run build 2>&1 | tee build-nx.log
-      # RECORDED, never GATED -- the integration job's policy and its exact pipeline.
-      # Gating on a non-zero count would be a LAUNDERABLE gate rather than coverage.
-      # This leg writes through a WRITABLE sidecar, so a broken cross-OS restore makes
-      # it MISS, execute the target, and SAVE its own entry -- and a re-run of the same
-      # commit then HITs that self-produced entry, taking a `count >= 1` check green
-      # with cross-OS reuse still dead. A gate a re-run can launder is worse than no
-      # gate, because it reads as coverage. The run-scoped, provenance-checked
-      # dogfood-verify canary is the gate instead.
-      # Note also what does NOT justify leaving this ungated: the `needs:` edge makes
-      # this leg INTRA-run -- its ubuntu producer repopulates the entry earlier in the
-      # SAME run -- so the cross-run "first run after a version-affecting change
-      # legitimately sees a zero" argument, which an earlier version of this comment
-      # rested on, never applied to these three legs at all.
-      # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
-      # pipeline under pipefail.
-      - name: Record the remote-cache label occurrence count for this leg
+      # GATED at a floor of 1, and the floor is sound ONLY because the step above made
+      # this leg unable to write. The silent failure that ungated it until XOS-09: a
+      # leg that can save launders its own failure, because a broken cross-OS restore
+      # makes it MISS, execute the target and SAVE its own entry -- and a re-run of the
+      # same commit then HITs that self-produced entry, taking a floor check green with
+      # cross-OS reuse still dead. A gate a re-run can launder is worse than no gate,
+      # because it reads as coverage.
+      # CACHE_READ_ONLY removes the premise rather than mitigating it. With no write
+      # path, no windows-produced entry for these hashes can ever exist, so a
+      # `[remote cache]` label here is NECESSARILY a restore of the ubuntu producer's
+      # entry. That property is INDUCTIVE: it holds of every run, and rests on nothing
+      # about job ordering, about this being a first run, or about anything else being
+      # true right now.
+      # Keep LIVENESS separate from correctness, because they are two arguments and
+      # only one of them is this step's. XOS-08's `needs:` edge is why the entry is
+      # PRESENT at all -- the ubuntu producer repopulates it earlier in the SAME run.
+      # Read-only-ness is why a green MEANS something. Neither substitutes for the
+      # other, and a rationale resting this gate on the `needs:` edge has confused them.
+      # Second-order effect, and it is the intended one: a MISS is now PERMANENT for
+      # that hash, because no self-produced entry ever backfills it. A red gate here
+      # stays red until the producer side is fixed rather than going green on a re-run.
+      # What this gate still does NOT cover: these three legs run the COMMITTED public
+      # `./start-cache-server` bundle, while the dogfood pair runs
+      # `uses: ./packages/github-cache` built in-job. Nothing here ties the bundle to
+      # the source it was built from -- `action-bundle-drift` is the control that does.
+      # Over-reading a green here as evidence about uncommitted source is the mistake
+      # CR-18 caught the first time.
+      # The `|| true` keeps a legitimate zero REACHING the comparison: under pipefail a
+      # zero-match grep exits 1 and would abort the step before the gate ran, turning a
+      # clear failure carrying an annotation into an opaque one carrying none.
+      - name: Gate on the cross-OS remote-cache label count for this leg
         shell: bash
         run: |
           set -euo pipefail
           count=$({ grep -o -F '[remote cache]' build-nx.log || true; } | wc -l | tr -d '[:space:]')
-          echo "remote-cache label occurrences on windows-11-arm (build): ${count} -- RECORDED, never gated"
+          echo "remote-cache label occurrences on windows-11-arm (build): ${count} -- GATED at a floor of 1"
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::build-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu build job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
+            exit 1
+          fi
       - cancel: cache-server
 
   typecheck-windows:
@@ -582,7 +617,8 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Sidecar dogfood block -- see the build job above.
+      # Sidecar dogfood block -- see the build job above; the CACHE_READ_ONLY role
+      # knob carries the build-windows leg's rationale.
       - name: Pre-set the Nx cache client vars for the sidecar
         shell: bash
         run: |
@@ -591,6 +627,7 @@ jobs:
           token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
           echo "::add-mask::${token}"
           echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+          echo "CACHE_READ_ONLY=1" >> "$GITHUB_ENV"
       - uses: ./start-cache-server
         id: cache-server
         background: true
@@ -634,25 +671,29 @@ jobs:
         run: |
           set -euo pipefail
           npm run typecheck 2>&1 | tee typecheck-nx.log
-      # RECORDED, never GATED -- the build-windows leg above carries the full rationale;
-      # this is the one-line form. A `count >= 1` gate here would be LAUNDERABLE, not
-      # coverage: the leg writes through a WRITABLE sidecar, so a broken cross-OS restore
-      # makes it save its own entry and a re-run of the same commit HITs that. The
-      # run-scoped, provenance-checked dogfood-verify canary is the gate instead.
+      # GATED at a floor of 1 -- the build-windows leg above carries the full rationale;
+      # this is the one-line form. The floor is sound because CACHE_READ_ONLY makes this
+      # leg a pure CONSUMER: with no write path it cannot save an entry of its own, so a
+      # `[remote cache]` label is NECESSARILY a restore of the ubuntu producer's entry
+      # and a re-run cannot launder a zero into a green.
       #
       # Stated ONCE rather than three times over: the argument was 13 lines verbatim on
       # each of the three legs, which triples the blast radius of the next correction --
       # and this file is the evidence that N-copy prose drifts PARTIALLY. The same commit
       # that widened the dogfood trigger had to fix eight sites making one stale claim,
       # several of them copies that a previous edit had missed. Don't re-expand this.
-      # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
-      # pipeline under pipefail.
-      - name: Record the remote-cache label occurrence count for this leg
+      # The `|| true` keeps a legitimate zero reaching the comparison instead of
+      # aborting the step under pipefail.
+      - name: Gate on the cross-OS remote-cache label count for this leg
         shell: bash
         run: |
           set -euo pipefail
           count=$({ grep -o -F '[remote cache]' typecheck-nx.log || true; } | wc -l | tr -d '[:space:]')
-          echo "remote-cache label occurrences on windows-11-arm (typecheck): ${count} -- RECORDED, never gated"
+          echo "remote-cache label occurrences on windows-11-arm (typecheck): ${count} -- GATED at a floor of 1"
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::typecheck-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu typecheck job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
+            exit 1
+          fi
       - cancel: cache-server
 
   test-windows:
@@ -669,7 +710,8 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
       - run: npm ci
-      # Sidecar dogfood block -- see the build job above.
+      # Sidecar dogfood block -- see the build job above; the CACHE_READ_ONLY role
+      # knob carries the build-windows leg's rationale.
       - name: Pre-set the Nx cache client vars for the sidecar
         shell: bash
         run: |
@@ -678,6 +720,7 @@ jobs:
           token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
           echo "::add-mask::${token}"
           echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+          echo "CACHE_READ_ONLY=1" >> "$GITHUB_ENV"
       - uses: ./start-cache-server
         id: cache-server
         background: true
@@ -721,25 +764,29 @@ jobs:
         run: |
           set -euo pipefail
           npm run test 2>&1 | tee test-nx.log
-      # RECORDED, never GATED -- the build-windows leg above carries the full rationale;
-      # this is the one-line form. A `count >= 1` gate here would be LAUNDERABLE, not
-      # coverage: the leg writes through a WRITABLE sidecar, so a broken cross-OS restore
-      # makes it save its own entry and a re-run of the same commit HITs that. The
-      # run-scoped, provenance-checked dogfood-verify canary is the gate instead.
+      # GATED at a floor of 1 -- the build-windows leg above carries the full rationale;
+      # this is the one-line form. The floor is sound because CACHE_READ_ONLY makes this
+      # leg a pure CONSUMER: with no write path it cannot save an entry of its own, so a
+      # `[remote cache]` label is NECESSARILY a restore of the ubuntu producer's entry
+      # and a re-run cannot launder a zero into a green.
       #
       # Stated ONCE rather than three times over: the argument was 13 lines verbatim on
       # each of the three legs, which triples the blast radius of the next correction --
       # and this file is the evidence that N-copy prose drifts PARTIALLY. The same commit
       # that widened the dogfood trigger had to fix eight sites making one stale claim,
       # several of them copies that a previous edit had missed. Don't re-expand this.
-      # The `|| true` keeps a legitimate zero printing 0 instead of aborting the
-      # pipeline under pipefail.
-      - name: Record the remote-cache label occurrence count for this leg
+      # The `|| true` keeps a legitimate zero reaching the comparison instead of
+      # aborting the step under pipefail.
+      - name: Gate on the cross-OS remote-cache label count for this leg
         shell: bash
         run: |
           set -euo pipefail
           count=$({ grep -o -F '[remote cache]' test-nx.log || true; } | wc -l | tr -d '[:space:]')
-          echo "remote-cache label occurrences on windows-11-arm (test): ${count} -- RECORDED, never gated"
+          echo "remote-cache label occurrences on windows-11-arm (test): ${count} -- GATED at a floor of 1"
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::test-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu test job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
+            exit 1
+          fi
       - cancel: cache-server
 
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),

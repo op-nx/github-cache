@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 13
 current_phase_name: read-only-actions-cache-backend
 status: executing
-last_updated: "2026-08-02T00:26:07.819Z"
+last_updated: "2026-08-02T00:50:12.693Z"
 last_activity: 2026-08-02
-last_activity_desc: Phase 13 execution started
+last_activity_desc: "Completed 13-02: compose the writable Actions backend from a read-only base"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 51
-  completed_plans: 39
+  completed_plans: 41
   percent: 14
 ---
 
@@ -28,10 +28,12 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 13 (read-only-actions-cache-backend) -- EXECUTING
-Plan: 2 of 6
-Status: 13-01 complete -- Phase 13's seven requirement IDs registered in both traceability files
+Plan: 3 of 6
+Status: 13-02 complete -- the Actions-cache backend is a read-only base the writable factory
+composes, so ONE `get` closure and ONE `cache.restoreCache` READ call site survive; VER-08 and
+VER-09 closed
 Progress: 6/7 phases complete [########--] 86%
-Last activity: 2026-08-02 -- Completed 13-01: register Phase 13 requirements and traceability
+Last activity: 2026-08-02 -- Completed 13-02: compose the writable Actions backend from a read-only base
 
 **Milestone v0.0.2 gained a SEVENTH phase.** Phases 7 through 12 are Complete in the ROADMAP table
 (39 of 39 plans), but `/gsd:audit-milestone` now waits on Phase 13, added by maintainer instruction
@@ -152,6 +154,7 @@ on run 30471772954 via a temporary push to main, since restored to fe25a3f. See
 | Phase 12 P05 | 17min | 3 tasks | 6 files |
 | Phase 12 P06 | 30min | 3 tasks tasks | 1 files files |
 | Phase 13 P01 | 22m | 3 tasks | 3 files |
+| Phase 13 P02 | 20min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -302,6 +305,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 13]: 13-01: Phase 13's seven requirement IDs are registered as Pending, NOT marked complete -- 13-01 registers traceability only; the code that satisfies them lands in 13-02..13-06 (follows the Phase 12 lesson where a RED-only plan falsely closed three XOS rows). `requirements.mark-complete` deliberately NOT run.
 - [Phase 13]: 13-01: No C19 control row for `CACHE_READ_ONLY`. The phase strictly REDUCES capability, opens no attack surface and adds no trust boundary, so it meets THREAT-MODEL.md's own criterion ("keep only what has no canonical home") for a Residual note and not for a control. The no-row decision is written INTO the bullet so the ledger's silence is not read as an omission.
 - [Phase 13]: 13-01: REQUIREMENTS.md asserts 57 and ROADMAP.md asserts 51 BY DESIGN -- full defined set vs roadmapped subset. The gap is exactly six pre-existing non-roadmapped IDs (PARITY-06, PARITY-07, PARITY-08, VER-07, ROBUST-04, RETAIN-05). Any other difference means one of the two tables has drifted; verified mechanically at 13-01.
+- [Phase 13]: 13-02: createActionsCacheBackend() is now { ...createReadOnlyActionsCacheBackend(), put } -- ONE get closure, ONE cache.restoreCache READ call site, so cache-version drift is unrepresentable rather than guarded (D-01). Both factories MUST stay in actions-cache-backend.ts: the ordered-member scan resolves its subject by NAME, so a sibling file makes it blind, not red. Read-only declared FIRST keeps the asserted array byte-identical, and it passed with ZERO edits.
+- [Phase 13]: 13-02: VER-09 widens the @actions/cache importer scan from file to PACKAGE scope, matching the quoted specifier (deep subpaths included) on comment-stripped source -- five non-spec modules mention it in prose. Proven non-vacuous by MUTATION: a throwaway importer scored 1 failed / 30 passed, VER-09 red and both file-scoped clauses green.
+- [Phase 13]: 13-02: put's lookupOnly probe stays a SECOND restoreCache on the write path only, with enableCrossOsArchive at the 5th positional -- probing at a different cache version reports absent for a present entry and every Windows write would answer a spurious 409. It does not violate D-01's one-read-site criterion.
 
 ### Pending Todos
 
@@ -429,8 +435,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-08-02T00:26:07.807Z
-Stopped at: Completed 13-01-PLAN.md
+Last session: 2026-08-02T00:50:12.678Z
+Stopped at: Completed 13-02-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.

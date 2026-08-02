@@ -338,7 +338,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   has just told everyone to expect exactly once. `action-bundle-drift` catches it, but only on push,
   after the misleading signal has already been rationalised.
 
-- [ ] **VER-08**: The read-only Actions-cache backend is the SAME implementation as the writable
+- [x] **VER-08**: The read-only Actions-cache backend is the SAME implementation as the writable
   one's read path, per D-01. Exactly ONE `cache.restoreCache(...)` READ call site survives in the
   package, and `createActionsCacheBackend` COMPOSES `createReadOnlyActionsCacheBackend` rather than
   duplicating it; both factories live in
@@ -355,7 +355,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   the composed shape. So the criterion is not something this phase establishes; it is something this
   phase must not break.
 
-- [ ] **VER-09**: The `@actions/cache` drift guard widens from FILE scope to PACKAGE scope: exactly
+- [x] **VER-09**: The `@actions/cache` drift guard widens from FILE scope to PACKAGE scope: exactly
   one non-spec module under `packages/github-cache/src/` imports `@actions/cache`. VER-03 asserts the
   argument list and the call count WITHIN `actions-cache-backend.ts`, and a file-scoped scan
   structurally cannot see a sibling module -- so a second importer added later would carry its own
@@ -759,8 +759,8 @@ honour table: `.planning/ROADMAP.md`.
 | XOS-05 | Phase 12 | Complete (live-CI: `[remote cache]` counted per leg at 1/2/1, total 4, matching the counts pre-registered in `f5d03b0` before the run; every ubuntu leg MISS-and-saved in the same run. The conditional scheduled-detector clause is discharged too -- run 30603713356 went green on a real `windows-11-arm` runner with the plural success line present and zero `[remote cache]` markers) |
 | XOS-08 | Phase 12 | Complete (bare single-producer `needs:` scalar per leg, guarded in `dogfood-cross-os.spec.ts`; the ordering is what made the 1:1 per-target attribution readable within run 30586177358) |
 | DOCS-07 | Phase 12 | Complete (`docs/cross-os.md`, safe default FIRST, registered as an `nx.json` `test` input in the same commit as the doc and drift-guarded; the stderr-immune discriminator is single-sourced and A1 closed by measurement on both legs; recipe accuracy reviewed in 12-UAT.md test 4 after code-review finding CR-01 was fixed) |
-| VER-08 | Phase 13 | Pending |
-| VER-09 | Phase 13 | Pending |
+| VER-08 | Phase 13 | Complete |
+| VER-09 | Phase 13 | Complete |
 | TRUST-14 | Phase 13 | Pending |
 | XOS-09 | Phase 13 | Pending |
 | TEST-11 | Phase 13 | Pending |

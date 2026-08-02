@@ -113,12 +113,13 @@ describe('documented snippets mask the bearer token before writing $GITHUB_ENV (
   );
 });
 
-describe('advanced.md documents all four selectBackend outcomes (F11)', () => {
-  // selectBackend has FOUR outcomes, two of which were invisible in the old binary
-  // read-write-versus-reader prose: the fail-closed THROW on a malformed identity,
-  // and the empty-memory permanent-MISS degrade on a trusted-but-tokenless context
-  // (the one adopters actually hit). A future selectBackend change not reflected
-  // here is caught by this guard.
+describe('advanced.md documents all five selectBackend outcomes (F11)', () => {
+  // selectBackend is not the binary read-write-versus-reader switch the old prose
+  // implied. Two outcomes were invisible in it -- the fail-closed THROW on a
+  // malformed identity, and the empty-memory permanent-MISS degrade on a
+  // trusted-but-tokenless context (the one adopters actually hit) -- and TRUST-14
+  // added the CACHE_READ_ONLY narrowing outcome on top. A future selectBackend
+  // change not reflected here is caught by this guard.
   const advanced = read('docs/advanced.md');
 
   it('names the untrusted read-only Releases reader outcome', () => {
@@ -137,6 +138,37 @@ describe('advanced.md documents all four selectBackend outcomes (F11)', () => {
 
   it('names the writable Actions-cache backend outcome', () => {
     expect(advanced).toMatch(/Actions-cache backend/i);
+  });
+
+  // Line-scoped, and it names the KNOB, because the clause above already matches
+  // /Actions-cache backend/i -- which the read-only row also contains. A clause both
+  // rows satisfy is not coverage of the fifth outcome, it is a second reading of the
+  // fourth. Requiring the knob and the read-only backend on the SAME line pins the
+  // row itself, without pinning column widths that prettier reflows.
+  //
+  // MEASURED, not argued: deleting the read-only row from the selection table reddens
+  // THIS clause and nothing else in the file (1 failed | 42 passed) -- in particular
+  // the writable-Actions clause above stays GREEN under that same mutation, which is
+  // exactly the false pass this clause exists to prevent.
+  it('names the CACHE_READ_ONLY read-only Actions-cache outcome (TRUST-14)', () => {
+    expect(advanced).toMatch(
+      /CACHE_READ_ONLY[^\n]*read-only[^\n]*Actions-cache backend/,
+    );
+  });
+
+  // The COUNT, not just the outcomes. Every clause above asserts CONTENT, so nothing
+  // held the number honest: a six-outcome selector could stay documented as five
+  // indefinitely -- the same defect class as a rationale comment that outlives the
+  // code it describes. Asserted against the PROSE sentence a reader actually reads,
+  // deliberately NOT a tally of table rows: a row tally re-derives the number from
+  // the same table it is checking, so it would agree with itself while the sentence
+  // above it lied.
+  //
+  // MEASURED, not argued: reverting that sentence to the previous count reddens THIS
+  // clause and nothing else in the file (1 failed | 42 passed); every content clause
+  // above stays GREEN, because the outcomes are all still described.
+  it('states the outcome count in prose, so a stale count cannot survive', () => {
+    expect(advanced).toMatch(/`selectBackend` has FIVE outcomes/i);
   });
 });
 

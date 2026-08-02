@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-02T11:29:15.965Z",
+  "phase": "13",
+  "phase_name": "read-only-actions-cache-backend",
+  "phase_dir": ".planning/phases/13-read-only-actions-cache-backend",
+  "plan": 6,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "pause_reason": "Execution and verification are COMPLETE. Paused deliberately so the three post-completion gates run in a fresh session with clean context.",
+  "completed_tasks": [
+    { "id": 1, "name": "13-01 register the seven requirement IDs", "status": "done", "commit": "c35ad00" },
+    { "id": 2, "name": "13-02 composed read-only Actions-cache factory (VER-08, VER-09)", "status": "done", "commit": "658301e" },
+    { "id": 3, "name": "13-03 CACHE_READ_ONLY last-branch narrowing knob (TRUST-14)", "status": "done", "commit": "3a83e01" },
+    { "id": 4, "name": "13-04 consumer contract + docs, fifth outcome (DOCS-10)", "status": "done", "commit": "79aea97" },
+    { "id": 5, "name": "13-05 three read-only legs, gate, seven stale sites (XOS-09, TEST-11, DOCS-09)", "status": "done", "commit": "6a6370b" },
+    { "id": 6, "name": "13-06 pre-registered counts + proving run + 13-EVIDENCE.md", "status": "done", "commit": "a78365f" },
+    { "id": 7, "name": "verify_phase_goal via gsd-verifier -- 7/7 requirements", "status": "done", "commit": "4d18acb" },
+    { "id": 8, "name": "close the human_needed item by live observation of the gate FAIL path", "status": "done", "commit": "ee67055" }
+  ],
+  "remaining_tasks": [
+    { "id": 9, "name": "/gsd:secure-phase 13", "status": "not_started", "note": "MUST be reached BY gsd-security-auditor. Do NOT take the inline short-circuit that writes SECURITY.md directly when threats_open:0." },
+    { "id": 10, "name": "/gsd:validate-phase 13", "status": "not_started", "note": "MUST be reached BY gsd-nyquist-auditor. Do NOT take the no-gap inline short-circuit that writes VALIDATION.md in the orchestrator." },
+    { "id": 11, "name": "/gsd:extract-learnings 13", "status": "not_started", "note": "Run LAST, after secure + validate are clean, so it captures what those audits surface." },
+    { "id": 12, "name": "global-learnings bridge", "status": "not_started", "note": "Only if features.global_learnings is true. learnings.copy is a silent no-op -- build a TEMP top-level .planning/LEARNINGS.md from 13-LEARNINGS.md, run the copy, rm it, as one uninterrupted sequence. NEVER git add it." },
+    { "id": 13, "name": "push the 4 unpushed commits", "status": "not_started", "note": "Deliberately left local by 13-06; pushing fires another CI run on PR #12." }
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    { "action": "Decide whether to push the four unpushed commits to PR #12", "context": "13-06 left them local on purpose because a push triggers another full CI run. Nothing depends on them being remote.", "blocking": false }
+  ],
+  "decisions": [
+    { "decision": "The read-only backend is selected per-LEG by ROLE, never per-EVENT", "rationale": "TRUST-05's asymmetry is a one-way ratchet -- a signal may only narrow RW->RO, never widen RO->RW. An event-derived read-only pull_request base could never be widened back for dogfood-seed, which asserts a hard PUT 200, so it would revert quick task 260801-vyy's CR-18 fix with no possible composition to restore it. Maintainer decision, 2026-08-02.", "phase": "13" },
+    { "decision": "Both factories live in ONE file (actions-cache-backend.ts)", "rationale": "The drift guard at actions-cache-backend.spec.ts:501-543 is a FILE-SCOPED source scan. A sibling-file split makes it blind and a second restoreCache could ship with every spec green. Confirmed by the guard passing with ZERO edits under the composed shape.", "phase": "13" },
+    { "decision": "CACHE_READ_ONLY is checked LAST in selectBackend", "rationale": "Branch ORDER is what makes 'can only narrow' a fact rather than a promise -- every path that could narrow has already returned. selectBackend.length stays 0.", "phase": "13" },
+    { "decision": "The gate's soundness argument is INDUCTIVE, not per-run", "rationale": "A leg that cannot write can only get a [remote cache] label from a genuine restore of the ubuntu producer's entry -- independent of run ordering. XOS-08's needs: edge is LIVENESS only. Comments must not rest correctness on the edge.", "phase": "13" },
+    { "decision": "Stale-site correction bounded to seven sites; exactly two survivors kept", "rationale": "ci.yml:825 (runner.debug) and ci.yml:912 (LEG_OS integration leg) remain TRUE -- this phase does not convert those jobs. The research's proposed blanket sweep would have deleted two correct claims.", "phase": "13" },
+    { "decision": "Closed the verifier's human_needed item by live observation rather than by Phase 12 precedent", "rationale": "Maintainer chose to prove the gate's FAIL path on a real runner. Run 30745558383: build-windows red AT THE GATE STEP at count 0, typecheck/test green at 2/1 as same-run positive control.", "phase": "13" }
+  ],
+  "uncommitted_files": [],
+  "untracked_files": [".planning/phases/13-read-only-actions-cache-backend/.gitkeep"],
+  "next_action": "Run /gsd:secure-phase 13, and let gsd-security-auditor reach the verdict -- do not self-certify it inline.",
+  "context_notes": "Phase 13 is functionally DONE and proven live twice: run 30744366870 (pass path, counts 1/2/1 against pre-registration whose commit IS the run's headSha) and run 30745558383 (fail path, gate step red at count 0 with same-run positive control). What remains is purely the audit tail. The dominant recurring hazard this session was NOT the code -- it was tooling: GSD state handlers corrupted STATE.md on every single plan, and four separate times a mechanical acceptance criterion was tripped by prose written into the very file it scans."
+}

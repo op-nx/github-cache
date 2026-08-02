@@ -338,6 +338,31 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   has just told everyone to expect exactly once. `action-bundle-drift` catches it, but only on push,
   after the misleading signal has already been rationalised.
 
+- [ ] **VER-08**: The read-only Actions-cache backend is the SAME implementation as the writable
+  one's read path, per D-01. Exactly ONE `cache.restoreCache(...)` READ call site survives in the
+  package, and `createActionsCacheBackend` COMPOSES `createReadOnlyActionsCacheBackend` rather than
+  duplicating it; both factories live in
+  `packages/github-cache/src/backend/actions-cache-backend.ts`. The VER-04 cwd/`GITHUB_WORKSPACE`
+  guards and the VER-07 construction-time `mkdirSync` live in the shared read core; `put`'s second
+  `mkdirSync` and its `lookupOnly` existence probe -- the SECOND `restoreCache`, write path only --
+  stay on the write path unchanged and MUST NOT be "unified" with the read path. A sibling
+  `*actions-cache*.ts` module is invisible to the FILE-scoped ordered-member guard at
+  `actions-cache-backend.spec.ts:517-531`, so a second version computation would ship with the whole
+  suite green -- and an OS-dependent cache version is precisely the bug Phase 9 existed to fix.
+  D-09's escape hatch was LIVE and was NOT taken: the roadmap allowed this phase to SHRINK to a
+  documented decision if no shape satisfied D-01's criterion. One does, and it needs ZERO changes to
+  the guard that enforces the criterion -- the ordered `cache.*` member array is byte-identical under
+  the composed shape. So the criterion is not something this phase establishes; it is something this
+  phase must not break.
+
+- [ ] **VER-09**: The `@actions/cache` drift guard widens from FILE scope to PACKAGE scope: exactly
+  one non-spec module under `packages/github-cache/src/` imports `@actions/cache`. VER-03 asserts the
+  argument list and the call count WITHIN `actions-cache-backend.ts`, and a file-scoped scan
+  structurally cannot see a sibling module -- so a second importer added later would carry its own
+  version computation past a green guard. That is the future-sibling evasion D-01's criterion exists
+  to foreclose, and it is the one hole the D-01 shape does not close by itself. True today
+  (`actions-cache-backend.ts` is the sole importer); this requirement is what keeps it true.
+
 ### Cross-OS outcomes (XOS)
 
 - [x] **XOS-01**: A local Windows developer gets a cache HIT for `build`, `typecheck` and `test`
@@ -385,6 +410,23 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 - [x] **XOS-07**: `publish` depends on every job producing a mirrored entry (`build`, `typecheck`,
   `test`, `integration`), not on `build` alone, so one default-branch push mirrors that push's full
   task set. Otherwise the O1 proof races job completion and can fail on a correct implementation.
+
+- [ ] **XOS-09**: All three Windows legs (`build-windows`, `typecheck-windows`, `test-windows`)
+  construct the read-only backend, and their `[remote cache]` counts are GATED at `>= 1` per leg.
+  Per D-04, convert all three and not a subset -- one writable leg left behind keeps a launderable
+  path open and invites a future reader to "make the others consistent" in the wrong direction. Per
+  D-05 the threshold is a FLOOR, not an exact pin: these counts are emitted by Nx's task graph and
+  legitimately vary with it, so the per-target numbers stay as printed diagnostics while the gate
+  asserts the floor. The soundness argument is INDUCTIVE, not per-run -- once the consumer legs
+  cannot write, no Windows-produced entry for those hashes can ever exist, so any HIT is NECESSARILY
+  Linux-produced, regardless of run ordering, re-runs, or what an earlier run did. Keep that SEPARATE
+  from LIVENESS: XOS-08's `needs:` edge is why the entry is present at all, and it is why the gate is
+  not spuriously red. Without the read-only backend the same gate is LAUNDERABLE -- a broken cross-OS
+  restore makes the leg MISS, execute and SAVE its own entry, and a re-run then HITs that
+  self-produced entry and takes `count >= 1` green with cross-OS reuse completely dead. A gate a
+  re-run can launder is worse than no gate, because it reads as coverage. The gate's failure message
+  names BOTH causes a zero can have (cross-OS restore broken vs. the producer never populated the
+  entry) so a red gate is actionable rather than merely alarming.
 
 ### Retention and cleanup (RETAIN)
 
@@ -447,6 +489,25 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   Actions cache's boundary is ref scope, not OS) is offered as INPUT to that audit, not as its
   conclusion.
 
+- [ ] **TRUST-14**: The producer-vs-consumer ROLE signal is a strictly-narrowing env knob read by
+  `selectBackend` as its LAST branch -- per D-02a the signal is per-LEG by ROLE and never per-EVENT
+  (an event-derived signal cannot be widened back for `dogfood-seed`, which legitimately writes on a
+  `pull_request`), and per D-02b its shape is an env knob, the only option that works on
+  `build-windows` without building the package before the measured `npm run build`.
+  `selectBackend.length` stays 0. The guarantee is BRANCH ORDER, not validation: every branch above
+  has already returned a read-only backend or thrown, so the knob's only reachable effect is
+  writable -> read-only, and it cannot resurrect the Releases branch, the fail-closed throw, or the
+  memory-degrade branch. TRUST-05's one-way ratchet is therefore satisfied -- it forbids REQUESTING
+  write, not DECLINING it. Proven BEHAVIOURALLY over an enumerated env table, never by comment: a
+  comment cannot fail when someone moves the check earlier, and moving it earlier is exactly what
+  breaks the property. A construction-time `readOnly` factory argument stays REJECTED (D-03) --
+  RW-vs-RO is which factory constructs, never a caller-facing mode flag, and a flag re-opens the hole
+  `PutResult` was narrowed to close when `'forbidden'` was deleted from the union. The distinction
+  that makes this knob legitimate and D-03 not: this signal is read from the ENV BAG by the SELECTOR;
+  D-03's is an argument to the FACTORY. The witness / `created_at` variant is dead at the API level
+  (D-02c) -- `@actions/cache@6.2.0`'s `restoreCache` returns only the matched key string, so no
+  creation timestamp is observable to compare against.
+
 ### Documentation (DOCS)
 
 - [x] **DOCS-07**: A consumer-facing cross-OS adoption recipe whose PRIMARY instruction is
@@ -467,6 +528,33 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   "corrected" as though they were wrong: both frame "never a wrong result" as a consequence of FAULT
   DEGRADATION ("every read fault degrades to a MISS"), which stays true. The edit there is ADDITIVE
   -- a new precondition about target platform-agnosticism -- not a contradiction.
+
+- [ ] **DOCS-09**: Every site justifying the UNGATED counts is corrected in the SAME commit that
+  gates them, per D-06. Once the legs cannot write, that rationale is FALSE, and a comment carrying a
+  false reason is a documented argument for undoing the work -- this repo has corrected exactly this
+  class of defect four times on this branch (`fd75d83`, `7e777b3`, `9e949e4`, quick task
+  `260801-vyy`). The list is SEVEN, not four: the three `ci.yml` per-leg rationale comment blocks,
+  the three `ci.yml` printed `echo` strings (which are CODE, survive the spec's `#`-strip, and are
+  what an operator actually reads in the job log), and the one `dogfood-cross-os.spec.ts`
+  `cacheObservation` reason string. The count is written down rather than left to a reader's sweep,
+  because a partially-corrected N-copy comment is this repo's recurring defect. Record the SCOPE
+  LIMIT with it: two further `RECORDED, never gated` sites in `ci.yml` -- the `runner.debug` record
+  and the `integration` matrix leg's count -- remain factually TRUE and MUST NOT be swept. The
+  outcome-COUNT sites are NOT this requirement: `docs/configuration.md:92` and `docs/versioning.md`
+  belong to DOCS-10, because neither ever argued the counts could not be gated.
+
+- [ ] **DOCS-10**: The knob D-02b lands on is documented and its arrival is reconciled everywhere the
+  backend-selection outcome count is written down. It gets a `docs/configuration.md` table row AND a
+  `### <KNOB>` resolution section (`docs-adoption.spec.ts` asserts each knob is documented), and a
+  listing in `docs/versioning.md`'s consumer env-knob group -- a pure addition, with no prior false
+  claim to correct. `docs/advanced.md`'s "How the backend is selected" grows from four outcomes to
+  five INCLUDING its hardcoded prose count, and every remaining "four backend-selection outcomes"
+  site is corrected: there are FIVE such sites, not two -- `docs/advanced.md:21`,
+  `docs/configuration.md:92`, `memory-backend.ts:59`, and the describe title PLUS its comment at
+  `docs-adoption.spec.ts:116-117`. The contract change lands as a reviewable diff in the explicit
+  `public-surface.spec.ts` literal, never a snapshot: the ninth knob is a consumer-visible surface
+  addition on a shipped package and must be readable in the diff, per the house rule the pinned
+  enumerations exist to enforce.
 
 ### Verification (TEST)
 
@@ -520,6 +608,18 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   actually left the process. Record the probe's timestamp as preceding the first Nx run. The
   `Cache: n/m hit` line is recorded and explicitly marked NON-DISCRIMINATING in both directions --
   a `0%` prints identically with no sidecar at all, and a non-zero count includes local hits.
+
+- [ ] **TEST-11**: `dogfood-cross-os.spec.ts` pins the SEMANTIC change per leg, per D-07 -- the
+  read-only knob write is present, the count COMPARISON is present, and the ungated-count revert
+  marker is absent. Pin the semantic outcome, not the presence of a string: without it a silent
+  revert to a writable sidecar reopens CR-18 with every other clause still green. Asserting a bare
+  `exit 1` is FORBIDDEN, and the reason is recorded here rather than left to be rediscovered:
+  `ci.yml:527` is already `exit 1` (the sidecar readiness poll) inside `jobBlock('build-windows')`,
+  so an `/exit 1/` clause is GREEN before the phase changes anything -- a guard that can pass over a
+  wrong payload is not coverage. Non-vacuity is MUTATION-proven and the measurement is recorded in
+  the clause comment, matching the `cacheClient` precedent at `dogfood-cross-os.spec.ts:886-893`.
+  The file is the right home rather than a sibling: it already reads `ci.yml` from disk and owns
+  cross-OS CI shape.
 
 ### Observability (OBS)
 
@@ -659,10 +759,17 @@ honour table: `.planning/ROADMAP.md`.
 | XOS-05 | Phase 12 | Complete (live-CI: `[remote cache]` counted per leg at 1/2/1, total 4, matching the counts pre-registered in `f5d03b0` before the run; every ubuntu leg MISS-and-saved in the same run. The conditional scheduled-detector clause is discharged too -- run 30603713356 went green on a real `windows-11-arm` runner with the plural success line present and zero `[remote cache]` markers) |
 | XOS-08 | Phase 12 | Complete (bare single-producer `needs:` scalar per leg, guarded in `dogfood-cross-os.spec.ts`; the ordering is what made the 1:1 per-target attribution readable within run 30586177358) |
 | DOCS-07 | Phase 12 | Complete (`docs/cross-os.md`, safe default FIRST, registered as an `nx.json` `test` input in the same commit as the doc and drift-guarded; the stderr-immune discriminator is single-sourced and A1 closed by measurement on both legs; recipe accuracy reviewed in 12-UAT.md test 4 after code-review finding CR-01 was fixed) |
+| VER-08 | Phase 13 | Pending |
+| VER-09 | Phase 13 | Pending |
+| TRUST-14 | Phase 13 | Pending |
+| XOS-09 | Phase 13 | Pending |
+| TEST-11 | Phase 13 | Pending |
+| DOCS-09 | Phase 13 | Pending |
+| DOCS-10 | Phase 13 | Pending |
 
-**Coverage:** 50 requirements, 50 mapped, 0 orphans, 0 duplicates. Distribution: Phase 7 = 7,
-Phase 8 = 9, Phase 9 = 11, Phase 10 = 12, Phase 11 = 7, Phase 12 = 4. Verified mechanically by
-set-differencing the defined IDs against the traced IDs in both directions.
+**Coverage:** 57 requirements, 57 mapped, 0 orphans, 0 duplicates. Distribution: Phase 7 = 7,
+Phase 8 = 9, Phase 9 = 11, Phase 10 = 12, Phase 11 = 7, Phase 12 = 4, Phase 13 = 7. Verified
+mechanically by set-differencing the defined IDs against the traced IDs in both directions.
 
 ---
 *Requirements defined: 2026-07-26*
@@ -674,3 +781,11 @@ probe (`research/v0.0.2/SUMMARY.md`, `PROBE-RESULTS.md`): 11 blocking correction
 requirements (PARITY-08, VER-07, ROBUST-04, RETAIN-05, XOS-08) plus 3 new PARITY IDs from the
 freshness-axis discovery, and one conditional clause on XOS-05. Phase count, phase order and
 per-phase ownership are unchanged -- the research explicitly endorsed the committed sequence.*
+*Amended 2026-08-02 with Phase 13's seven requirements (VER-08, VER-09, TRUST-14, XOS-09, TEST-11,
+DOCS-09, DOCS-10), registered in 13-01 BEFORE any code claims to satisfy them. Coverage 50 -> 57. The
+"43/43 mapped" sentence above the traceability table is left as written: it is a dated statement
+about roadmap creation, not the live count. Note the two files assert DIFFERENT totals and both are
+correct -- this file counts the full DEFINED set (57), `ROADMAP.md` counts the ROADMAPPED subset
+(51). The difference is exactly SIX IDs that predate Phase 13 and have a row here but none there:
+`PARITY-06`, `PARITY-07`, `PARITY-08`, `VER-07`, `ROBUST-04`, `RETAIN-05`. If a future edit makes
+that difference anything other than those six, one of the two tables has drifted.*

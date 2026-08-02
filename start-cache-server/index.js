@@ -68707,6 +68707,9 @@ function selectBackend(env = process.env) {
   if (resolveGitHubToken(env) === void 0) {
     return createReadOnlyMemoryBackend();
   }
+  if (env.CACHE_READ_ONLY) {
+    return createReadOnlyActionsCacheBackend();
+  }
   return createActionsCacheBackend();
 }
 

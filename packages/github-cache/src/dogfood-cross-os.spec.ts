@@ -784,11 +784,36 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       'run-scoped key, so it never observes whether a REAL Nx build/typecheck/test task ' +
       'got a remote HIT, and it is skipped outright on a fork pull request. Those ' +
       'per-target records are what these clauses guard. This clause is about the RECORD ' +
-      'existing, never about its VALUE: the count is deliberately not gated because it ' +
-      'is LAUNDERABLE -- this leg writes through a WRITABLE sidecar, so a broken ' +
-      'cross-OS restore makes it MISS, execute and SAVE its own entry, and a re-run of ' +
-      'the same commit then HITs that self-produced entry and takes a `count >= 1` ' +
+      'existing; its VALUE is gated by the gatedCount clause, and soundly so since ' +
+      'XOS-09: the leg DECLINES the write, so the only way it can carry a ' +
+      '[remote cache] label at all is a genuine restore of the ubuntu producer entry. ' +
+      'While the leg could still save, that gate would have been launderable -- a ' +
+      'broken cross-OS restore made the leg MISS, execute and SAVE its own entry, and a ' +
+      're-run of the same commit then HIT that self-produced entry and took a floor ' +
       `check green with cross-OS reuse dead. ${RENAME_NOTE}`,
+    readOnlyLeg:
+      `${leg} must write CACHE_READ_ONLY into $GITHUB_ENV from its pre-set step, so the ` +
+      'sidecar started next constructs the read-only Actions backend (TRUST-14) and this leg ' +
+      'CANNOT save an entry of its own. That is not hardening for its own sake, it is the whole ' +
+      'reason the gatedCount clause below is allowed to exist: a leg that can write launders its ' +
+      'own failure, because a broken cross-OS restore makes it MISS, execute and SAVE, and a ' +
+      're-run of the same commit then HITs that self-produced entry and takes the floor green ' +
+      'with cross-OS reuse dead. Delete this one line and NOTHING else on the leg reddens -- the ' +
+      'job still runs, still HITs on a re-run, and the gate still passes -- so the failure mode ' +
+      'is a GATE THAT STILL LOOKS PRESENT while it has quietly stopped proving the ubuntu ' +
+      "producer is the source. The write belongs in the pre-set step and not the sidecar's own " +
+      "`env:`, because a REGULAR step's $GITHUB_ENV writes reach later steps while a BACKGROUND " +
+      `step's do not (start-cache-server/action.yml records this). ${RENAME_NOTE}`,
+    gatedCount:
+      `${leg} must COMPARE its [remote cache] count against the floor of 1 and FAIL below it ` +
+      '(XOS-09, D-04/D-05), not merely print it. Matched on the COMPARISON line deliberately, ' +
+      'and never on a bare `exit 1`: this job block already contains one, in the "Wait for the ' +
+      'loopback sidecar" readiness poll, and it is not a comment so the strip above keeps it -- ' +
+      'an `/exit 1/` clause here was GREEN before the gate existed, which is a live vacuity trap ' +
+      'this file MEASURED rather than reasoned about. The paired absence check is the revert ' +
+      'detector, and it reads the printed record rather than a comment on purpose: the echo is ' +
+      'CODE and survives the comment strip, so a leg quietly returned to recording-without-' +
+      `gating still says so in the one place an operator reads. ${RENAME_NOTE}`,
     backendToken:
       `${leg} must pass GITHUB_TOKEN into the sidecar step's own \`env:\`, and this clause is ` +
       'SEPARATE from the cacheClient one above because the two produce the SAME green-having-' +
@@ -823,6 +848,8 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     sidecar,
     cacheClient,
     cacheObservation,
+    readOnlyLeg,
+    gatedCount,
     backendToken,
     noIf,
   } = windowsLegReasons('build-windows', 'build', 'build');
@@ -921,8 +948,49 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
       /^ {6}- name: Run the build target and tee its output$/m,
     );
     expect(block, cacheObservation).toMatch(
-      /^ {6}- name: Record the remote-cache label occurrence count for this leg$/m,
+      /^ {6}- name: Gate on the cross-OS remote-cache label count for this leg$/m,
     );
+  });
+
+  // THE PREMISE OF THE GATE, asserted separately from the gate itself because the two fail
+  // for different reasons and only one of them is visible in a failing job. Without this
+  // line the leg is a WRITER, and a writer's own count is launderable: it MISSes, executes,
+  // SAVEs its entry, and the next re-run of the same commit HITs what it saved and takes the
+  // floor below green with cross-OS reuse dead. With it, no windows-produced entry for these
+  // hashes can exist at all, so a label is NECESSARILY the ubuntu producer's -- and that is
+  // INDUCTIVE, holding of every run rather than of this one.
+  //
+  // Same regex shape as the two cacheClient writes above, and for the same reason: anchored
+  // at the leg's real indent, with `>> "$GITHUB_ENV"` pinned at end-of-line so a mention in
+  // some other position cannot satisfy it. Non-vacuity is free here in one direction --
+  // `codeLines` is comment-stripped, so a knob named only in a `#` line cannot pass -- and
+  // MEASURED in the other, below.
+  it('declines the write via CACHE_READ_ONLY, which is what makes the gate below sound', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, readOnlyLeg).toMatch(
+      /^\s+echo "CACHE_READ_ONLY=1" >> "\$GITHUB_ENV"$/m,
+    );
+  });
+
+  // THE VACUITY TRAP THIS CLAUSE IS BUILT AROUND, and it is live rather than hypothetical:
+  // this job block contains a bare `exit 1` in the "Wait for the loopback sidecar" readiness
+  // poll, that line is not a comment so the strip keeps it, and `expect(block).toMatch(/exit
+  // 1/)` was GREEN before this phase changed anything. An `exit 1` is not evidence of a gate.
+  // The COMPARISON is the load-bearing needle, so it is matched literally and anchored at the
+  // ten-space script indent.
+  //
+  // The absence check is the revert detector, and it reads the printed record rather than the
+  // rationale comment on purpose: `codeLines` strips every `#` line, so a comment lock here
+  // would be vacuous by construction, while the echo is CODE and is also the only one of the
+  // two an operator ever sees.
+  it('gates that count at a floor of 1 rather than only printing it (XOS-09)', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, gatedCount).toMatch(
+      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then$/m,
+    );
+    expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
@@ -950,6 +1018,8 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     sidecar,
     cacheClient,
     cacheObservation,
+    readOnlyLeg,
+    gatedCount,
     backendToken,
     noIf,
   } = windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck');
@@ -1018,8 +1088,25 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
       /^ {6}- name: Run the typecheck target and tee its output$/m,
     );
     expect(block, cacheObservation).toMatch(
-      /^ {6}- name: Record the remote-cache label occurrence count for this leg$/m,
+      /^ {6}- name: Gate on the cross-OS remote-cache label count for this leg$/m,
     );
+  });
+
+  it('declines the write via CACHE_READ_ONLY, which is what makes the gate below sound', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, readOnlyLeg).toMatch(
+      /^\s+echo "CACHE_READ_ONLY=1" >> "\$GITHUB_ENV"$/m,
+    );
+  });
+
+  it('gates that count at a floor of 1 rather than only printing it (XOS-09)', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, gatedCount).toMatch(
+      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then$/m,
+    );
+    expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
@@ -1047,6 +1134,8 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     sidecar,
     cacheClient,
     cacheObservation,
+    readOnlyLeg,
+    gatedCount,
     backendToken,
     noIf,
   } = windowsLegReasons('test-windows', 'test', 'test');
@@ -1115,8 +1204,25 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
       /^ {6}- name: Run the test target and tee its output$/m,
     );
     expect(block, cacheObservation).toMatch(
-      /^ {6}- name: Record the remote-cache label occurrence count for this leg$/m,
+      /^ {6}- name: Gate on the cross-OS remote-cache label count for this leg$/m,
     );
+  });
+
+  it('declines the write via CACHE_READ_ONLY, which is what makes the gate below sound', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, readOnlyLeg).toMatch(
+      /^\s+echo "CACHE_READ_ONLY=1" >> "\$GITHUB_ENV"$/m,
+    );
+  });
+
+  it('gates that count at a floor of 1 rather than only printing it (XOS-09)', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, gatedCount).toMatch(
+      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then$/m,
+    );
+    expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {

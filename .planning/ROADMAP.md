@@ -634,10 +634,37 @@ Plans:
 - [ ] `13-05-PLAN.md` - three read-only Windows legs, their counts gated at the floor, and every stale rationale corrected in the same commit (XOS-09, TEST-11, DOCS-09)
 - [ ] `13-06-PLAN.md` - the pre-registered counts, the proving run, and `13-EVIDENCE.md` (XOS-09, TEST-11)
 
-**Live-CI close**: XOS-09's gate is only observable on a real `windows-11-arm` runner after a ubuntu
-leg has saved the entries. The Q4 base-scope READ half (Case B) is carried as a separate, later
-item -- this phase's own landing commit rotates all three hashes, so every leg takes the intra-run
-merge-ref path (Case A) and cannot exhibit it. Plan 13-01 registers the full procedure.
+**Live-CI close**: two items.
+
+1. **XOS-09's gate** is only observable on a real `windows-11-arm` runner after a ubuntu leg has
+   saved the entries. It closes on this phase's own landing run.
+
+2. **The Q4 base-scope READ half (Case B)** is carried as a separate, LATER item, because this
+   phase's own landing commit CANNOT reproduce it. The commit edits
+   `packages/github-cache/src/**/*.ts` -- a declared `build` input (`nx.json:114`) that reaches
+   `typecheck` and `test` the same way -- plus `.github/workflows/ci.yml` and two `docs/` files, all
+   declared `test` inputs (`nx.json:70,62,64`). So all three hashes rotate, the ubuntu producers
+   MISS-and-SAVE into the merge-ref scope, and every leg takes the intra-run merge-ref path. That is
+   Case A: it proves LIVENESS and nothing whatever about the base-scope read.
+
+   **Procedure.** (a) VERIFY Assumption A2 FIRST rather than assuming it -- confirm with
+   `npx nx show project github-cache --json` that `.planning/**` appears in no target's declared
+   input set; if it does, the PR below silently becomes Case A and proves nothing. (b) Land Phase 13
+   on `main`, so main's default-branch scope holds fresh entries for all three targets. (c) Open a
+   PR whose diff touches NO declared input of `build` or `typecheck`; a `.planning/`-only diff
+   qualifies. `test` is deliberately excluded from the claim -- its input list includes `ci.yml` and
+   five `docs/` files, so it is easier to rotate by accident. (d) Observe that `build-windows` and
+   `typecheck-windows` still report `count >= 1` while their ubuntu producers logged a HIT and wrote
+   nothing. That green IS the reproduction: nothing wrote into the merge-ref scope during the run,
+   so the merge-ref path cannot explain it. Record it in `13-EVIDENCE.md` with the run id, the
+   producers' HIT lines and the three counts, per the `09-EVIDENCE.md` / `11-EVIDENCE.md` idiom.
+
+   **If the read half does NOT hold**, the BACKEND SHAPE is unaffected -- this is purely about
+   D-04's threshold and its skip/expected-zero conditions. Fallback: gate on `push` only and keep
+   the counts as diagnostics on `pull_request`, which loses pre-merge signal but keeps both the
+   inductive property and the post-merge gate. Note the second-order effect either way: once the
+   legs are read-only, a Case-B MISS is PERMANENT for that hash on Windows -- no self-produced entry
+   ever fills it -- so a Case-B failure is a hard red, not a first-run-only red.
 
 ## Traceability
 
@@ -689,13 +716,20 @@ Every v0.0.2 requirement maps to exactly one phase.
 | XOS-05 | Phase 12 | O4 proof: those legs HIT on ubuntu-saved entries; the write decision is explicit and recorded. |
 | XOS-08 | Phase 12 | Producer-to-consumer ordering: each Windows leg `needs:` its ONE ubuntu counterpart. Row ADDED 2026-07-30 -- it was missing while this section's own `**Requirements**` line and SC1 both named XOS-08, so the file contradicted itself (Phase 12 CONTEXT D-01). REQUIREMENTS.md is authoritative and says FOUR. |
 | DOCS-07 | Phase 12 | Safe-by-default consumer recipe; portability checklist second, derived from PARITY-01; drift-guarded. |
+| VER-08 | Phase 13 | One implementation, not two: the writable factory COMPOSES the read-only one, so exactly one `restoreCache` READ call site survives. D-09's shrink-to-a-decision hatch was live and NOT taken. |
+| VER-09 | Phase 13 | The `@actions/cache` drift guard widens FILE -> PACKAGE scope; closes the sibling-module evasion the file-scoped scan structurally cannot see. |
+| TRUST-14 | Phase 13 | Strictly-narrowing env knob read as `selectBackend`'s LAST branch; the guarantee is BRANCH ORDER, not validation. `selectBackend.length` stays 0. |
+| XOS-09 | Phase 13 | All three Windows legs read-only, counts GATED at a `>= 1` floor per leg. The soundness argument is INDUCTIVE; XOS-08's `needs:` edge stays the separate LIVENESS argument. |
+| TEST-11 | Phase 13 | `dogfood-cross-os.spec.ts` pins the SEMANTIC change per leg; the bare `exit 1` clause is forbidden because `ci.yml:527` makes it green before the phase starts. |
+| DOCS-09 | Phase 13 | All SEVEN sites justifying the ungated counts corrected in the SAME commit that gates them -- including the three `echo` strings an operator reads in the job log. |
+| DOCS-10 | Phase 13 | The ninth knob documented and enumerated; `selectBackend`'s outcome count goes four -> five at all FIVE sites that write it down. |
 
 ## Coverage Validation
 
-**Assertion: 44/44 v0.0.2 requirements map to exactly one phase. No orphans, no duplicates.**
-(Was stated as 43/43; corrected 2026-07-30 -- see the note under the per-phase counts. XOS-08 was
+**Assertion: 51/51 v0.0.2 requirements map to exactly one phase. No orphans, no duplicates.**
+(Was stated as 43/43, then 44/44; see the two dated notes under the per-phase counts. XOS-08 was
 named in Phase 12's `**Requirements**` line and in its SC1, but had no traceability row and was not
-counted.)
+counted; Phase 13's seven were added 2026-08-02.)
 
 Per-phase counts:
 
@@ -705,14 +739,26 @@ Per-phase counts:
 - Phase 10: 11 (CORR-02, CORR-05, RETAIN-04, OBS-03, OBS-05, XOS-06, XOS-07, TRUST-10..13)
 - Phase 11: 7 (XOS-01, XOS-02, XOS-03, TEST-08, TEST-09, TEST-10, OBS-02)
 - Phase 12: 4 (XOS-04, XOS-05, XOS-08, DOCS-07)
+- Phase 13: 7 (VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10)
 
-Total mapped: 7 + 7 + 8 + 11 + 7 + 4 = 44. Source categories: CORR 5, LINT 6, PARITY 5, VER 6,
-XOS 8, RETAIN 1, TRUST 4, DOCS 2, TEST 3, OBS 4 = 44.
+Total mapped: 7 + 7 + 8 + 11 + 7 + 4 + 7 = 51. Source categories: CORR 5, LINT 6, PARITY 5, VER 8,
+XOS 9, RETAIN 1, TRUST 5, DOCS 4, TEST 4, OBS 4 = 51.
 
 **Count corrected 2026-07-30.** The Phase 12 tally read 3 and the total read 43 while this file's own
 Phase 12 `**Requirements**` line and SC1 both named XOS-08, and while `REQUIREMENTS.md` (`:658-665`)
 said FOUR. `REQUIREMENTS.md` is authoritative; the traceability row for XOS-08 has been added above and
 the tallies reconciled. The XOS category is 8, not 7 (XOS-01 through XOS-08).
+
+**Phase 13 added 2026-08-02.** Its `**Requirements**` line read `TBD` and neither traceability table
+had a Phase 13 row, so all seven IDs were orphaned while this assertion still said 44/44. Registered
+in plan 13-01, BEFORE any code claims to satisfy them. Total 44 -> 51; VER 6 -> 8, XOS 8 -> 9,
+TRUST 4 -> 5, DOCS 2 -> 4, TEST 3 -> 4. Read the three dated notes as one history.
+
+**Why this file says 51 and `REQUIREMENTS.md` says 57.** Both are correct and neither is drifting:
+this table counts the ROADMAPPED subset, `REQUIREMENTS.md` counts the full DEFINED set. The
+difference is exactly SIX IDs that predate Phase 13 and have a row there but none here --
+`PARITY-06`, `PARITY-07`, `PARITY-08`, `VER-07`, `ROBUST-04`, `RETAIN-05`. 57 - 51 = 6. If a future
+edit makes that difference anything other than those six, one of the two tables HAS drifted.
 
 ### Every sequencing-constraint row, and where it is honoured
 

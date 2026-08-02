@@ -9,7 +9,12 @@ import {
 } from '../lib/cache-archive-path.js';
 import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
 import { withHashLock } from '../lib/with-hash-lock.js';
-import type { CacheBackend, GetResult, PutResult } from './types.js';
+import type {
+  CacheBackend,
+  GetResult,
+  PutResult,
+  ReadableBackend,
+} from './types.js';
 
 // The server-produced-key namespace + filter (prefix + HASH_PATTERN) now live in
 // the cache-key.ts single-source leaf (TRUST-08 done); this backend just consumes
@@ -26,9 +31,11 @@ import type { CacheBackend, GetResult, PutResult } from './types.js';
  * that is the upstream write gate's job (D-01) -- and this factory must never
  * grow a mode argument (TRUST-05).
  *
- * This backend never returns 'forbidden' (403 is the read-only backend's job). It
- * DOES return 'conflict' on one branch: an ambiguous saveCache no-op, which the
- * contract layer maps to the Nx client's benign 409 (see put).
+ * This backend never returns 'forbidden' -- the value does not exist (types.ts:3-8
+ * deleted it), because the read-only backend has no put at all and the SERVER
+ * produces the contract's 403 at the protocol boundary. It DOES return 'conflict' on
+ * one branch: an ambiguous saveCache no-op, which the contract layer maps to the Nx
+ * client's benign 409 (see put).
  *
  * BOTH get and put run under withHashLock (TEST-02 / D-03), because this module is
  * the one that OWNS the shared deterministic archive path. get does
@@ -42,8 +49,43 @@ import type { CacheBackend, GetResult, PutResult } from './types.js';
  *
  * The writable MEMORY backend is intentionally NOT serialized: it has no shared
  * temp path, so there was never anything to protect there.
+ *
+ * SHAPE (D-01). Two factories, exactly ONE `get`:
+ * createReadOnlyActionsCacheBackend owns the construction guards and the single
+ * cache.restoreCache READ call site, and createActionsCacheBackend SPREADS it and
+ * adds put. They restore at a byte-identical cache version not because two copies
+ * agree but because there is only one -- a second read call site is precisely the
+ * drift Phase 9 existed to remove.
+ *
+ * BOTH FACTORIES MUST STAY IN THIS ONE FILE, and it is a hard constraint rather than
+ * a style preference. actions-cache-backend.spec.ts's ordered-member scan resolves
+ * its subject as `new URL('./actions-cache-backend.ts', ...)` -- a single named file
+ * -- so a sibling module carrying its own restoreCache would produce ZERO failures
+ * there. The VER-09 package-scope clause in the same spec closes that from the
+ * outside; the file constraint is what keeps the ordered scan meaningful at all.
  */
-export function createActionsCacheBackend(): CacheBackend {
+
+/**
+ * Read-only form of the Actions-cache backend (D-01): a ReadableBackend with NO put
+ * -- a write is unrepresentable, and the SERVER (not a put() return value) answers a
+ * PUT routed here with the Nx contract's 403.
+ *
+ * Its role is selectBackend's read-only Actions outcome: a leg that declares itself a
+ * cache CONSUMER is served this backend, so no entry for that leg's hashes can be
+ * produced on its OS at all, and any HIT it records is NECESSARILY produced
+ * elsewhere. That property is INDUCTIVE rather than per-run (D-02a) -- it does not
+ * depend on job ordering, on a `needs:` edge, or on anything being true of the
+ * current run, which is what makes a `[remote cache]` count on such a leg soundly
+ * gateable where a writable leg's count is launderable by a re-run. It is one of the
+ * documented backend-selection outcomes; see the table in docs/advanced.md ("How the
+ * backend is selected"). RW-vs-RO is which factory constructs the server, never a
+ * caller-facing mode flag (TRUST-05).
+ *
+ * It owns the construction preamble for BOTH factories -- the two VER-04 anchor
+ * guards and the VER-07 archive-directory mkdir all run here, and the writable
+ * factory inherits every one of them by CALLING this one rather than repeating it.
+ */
+export function createReadOnlyActionsCacheBackend(): ReadableBackend {
   // VER-04. ONE assertion, ONCE, at construction -- and BEFORE the mkdirSync below, so a
   // wrong cwd fails loud instead of the mkdir silently creating a `.nx/cache` in the wrong
   // tree.
@@ -83,11 +125,20 @@ export function createActionsCacheBackend(): CacheBackend {
   // MEASURED 2026-07-26 (research/v0.0.2/PROBE-RESULTS.md Q2): the cwd/GITHUB_WORKSPACE
   // identity HOLDS on both runners today. This is a DRIFT GUARD, not a fix for a live
   // break -- and nothing else in the system defends it.
+  //
+  // BOTH messages below name THIS factory, and the rename came with the D-01 move rather
+  // than being cosmetic: after the split these throws come from the function the write
+  // path reaches BY CALLING, so a prefix naming the WRITABLE factory would send an
+  // operator to a frame that never ran the check. Naming the wrong frame costs most on a
+  // read-only leg, which has no write whose failure would surface -- there, an unnamed
+  // divergence presents as "cross-OS restore is broken" instead of naming its cause.
+  // The rename is mechanically checkable, which is why the old prefix is not quoted
+  // anywhere here: no non-spec module under src/ may carry it (T-13-02-R1).
   const cwd = process.cwd();
 
   if (!existsSync(join(cwd, 'nx.json'))) {
     throw new Error(
-      `createActionsCacheBackend: the process cwd must be the Nx workspace root, but no nx.json exists at ${cwd}. The archive path is workspace-relative (VER-01), so a cwd anywhere else writes and reads a different file than @actions/cache extracts (VER-04).`,
+      `createReadOnlyActionsCacheBackend: the process cwd must be the Nx workspace root, but no nx.json exists at ${cwd}. The archive path is workspace-relative (VER-01), so a cwd anywhere else writes and reads a different file than @actions/cache extracts (VER-04).`,
     );
   }
 
@@ -104,7 +155,7 @@ export function createActionsCacheBackend(): CacheBackend {
 
   if (resolve(githubWorkspace).toLowerCase() !== resolve(cwd).toLowerCase()) {
     throw new Error(
-      `createActionsCacheBackend: GITHUB_WORKSPACE (${githubWorkspace}) and the process cwd (${cwd}) must be the same directory. They are not, so @actions/cache would extract under one and this backend would read under the other -- a reported HIT whose bytes are unreachable, which handleGet then converts to a silent 404 (VER-04).`,
+      `createReadOnlyActionsCacheBackend: GITHUB_WORKSPACE (${githubWorkspace}) and the process cwd (${cwd}) must be the same directory. They are not, so @actions/cache would extract under one and this backend would read under the other -- a reported HIT whose bytes are unreachable, which handleGet then converts to a silent 404 (VER-04).`,
     );
   }
 
@@ -162,6 +213,35 @@ export function createActionsCacheBackend(): CacheBackend {
         }
       });
     },
+    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // 'forbidden'. The server answers a PUT here with the contract's 403.
+  };
+}
+
+/**
+ * The writable Actions-cache backend: the read-only one, plus put, and nothing else.
+ *
+ * The spread IS D-01's acceptance criterion in code. It carries over the single `get`
+ * closure, so the package keeps exactly one cache.restoreCache READ call site and has
+ * no second cache-version computation available to drift -- unrepresentable rather
+ * than guarded. It also carries over the construction preamble, and that inheritance
+ * is load-bearing rather than incidental: VER-07's mkdir must NOT be lost from the
+ * write path (its absence is the ENOENT-into-500 defect the comment there describes),
+ * and calling the read-only factory is how it stays.
+ *
+ * The spread is safe for the reason serve.ts:91-95 already records at its own
+ * spread-a-backend site: backend factories return closures over captured state, not
+ * this-bound methods.
+ *
+ * Zero parameters, like every backend factory. A `readOnly` argument is settled
+ * project law against (D-03/TRUST-05), not a judgement call: a flagged factory has ONE
+ * return type, so isWritableBackend would be true for a read-only instance and the 403
+ * would have to move back into a runtime put() value that types.ts:3-8 deliberately
+ * deleted.
+ */
+export function createActionsCacheBackend(): CacheBackend {
+  return {
+    ...createReadOnlyActionsCacheBackend(),
 
     put(hash: Hash, bytes: Buffer): Promise<PutResult> {
       return withHashLock(hash, async () => {

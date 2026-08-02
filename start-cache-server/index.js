@@ -68272,17 +68272,17 @@ function withHashLock(hash, fn) {
 }
 
 // packages/github-cache/src/backend/actions-cache-backend.ts
-function createActionsCacheBackend() {
+function createReadOnlyActionsCacheBackend() {
   const cwd = process.cwd();
   if (!(0, import_node_fs2.existsSync)((0, import_node_path2.join)(cwd, "nx.json"))) {
     throw new Error(
-      `createActionsCacheBackend: the process cwd must be the Nx workspace root, but no nx.json exists at ${cwd}. The archive path is workspace-relative (VER-01), so a cwd anywhere else writes and reads a different file than @actions/cache extracts (VER-04).`
+      `createReadOnlyActionsCacheBackend: the process cwd must be the Nx workspace root, but no nx.json exists at ${cwd}. The archive path is workspace-relative (VER-01), so a cwd anywhere else writes and reads a different file than @actions/cache extracts (VER-04).`
     );
   }
   const githubWorkspace = process.env.GITHUB_WORKSPACE ?? "";
   if ((0, import_node_path2.resolve)(githubWorkspace).toLowerCase() !== (0, import_node_path2.resolve)(cwd).toLowerCase()) {
     throw new Error(
-      `createActionsCacheBackend: GITHUB_WORKSPACE (${githubWorkspace}) and the process cwd (${cwd}) must be the same directory. They are not, so @actions/cache would extract under one and this backend would read under the other -- a reported HIT whose bytes are unreachable, which handleGet then converts to a silent 404 (VER-04).`
+      `createReadOnlyActionsCacheBackend: GITHUB_WORKSPACE (${githubWorkspace}) and the process cwd (${cwd}) must be the same directory. They are not, so @actions/cache would extract under one and this backend would read under the other -- a reported HIT whose bytes are unreachable, which handleGet then converts to a silent 404 (VER-04).`
     );
   }
   (0, import_node_fs2.mkdirSync)(CACHE_ARCHIVE_DIR, { recursive: true });
@@ -68307,7 +68307,14 @@ function createActionsCacheBackend() {
           await (0, import_promises.rm)(path11, { force: true });
         }
       });
-    },
+    }
+    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // 'forbidden'. The server answers a PUT here with the contract's 403.
+  };
+}
+function createActionsCacheBackend() {
+  return {
+    ...createReadOnlyActionsCacheBackend(),
     put(hash, bytes) {
       return withHashLock(hash, async () => {
         const path11 = cacheArchivePath(hash);

@@ -411,7 +411,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   `test`, `integration`), not on `build` alone, so one default-branch push mirrors that push's full
   task set. Otherwise the O1 proof races job completion and can fail on a correct implementation.
 
-- [ ] **XOS-09**: All three Windows legs (`build-windows`, `typecheck-windows`, `test-windows`)
+- [x] **XOS-09**: All three Windows legs (`build-windows`, `typecheck-windows`, `test-windows`)
   construct the read-only backend, and their `[remote cache]` counts are GATED at `>= 1` per leg.
   Per D-04, convert all three and not a subset -- one writable leg left behind keeps a launderable
   path open and invites a future reader to "make the others consistent" in the wrong direction. Per
@@ -529,7 +529,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   DEGRADATION ("every read fault degrades to a MISS"), which stays true. The edit there is ADDITIVE
   -- a new precondition about target platform-agnosticism -- not a contradiction.
 
-- [ ] **DOCS-09**: Every site justifying the UNGATED counts is corrected in the SAME commit that
+- [x] **DOCS-09**: Every site justifying the UNGATED counts is corrected in the SAME commit that
   gates them, per D-06. Once the legs cannot write, that rationale is FALSE, and a comment carrying a
   false reason is a documented argument for undoing the work -- this repo has corrected exactly this
   class of defect four times on this branch (`fd75d83`, `7e777b3`, `9e949e4`, quick task
@@ -609,7 +609,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   `Cache: n/m hit` line is recorded and explicitly marked NON-DISCRIMINATING in both directions --
   a `0%` prints identically with no sidecar at all, and a non-zero count includes local hits.
 
-- [ ] **TEST-11**: `dogfood-cross-os.spec.ts` pins the SEMANTIC change per leg, per D-07 -- the
+- [x] **TEST-11**: `dogfood-cross-os.spec.ts` pins the SEMANTIC change per leg, per D-07 -- the
   read-only knob write is present, the count COMPARISON is present, and the ungated-count revert
   marker is absent. Pin the semantic outcome, not the presence of a string: without it a silent
   revert to a writable sidecar reopens CR-18 with every other clause still green. Asserting a bare
@@ -762,9 +762,9 @@ honour table: `.planning/ROADMAP.md`.
 | VER-08 | Phase 13 | Complete |
 | VER-09 | Phase 13 | Complete |
 | TRUST-14 | Phase 13 | Complete |
-| XOS-09 | Phase 13 | Pending |
-| TEST-11 | Phase 13 | Pending |
-| DOCS-09 | Phase 13 | Pending |
+| XOS-09 | Phase 13 | Complete |
+| TEST-11 | Phase 13 | Complete |
+| DOCS-09 | Phase 13 | Complete |
 | DOCS-10 | Phase 13 | Complete |
 
 **Coverage:** 57 requirements, 57 mapped, 0 orphans, 0 duplicates. Distribution: Phase 7 = 7,

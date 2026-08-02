@@ -201,3 +201,240 @@ LEG, from that leg's own job log -- never run-wide, which sweeps in the `integra
 **PENDING -- live-CI, the proving run does not exist yet.** Nothing above this line is an
 observation. The counts, the producer expectations, the failure hypothesis and the scope statement
 are all prediction. The observation record is below.
+
+---
+
+## OBSERVATION -- the proving run
+
+**Nothing above this line was edited to produce this section.** The pre-registration stands as
+written, including the one prediction it got wrong, which is recorded as wrong below.
+
+### The run
+
+| Item | Value |
+|---|---|
+| Run id | **`30744366870`** (run number 169) |
+| Run URL | `https://github.com/op-nx/github-cache/actions/runs/30744366870` |
+| Trigger | `event: pull_request` -- a `synchronize` on same-repo PR #12, fired by pushing this branch |
+| `attempt` | **1** -- the FIRST run of this head. A re-run would be disqualified, not merely discouraged: on a re-run the ubuntu producer restores the entry the first run saved, so the producer attribution WITHIN the run evaporates |
+| `headSha` | **`631a2e7`** -- which IS the pre-registration commit |
+| Conclusion | `success`, 24 job legs (3 `skipped`: `publish`, `publish-verify`, `consumer-smoke`, all push-gated) |
+| Created / finished | `2026-08-02T10:45:24Z` / `2026-08-02T10:49:45Z` |
+
+**The ordering claim is structural rather than a timestamp comparison.** The run's `headSha` is the
+pre-registration commit itself, so the prediction was in the tree the run measured. It could not
+have been written afterwards.
+
+### Per-leg counts, named INDIVIDUALLY, with the gate's own printed line
+
+Every number below is the leg's own gate step output, quoted from that leg's job log.
+
+```
+remote-cache label occurrences on windows-11-arm (build): 1 -- GATED at a floor of 1
+remote-cache label occurrences on windows-11-arm (typecheck): 2 -- GATED at a floor of 1
+remote-cache label occurrences on windows-11-arm (test): 1 -- GATED at a floor of 1
+```
+
+| Leg | Pre-registered gate count | Observed gate count | Floor of 1 | Job | Verdict |
+|---|---|---|---|---|---|
+| `build-windows` | 1 | **1** | met | `success` | **MET** |
+| `typecheck-windows` | 2 | **2** | met | `success` | **MET** |
+| `test-windows` | 1 | **1** | met | `success` | **MET** |
+| aggregate (recorded, NOT the gate) | 4 | **4** | -- | -- | MET |
+
+The targets named individually, from each leg's Nx output:
+
+| Leg | Target(s) restored | Nx key | Bytes received |
+|---|---|---|---|
+| `build-windows` | `build` | `nx-cache-6303782621882711279` | 137951 |
+| `typecheck-windows` | `build` AND `typecheck` | `nx-cache-6303782621882711279`, `nx-cache-12280368578858856585` | 137951, 98227 |
+| `test-windows` | `test` | `nx-cache-12695567002797499449` | 1309 |
+
+All three legs report `Nx read the output from the cache instead of running the command for N out of
+N tasks` -- 1/1, 2/2 and 1/1 respectively. **`Cache: n/n hit (100%)` is NON-DISCRIMINATING IN BOTH
+DIRECTIONS** and is recorded only because the requirement says to record it: a `0%` prints
+identically with no sidecar at all, and a non-zero count includes LOCAL hits. The per-leg
+`[remote cache]` label count is the gate; that line is not.
+
+### Each producer's own line
+
+This is what separates liveness from correctness. The producer's line is why the entry was PRESENT
+at all (the `needs:` edge); read-only-ness is why the Windows HIT means what it says.
+
+**ubuntu `typecheck` -- MISSED and SAVED, twice.** It resolved `build` as well as `typecheck` and
+executed both. Transcribed from its own log; the group-marker glyph is rendered `[OK]` because this
+record is ASCII-only:
+
+```
+##[group][OK] > nx run @op-nx/github-cache:build
+> tsc --build tsconfig.lib.json
+[command]/usr/bin/tar --posix -cf cache.tzst ... --use-compress-program zstdmt
+Sent 137951 of 137951 (100.0%), 0.4 MBs/sec
+##[group][OK] > nx run @op-nx/github-cache:typecheck
+> tsc --build tsconfig.json --emitDeclarationOnly
+[command]/usr/bin/tar --posix -cf cache.tzst ... --use-compress-program zstdmt
+Sent 98227 of 98227 (100.0%), 0.3 MBs/sec
+
+  Cache:             0/2 hit (0%)
+```
+
+**ubuntu `test` -- MISSED and SAVED.** It executed the suite (975 tests) before saving:
+
+```
+Sent 1309 of 1309 (100.0%), 0.0 MBs/sec
+
+  Cache:             0/1 hit (0%)
+```
+
+**ubuntu `build` -- HIT.** It restored the entry the ubuntu `typecheck` job had already saved:
+
+```
+Cache hit for: nx-cache-6303782621882711279
+
+  Cache:             1/1 hit (100%)
+```
+
+| ubuntu leg | Predicted | Observed | Verdict |
+|---|---|---|---|
+| `typecheck` | MISS-and-SAVE (`0`) | **MISS-and-SAVE, `0/2`** | **MET** |
+| `test` | MISS-and-SAVE (`0`) | **MISS-and-SAVE, `0/1`** | **MET** |
+| `build` | MISS-and-SAVE (`0`), with the race named in advance as either outcome | **HIT, `1/1`** -- the race resolved to the `typecheck` job | **the anticipated race, NOT a deviation** |
+
+The pre-registration named this race and said explicitly that neither outcome invalidates anything.
+It resolved the same way Phase 11's `List 3` measured it on run `30471772954`: the `build` hash was
+written by the `typecheck` job rather than by the `build` job. **`needs:` ordering still holds
+transitively** -- `build-windows` waits on the ubuntu `build` job, which had itself already
+demonstrated the entry existed by restoring it.
+
+### The producer-to-consumer tie, at the byte
+
+Not inferred from the label alone. The saved and received sizes match exactly, per entry:
+
+| Entry | ubuntu producer SENT | Windows consumer RECEIVED |
+|---|---|---|
+| `nx-cache-6303782621882711279` (`build`) | 137951 (ubuntu `typecheck`) | 137951 on `build-windows`, 137951 on `typecheck-windows` |
+| `nx-cache-12280368578858856585` (`typecheck`) | 98227 (ubuntu `typecheck`) | 98227 on `typecheck-windows` |
+| `nx-cache-12695567002797499449` (`test`) | 1309 (ubuntu `test`) | 1309 on `test-windows` |
+
+### The read-only knob, observed on the wire
+
+Each leg's regular pre-set step wrote the knob, and the sidecar step that follows shows it in its
+inherited env -- so the `$GITHUB_ENV` write propagated, which is the whole reason it is not in the
+background step's own `env:`:
+
+```
+echo "CACHE_READ_ONLY=1" >> "$GITHUB_ENV"
+##[group]Run ./start-cache-server
+env:
+  NX_SELF_HOSTED_REMOTE_CACHE_SERVER: http://127.0.0.1:3000
+  NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN: ***
+  CACHE_READ_ONLY: 1
+```
+
+Corroborated by absence: **`Sent <n> of <n>` appears ZERO times on all three legs.** No leg saved
+anything. And the obsolete claim is gone -- `RECORDED, never gated` occurs **0** times in each of
+the three job logs.
+
+`action-bundle-drift` is **GREEN** on this run, which is the control that ties the committed
+`./start-cache-server` bundle to its source. These three legs run that committed bundle; the dogfood
+pair runs `uses: ./packages/github-cache` built in-job. Nothing in this gate ties the two, which is
+why the bundle job is recorded here beside it.
+
+### A PREDICTION THAT DID NOT HOLD: the job-log raw counts
+
+Recorded as a miss rather than smoothed over, per `09-EVIDENCE.md`'s precedent.
+
+| Leg | Pre-registered raw job-log count | Observed | Verdict |
+|---|---|---|---|
+| `build-windows` | 2 | **3** | **NOT met** |
+| `typecheck-windows` | 3 | **4** | **NOT met** |
+| `test-windows` | 2 | **3** | **NOT met** |
+
+**The mechanism was right; the multiplier was wrong.** The pre-registration measured the echo
+artifact against run `30721656181`, whose legs still carried the OLD Record step -- a two-line body
+containing the literal exactly once, in the `grep` needle. The step this phase installed has a
+four-line body containing it **twice**: once in the `grep` needle and once inside the `::error::`
+message, which reads `got ${count} [remote cache] labels`. So the runner's command echo contributes
+**+2** per leg, not +1.
+
+The correction, which is what a future reader should use:
+
+| Quantity | How to get it | Value this run |
+|---|---|---|
+| The GATE's number, and the only one that gates | the leg's own printed `remote-cache label occurrences ...` line, counted from `<target>-nx.log` | 1 / 2 / 1 |
+| The JOB LOG raw count | `rg -o -F "[remote cache]" <job log> \| wc -l` | 3 / 4 / 3 -- the gate number **plus 2** |
+
+The pre-registered GATE counts (1 / 2 / 1) were MET exactly. Only the derived job-log figure was
+wrong, and it was wrong because the instrument changed under it in this phase's own commit. That is
+worth recording precisely because a record that reported only the clean numbers would have hidden a
+live drift between two ways of reading the same quantity.
+
+### Assumption A1 -- NOT EXERCISED on this run, and structurally so
+
+RESEARCH.md's A1 is: *the Nx client tolerates a PUT `403` without failing the build or producing
+alarming output*, flagged "Confirm on the landing run". The observation is honest and negative:
+
+| Check, over all three read-only legs | Result |
+|---|---|
+| Tasks that MISSed | **0** -- every leg reports `n/n` restored |
+| Save attempts (`Sent <n> of <n>`) | **0** |
+| `##[warning]` / `##[error]` annotations | **0** |
+| `NX Warning` / `NX Error` banners, `Failed to save`, `Cache upload` | **0** |
+| Occurrences of `403` or `forbidden` in Nx or sidecar output | **0** -- the only `403` substrings in these logs are inside ISO timestamps and a toolcache path, which is why this row says the count is zero rather than three |
+
+**A1 cannot be answered by a run in which nothing MISSes.** The `403` only exists on a PUT, a PUT
+only follows an EXECUTED task, and a leg on which every pre-registered count is MET is precisely a
+leg on which no task executed. This is the same shape `11-EVIDENCE.md` already recorded for the
+second-producer capability: a fully-restoring run is exactly the run that exercises none of it.
+
+**Status: A1 remains OPEN, now with a stated observation condition instead of a vague one.** It is
+observable on a green run -- it does not need a red one. `typecheck-windows` resolves TWO tasks, so
+a run where one HITs and one MISSes prints a count of 1, clears the floor, stays GREEN, and attempts
+exactly one PUT that receives a `403`. That is the run to read. No `OBS` requirement is opened for
+it, per RESEARCH open question 3: the recommendation was to observe first and build only if the log
+is actually confusing, and there is still no evidence it is.
+
+What this run DOES establish about the 403 path: on the read-only legs there was **no output of any
+kind** a reader could mistake for a failure. That is consistent with A1 and is not a test of it.
+
+### SCOPE, restated: Case A
+
+Every prediction in the pre-registration's scope section held. All three hashes rotated, all three
+ubuntu producers were reached, and every Windows leg restored a same-run, same-scope
+(`refs/pull/12/merge`) entry. **Every leg took the intra-run merge-ref path.**
+
+- **PROVEN:** cross-OS restore is LIVE, read-only Windows legs restore what ubuntu legs saved in the
+  same run, and the gate observes it at a floor of 1 per leg.
+- **NOT PROVEN, and not touched:** the base/default-branch scope read. **Case B.** See `ROADMAP.md`
+  Phase 13 `**Live-CI close**` item 2 for the procedure, including the step that VERIFIES Assumption
+  A2 before the PR is opened. This run must not be cited as reproducing it.
+
+### What this run does NOT establish
+
+- **That the gate REDDENS on a genuine cross-OS restore failure.** Not observed, and deliberately
+  not induced. `13-VALIDATION.md`'s Manual-Only table says to confirm the failure direction by the
+  TEST-11 mutation check rather than by breaking CI, and that is what was done: three mutations,
+  recorded in `13-05-SUMMARY.md`, each reddening exactly the intended clause. **Local mutation
+  proves the CLAUSES are non-vacuous. It does not prove the live gate reddens.** Those are two
+  claims and only the first is made here.
+- **That a PARTIAL cross-OS regression would be caught.** The gate is a floor of 1 per leg, and
+  `typecheck-windows` resolves two tasks -- so a drop from 2 to 1 clears the floor and the leg stays
+  green. The floor was chosen deliberately (D-05: the counts follow Nx's task graph and an exact pin
+  would break on a graph change), and this is its cost, stated rather than left for a reader to
+  discover. The per-target counts recorded above are the record against which such a drop would be
+  legible.
+- **That the targets are PORTABLE.** A restored task does not execute. The success signal here is
+  the IDENTICAL observation to a Windows-only regression being invisible forever; the scheduled
+  `windows-regression-detector` workflow is what covers that, not this gate.
+- **Anything about uncommitted source.** These legs run the committed `./start-cache-server` bundle.
+  `action-bundle-drift` is the control, and it is green on this run.
+
+### VERDICT
+
+**XOS-09: PROVEN for Case A.** Run `30744366870`, attempt 1, `event: pull_request`, head `631a2e7`.
+All three read-only Windows legs green, gate counts 1 / 2 / 1 against a pre-registered 1 / 2 / 1 and
+a floor of 1, with all three ubuntu producers reached and the byte sizes matching per entry.
+
+**TEST-11: PROVEN locally by mutation**, live gate-reddening not observed and not required to be.
+
+**Assumption A1: OPEN**, with a named observation condition. **Case B: OPEN**, carried in ROADMAP.

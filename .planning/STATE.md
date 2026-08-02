@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.0.2
 milestone_name: framing
-current_phase: 12
-current_phase_name: windows-ci-reuse-o4-consumer-recipe
-status: complete
-last_updated: "2026-08-01T22:43:32.117Z"
-last_activity: 2026-08-01
-last_activity_desc: "Completed quick task 260801-vyy: Resolve CR-18"
+current_phase: 13
+current_phase_name: read-only-actions-cache-backend
+status: executing
+last_updated: "2026-08-02T00:26:07.819Z"
+last_activity: 2026-08-02
+last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 45
+  total_plans: 51
   completed_plans: 39
   percent: 14
 ---
@@ -23,22 +23,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** milestone v0.0.2 is feature-complete -- all six phases closed
+**Current focus:** Phase 13 -- read-only-actions-cache-backend
 
 ## Current Position
 
-Phase: 12 (windows-ci-reuse-o4-consumer-recipe) -- COMPLETE
-Plan: 6 of 6
-Status: all gates closed -- verification passed, UAT 4/4, threats_open 0, nyquist_compliant true,
-learnings extracted and pooled
-Progress: 6/6 phases complete [######] 100%
-Last activity: 2026-08-01 -- Completed quick task 260801-vyy: Resolve CR-18
+Phase: 13 (read-only-actions-cache-backend) -- EXECUTING
+Plan: 2 of 6
+Status: 13-01 complete -- Phase 13's seven requirement IDs registered in both traceability files
+Progress: 6/7 phases complete [########--] 86%
+Last activity: 2026-08-02 -- Completed 13-01: register Phase 13 requirements and traceability
 
-**Milestone v0.0.2 is ready for `/gsd:audit-milestone`.** All six phases (7 through 12) are Complete
-in the ROADMAP table, 39 of 39 plans executed, and every v0.0.2 requirement is closed in
-REQUIREMENTS.md. Phase 12's four -- XOS-04, XOS-05, XOS-08, DOCS-07 -- closed last, at this step
+**Milestone v0.0.2 gained a SEVENTH phase.** Phases 7 through 12 are Complete in the ROADMAP table
+(39 of 39 plans), but `/gsd:audit-milestone` now waits on Phase 13, added by maintainer instruction
+to close CR-18. Phase 12's four -- XOS-04, XOS-05, XOS-08, DOCS-07 -- closed at the phase step
 rather than per-plan, because every plan deliberately skipped `requirements.mark-complete` after it
-falsely closed all three XOS rows on 12-01's RED-only plan.
+falsely closed all three XOS rows on 12-01's RED-only plan. Phase 13's seven are registered Pending
+for exactly the same reason and close only as their code lands in 13-02..13-06.
 
 Phase 12's live-CI half is OBSERVED, not inferred. O4 was measured on run 30586177358, the FIRST run
 of same-repo PR #12: `[remote cache]` counted per Windows leg at 1/2/1 (total 4), matching counts
@@ -151,6 +151,7 @@ on run 30471772954 via a temporary push to main, since restored to fe25a3f. See
 | Phase 12 P04 | 38min | 3 tasks tasks | 7 files files |
 | Phase 12 P05 | 17min | 3 tasks | 6 files |
 | Phase 12 P06 | 30min | 3 tasks tasks | 1 files files |
+| Phase 13 P01 | 22m | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -298,6 +299,9 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 12]: 12-05 (DOCS-07/D-15): docs/cross-os.md renders the discriminator at BOTH sites (the copy-pasteable config snippet and the verification fence), pinned by an EXACT occurrence count rather than a >= 1 floor -- a floor is as half-locking as the toContain it replaced, and the half it would have dropped is the verification fence, which is the only control an adopter has against a silently collapsed discriminator (T-12-09)
 - [Phase 12]: 12-06: O4's verdict is recorded as PENDING -- live-CI, first run of the proving PR, because no such run exists: the branch's remote tip is still 38f9aea, the local tree is 55 unpushed commits ahead, there are zero open PRs, and the newest run in the repo is a schedule run on main at fe25a3f. The O4 section carries the pre-registration (1/2/1, total 4), the five anti-requirements and a six-step handover procedure instead of an observation. Opening the PR is a carried operator decision.
 - [Phase 12]: 12-06: RESEARCH assumption A1 stays OPEN and is carried as a human-verify item. The hash-parity artifacts on the newest available run (30500255530) record command 'node -p process.platform' with stdout linux/win32 and stderr EMPTY on both legs -- that CALIBRATES the instrument (a per-leg discriminator block with command/stdout/stderr/status does exist and is readable) but it is the PRE-hardening command, so it does not close A1, which is about --no-warnings on linux/arm64. Closing it by inference was refused.
+- [Phase 13]: 13-01: Phase 13's seven requirement IDs are registered as Pending, NOT marked complete -- 13-01 registers traceability only; the code that satisfies them lands in 13-02..13-06 (follows the Phase 12 lesson where a RED-only plan falsely closed three XOS rows). `requirements.mark-complete` deliberately NOT run.
+- [Phase 13]: 13-01: No C19 control row for `CACHE_READ_ONLY`. The phase strictly REDUCES capability, opens no attack surface and adds no trust boundary, so it meets THREAT-MODEL.md's own criterion ("keep only what has no canonical home") for a Residual note and not for a control. The no-row decision is written INTO the bullet so the ledger's silence is not read as an omission.
+- [Phase 13]: 13-01: REQUIREMENTS.md asserts 57 and ROADMAP.md asserts 51 BY DESIGN -- full defined set vs roadmapped subset. The gap is exactly six pre-existing non-roadmapped IDs (PARITY-06, PARITY-07, PARITY-08, VER-07, ROBUST-04, RETAIN-05). Any other difference means one of the two tables has drifted; verified mechanically at 13-01.
 
 ### Pending Todos
 
@@ -425,8 +429,8 @@ Next: `/gsd:plan-phase 7`.
 
 ### Prior session (2026-07-26, quick 260726-gok)
 
-Last session: 2026-08-01T22:43:32.104Z
-Stopped at: Phase 13 context gathered
+Last session: 2026-08-02T00:26:07.807Z
+Stopped at: Completed 13-01-PLAN.md
 THE FIX IS ONE TOKEN, and the interesting part is what made it safe. `production` -> `default` in `typecheck.inputs`. Two alternatives were killed on evidence rather than taste: dropping the spec project from typecheck would have silently removed spec type coverage entirely (vitest transpiles via esbuild and does NOT typecheck), and "keep `production`, re-add the spec globs" is structurally IMPOSSIBLE -- Nx buckets a fileset's patterns by leading `!`, discards position, and sorts the array, so a later positive can never undo an earlier negation (proven by executed probe).
 PROVEN BY DIFFERENTIAL, NOT BY READING THE CONFIG. Warm cache + a real spec type error: exit **1**, "Found 2 errors." Previously exit 0 at `Cache: 2/2 hit (100%)`. And touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`) -- a SECOND instance of the same defect that no prior artifact had measured, closed by the same token. The verifier reproduced both independently, using the reverted config as a control so the DELTA is the evidence.
 THE GUARD IS MUTATION-TESTED, which no prior agent had done for any guard in this repo. Reverting the token turns `nx-target-inputs.spec.ts` red on exactly its two spec-hashing assertions (`2 failed | 436 passed`). A guard that cannot fail is worthless; this one demonstrably can.
@@ -494,7 +498,7 @@ Stopped at: Executed quick 260722-0od (address the 27 upheld PR #3 multi-agent-r
 Task 3a (413-flush, F14) RESOLVED as a documented HTTP/1.1 limitation (lead-approved option a): a bounded raw-socket investigation proved the ECONNRESET is deterministic for a client streaming a body far over the cap (60/60 on a 100MB repro; <=16KB-over-cap gets a clean 413, >=256KB resets), and the prescribed destroy-on-finish fix does NOT resolve it (and one variant hangs). Landed a ponytail ceiling comment at both destroy sites (cb2832d), no behavior change, no bundle diff, no flaky test. The memory-bounding cap (backend.put never reached, proven by the mid-stream abort test) is intact regardless.
 HELD (deliberately, for the lead): the branch push and the PR-body update. The lead handles the outward-facing push after independently verifying the series. This executor did not push and did not touch the PR body.
 Final local battery at HEAD cb2832d: fmt / build / typecheck / typecheck:action / test (430) / fallow:ci / check:action / pack:check all exit 0.
-Resume file: .planning/phases/13-read-only-actions-cache-backend/13-CONTEXT.md
+Resume file: None
 Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates the PR #3 body. Then the milestone-fate decision (non-blocking) - complete/archive v0.0.1 (/gsd:complete-milestone v0.0.1 + /gsd:cleanup) and land PR #3 on main. Milestone is audit-passed.
 
 ## Operator Next Steps

@@ -578,7 +578,7 @@ Windows reuse legs can be GATED on a genuine cross-OS HIT instead of merely reco
 
 **Requirements**: VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10.
 **Depends on:** Phase 12
-**Plans:** 6 plans
+**Plans:** 1/6 plans executed
 
 **Why this exists.** CR-18 (PR #12 round-3 review) found the three Windows reuse legs RECORDED
 but never GATED. Quick task `260801-vyy` closed the pre-merge signal gap by widening the
@@ -604,8 +604,10 @@ minimum:
 - **Shared read core + writable variant adds `put`** -- one version computation, two exports.
 - **Capability narrowing at the seam** -- construct the writable backend and expose it through a
   read-only adapter, so there is literally one implementation.
+
 - **A construction-time flag** -- rejected on sight for TRUST-05 (RW-vs-RO is which factory
   constructs the backend, never a caller-facing mode flag), but record WHY so it is not re-raised.
+
 - **Do nothing** -- keep the counts as diagnostics. The honest baseline: the dogfood canary
   already gates the storage layer pre-merge, so this phase buys the Nx-task layer, not the
   storage layer.
@@ -626,6 +628,13 @@ store CI writes is a new position, not a gap in the existing one -- confirm it d
 contradict CORR-01 or TRUST-05 before planning.
 
 Plans:
+
+- [x] 13-01-PLAN.md
+- [ ] 13-02-PLAN.md
+- [ ] 13-03-PLAN.md
+- [ ] 13-04-PLAN.md
+- [ ] 13-05-PLAN.md
+- [ ] 13-06-PLAN.md
 
 - [ ] `13-01-PLAN.md` - register the seven requirement IDs in both traceability files, plus the THREAT-MODEL residual note and the Case-B live-CI item (VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10)
 - [ ] `13-02-PLAN.md` - the composed read-only Actions-cache factory, and the package-scope `@actions/cache` importer scan (VER-08, VER-09)
@@ -875,7 +884,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 7/7 | Complete    | 2026-07-30 |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 6/6 | Complete    | 2026-07-31 |
-| 13. Read-Only Actions-Cache Backend | v0.0.2 | 0/0 | Not planned | -- |
+| 13. Read-Only Actions-Cache Backend | v0.0.2 | 1/6 | In Progress|  |
 
 ---
 *v0.0.2 roadmap created 2026-07-26 from `.planning/REQUIREMENTS.md` (43 requirements, revised

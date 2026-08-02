@@ -436,5 +436,82 @@ All three read-only Windows legs green, gate counts 1 / 2 / 1 against a pre-regi
 a floor of 1, with all three ubuntu producers reached and the byte sizes matching per entry.
 
 **TEST-11: PROVEN locally by mutation**, live gate-reddening not observed and not required to be.
+**SUPERSEDED by the ADDENDUM below** -- live gate-reddening WAS subsequently observed on a real
+`windows-11-arm` runner. This line is left as written rather than back-edited, per this file's own
+"nothing above this line was edited" discipline.
 
 **Assumption A1: OPEN**, with a named observation condition. **Case B: OPEN**, carried in ROADMAP.
+
+---
+
+## ADDENDUM -- the gate FAIL path, observed on a real runner (2026-08-02)
+
+**Why this exists.** `13-VERIFICATION.md` returned `human_needed` on exactly one point: the gate's
+FAIL path had never executed on a real runner. Run `30744366870` exercised only the PASS path, and
+non-vacuity had been proven by mutating the SPEC's input -- not by running the real bash with a zero
+count. The maintainer elected to close it by observation rather than by precedent.
+
+### Method
+
+A throwaway branch `gsd/13-gate-failpath-proof` (draft PR #13, commit `bafd7be`) appended
+`--skip-nx-cache` to **`build-windows`'s target run only**, forcing zero `[remote cache]` labels into
+`build-nx.log`. That is the exact observable state the gate exists to catch, so the gate's own code
+path ran end to end: the `grep -o -F` with its `|| true`, the `wc -l`, the `-lt 1` comparison, the
+`::error::` annotation, and `exit 1`.
+
+`typecheck-windows` and `test-windows` were left **UNPERTURBED in the same run as a positive
+control** -- this repo's TEST-09 idiom. Their staying green is what makes the red attributable to the
+count rather than to the runner, the queue, or an `@actions/cache` regression.
+
+### The run
+
+| Item | Value |
+|---|---|
+| Run id | **`30745558383`** |
+| Run URL | `https://github.com/op-nx/github-cache/actions/runs/30745558383` |
+| Trigger | `event: pull_request` (draft PR #13, base = this phase branch) |
+| `headSha` | **`bafd7be`** -- the perturbation commit |
+| Conclusion | `failure`, as designed |
+
+### Result -- the discrimination that matters
+
+| Leg | Perturbed | Count | Job | Failing step |
+|---|---|---|---|---|
+| `build-windows` | YES (`--skip-nx-cache`) | **0** | **failure** | **`Gate on the cross-OS remote-cache label count for this leg`** |
+| `typecheck-windows` | no (control) | **2** | success | -- |
+| `test-windows` | no (control) | **1** | success | -- |
+
+**The job reddened AT THE GATE STEP, not at the build and not at the readiness poll.** This is the
+load-bearing check: a red job proves nothing on its own, because `ci.yml:527`'s pre-existing bare
+`exit 1` in the readiness poll can redden the same job for an unrelated reason -- which is precisely
+the vacuity trap TEST-11 was written to avoid. The failing step is named explicitly above.
+
+The annotation emitted was the gate's own, verbatim:
+
+> `build-windows got 0 [remote cache] labels, but this leg is read-only and can only get one by
+> restoring the ubuntu build job's entry. Either cross-OS restore is broken (an @actions/cache
+> regression or a cache-version drift), or the ubuntu producer never populated the entry this run.
+> Check the producer job's own log for a HIT or a save before assuming the former.`
+
+The two control legs returned **2** and **1** -- byte-identical to their pre-registered values in
+this file's PRE-REGISTRATION section, measured on a different run and a different commit.
+
+### What this does NOT prove
+
+- **That a genuinely broken cross-OS restore is what produces a zero.** The perturbation produced
+  the zero by skipping the cache, not by breaking a restore. That a broken restore yields zero is a
+  property of the BACKEND and is carried by the inductive read-only argument (a leg with no write
+  path can only get a label from the producer's entry), not by this observation.
+- **Case B.** Unchanged and still open; see ROADMAP Phase 13 Live-CI item 2.
+
+### Cleanup
+
+Draft PR #13 closed and branch `gsd/13-gate-failpath-proof` deleted after this record was written.
+No perturbation reached the phase branch: `--skip-nx-cache` exists only on `bafd7be`, which is not
+an ancestor of any retained ref.
+
+### REVISED VERDICT
+
+**TEST-11: PROVEN, live.** The gate's fail path executes as designed on a real `windows-11-arm`
+runner -- correct step, correct annotation, non-zero exit, job red -- with a same-run positive
+control isolating the cause to the count.

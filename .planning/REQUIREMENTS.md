@@ -762,8 +762,8 @@ honour table: `.planning/ROADMAP.md`.
 | VER-08 | Phase 13 | Complete |
 | VER-09 | Phase 13 | Complete |
 | TRUST-14 | Phase 13 | Complete |
-| XOS-09 | Phase 13 | Complete |
-| TEST-11 | Phase 13 | Complete |
+| XOS-09 | Phase 13 | Complete (three read-only Windows legs gated at a floor of 1 in `ci.yml`; the gate OBSERVED green live on run 30744366870, attempt 1, at gate counts 1 / 2 / 1 against counts pre-registered in that run's own head commit 631a2e7. **Case A only** -- the base-scope read half stays open as ROADMAP Phase 13 Live-CI item 2. See 13-EVIDENCE.md) |
+| TEST-11 | Phase 13 | Complete (six per-leg clauses in `dogfood-cross-os.spec.ts`, non-vacuity proven by three recorded mutations. Local mutation proves the CLAUSES can fail; the live gate REDDENING on a real cross-OS restore failure is not observed and was deliberately not induced -- see 13-EVIDENCE.md) |
 | DOCS-09 | Phase 13 | Complete |
 | DOCS-10 | Phase 13 | Complete |
 

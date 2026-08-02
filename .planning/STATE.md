@@ -5,14 +5,14 @@ milestone_name: framing
 current_phase: 13
 current_phase_name: read-only-actions-cache-backend
 status: executing
-last_updated: "2026-08-02T05:09:00.009Z"
+last_updated: "2026-08-02T10:59:38.640Z"
 last_activity: 2026-08-02
-last_activity_desc: "Completed 13-05: read-only Windows legs and their gated cross-OS counts"
+last_activity_desc: "Completed 13-06: the pre-registered counts, the proving run and 13-EVIDENCE.md"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 51
-  completed_plans: 44
+  completed_plans: 45
   percent: 14
 ---
 
@@ -29,12 +29,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 13 (read-only-actions-cache-backend) -- EXECUTING
 Plan: 6 of 6
-Status: 13-04 complete -- CACHE_READ_ONLY is the ninth EXPECTED_ENV_KNOBS entry (landed as a
-hand-edited literal, not a snapshot regen), documented on all three doc surfaces, and the
-backend-selection outcome count reads five everywhere with the count itself now spec-pinned and
-mutation-proven; DOCS-10 closed
+Status: 13-06 complete -- all six plans executed. The phase's behavioural proof is run 30744366870,
+recorded in 13-EVIDENCE.md against counts pre-registered in the commit that IS that run's head
 Progress: 6/7 phases complete [########--] 86%
-Last activity: 2026-08-02 -- Completed 13-03: the last-branch narrowing CACHE_READ_ONLY knob
+Last activity: 2026-08-02 -- Completed 13-06: the pre-registered counts, the proving run and
+13-EVIDENCE.md
 
 **Milestone v0.0.2 gained a SEVENTH phase.** Phases 7 through 12 are Complete in the ROADMAP table
 (39 of 39 plans), but `/gsd:audit-milestone` now waits on Phase 13, added by maintainer instruction
@@ -42,6 +41,18 @@ to close CR-18. Phase 12's four -- XOS-04, XOS-05, XOS-08, DOCS-07 -- closed at 
 rather than per-plan, because every plan deliberately skipped `requirements.mark-complete` after it
 falsely closed all three XOS rows on 12-01's RED-only plan. Phase 13's seven are registered Pending
 for exactly the same reason and close only as their code lands in 13-02..13-06.
+
+Phase 13's live-CI half is OBSERVED for Case A only. Run 30744366870 (attempt 1, `pull_request`,
+head 631a2e7) shows all three read-only Windows legs green at gate counts 1 / 2 / 1 against a floor
+of 1, matching counts pre-registered in 631a2e7 -- which IS that run's head, so the prediction was
+provably in the tree the run measured. Every ubuntu producer was reached: `typecheck` MISS-and-saved
+both `build` and `typecheck` (0/2), `test` MISS-and-saved (0/1), and `build` HIT the entry the
+`typecheck` job wrote, the race named in advance. Sent equals received per entry (137951 / 98227 /
+1309). TWO items stay OPEN and must not be read as closed by that green: the Case-B base-scope read
+(this commit rotates all three hashes, so every leg took the intra-run merge-ref path) and RESEARCH
+assumption A1 (no Windows task MISSed, so no PUT was attempted and the 403 path was never
+exercised). A1 now carries a stated observation condition -- a partial miss on the two-task
+`typecheck-windows` leg clears the floor, stays green, and produces exactly one 403.
 
 Phase 12's live-CI half is OBSERVED, not inferred. O4 was measured on run 30586177358, the FIRST run
 of same-repo PR #12: `[remote cache]` counted per Windows leg at 1/2/1 (total 4), matching counts
@@ -159,6 +170,7 @@ on run 30471772954 via a temporary push to main, since restored to fe25a3f. See
 | Phase 13 P03 | 7min | 3 tasks | 4 files |
 | Phase 13 P04 | 8min | 3 tasks | 6 files |
 | Phase 13 P05 | 20min | 3 tasks | 2 files |
+| Phase 13 P06 | 35min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -318,6 +330,11 @@ Full decision log in PROJECT.md Key Decisions; the CREEP control ledger C1-C18 b
 - [Phase 13]: 13-04: disambiguate the NEW spec clause, not the old one -- The pre-existing writable-Actions clause matches /Actions-cache backend/i, which the new read-only row also contains. The fifth-outcome clause is line-scoped and requires the knob name, so only the new row satisfies it; the old clause stays loose because it is still correct for the outcome it names.
 - [Phase 13]: 13-04: pin a documented COUNT against prose, never a row tally -- A tally re-derives the number from the same table it checks, so it agrees with itself while the sentence above the table lies. The clause asserts the prose sentence a reader actually reads; mutation-measured at 1 failed | 42 passed.
 - [Phase 13]: 13-05: the three Windows reuse legs write CACHE_READ_ONLY=1 to $GITHUB_ENV from their REGULAR pre-set step (a background step's writes do not propagate) and gate their `[remote cache]` count at a floor of 1. The floor is gateable only because the legs cannot save: a read-only leg can get that label only by restoring the ubuntu producer's entry, so the gate is sound INDUCTIVELY rather than per-run. Compared with `-lt 1`, not `-eq 0`, to state the floor D-05 locked. Clause B matches the COMPARISON line, never a bare `exit 1` -- measured: with the gate step deleted the block still contains the readiness poll's `exit 1`.
+- [Phase 13]: 13-06: pre-register the counts in a commit and then PUSH THAT COMMIT AS HEAD, so the proving run's `headSha` IS the prediction commit. The ordering is then structural and needs no clock -- a stronger anti-repudiation claim than Phase 12's timestamp comparison in `f5d03b0`.
+- [Phase 13]: 13-06: the `Headline` table's verdict cells were written as forward references ("see the OBSERVATION section"), so appending the observation required no edit above the fold. The whole file diffs as additions only, which is a stronger property than "the pre-registration section is unchanged".
+- [Phase 13]: 13-06: publish the INSTRUMENT CONVERSION, not just the number. The gate counts `<target>-nx.log` and prints 1 / 2 / 1; the job log reads 3 / 4 / 3 because the runner echoes the gate step's body, which carries the literal twice (the `grep` needle and the `::error::` text). The pre-registration predicted +1 per leg from the OLD Record step and was WRONG by one more; the miss is recorded rather than smoothed over.
+- [Phase 13]: 13-06: A1 is reported UNEXERCISED, not closed. A run where every pre-registered count is MET is exactly a run where no task executes, so no PUT is attempted and no 403 exists. Reading a clean log as "the 403 is quiet" would infer a property of a path the run never took -- the same shape as reading a MISS as evidence.
+- [Phase 13]: 13-06: the gate's floor has a stated blind spot: `typecheck-windows` resolves two tasks, so a 2-to-1 drop clears the floor and stays green. The floor was kept (D-05: the counts follow Nx's task graph), and the per-target counts in 13-EVIDENCE.md are what make such a drop legible.
 
 ### Pending Todos
 

@@ -92,7 +92,7 @@ Full phase detail, success criteria, traceability, and coverage validation archi
 - [x] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed. (completed 2026-07-29)
 - [x] **Phase 11: Live Proofs -- O1, O2, O3** - Record the three live proofs in the mandated order, including the producer attribution that enabling O4 destroys forever. (completed 2026-07-30)
 - [ ] **Phase 12: Windows CI Reuse (O4) + Consumer Recipe** - Add the Windows `build`/`typecheck`/`test` legs, prove they HIT on Linux-produced entries, and ship the safe-by-default adoption recipe.
-- [ ] **Phase 13: Read-Only Actions-Cache Backend** - Make "read the Actions cache, never write it" representable, so the three Windows reuse legs can be GATED on a genuine cross-OS HIT rather than recording a launderable one -- without giving the cache-version computation a second place to drift.
+- [x] **Phase 13: Read-Only Actions-Cache Backend** - Make "read the Actions cache, never write it" representable, so the three Windows reuse legs can be GATED on a genuine cross-OS HIT rather than recording a launderable one -- without giving the cache-version computation a second place to drift. (completed 2026-08-02)
 
 ## Phase Details
 
@@ -578,7 +578,7 @@ Windows reuse legs can be GATED on a genuine cross-OS HIT instead of merely reco
 
 **Requirements**: VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10.
 **Depends on:** Phase 12
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 
 **Why this exists.** CR-18 (PR #12 round-3 review) found the three Windows reuse legs RECORDED
 but never GATED. Quick task `260801-vyy` closed the pre-merge signal gap by widening the
@@ -634,7 +634,7 @@ Plans:
 - [x] 13-03-PLAN.md
 - [x] 13-04-PLAN.md
 - [x] 13-05-PLAN.md
-- [ ] 13-06-PLAN.md
+- [x] 13-06-PLAN.md
 
 - [ ] `13-01-PLAN.md` - register the seven requirement IDs in both traceability files, plus the THREAT-MODEL residual note and the Case-B live-CI item (VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10)
 - [ ] `13-02-PLAN.md` - the composed read-only Actions-cache factory, and the package-scope `@actions/cache` importer scan (VER-08, VER-09)
@@ -884,7 +884,7 @@ Carried from REQUIREMENTS.md, listed so no phase picks them up:
 | 10. OS-Invariant Releases Mirror | v0.0.2 | 8/8 | Complete   | 2026-07-29 |
 | 11. Live Proofs -- O1, O2, O3 | v0.0.2 | 7/7 | Complete    | 2026-07-30 |
 | 12. Windows CI Reuse (O4) + Consumer Recipe | v0.0.2 | 6/6 | Complete    | 2026-07-31 |
-| 13. Read-Only Actions-Cache Backend | v0.0.2 | 5/6 | In Progress|  |
+| 13. Read-Only Actions-Cache Backend | v0.0.2 | 6/6 | Complete   | 2026-08-02 |
 
 ---
 *v0.0.2 roadmap created 2026-07-26 from `.planning/REQUIREMENTS.md` (43 requirements, revised

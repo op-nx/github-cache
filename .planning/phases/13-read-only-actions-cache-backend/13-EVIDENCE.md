@@ -551,3 +551,103 @@ pre-registration. The gate is not a one-run artifact.
 - **Assumption A1 is untouched.** Every task HIT again, so again no PUT was attempted and no 403
   path was exercised. The stated observation condition is unchanged: a partial miss on the
   two-task `typecheck-windows` leg clears the floor, stays green, and produces exactly one 403.
+
+---
+
+## ADDENDUM 3 -- both live-CI residuals CLOSED (quick `260802-toz` and `260803-0rr`)
+
+Appended 2026-08-03, never back-edited. Everything above this line was correct for the tree and the
+runs it describes; this section supersedes the OPEN status those sections record for Case B and for
+assumption A1. In particular ADDENDUM 2's two "untouched" bullets and the `Assumption A1: OPEN`
+line earlier in this file are superseded here rather than edited in place.
+
+### Case B -- PROVEN on run `30768540898`
+
+Closed by quick `260802-toz`. Event `pull_request`, draft PR #14, head `7188a66` -- which IS the
+pre-registration commit, so the prediction was provably in the tree the run measured.
+
+All three ubuntu producers HIT and emitted **no `Sent` line at all**, so nothing was written into
+the PR's merge-ref scope during the run. The three Windows legs nonetheless restored entries whose
+keys are byte-identical to the ones `main`'s scope received from run `30767511870`:
+
+| Leg | Key restored | `Received` | Baseline `Sent` | Gate count |
+|-----|--------------|-----------|-----------------|------------|
+| `build-windows` | `nx-cache-6303782621882711279` | 137951 | 137951 | 1 |
+| `typecheck-windows` | `nx-cache-11553684120103592295` (+ the build dep) | 98227 | 98227 | 2 |
+| `test-windows` | `nx-cache-11565398464176149070` | 1299 | 1299 | 1 |
+
+Counts 1 / 2 / 1, exactly as pre-registered, all three legs GREEN. No same-run merge-ref entry
+existed for them to have restored, so the entries came from a scope populated BEFORE the run
+started. That is Case B, and it is what the gate's soundness argument needs.
+
+**Scope, unchanged from the pre-registration.** It does not distinguish BASE-branch scope from
+DEFAULT-branch scope -- for a PR off `main` they are the same ref. The narrower proven claim is
+"restored from a scope populated before the run, outside this run's merge ref".
+
+**Unplanned finding carried forward: `o3-witness` is not Case-B-safe.** That job asserts a CREATION
+ordering (the linux entry came into existence before the Windows integration step began). On a
+Case-B run nothing is created, so the assertion has no event to observe and the job reddens. The
+first post-Phase-13 PR touching no declared input will hit this. It is a FALSE red -- the three
+read-only legs were green in that very run. Follow-up, not fixed by either quick task.
+
+### Assumption A1 -- ANSWERED AFFIRMATIVELY, by local measurement
+
+Closed by quick `260803-0rr`. Full write-up and controls:
+`.planning/quick/260803-0rr-address-a1-so-that-it-can-be-closed/260803-0rr-EVIDENCE.md`.
+
+The route changed. A1's row said "Confirm on the landing run", but a landing run in which every
+task HITs exercises none of the path -- the reason this file recorded A1 OPEN three times. It was
+instead answered LOCALLY, with no source change and no CI cycle, because `server.ts:128-133`
+answers a read-only PUT with 403 and RETURNS BEFORE `handlePut`: no backend method runs on a
+refused PUT, so the backend's identity provably cannot affect the PUT path. That makes the existing
+`createReadOnlyMemoryBackend` exactly equivalent for this question, and PUT-maximal besides -- it
+is permanently empty, so every task must execute and every execution is a store opportunity.
+
+A tap on the real `createCacheServer` recorded eight requests across two runs, four GET/PUT pairs
+at real Nx task hashes:
+
+```
+GET /v1/cache/6303782621882711279  -> 404   |  PUT -> 403     run 1 (build)
+GET /v1/cache/11553684120103592295 -> 404   |  PUT -> 403     run 1 (typecheck)
+GET /v1/cache/16145199525155793066 -> 404   |  PUT -> 403     run 2, hashes rotated (build)
+GET /v1/cache/3356125849110639811  -> 404   |  PUT -> 403     run 2, hashes rotated (typecheck)
+```
+
+1. **Nx DOES attempt a store after a MISS** -- four PUTs, one per executed task. This is the fact
+   A1 could not establish, and it is what the two-way ambiguity turned on.
+2. **The backend refuses each with 403**, at the protocol boundary, without being consulted.
+3. **Nx swallows it in complete silence** -- the definitive run's full 30-line output contains zero
+   occurrences of `403`, `forbidden`, `refus`, `store`, `fail`, `could not`, `unable`, `error` or
+   `warn`.
+4. **The build still succeeds** (`Successfully ran target typecheck`).
+
+**What transfers to CI, stated narrowly:** *given a 403 to a store, this pinned Nx emits no
+output.* That is a property of the client and the protocol response, not of the environment, so it
+holds on `windows-11-arm`. **It is an inference, not a measurement:** no CI run has directly
+observed a PUT arriving. The silence on run `30768554184` is now best EXPLAINED by this mechanism
+rather than being ambiguous between "refused silently" and "never attempted".
+
+**Incidental, and it cuts the other way if you invert it:** because a store IS attempted,
+`server.ts:128-133` is reachable in ordinary operation. Had no PUT arrived, the finding would have
+been that the project ships a read-only guard production never exercises.
+
+**Incidental corroboration of the OS-invariant work:** run 1's hashes `6303782621882711279` and
+`11553684120103592295` are byte-identical to the keys recorded from CI run `30767511870`, whose
+producers are ubuntu. A local Windows 11 arm64 machine and an ubuntu runner computed the same task
+hashes -- exactly what the discriminator work predicts, observed here as a side effect.
+
+**Latent since Phase 10.** `10-EVIDENCE-PRE-RENAME.md:88` ran a local sidecar against a read-only
+backend with a control row reading "no PUT-to-read-only-backend crash". It stood on this exact seam
+and recorded only that nothing crashed, never whether a PUT arrived. That omission IS A1's
+residual, and it read as coverage for three phases.
+
+**The method hazard worth carrying:** one harness run reported a clean "Nx said nothing" while
+adding ZERO tap lines -- served entirely from local cache, so it never contacted the instrument. It
+was rejected as vacuous. Root cause: `NX_CACHE_DIRECTORY` is NOT honoured by Nx 23.1.0 here (a
+verifiably empty directory still produced `[local cache]` 2/2). Coldness was forced by ROTATING THE
+HASH instead. Before believing any silence, count the requests the run actually made.
+
+### What remains open after this addendum
+
+Nothing from the `**Live-CI close**` block. Both items are closed; `ROADMAP.md` is updated to
+match. The `o3-witness` Case-B limitation above is a new follow-up, not a residual of either item.

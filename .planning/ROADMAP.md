@@ -643,7 +643,8 @@ Plans:
 - [ ] `13-05-PLAN.md` - three read-only Windows legs, their counts gated at the floor, and every stale rationale corrected in the same commit (XOS-09, TEST-11, DOCS-09)
 - [ ] `13-06-PLAN.md` - the pre-registered counts, the proving run, and `13-EVIDENCE.md` (XOS-09, TEST-11)
 
-**Live-CI close**: two items.
+**Live-CI close**: two items. **BOTH CLOSED as of 2026-08-03** -- see the status block after
+item 2. The original text of both is kept for the reasoning it records.
 
 1. **XOS-09's gate** is only observable on a real `windows-11-arm` runner after a ubuntu leg has
    saved the entries. It closes on this phase's own landing run.
@@ -674,6 +675,34 @@ Plans:
    inductive property and the post-merge gate. Note the second-order effect either way: once the
    legs are read-only, a Case-B MISS is PERMANENT for that hash on Windows -- no self-produced entry
    ever fills it -- so a Case-B failure is a hard red, not a first-run-only red.
+
+### Live-CI close -- STATUS as of 2026-08-03: both items CLOSED
+
+| Item | Status | Closed by | Run |
+|------|--------|-----------|-----|
+| 1. XOS-09's gate on a real `windows-11-arm` runner | **CLOSED** | Phase 13's own landing run, as designed | `30744366870` green at 1 / 2 / 1 against counts pre-registered in that same head `631a2e7`; `30745558383` proved the FAIL direction (`build-windows` red AT THE GATE STEP at count 0, other two green as a same-run control) |
+| 2. The Q4 base-scope READ half (Case B) | **PROVEN** | quick `260802-toz` | `30768540898`, draft PR #14, head `7188a66` = the pre-registration commit. All three ubuntu producers HIT with NO `Sent` line, so nothing entered the merge-ref scope, yet all three Windows legs restored `main`-scope keys byte-identically at 1 / 2 / 1 |
+
+The procedure in item 2 was executed as written, including step (a): assumption A2 was VERIFIED
+before the PR was opened, not assumed. The fallback in the last paragraph was therefore never
+needed -- the read half holds, so the gate keeps pre-merge signal on `pull_request`.
+
+**Scope, unchanged from the pre-registration.** Case B's proof does not separate BASE-branch from
+DEFAULT-branch scope -- for a PR off `main` they are the same ref. The proven claim is the narrower
+one the gate's soundness actually needs: restored from a scope populated before the run, outside
+this run's merge ref.
+
+**A1 was never a ROADMAP item** and no row is invented for it here. For the record, it also closed
+(quick `260803-0rr`, by local measurement rather than on the landing run). Both closures are
+written up in `13-EVIDENCE.md` ADDENDUM 3; current status of record is `13-VALIDATION.md`'s
+Manual-Only table.
+
+**One NEW follow-up, surfaced by the Case-B run and belonging to neither item.** `o3-witness`
+asserts a CREATION ordering -- that the linux entry came into existence before the Windows
+integration step began. On a Case-B run nothing is created, because every producer HITs, so the
+assertion has no event to observe and the job reddens. The first post-Phase-13 PR touching no
+declared input will hit this. It is a FALSE red: the cross-OS property holds, as the three green
+read-only legs in run `30768540898` show. The witness silently assumes the Case-A shape.
 
 ## Traceability
 

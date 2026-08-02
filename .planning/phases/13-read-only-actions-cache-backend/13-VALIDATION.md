@@ -86,7 +86,7 @@ from each plan's SUMMARY frontmatter, which is where this phase actually tracked
 | 13-06 D2 | 06 | 6 | XOS-09 | T-13-06-R1 | Per-leg counts pre-registered in a commit PRECEDING the proving run | manual | none -- see Manual-Only | `13-EVIDENCE.md`, commit `631a2e7` | ✅ observed (run `30744366870`) |
 | 13-06 D3 | 06 | 6 | XOS-09 | T-13-06-R1 | Run recorded with id, three per-leg counts, each ubuntu producer's line | manual | none | `13-EVIDENCE.md` | ✅ observed (1/2/1) |
 | 13-06 D4 | 06 | 6 | XOS-09 | T-13-06-R2 | Evidence states Case A and does not imply the base-scope read | manual | none | `13-EVIDENCE.md` | ✅ observed |
-| 13-06 D5 | 06 | 6 | TEST-11 | -- | Assumption A1 answered by observation rather than deferred silently | manual | none -- A1 remains UNEXERCISED, see Manual-Only | `13-EVIDENCE.md` | 🔒 manual-only (open) |
+| 13-06 D5 | 06 | 6 | TEST-11 | -- | Assumption A1 answered by observation rather than deferred silently | manual | none -- deliberately no standing guard, see Manual-Only | `13-EVIDENCE.md` ADDENDUM 3 | CLOSED (quick `260803-0rr`, local measurement) |
 | 13-06 D6 | 06 | 6 | XOS-09 | T-13-06-R1 | Pre-registration never back-edited | smoke | `git diff 631a2e7 HEAD -- 13-EVIDENCE.md` shows 0 deletions | `13-EVIDENCE.md` | ✅ green |
 
 **Requirement → behavior coverage (from RESEARCH.md; the planner maps these onto task IDs):**
@@ -160,8 +160,8 @@ return zero (exit 1, genuine no-match, positive control confirmed).
 |----------|-------------|------------|-------------------|--------|
 | The gate reddens on a real cross-OS restore failure | XOS-09 | Only observable on a real `windows-11-arm` runner after a ubuntu leg has saved | Land the change; record the run id showing all three gated legs green; then confirm the failure direction | **CLOSED** -- run `30745558383`: `build-windows` red AT THE GATE STEP at count 0, `typecheck-windows`/`test-windows` green at 2/1 in the SAME run as a positive control. Green direction: runs `30744366870` (1/2/1 against a pre-registration in the same sha `631a2e7`) and `30746080731` |
 | New gate clauses are non-vacuous | TEST-11 | Vacuity is a property of the assertion, not of the run | Mutate the gate step out of one leg; confirm exactly the intended clause reddens. **`ci.yml:527` is already `exit 1`, so a clause matching `/exit 1/` is green today, before any change** | **CLOSED** -- 3 mutations recorded in-file at `dogfood-cross-os.spec.ts:886-893`; trap 10 additionally re-checked this audit (no `toMatch`/`toContain` argument in the file contains `exit 1`) |
-| **PR restores from the base/default-branch scope (Case B)** | Q4 / XOS-09 | This phase's landing commit rotates all three hashes, so every leg takes the intra-run merge-ref path (Case A) | Separate later PR that touches no declared `build`/`typecheck`/`test` input; see RESEARCH.md Q4 for the procedure. Verify assumption A2 against the live Nx graph FIRST | **OPEN -- stays manual.** A spec cannot close this; it is live-CI behavioural. Note run `30746080731` does NOT close it either: every commit between `631a2e7` and `e6b3268` touches only `.planning/`, so the task hashes did not rotate and it consumed the same producer entries -- it reproduces the observation, it is not an independent Case-A instance |
-| **RESEARCH assumption A1 -- the 403 log-noise path** | TEST-11 | Unexercised: every Windows task HIT on the proving run, so no PUT was attempted and no 403 could occur | Observation condition, stated and unchanged: a partial miss on the two-task `typecheck-windows` leg clears the floor, stays GREEN, and produces exactly one 403 | **OPEN -- stays manual.** Answered by observation (0 MISSes, 0 save attempts, 0 genuine `403`/`forbidden` tokens across all three read-only legs) but NOT closed -- the path itself has never run |
+| **PR restores from the base/default-branch scope (Case B)** | Q4 / XOS-09 | Live-CI behavioural; a spec cannot close it. Stays manual permanently | Executed as specified: draft PR #14 off `main` with a `.planning`-only diff, assumption A2 verified against the live Nx graph first | **CLOSED by quick `260802-toz`** (`13-EVIDENCE.md` ADDENDUM 3). Run `30768540898`, head `7188a66` = the pre-registration commit. All three ubuntu producers HIT with NO `Sent` line, so nothing entered the merge-ref scope, yet all three Windows legs restored `main`-scope keys byte-identically at counts 1 / 2 / 1. **Scope:** proves "restored from a scope populated before the run, outside this run's merge ref"; does NOT separate BASE from DEFAULT scope (same ref for a PR off `main`). Note run `30746080731` did NOT close it -- no hash rotated there, so it consumed the same producer entries |
+| **RESEARCH assumption A1 -- the 403 log-noise path** | TEST-11 | Third-party client behaviour: a standing guard here would test Nx and redden on an unrelated bump, and the failure mode is self-announcing (it would redden read-only legs on any partial miss) | Superseded. The stated CI observation condition was never met and was not needed -- see the closure below | **CLOSED by quick `260803-0rr`** (`13-EVIDENCE.md` ADDENDUM 3). Answered AFFIRMATIVELY by local measurement, not by the landing run: four PUTs observed across two runs, each refused 403, Nx silent on all nine noise tokens, build green. **Scope:** local; the CI inference rests on the client-side property *given a 403 to a store, this pinned Nx emits no output* being environment-independent. No CI run has directly observed a PUT arriving. Deliberately NOT converted to a standing test |
 | The VER-04 message names the function that actually ran | VER-08 / T-13-02-R1 | Pinning a function-name prefix in a spec would mean the guard has to be edited by the very change it guards -- the tautological-guard shape this phase exists to attack | The two VER-04 clauses assert the message's SUBSTANCE (`/nx\.json/`, `/GITHUB_WORKSPACE/`), which is the durable half. Re-read `actions-cache-backend.ts:141,158` by eye whenever either factory is renamed | **ACCEPTED as manual by design** (documented rationale at `actions-cache-backend.spec.ts:783-786`). Note the SUMMARY's `git grep "createActionsCacheBackend:"` check must exclude `*.spec.ts` -- unscoped it now hits a mock key at `publish/publish-mirror.spec.ts:26` |
 
 ---
@@ -273,3 +273,17 @@ guard, not a broken behavior; the shipped branch order is correct.
 978 -> 979 tests, the one gap found was closed with a clause that was proven to redden alone under
 the mutation it guards, and the two live-CI items (Case B, A1) remain OPEN and manual by design
 rather than being laundered into coverage.
+
+### Post-approval note -- 2026-08-03, both live-CI items since CLOSED
+
+The approval above is a dated snapshot and is left as written: at `eb57440` both items WERE open,
+and the sign-off's claim is about what that audit did, not about their permanent status. Both have
+since closed, by two quick tasks rather than by this phase's execution, and the two Manual-Only
+rows above are updated to match:
+
+- **Case B** -- quick `260802-toz`, run `30768540898`.
+- **Assumption A1** -- quick `260803-0rr`, local measurement.
+
+Neither closure adds automated coverage, so `nyquist_compliant` is unaffected. Both remain
+Manual-Only by design: Case B is live-CI behavioural, and A1 is third-party client behaviour whose
+regression is self-announcing. Full record: `13-EVIDENCE.md` ADDENDUM 3.

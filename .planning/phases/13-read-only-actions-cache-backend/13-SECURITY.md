@@ -307,6 +307,32 @@ per-leg FLOOR, so a partial cross-OS regression on `typecheck-windows` (2 -> 1) 
 and stays green. Deliberate under D-05; the per-target counts recorded in the evidence file
 are the record against which such a drop would be legible.
 
+### SUPERSEDED 2026-08-03 -- both items above have since closed. This file is FROZEN.
+
+Stated explicitly rather than left silent, because otherwise this repo would assert A1 and
+Case B as both CLOSED and OPEN across two audit artifacts of the same phase.
+
+**This audit is a dated snapshot at `80f3066` and is deliberately NOT back-edited.** Items 1
+and 2 above, and the sign-off box asserting they "remain recorded as known-open, NOT closed,
+and were untouched by either closure", were all TRUE of the tree this agent audited and of
+what this audit did. They are left exactly as written. The same discipline the repo applies
+to `12-SECURITY.md` and `13-EVIDENCE.md`: supersede forward, never rewrite the record.
+
+Both closed AFTER this audit, by quick tasks rather than by phase execution:
+
+| Item | Closed by | How | Status now |
+|------|-----------|-----|------------|
+| Case B -- base-scope READ | quick `260802-toz` | Run `30768540898`, head `7188a66` = the pre-registration commit. All three ubuntu producers HIT with no `Sent`, so nothing entered the merge-ref scope; all three Windows legs still restored `main`-scope keys byte-identically at 1 / 2 / 1 | **PROVEN**, at the narrower claim (a scope populated before the run, outside this run's merge ref) |
+| RESEARCH assumption A1 -- PUT `403` log noise | quick `260803-0rr` | Local measurement, no source change and no CI cycle -- `server.ts:128-133` returns 403 BEFORE `handlePut`, so the backend cannot affect the PUT path. Four PUTs across two runs, each refused 403, Nx entirely silent, build green | **ANSWERED AFFIRMATIVELY.** Local; the CI step is an inference about pinned-client behaviour, not a measurement |
+
+Neither closure touches this phase's threat register: all 27 threats were and remain CLOSED,
+and no code changed. Current status of record: `13-VALIDATION.md`'s Manual-Only table.
+Full evidence: `13-EVIDENCE.md` ADDENDUM 3.
+
+One NEW follow-up surfaced by the Case-B run and belonging to neither item: `o3-witness`
+asserts a CREATION ordering, which has no event to observe on a Case-B run where every
+producer HITs. The first post-Phase-13 PR touching no declared input will redden it falsely.
+
 ---
 
 ## Unregistered Flags

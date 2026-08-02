@@ -447,6 +447,47 @@ describe('TRUST-14: CACHE_READ_ONLY is a ROLE signal that can only narrow', () =
     },
   );
 
+  // BRANCH ORDER, which the table above CANNOT see. T-13-03-E1 registers "the knob
+  // check placed before an existing narrowing branch" at high severity, and
+  // select-backend.ts:33-35 claims the "it is last" guarantee is "checked mechanically
+  // by first-occurrence position". That mechanical check was an ad-hoc `indexOf`
+  // comparison run once during plan 13-03; it never became a clause, so at the time
+  // this test was written NOTHING in the tree enforced it.
+  //
+  // MEASURED, not argued. Hoisting the knob branch above `resolveGitHubToken` --
+  // exactly T-13-03-E1's shape -- left the whole suite GREEN at 42 files / 978 tests.
+  // The table above is blind to it because `outcomeOf` collapses BOTH read-only
+  // outcomes to the single token 'read-only': memory-degrade and read-only-Actions are
+  // indistinguishable to `isWritableBackend`, so `widened()` stays false and the row
+  // passes while the fail-safe branch has been bypassed. (A hoist above the
+  // repository-identity THROW is caught, by the throw-parity assertion above -- which
+  // is why only this one direction needed a new clause.)
+  //
+  // The discriminator is the one the D1 clause above already uses, applied to the
+  // complementary case: only ONE of the two read-only outcomes touches @actions/cache.
+  // Both halves stay INSIDE one test so neither can be deleted without the other --
+  // the positive control is what stops `not.toHaveBeenCalled()` being satisfied by an
+  // inert mock.
+  it('keeps the memory-degrade branch AHEAD of the knob: a token-less write-trusted env still degrades to MEMORY, not to a read-only ACTIONS backend (TRUST-14, T-13-03-E1)', async () => {
+    const degraded = selectBackend({
+      ...trusted,
+      GH_TOKEN: '',
+      CACHE_READ_ONLY: '1',
+    });
+
+    expect(isWritableBackend(degraded)).toBe(false);
+    expect(await degraded.get(HASH)).toEqual({ kind: 'miss' });
+    expect(restoreCache).not.toHaveBeenCalled();
+
+    // Positive control on the SAME mock, in the SAME test: the identical env WITH a
+    // resolvable token does reach @actions/cache. Without this half a permanently
+    // inert `restoreCache` would satisfy the assertion above and prove nothing.
+    const knobbedActions = selectBackend({ ...trusted, CACHE_READ_ONLY: '1' });
+
+    expect(await knobbedActions.get(HASH)).toEqual({ kind: 'miss' });
+    expect(restoreCache).toHaveBeenCalledTimes(1);
+  });
+
   // Truthiness, never `=== 'true'`, and the DIRECTION is the whole point: on a one-way
   // ratchet a typo must still NARROW. An exact-string parser would let
   // CACHE_READ_ONLY=flase silently restore the writable backend, which is the wrong

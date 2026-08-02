@@ -114,6 +114,32 @@ the record was deleted.
   gates plus the advisory PPE gate. The only genuine second layer would be reader-side provenance
   attestation (C7), which is deferred. Gate correctness is therefore load-bearing with
   `no backstop`.
+- **`CACHE_READ_ONLY` is a one-way ratchet, and NO control row was added for it (deliberate;
+  Phase 13, 2026-08-02).** The knob is a strictly-narrowing consumer signal whose only reachable
+  effect is to remove `put` from the constructed backend. The guarantee comes from BRANCH ORDER in
+  `selectBackend`, not from validation: the check is LAST, after every existing narrowing branch, so
+  every path that could narrow has already returned and the knob cannot resurrect the Releases
+  branch, the fail-closed throw, or the memory-degrade branch. It is control flow, not validation,
+  and moving the check earlier would break it -- the POSITION is the invariant, not the comment
+  above it. Truthiness rather than `=== 'true'` is the FAIL-SAFE direction for a ratchet: a typo'd
+  value still narrows, whereas an exact-string comparison would let a typo silently restore the
+  writable backend. **No `C19` was added on purpose**, and that decision is recorded here so the
+  ledger's silence is not read as an omission: this phase strictly REDUCES capability, opens no
+  attack surface and introduces no new trust boundary, so it meets this file's criterion for a note
+  and not for a control. C1 is ADJACENT but not contradicted -- C1's 409 describes a write blocked
+  AT THE STORE, while this blocks one layer earlier, so `server.ts:124-129` answers the contract's
+  403 at the protocol boundary and `saveCache` is never attempted. That 403 is the ESTABLISHED
+  behaviour of the two existing read-only outcomes, not a new one, and C1's 409 path on the writable
+  backend is untouched. C8 runs BACKWARDS from the intuition and is worth one sentence so nobody
+  "fixes" a non-problem: a read-only leg no longer refreshes an entry's clock by WRITING, but
+  GitHub's eviction policy is keyed on ACCESS ("removed if not accessed in over 7 days") and a
+  restore IS an access -- so there is no retention regression. Per D-08, read-only against the SAME
+  store CI writes contradicts none of the three stances it appears to touch: `PROJECT.md`'s "Local
+  read-write mode" Out of Scope line bans LOCAL WRITE, while this adds a CI-side READ-ONLY position
+  -- strictly less capability, in the same direction that stance points; TRUST-05 is scoped to
+  RW-vs-RO-by-construction and is satisfied as long as the signal can only narrow; and CORR-01 is
+  about OS-namespacing and is already superseded by the v0.0.2 OS-invariant decision, untouched
+  here. That is a RECORD, not a re-litigation.
 
 ### Accepted as spent (2026-07-26)
 

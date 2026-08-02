@@ -180,6 +180,33 @@ None - no external service configuration required.
 - **One item is deferred by construction, not by omission.** The Case-B base-scope READ observation cannot be made by this phase's own landing commit, which rotates all three task hashes. It is registered in ROADMAP.md's Live-CI close with its full procedure and must be executed as a separate PR after Phase 13 lands on `main`.
 - **No blockers.** This plan touched only `.planning/**`, which is in no Nx target's declared input set, so no task hash rotated and no build or test run was required.
 
+## Self-Check: PASSED
+
+Every claim above was verified against disk and git after the final commit.
+
+**Files claimed, files found:** `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`,
+`.planning/THREAT-MODEL.md`, `.planning/phases/13-read-only-actions-cache-backend/13-01-SUMMARY.md`
+-- all present.
+
+**Commits claimed, commits found:** `34577b8`, `4b22cee`, `7b45c38`, `decf56d` -- all present in
+`git log --all`.
+
+**Assertions re-run after the final commit:**
+
+| Check | Result |
+|---|---|
+| Seven `- [ ] **ID**` bodies + seven `\| ID \| Phase 13 \|` rows + 57/57 tally + every body cites a `D-0N` decision | PASS |
+| ROADMAP: seven rows, 51/51 assertion, both tally lines `= 51`, Live-CI block naming the hash rotation | PASS |
+| THREAT-MODEL: knob only below `## Residual notes`, no `^\| C19 ` row, ledger still exactly 18 rows, bullet names BRANCH ORDER and the no-row decision | PASS |
+| Cross-file gap: REQUIREMENTS 57, ROADMAP 51, difference exactly the six named IDs, no reverse gap | PASS |
+| `init.plan-phase 13` echoes all seven IDs on one physical line | PASS |
+| Every line added by this plan is ASCII-only | PASS |
+
+**One assertion was corrected, not waived.** An initial whole-file ASCII scan of THREAT-MODEL.md
+failed on pre-existing `->`-style arrows in the C1 control row. The scan was re-scoped to the lines
+this plan added, which is the actual claim; the pre-existing characters are outside this plan's
+scope boundary and the diff is 26 insertions with 0 deletions, so the ledger is byte-unchanged.
+
 ---
 *Phase: 13-read-only-actions-cache-backend*
 *Completed: 2026-08-02*

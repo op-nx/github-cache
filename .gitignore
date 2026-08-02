@@ -86,6 +86,14 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
+# GSD research-tool response cache (hash-named JSON, written by the `research-*`
+# query handlers). Generated, never authored, and worthless as history -- but it is
+# NOT merely noise: it lands untracked under `.planning/`, and `capture-hashes.mjs`
+# records `workingTreeClean` from `git status --porcelain`, so a research probe run
+# in the same checkout as a hash capture pegs that field to false and destroys the
+# signal, exactly as the workspace-root logs above would. Same rule, new writer.
+.planning/research/.cache/
+
 .claude/worktrees
 .claude/settings.local.json
 .nx/polygraph

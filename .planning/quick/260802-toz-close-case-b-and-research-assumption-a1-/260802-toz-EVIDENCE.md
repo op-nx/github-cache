@@ -148,3 +148,73 @@ five live pushes to close.
 
 Root-cause analysis is deliberately NOT folded into this window -- it needs no rewritten `main`
 and would prolong one. See the OBSERVATION section for disposition.
+
+---
+
+## PRE-REGISTRATION CORRECTIONS (still before any observation run exists)
+
+Raised by `gsd-plan-checker` against the plan, applied here before either observation branch was
+pushed. No observation run existed when this was written, so the predictions above remain
+untested-at-time-of-writing; this section tightens HOW they are measured, and does not soften WHAT
+was predicted.
+
+### C1 -- an Nx MISS-and-SAVE does not print its key. Only a HIT does.
+
+The baseline table above is therefore derived from the WINDOWS CONSUMER legs, which HIT, and tied
+to the ubuntu producers BY BYTE SIZE -- the idiom `13-EVIDENCE.md` already uses for its
+producer-to-consumer tie. Verified from run `30767511870`'s log:
+
+| Producer | `Sent` | Consumer | `Cache hit for:` | `Received` |
+|----------|--------|----------|------------------|------------|
+| ubuntu `build` | 137951 of 137951 | `build-windows` | `nx-cache-6303782621882711279` | 137951 |
+| ubuntu `typecheck` | 98227 of 98227 | `typecheck-windows` | `nx-cache-11553684120103592295` | 98227 |
+| ubuntu `test` | 1299 of 1299 | `test-windows` | `nx-cache-11565398464176149070` | 1299 |
+
+`typecheck-windows` additionally HIT `nx-cache-6303782621882711279` at `Received 137951` -- the
+`build` dependency -- which is why its count is 2.
+
+### C2 -- a `Cache hit for:` line is NOT always a restore. Race-artifact rule.
+
+Run `30767511870`'s ubuntu `typecheck` job contains, in sequence:
+
+```
+Failed to save: Unable to reserve cache with key nx-cache-6303782621882711279, another job may be creating this cache.
+Cache hit for: nx-cache-6303782621882711279
+Lookup only - skipping download
+```
+
+That is the `build` key surfacing inside the `typecheck` JOB because the reserve race resolved to
+the `build` job this run -- the opposite way round from run `30744366870`. It is a lookup-only
+probe, not a restore. **Rule: a `Cache hit for:` immediately following `Failed to save: Unable to
+reserve` is a race artifact and must never be attributed as a restore, nor tied to that job's own
+`Sent` figure.** Doing so here would have bound the `build` key to `Sent 98227`, which is the
+`typecheck` entry -- a silent mis-attribution underneath the entire Case-B claim.
+
+### C3 -- `Sent == 0` is the corroborator, NOT the primary discriminator.
+
+A producer that MISSes, executes, and then FAILS TO RESERVE also emits zero `Sent` -- and that
+exact sequence is present in this very run. So Observation 1's binding discriminator is
+`Cache: <n>/<n> hit (100%)` on each ubuntu producer, with zero `Sent` as corroboration.
+
+### C4 -- widened falsifier for Observation 1.
+
+A MISS on an ubuntu producer means *a hash rotated* **OR** *the baseline entry is no longer
+reachable* (LRU eviction under the 10 GB repo cap, or an unreachable scope). Compare the observed
+key against the baseline BEFORE attributing a MISS to hash rotation. Eviction is unlikely at these
+sizes (1 KB / 98 KB / 138 KB) but it is a different fact and must not be reported as the other one.
+
+### C5 -- jobs excluded from the "nothing wrote into the merge-ref scope" claim, named not filtered.
+
+The claim is checked over the three ubuntu producers. Two other jobs touch the cache and are
+excluded for stated reasons: `dogfood-seed` keys on `nx-cache-<GITHUB_RUN_ID>` (`ci.yml:26-31`), a
+run-scoped key that is not a task hash; and `integration` carries a `process.platform`
+discriminator (`nx.json:106`), so it cannot collide with a task-hash key either.
+
+### C6 -- run `30767511870`'s overall conclusion is `failure`, and the baseline is still sound.
+
+The two failures are `publish-verify (ubuntu-24.04-arm)` and `publish-verify (windows-11-arm)` --
+see the UNPLANNED FINDING section. All three ubuntu producers and all three Windows legs are
+`success`. `publish-verify` exercises the GitHub **Releases** mirror, a different store from the
+**Actions** cache this baseline measures, and it runs AFTER the producers. A later reader running
+`gh run view 30767511870` will see `failure` next to a baseline claimed off it; that is expected,
+and this paragraph is why it is not a contradiction.

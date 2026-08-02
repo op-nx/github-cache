@@ -18,15 +18,16 @@ read access.
 ### How the backend is selected
 
 **The backend is chosen from runtime context -- there is nothing to enable in
-code (D-01/TRUST-05).** `selectBackend` has FOUR outcomes, not a binary
+code (D-01/TRUST-05).** `selectBackend` has FIVE outcomes, not a binary
 read-write-versus-reader switch:
 
-| Context                                                               | Backend                                | Observable behavior                                                                                   |
-| --------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Untrusted (a developer machine, a fresh runner, an untrusted trigger) | read-only GitHub Releases **reader**   | reads resolve from the mirror; a `put()` always returns `403`                                         |
-| Trusted, but `GITHUB_REPOSITORY` is malformed                         | none -- it **throws**                  | fail-closed: the server does not start, rather than resolve into another repository's cache namespace |
-| Trusted, valid identity, but no resolvable token                      | an **empty read-only memory backend**  | **every read is a permanent MISS and every write a `403`, silently -- no error**                      |
-| Trusted, valid identity, resolvable token                             | the writable **Actions-cache backend** | full read-write caching                                                                               |
+| Context                                                                                                   | Backend                                 | Observable behavior                                                                                   |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Untrusted (a developer machine, a fresh runner, an untrusted trigger)                                     | read-only GitHub Releases **reader**    | reads resolve from the mirror; a `put()` always returns `403`                                         |
+| Trusted, but `GITHUB_REPOSITORY` is malformed                                                             | none -- it **throws**                   | fail-closed: the server does not start, rather than resolve into another repository's cache namespace |
+| Trusted, valid identity, but no resolvable token                                                          | an **empty read-only memory backend**   | **every read is a permanent MISS and every write a `403`, silently -- no error**                      |
+| Trusted, valid identity, resolvable token                                                                 | the writable **Actions-cache backend**  | full read-write caching                                                                               |
+| Trusted, valid identity, resolvable token, plus [`CACHE_READ_ONLY`](configuration.md#cache_read_only) set | the read-only **Actions-cache backend** | reads resolve from the real Actions cache; a `put()` always returns `403`                             |
 
 The third row is the one adopters actually hit: a trusted CI trigger with no
 `GH_TOKEN` / `GITHUB_TOKEN` wired does not fail -- it degrades to an empty backend

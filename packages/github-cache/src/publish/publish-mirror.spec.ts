@@ -298,6 +298,42 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
     // A benign already-exists is NOT a fault annotation.
     expect(core.warning).not.toHaveBeenCalled();
   });
+
+  it('counts a 422 that is NOT already_exists as a real fault, never a benign skip', async () => {
+    // THE NEGATIVE TWIN of the case above, and the one run 30767511870 needed. That run's
+    // month shard was created already-PUBLISHED under GitHub's immutable-releases setting,
+    // so every upload into it was rejected 422 -- permanently, and for a reason that is not
+    // a duplicate name (the shard held ZERO assets and the seed name is unique per run).
+    // Discriminating on `statusOf(error) === 422` ALONE counted 32 of 32 fatal rejections as
+    // `skipped`, left `failed` at 0, never reached the aggregate setFailed, and reported a
+    // mirror that wrote nothing as a GREEN publish leg -- the failure only surfaced one job
+    // later, in publish-verify, pointing at the wrong subsystem.
+    //
+    // `already_exists` is the ONLY 422 GitHub documents for this endpoint ("Response if you
+    // upload an asset with the same filename as another uploaded asset"), so it is the only
+    // one the first-write-wins no-op (D-05) may claim. Every other 422 is a fault.
+    const fake = client({
+      uploadReleaseAsset: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [{ resource: 'ReleaseAsset', code: 'immutable' }],
+        });
+      }),
+    });
+
+    const result = await publishMirror(fake);
+
+    expect(result).toEqual({
+      scanned: 1,
+      mirrored: 0,
+      skipped: 0,
+      readMisses: 0,
+      failed: 1,
+    });
+    // Annotated per item, and loud in aggregate -- the two halves that were both missing.
+    expect(core.warning).toHaveBeenCalledOnce();
+    expect(core.setFailed).toHaveBeenCalledOnce();
+  });
 });
 
 describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {

@@ -139,6 +139,38 @@ async function ensureShardRelease(
 }
 
 /**
+ * The shape of the only part of an upload fault's body this module reads. Declared
+ * rather than inlined so the cast below is one expression instead of four nested
+ * `typeof` guards; every field is optional because NONE of them is guaranteed.
+ */
+interface UploadFaultBody {
+  readonly response?: { readonly data?: { readonly errors?: unknown } };
+}
+
+/**
+ * GitHub's OWN reason code for a rejected upload, read from the 422 body's
+ * `errors[].code`, or undefined when the body is absent, is not the documented shape,
+ * or carries no string `code`.
+ *
+ * Undefined is NOT benign, and the call site must not treat it as such: a status-only
+ * classifier that guessed benign is the entire defect this function exists to close, so
+ * re-introducing the guess one level down -- "unreadable body, probably a duplicate" --
+ * would be the same bug with more steps. Only an explicit `already_exists` earns the skip.
+ * Optional chaining absorbs a null/undefined error and a primitive one alike, so no
+ * caller-side pre-check is needed.
+ */
+function uploadFaultCode(error: unknown): string | undefined {
+  const errors = (error as UploadFaultBody | null)?.response?.data?.errors;
+
+  return Array.isArray(errors)
+    ? errors.find(
+        (entry): entry is { code: string } =>
+          typeof (entry as { code?: unknown } | null)?.code === 'string',
+      )?.code
+    : undefined;
+}
+
+/**
  * The out-of-band publish/mirror engine (D-02/D-03/D-05/D-11/D-12, TEST-03,
  * ROBUST-01/02/05, TRUST-07, OBS-01). Enumerate default-branch Actions-cache entries,
  * mirror ONLY the server-produced keys via isServerProducedKey (D-16/D-08/TRUST-08),
@@ -176,11 +208,14 @@ async function ensureShardRelease(
  *   given hash the Actions cache holds exactly ONE entry, and every publish leg RESTORES
  *   that one entry and uploads it VERBATIM without re-executing the task, so the uploaded
  *   bytes are byte-identical no matter which leg wins the race. A duplicate-upload race
- *   returning 422 is likewise benign. A real per-item fault (401/403/429/5xx) is annotated
- *   and counted but isolated so the rest of the batch still mirrors (D-13 per-item vs
- *   whole-run). The residual -- arbitration between NON-identical payloads -- becomes
- *   reachable only once a SECOND producer exists, which is a later phase's write decision
- *   and not this one's (T-10-04).
+ *   is likewise benign -- but ONLY when GitHub's 422 body says `already_exists`. The 422
+ *   STATUS alone does not mean a duplicate, and reading it that way is what let a shard
+ *   that rejects every upload report a green publish leg (see the upload catch below).
+ *   A real per-item fault (401/403/429/5xx, and every non-already_exists 422) is
+ *   annotated and counted but isolated so the rest of the batch still mirrors (D-13
+ *   per-item vs whole-run). The residual -- arbitration between NON-identical payloads --
+ *   becomes reachable only once a SECOND producer exists, which is a later phase's write
+ *   decision and not this one's (T-10-04).
  * - Aggregate fail-loud (OBS-01/D-15): a nonzero `failed` count calls core.setFailed after
  *   the batch, so a systemic upload regression (a token whose permissions regressed, a
  *   sustained upload-phase outage) fails the job instead of reporting CI green -- mirroring
@@ -326,21 +361,37 @@ export async function publishMirror(
       shard.names.add(name);
       mirrored++;
     } catch (error) {
-      if (statusOf(error) === 422) {
-        // A duplicate-upload race (another leg wrote the same byte-identical name between
-        // our list and upload) returns 422 already_exists -- benign no-op (D-05),
-        // discriminated on status alone, never on body text.
+      const code = uploadFaultCode(error);
+
+      // D-05 first-write-wins: a duplicate-upload race (another leg wrote the same
+      // byte-identical name between our list and our upload) is a benign no-op -- but
+      // ONLY when GitHub says so. `already_exists` is the one 422 this endpoint
+      // documents, and the status ALONE does not mean it: GitHub returns 422 from
+      // /releases/{id}/assets for several distinct reasons, most of them permanent.
+      // Run 30767511870's month shard was created already-PUBLISHED under the repo's
+      // immutable-releases setting, so it accepts no assets ever; all 65 uploads (32
+      // ubuntu + 33 windows) were rejected 422, a status-only test counted every one as
+      // `skipped`, `failed` stayed 0, the aggregate setFailed below never fired, and both
+      // legs exited GREEN having mirrored nothing. The failure surfaced one job later in
+      // publish-verify, naming the wrong subsystem. An UNREADABLE body is not benign
+      // either -- it falls through to the fault branch, because guessing benign is the
+      // defect (see uploadFaultCode).
+      if (statusOf(error) === 422 && code === 'already_exists') {
         skipped++;
 
         continue;
       }
 
-      // A real per-item fault (401/403/429/5xx): annotate + count, but isolate it so the
-      // rest of the batch still mirrors (D-13). Only the asset name + numeric status are
-      // logged -- never a token, never a raw workflow-command string.
+      // A real per-item fault (401/403/429/5xx, and every non-already_exists 422):
+      // annotate + count, but isolate it so the rest of the batch still mirrors (D-13).
+      // The warning carries GitHub's own reason code alongside the asset name and status,
+      // so the next occurrence names itself in the job log instead of needing a body dive
+      // that the octokit request-log plugin makes impossible (it logs no response body).
+      // Only the name, the numeric status and that code are logged -- never a token,
+      // never a raw workflow-command string.
       failed++;
       core.warning(
-        `github-cache: failed to mirror ${name} (status ${statusOf(error) ?? 'unknown'}); continuing.`,
+        `github-cache: failed to mirror ${name} (status ${statusOf(error) ?? 'unknown'}, code ${code ?? 'unknown'}); continuing.`,
       );
     }
   }

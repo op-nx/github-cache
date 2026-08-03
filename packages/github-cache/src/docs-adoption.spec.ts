@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { EXPECTED_ENV_KNOBS } from './test/consumer-contract.js';
+import {
+  EXPECTED_ENV_KNOBS,
+  EXPECTED_TYPE_EXPORTS,
+  EXPECTED_VALUE_EXPORTS,
+} from './test/consumer-contract.js';
 
 /**
  * DOCS-01/02/04/06 adoption-docs content guard.
@@ -82,6 +86,25 @@ describe('versioning.md documents every consumer env knob (DOCS-02/DOCS-05)', ()
   it.each(EXPECTED_ENV_KNOBS)('lists env knob %s', (knob) => {
     expect(versioning).toContain(knob);
   });
+
+  // GROUP (c), ON THE SAME FOOTING, and this is the generalization the comment above
+  // never got. public-surface.spec.ts pinned the exports against the CODE and this
+  // describe pinned only the knobs against the PROSE, so the exports had no prose pin
+  // at all -- and versioning.md named four of the six for as long as ReadableBackend
+  // and WritableBackend had existed.
+  //
+  // Two accepted limits, both cheaper than engineering around:
+  // - `toContain` is a substring match, so `CacheBackend` is also satisfied by
+  //   `createCacheBackend`. The env-knob clause above already accepts that weakness;
+  //   a presence guard is the right rung for prose.
+  // - Scoped to versioning.md ALONE -- the doc that CLAIMS to define the contract.
+  //   Widening to README.md or configuration.md would churn on ordinary prose edits.
+  it.each([...EXPECTED_VALUE_EXPORTS, ...EXPECTED_TYPE_EXPORTS])(
+    'lists package export %s',
+    (exportName) => {
+      expect(versioning).toContain(exportName);
+    },
+  );
 });
 
 describe('documented snippets mask the bearer token before writing $GITHUB_ENV (F17)', () => {

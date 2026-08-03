@@ -12,7 +12,8 @@ The versioned contract is the CONSUMER surface only -- exactly three groups
 
 1. **Package exports.** The value and type exports re-exported from the package
    entry (`index.ts`): `createCacheServer` and the `CacheBackend`, `GetHit`,
-   `GetResult`, and `PutResult` port types.
+   `GetResult`, `PutResult`, `ReadableBackend`, and `WritableBackend` port
+   types.
 2. **Consumer action inputs.** The inputs of the `uses:`-consumable
    `start-cache-server` JS action.
 3. **Consumer env knobs.** The environment variables an adopter sets:

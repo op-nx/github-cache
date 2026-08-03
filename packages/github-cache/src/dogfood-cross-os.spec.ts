@@ -1651,7 +1651,60 @@ describe('ci.yml keeps exactly the two record-only diagnostics XOS-09 did not co
  * `ci.yml` mentions `::add-mask::` in three separate prose comments explaining the
  * rule, so a raw read would count 11 and the pairing would be garbage.
  */
+/**
+ * THE OTHER DIRECTION OF THE SAME KNOB, and the one no clause read. The three per-leg
+ * `readOnlyLeg` clauses assert `CACHE_READ_ONLY` is PRESENT on each Windows consumer. What
+ * makes those three gates SOUND is the complementary fact -- that the ubuntu PRODUCERS do
+ * not carry it -- and `ci.yml` states that premise in prose at the build-windows block
+ * ("one line the ubuntu producers deliberately do not carry") while nothing enforced it.
+ *
+ * WHAT A SPREAD COSTS, stated as the consequence. Copy the knob into the ubuntu
+ * build/typecheck/test pre-set step during a sweep, or hoist the three copies to a
+ * workflow-level `env:` block -- the natural "dedupe this" cleanup -- and every producer
+ * stops writing. The Actions cache stops being repopulated on the default branch, the
+ * publish job enumerates less each month, and the Releases mirror quietly stops being
+ * seeded.
+ *
+ * THE WINDOWS GATES DO NOT CATCH IT, which is why this clause is not redundant with them.
+ * Since the Case-B widening a leg legitimately restores from the DEFAULT-branch scope, so an
+ * entry written by an earlier run keeps all three floor-of-1 gates green until the eviction
+ * window closes -- and all three `readOnlyLeg` clauses stay green too, because each is
+ * block-scoped presence only and says nothing about any other job.
+ *
+ * COUNT PINNED EXACTLY, never a floor, for the reason `MASKED_TOKEN_SITES` and
+ * `RECORD_ONLY_SURVIVOR_SITES` are: a floor of 3 is satisfied by the three consumers alone
+ * and would let a fourth site appear in silence, which is the whole failure mode. FEWER
+ * means a consumer lost its knob and its gate went unsound. MEASURED against the
+ * comment-stripped file -- 3 stripped, 9 raw -- not predicted, and the strip is load-bearing
+ * here in the usual direction: six of the nine raw occurrences are prose explaining the
+ * rule. If a leg is legitimately added or removed, RE-MEASURE and update this constant HERE
+ * in the same commit.
+ */
+const READ_ONLY_LEG_SITES = 3;
+
 const MASKED_TOKEN_SITES = 8;
+
+describe('ci.yml keeps the read-only knob on the CONSUMERS only (XOS-09, TRUST-14)', () => {
+  it('carries CACHE_READ_ONLY on exactly the three Windows legs, so no producer stops writing', () => {
+    const sites = codeLines.filter((line) => line.includes('CACHE_READ_ONLY'));
+
+    expect(
+      sites,
+      `Expected exactly ${READ_ONLY_LEG_SITES} CACHE_READ_ONLY sites in the comment-stripped ` +
+        '`ci.yml` -- one per Windows consumer leg, and NONE on the ubuntu producers. MORE ' +
+        'means a producer has been given the knob (a copy-paste sweep, or a "dedupe the three ' +
+        'copies" hoist to a workflow-level `env:` block): that producer stops writing, the ' +
+        'Actions cache stops being repopulated on the default branch, and the Releases mirror ' +
+        'quietly stops being seeded. The three floor-of-1 gates do NOT catch it -- since the ' +
+        'Case-B widening a leg legitimately restores from the DEFAULT-branch scope, so an ' +
+        'entry from an earlier run keeps them green until eviction. FEWER means a consumer ' +
+        'lost its knob, which makes that leg a WRITER and its own gate launderable by a ' +
+        're-run. Pinned exactly rather than as a floor for the same reason MASKED_TOKEN_SITES ' +
+        'is. If a leg was legitimately added or removed, RE-MEASURE and update ' +
+        'READ_ONLY_LEG_SITES in the same commit.',
+    ).toHaveLength(READ_ONLY_LEG_SITES);
+  });
+});
 
 describe('ci.yml masks the sidecar token before writing it (T-12-05)', () => {
   it('every sidecar block registers the token for redaction BEFORE it reaches $GITHUB_ENV', () => {

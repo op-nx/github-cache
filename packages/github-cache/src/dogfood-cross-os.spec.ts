@@ -1684,6 +1684,83 @@ const READ_ONLY_LEG_SITES = 3;
 
 const MASKED_TOKEN_SITES = 8;
 
+/**
+ * THE ORDERING THE KNOB DEPENDS ON, which is exactly one line wide and was guarded by
+ * nothing. `$GITHUB_ENV` is processed only when the WRITING STEP COMPLETES, so the echo has
+ * to land in a step that finishes BEFORE the sidecar starts. In `ci.yml` those are adjacent
+ * lines: the echo closes the pre-set step and `- uses: ./start-cache-server` opens the next.
+ *
+ * MOVE THE ECHO BELOW THE SIDECAR AND EVERY CLAUSE IN THIS FILE STAYS GREEN. The three
+ * `readOnlyLeg` clauses match `/^\s+echo "CACHE_READ_ONLY=1" >> "\$GITHUB_ENV"$/m` against
+ * the whole job block with a `\s+` prefix, so they are satisfied from ANY step at ANY indent;
+ * the new site-count clause below still counts three; and all three `gatedCount` clauses
+ * still find their comparison. Meanwhile the sidecar never sees the knob, `selectBackend`
+ * takes the writable branch, and the leg is a WRITER again -- so the gate keeps printing
+ * "GATED at a floor of 1" while being satisfiable by a self-produced entry on a re-run.
+ * That is precisely the defect XOS-09 was opened to close, reachable by moving one line.
+ *
+ * SCOPED PER JOB BLOCK, not paired across the whole file, and the distinction is load-
+ * bearing rather than stylistic. `ci.yml` carries EIGHT `- uses: ./start-cache-server` steps
+ * against three knob writes -- the other five belong to legs that legitimately WRITE -- so a
+ * whole-file positional pairing compares a leg's knob against some unrelated job's sidecar.
+ * Worse, it would still PASS the regression it exists to catch: move a knob below its own
+ * sidecar and the next job's sidecar is still further down the file, so a "first sidecar
+ * after this knob" pairing stays satisfied. Within one job block the comparison is exact.
+ *
+ * INDEX COMPARISON, not a `toMatch`, for the reason T-12-05's mask clause records:
+ * order-within-a-block is not something a single regex can read. Both directions fail loud --
+ * a deleted echo or a deleted sidecar trips its own positive control (-1), and a reordered
+ * pair inverts the comparison.
+ *
+ * A RUNTIME PROBE WOULD BE STRONGER AND IS DELIBERATELY NOT USED. A `curl -X PUT` expecting
+ * the contract's 403 would observe the CONSTRUCTED backend rather than the YAML that selects
+ * it. But on the failure it exists to detect the backend is WRITABLE, so the probe itself
+ * would STORE an entry under a valid server-produced key -- which `publish-mirror` would
+ * then enumerate and mirror to the public Releases shard. A control that corrupts the store
+ * on exactly the run it fires is not worth the strength. The behavioural half is covered
+ * instead by select-backend.spec.ts, which drives the real `selectBackend` on the real knob.
+ */
+describe('ci.yml starts each sidecar AFTER its leg declined the write (XOS-09, TRUST-14)', () => {
+  it.each(['build-windows', 'typecheck-windows', 'test-windows'])(
+    '%s writes CACHE_READ_ONLY in a step that COMPLETES before its sidecar step begins',
+    (leg) => {
+      const block = jobBlock(leg).split('\n');
+      const knobAt = block.findIndex((line) =>
+        /^\s+echo "CACHE_READ_ONLY=1" >> "\$GITHUB_ENV"$/.test(line),
+      );
+      const sidecarAt = block.findIndex((line) =>
+        /^ {6}- uses: \.\/start-cache-server$/.test(line),
+      );
+
+      // POSITIVE CONTROLS FIRST, both needed: two -1s compare equal-and-not-less, so
+      // without these the ordering assertion below would report a MISSING knob as a
+      // correctly ordered one.
+      expect(
+        knobAt,
+        `${leg} has no CACHE_READ_ONLY write at all, so its floor-of-1 gate is unsound -- ` +
+          'see the readOnlyLeg clause for why, and restore the line rather than this clause.',
+      ).toBeGreaterThanOrEqual(0);
+
+      expect(
+        sidecarAt,
+        `${leg} has no \`- uses: ./start-cache-server\` step, so it has no remote cache ` +
+          'client and this ordering assertion has no subject.',
+      ).toBeGreaterThanOrEqual(0);
+
+      expect(
+        knobAt,
+        `${leg} starts its sidecar at block line ${sidecarAt} but writes CACHE_READ_ONLY at ` +
+          `block line ${knobAt} -- at or AFTER it. $GITHUB_ENV is processed only when the ` +
+          'WRITING step completes, so a knob written at or after the sidecar step never ' +
+          'reaches the sidecar: selectBackend takes the writable branch, the leg becomes a ' +
+          'WRITER, and its floor-of-1 gate is launderable by a re-run again -- while every ' +
+          'other clause in this file stays green, because none of them reads the order. The ' +
+          'fix is to move the echo back above the sidecar step, never to relax this clause.',
+      ).toBeLessThan(sidecarAt);
+    },
+  );
+});
+
 describe('ci.yml keeps the read-only knob on the CONSUMERS only (XOS-09, TRUST-14)', () => {
   it('carries CACHE_READ_ONLY on exactly the three Windows legs, so no producer stops writing', () => {
     const sites = codeLines.filter((line) => line.includes('CACHE_READ_ONLY'));

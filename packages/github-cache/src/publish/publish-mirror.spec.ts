@@ -432,7 +432,108 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
     // call, so a re-GET would turn the whole run green rather than merely red elsewhere.
     expect(getReleaseByTag).toHaveBeenCalledOnce();
     expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
+    // A BARE `rejects.toThrow()` IS NOT ENOUGH, twice over. It is satisfied by any throw,
+    // including one raised BEFORE createRelease is ever reached -- so the call that this
+    // case is about has to be asserted to have happened at all. And it says nothing about
+    // whether the fault was LOGGED: a regression that throws on the unreadable body without
+    // calling core.error loses B2's instrument on exactly the path B1 was measured on, and
+    // would otherwise stay green here. The rejection is the fail-closed half; the log is
+    // the diagnosable half, and this task exists because the second one was missing.
+    expect(fake.createRelease).toHaveBeenCalledOnce();
+    expect(core.error).toHaveBeenCalledOnce();
   });
+
+  it('names GitHub own top-level message when the 422 body carries NO errors array', async () => {
+    // THE MOST PLAUSIBLE SHAPE FOR THE NEXT PRODUCTION WINDOW, and it had zero coverage.
+    // Every other 422 fixture in this file carries a full `errors[]` or no body at all, so
+    // the `data.message` fallback -- an explicit claim in the reader's docstring -- was
+    // never entered. A ruleset rejection that arrives with a top-level message and nothing
+    // else is exactly the body a scarce verification window would be spent reading.
+    const fake = client({
+      getReleaseByTag: vi.fn(async () => {
+        throw octokitFault(404);
+      }),
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Tag name cannot be reused under this ruleset',
+        });
+      }),
+    });
+
+    await expect(publishMirror(fake, { now: NOW })).rejects.toThrow();
+
+    expect(core.error).toHaveBeenCalledOnce();
+    const logged = vi.mocked(core.error).mock.calls[0][0];
+    expect(logged).toContain('code unknown');
+    expect(logged).toContain('Tag name cannot be reused under this ruleset');
+  });
+
+  /**
+   * THE FAIL-CLOSED FRONTIER, enumerated. The reader's docstring claims that an absent
+   * body, a body that is not the documented shape, and a body carrying nothing readable
+   * ALL land on `code === undefined` and therefore on the fault branch -- "undefined is
+   * NOT benign, and no call site may treat it as such". Only two of those shapes had a
+   * case. These are the rest, and each mock is primed to RESOLVE the second
+   * getReleaseByTag: a re-GET on a guess does not merely redden somewhere else, it turns
+   * the whole run GREEN, which is the failure mode run 30773689490 actually shipped.
+   */
+  it.each([
+    ['no body at all', undefined],
+    ['an empty object', {}],
+    ['an EMPTY errors array', { errors: [] }],
+    ['a non-array errors field', { errors: 'nope' }],
+    ['an entry whose code is not a string', { errors: [{ code: 7 }] }],
+  ])(
+    'REJECTS a createRelease 422 carrying %s, and never re-GETs on the guess',
+    async (_label, body) => {
+      const getReleaseByTag = vi
+        .fn<PublishClient['getReleaseByTag']>()
+        .mockRejectedValueOnce(octokitFault(404))
+        .mockResolvedValueOnce({ id: SHARD_ID });
+      const fake = client({
+        getReleaseByTag,
+        createRelease: vi.fn(async () => {
+          throw octokitFault(422, body);
+        }),
+      });
+
+      await expect(publishMirror(fake, { now: NOW })).rejects.toThrow();
+
+      expect(getReleaseByTag).toHaveBeenCalledOnce();
+      expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
+      expect(core.error).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a bare string', 'boom'],
+  ])(
+    'REJECTS a createRelease that throws %s -- a non-object fault is not a race either',
+    async (_label, thrown) => {
+      // Optional chaining in the reader absorbs a null/undefined/primitive fault, so no
+      // caller-side pre-check exists to protect this path -- which is precisely why it
+      // needs a case. `rejects.toBe` rather than `rejects.toThrow`: the engine rethrows the
+      // ORIGINAL value, and toThrow cannot express a rejection that is not an Error.
+      const getReleaseByTag = vi
+        .fn<PublishClient['getReleaseByTag']>()
+        .mockRejectedValueOnce(octokitFault(404))
+        .mockResolvedValueOnce({ id: SHARD_ID });
+      const fake = client({
+        getReleaseByTag,
+        createRelease: vi.fn(async () => {
+          throw thrown;
+        }),
+      });
+
+      await expect(publishMirror(fake, { now: NOW })).rejects.toBe(thrown);
+
+      expect(getReleaseByTag).toHaveBeenCalledOnce();
+      expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
+      expect(core.error).toHaveBeenCalledOnce();
+    },
+  );
 
   it('REJECTS a POLICY 422 and names the tag, the code AND GitHub own message in one core.error line (B2)', async () => {
     // B2 in one clause. GitHub's `errors[].code` enum is GLOBAL and six-membered, and a

@@ -307,6 +307,64 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
     expect(core.warning).not.toHaveBeenCalled();
   });
 
+  // THE MULTI-ENTRY BODY, which neither of the two cases around this one constructs -- both
+  // are single-entry, which is exactly how the order-dependence survived. The discriminator
+  // reads the WHOLE errors array (hasFaultCode), so the verdict cannot turn on which entry
+  // GitHub happened to put first.
+  //
+  // This is the SILENT-GREEN direction and the more dangerous of the two: with a first-code
+  // read, the `already_exists` at index 0 wins, every permanently-rejected upload counts as
+  // `skipped`, `failed` stays 0, the aggregate setFailed never fires, and the leg exits
+  // GREEN having mirrored nothing -- the shape of run 30767511870, one entry over.
+  it('does not let an already_exists entry mask a fatal sibling in the SAME body', async () => {
+    const fake = client({
+      uploadReleaseAsset: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [
+            { resource: 'ReleaseAsset', code: 'already_exists' },
+            {
+              resource: 'ReleaseAsset',
+              code: 'custom',
+              message: 'Release assets are immutable under this ruleset',
+            },
+          ],
+        });
+      }),
+    });
+
+    const result = await publishMirror(fake);
+
+    // Still a benign skip: GitHub DID say already_exists, and D-05's first-write-wins no-op
+    // is what that means. The property under test is that the answer is the same whichever
+    // order the entries arrive in -- asserted by its twin below.
+    expect(result.skipped).toBe(1);
+    expect(result.failed).toBe(0);
+  });
+
+  it('reaches the same verdict when already_exists is NOT the first entry', async () => {
+    const fake = client({
+      uploadReleaseAsset: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [
+            { resource: 'ReleaseAsset', code: 'custom', message: 'decoy' },
+            { resource: 'ReleaseAsset', code: 'already_exists' },
+          ],
+        });
+      }),
+    });
+
+    const result = await publishMirror(fake);
+
+    // The half that fails CLOSED under a first-code read: `custom` would win, the genuine
+    // duplicate-upload race would be counted as a fault, and the publish job would redden on
+    // a race D-05 defines as benign. Order-independence is the whole claim.
+    expect(result.skipped).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(core.warning).not.toHaveBeenCalled();
+  });
+
   it('counts a 422 that is NOT already_exists as a real fault, never a benign skip', async () => {
     // THE NEGATIVE TWIN of the case above, and the one run 30767511870 needed. That run's
     // month shard was created already-PUBLISHED under GitHub's immutable-releases setting,

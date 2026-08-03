@@ -101,6 +101,39 @@ export function faultReason(error: unknown): FaultReason {
 }
 
 /**
+ * Does ANY `errors[]` entry carry exactly this code?
+ *
+ * WHY THIS EXISTS AND `faultReason().code` DOES NOT COVER IT. That lookup returns the FIRST
+ * string code anywhere in the array, which is the right answer for a log line -- one code to
+ * print -- and the wrong one for a DECISION, because it is order-dependent in both
+ * directions. It is also asymmetric with the same function's `message`, which deliberately
+ * scans the WHOLE array; the code lookup reads like it does the same and does not.
+ *
+ * Both directions are real on a multi-entry body, and the benign one is worse:
+ * `[{code:'already_exists'}, {code:'custom', message:'Release assets are immutable under
+ * this ruleset'}]` resolves to `already_exists` from entry 0, so a caller treats a permanent
+ * policy rejection as a duplicate no-op, `failed` stays 0, and the leg exits GREEN having
+ * mirrored nothing -- verbatim the shape of run 30767511870, which is the run that caused
+ * status-only discrimination to be removed in the first place. The other direction merely
+ * fails closed: an unrelated earlier code makes a genuine duplicate-upload race fatal.
+ *
+ * A BOOLEAN, not a code, and deliberately not a general "codes()" accessor: every caller
+ * asks a yes/no question about ONE documented code, and returning the set would just move
+ * the order-dependence into the call sites. The name says what it proves -- GitHub SAID
+ * this -- which keeps the module's rule intact: only an explicit code earns a benign branch,
+ * and an unreadable body still earns none.
+ */
+export function hasFaultCode(error: unknown, code: string): boolean {
+  const raw = (error as FaultBody | null)?.response?.data?.errors;
+  const errors: unknown[] = Array.isArray(raw) ? raw : [];
+
+  return errors.some(
+    (entry) =>
+      stringOrUndefined((entry as { code?: unknown } | null)?.code) === code,
+  );
+}
+
+/**
  * The message of the FIRST `errors[]` entry scoped to a given `field`, or undefined.
  *
  * WHY THIS EXISTS AND `faultReason().message` DOES NOT COVER IT. That lookup returns the

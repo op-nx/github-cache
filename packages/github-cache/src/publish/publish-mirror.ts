@@ -10,6 +10,7 @@ import {
 import {
   faultMessageForField,
   faultReason,
+  hasFaultCode,
 } from '../lib/octokit-fault-reason.js';
 import { statusOf } from '../lib/octokit-status.js';
 import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
@@ -159,7 +160,12 @@ async function ensureShardRelease(
   } catch (error) {
     const reason = faultReason(error);
 
-    if (statusOf(error) === 422 && reason.code === 'already_exists') {
+    // SCANNED ACROSS THE WHOLE `errors[]`, never `reason.code`, which is the FIRST string
+    // code anywhere in the array and therefore order-dependent in both directions. See
+    // hasFaultCode: an `already_exists` sitting behind an unrelated earlier code would make
+    // a genuine create race fatal here, killing the run on the one case this branch exists
+    // to absorb.
+    if (statusOf(error) === 422 && hasFaultCode(error, 'already_exists')) {
       // GUARDED, even on a genuine race. This re-GET is a read-after-write: it can 404
       // transiently right after another leg's create, and get-by-tag does not resolve
       // DRAFT releases at all. Unguarded it propagates octokit's bare "Not Found", which
@@ -477,7 +483,14 @@ export async function publishMirror(
       // publish-verify, naming the wrong subsystem. An UNREADABLE body is not benign
       // either -- it falls through to the fault branch, because guessing benign is the
       // defect (see `lib/octokit-fault-reason.ts`).
-      if (statusOf(error) === 422 && reason.code === 'already_exists') {
+      // SCANNED ACROSS THE WHOLE `errors[]` (see hasFaultCode), never `reason.code`. The
+      // benign direction is the dangerous one here: with an order-dependent read, an
+      // `already_exists` entry sitting AHEAD of a `custom` immutability rejection makes
+      // every rejected upload count as `skipped`, `failed` stays 0, the aggregate setFailed
+      // below never fires, and the leg exits GREEN having mirrored nothing -- which is run
+      // 30767511870, the run this whole branch was rewritten for. `reason` is still read
+      // just below, for the log line, where FIRST-code is the right answer.
+      if (statusOf(error) === 422 && hasFaultCode(error, 'already_exists')) {
         skipped++;
 
         continue;

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { faultMessageForField, faultReason } from './octokit-fault-reason.js';
+import {
+  faultMessageForField,
+  faultReason,
+  hasFaultCode,
+} from './octokit-fault-reason.js';
 
 /**
  * The body half of the fault contract, tested at its own leaf rather than only through the
@@ -93,6 +97,62 @@ describe("faultReason reads GitHub's own reason out of the body (ROBUST-01, D-04
       message: undefined,
     });
   });
+});
+
+describe('hasFaultCode scans the WHOLE errors array (D-05, ROBUST-01)', () => {
+  // THE ORDER-DEPENDENCE THIS FUNCTION EXISTS TO REMOVE, in both directions. Neither call
+  // site had coverage for a multi-entry array, which is how it survived: every existing
+  // case was single-entry, empty, non-array or non-string.
+  //
+  // The BENIGN direction is the dangerous one. With a first-code read, an `already_exists`
+  // ahead of a `custom` immutability rejection makes a permanent policy failure count as a
+  // duplicate no-op -- `failed` stays 0, the aggregate setFailed never fires, and the leg
+  // exits GREEN having mirrored nothing. That is run 30767511870.
+  it('finds the code behind an unrelated entry, where a first-code read fails CLOSED', () => {
+    const error = bodyOf({
+      errors: [
+        { code: 'custom', message: 'decoy' },
+        { code: 'already_exists' },
+      ],
+    });
+
+    expect(hasFaultCode(error, 'already_exists')).toBe(true);
+    // The contrast that names the defect: the log-line accessor still reports the FIRST
+    // code, which is correct for a log and wrong for a decision.
+    expect(faultReason(error).code).toBe('custom');
+  });
+
+  it('does NOT report the code from an entry that merely precedes a real one', () => {
+    const error = bodyOf({
+      errors: [
+        { code: 'already_exists' },
+        {
+          code: 'custom',
+          message: 'Release assets are immutable under this ruleset',
+        },
+      ],
+    });
+
+    // True is CORRECT here -- GitHub did say already_exists. The point of the pairing is
+    // that the verdict no longer depends on WHICH entry came first.
+    expect(hasFaultCode(error, 'already_exists')).toBe(true);
+    expect(hasFaultCode(error, 'unprocessable')).toBe(false);
+  });
+
+  it.each([
+    ['an absent body', undefined],
+    ['a null body', null],
+    ['errors that are not an array', bodyOf({ errors: 'nope' })],
+    ['an empty errors array', bodyOf({ errors: [] })],
+    ['a primitive entry', bodyOf({ errors: [42] })],
+    ['a non-string code', bodyOf({ errors: [{ code: 7 }] })],
+    ['a top-level message only', bodyOf({ message: 'already_exists' })],
+  ])(
+    'returns false for %s -- an unreadable body earns no benign branch',
+    (_s, error) => {
+      expect(hasFaultCode(error, 'already_exists')).toBe(false);
+    },
+  );
 });
 
 describe('faultMessageForField scopes the lookup to one entry (ROBUST-01)', () => {

@@ -599,6 +599,38 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
     );
   });
 
+  // THE GUARD ABOVE ONLY RUNS IF THE STEP SURVIVES THE REQUEST, and neither curl carried
+  // the swallow that lets it. This is the THIRD site in ci.yml to miss the same rule -- the
+  // integration job's positive control records it at length after its absence defeated that
+  // control on the ONE case it exists to detect -- so it is pinned here rather than left to
+  // be re-learned a fourth time. COUNT-PAIRED rather than matched once: a floor would be
+  // satisfied by whichever call still has it while the other silently aborts the step.
+  it('swallows a TRANSPORT fault on BOTH REST calls, so a verdict always reaches the log', () => {
+    const block = jobBlock('o3-witness');
+    const curls = (block.match(/curl -s --max-time 30/g) ?? []).length;
+    const swallows = (block.match(/ \|\| true\)/g) ?? []).length;
+
+    // POSITIVE CONTROL: two zeroes are trivially equal, so prove the calls exist first.
+    expect(
+      curls,
+      'o3-witness issues no `curl -s --max-time 30` REST call at all, so the pairing below ' +
+        'has no subject and this clause cannot be evaluated.',
+    ).toBe(2);
+
+    expect(
+      swallows,
+      `o3-witness has ${swallows} \`|| true)\` swallows for ${curls} curl calls. curl exits ` +
+        'non-zero for TRANSPORT faults that produce no body -- 7 connection refused, 28 on ' +
+        'the --max-time ceiling, 6 DNS, 35 TLS -- and a command substitution INHERITS that ' +
+        'status, so under `set -euo pipefail` the step aborts BEFORE its own array guard can ' +
+        "run. `-s` has already suppressed curl's message, so the o3 proof then reads as a " +
+        'bare non-zero exit naming no subsystem: the misattributing wrong-cause report this ' +
+        'whole witness was corrected for, arriving one line ABOVE the guard that prevents it. ' +
+        'An empty body is measured to reach that guard correctly. Restore the swallow; never ' +
+        'relax this clause.',
+    ).toBe(curls);
+  });
+
   it('EXCLUDES a row with no created_at before sorting, so a timeless row cannot win', () => {
     expect(
       jobBlock('o3-witness'),

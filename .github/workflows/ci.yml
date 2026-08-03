@@ -1299,8 +1299,29 @@ jobs:
             # is the same wrong-cause report the sibling block was corrected for. jq's own
             # parse error still reaches stderr alongside the verdict -- that is extra
             # evidence, not noise, so it is deliberately not suppressed.
+            # THE `|| true` IS LOAD-BEARING HERE FOR THE REASON THE INTEGRATION JOB'S
+            # POSITIVE CONTROL ALREADY RECORDS, and this call did not inherit it either.
+            # curl exits non-zero for TRANSPORT faults that never produce a body -- 7
+            # connection refused, 28 on the `--max-time 30` ceiling, 6 DNS, 35 TLS -- and the
+            # command substitution INHERITS that status, so `set -e` aborts the step BEFORE
+            # the array guard below can run. `-s` has already suppressed curl's own message,
+            # so the o3 proof would read as a bare non-zero exit naming no subsystem: exactly
+            # what the guard below exists to prevent, defeated from one line above it.
+            # Swallowing the exit lets the EMPTY body reach that guard, which is measured to
+            # handle it -- jq returns nothing, the capture is empty, `!= "ok"` fires and the
+            # explanatory message reaches the log. This job's own `if: !cancelled()` condition
+            # guarantees it runs even on a failed integration leg, which is the run where an
+            # operator most needs a verdict rather than a bare exit code.
+            #
+            # NEVER write a workflow EXPRESSION in its brace-template form anywhere inside a
+            # `run:` body, not even in a shell comment. GitHub templates the whole body before
+            # the shell ever sees it, so a commented expression is still EVALUATED -- and
+            # status functions like `cancelled()` do not exist outside an `if:`, so it rejects
+            # the entire file with "Unrecognized function: 'cancelled'" and NOT ONE job starts.
+            # Measured the hard way: this very comment did exactly that. Name such conditions
+            # in prose, as the line above now does. A spec clause counts these to zero.
             caches_body=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
-              "${api}/actions/caches?key=${key}&per_page=100")
+              "${api}/actions/caches?key=${key}&per_page=100" || true)
             if [ "$(printf '%s' "${caches_body}" | jq -r 'if (.actions_caches | type) == "array" then "ok" else "bad" end')" != "ok" ]; then
               echo "o3-witness: FAIL -- the caches API returned no \`actions_caches\` array, so nothing was read about the entry at all. This is an API, rate-limit or permissions fault, NOT evidence about the entry and NOT attributable to the Windows MISS." >&2
               exit 1
@@ -1361,8 +1382,11 @@ jobs:
             step=''
             page=1
             while [ "${page}" -le 20 ]; do
+              # `|| true` for the same transport reason as the caches query above -- and it
+              # matters MORE inside this loop, where an abort also discards the pages already
+              # walked, so a mid-walk timeout reports nothing about the pages that did return.
               body=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
-                "${api}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100&page=${page}")
+                "${api}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100&page=${page}" || true)
               if [ "$(printf '%s' "${body}" | jq -r 'if (.jobs | type) == "array" then "ok" else "bad" end')" != "ok" ]; then
                 echo "o3-witness: FAIL -- the jobs API returned no \`jobs\` array on page ${page}, so the run's job list was never read. This is an API or permissions fault, not a rename and not a missing step." >&2
                 exit 1

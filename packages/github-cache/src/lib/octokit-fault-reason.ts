@@ -79,3 +79,50 @@ export function faultReason(error: unknown): FaultReason {
       stringOrUndefined(data?.message),
   };
 }
+
+/**
+ * The message of the FIRST `errors[]` entry scoped to a given `field`, or undefined.
+ *
+ * WHY THIS EXISTS AND `faultReason().message` DOES NOT COVER IT. That lookup returns the
+ * first entry carrying a message ANYWHERE in the array, which is the right answer when a
+ * caller wants "whatever GitHub said" for a log line -- but the wrong one when a caller
+ * needs a SPECIFIC entry's message to decide something. On the measured createRelease
+ * rejection for a burned tag name the array arrives as
+ * [pre_receive, tag_name, <no field>], all three `code: custom`, so `faultReason().message`
+ * returns the `pre_receive` entry: a generic "Repository rule violations found / Cannot
+ * create ref due to creations being restricted" that reads exactly like a tag ruleset and
+ * is NOT the authoritative reason. A predicate written the obvious way, as a substring test
+ * against that message, could therefore never fire -- it would fail closed, so not
+ * dangerous, but it would ship a guard that cannot work and a verification window would
+ * read "the guard did not fire" instead of "the guard is wrong".
+ *
+ * Scoping on `field` is also what makes a caller's substring test structurally unable to
+ * match a neighbouring entry, which matters when one of those neighbours is a decoy whose
+ * own condition must stay fatal.
+ *
+ * A caller-SPECIFIC predicate does not belong here. This returns the message and nothing
+ * more; the one call site that needs it composes its own substring test, because a
+ * publisher-shaped `isBurnedTagName()` in a generic body reader would be an abstraction
+ * with exactly one consumer.
+ *
+ * Undefined on everything else -- absent body, `errors` missing or not an array, no entry
+ * with that field, an entry whose `message` is not a string. The 422 body is untrusted
+ * remote input (V5), and per this module's rule undefined is NOT benign: a caller must
+ * treat it as "GitHub did not say this", never as "probably fine".
+ */
+export function faultMessageForField(
+  error: unknown,
+  field: string,
+): string | undefined {
+  const raw = (error as FaultBody | null)?.response?.data?.errors;
+  const errors: unknown[] = Array.isArray(raw) ? raw : [];
+
+  return errors
+    .filter(
+      (entry) => (entry as { field?: unknown } | null)?.field === field,
+    )
+    .map((entry) =>
+      stringOrUndefined((entry as { message?: unknown } | null)?.message),
+    )
+    .find((message) => message !== undefined);
+}

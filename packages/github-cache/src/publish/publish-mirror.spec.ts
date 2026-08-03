@@ -609,6 +609,172 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
     expect(logged).not.toContain('Validation Failed');
   });
 
+  /**
+   * THE MEASURED BURNED-NAME PAYLOAD, verbatim from run 30796967020 and independently
+   * captured byte-for-byte from two unrelated public repositories ~10 months apart. All
+   * three entries, in the order GitHub sent them, `code: 'custom'` on every one -- which is
+   * why `code` cannot discriminate here and the guard has to read a MESSAGE.
+   *
+   * Split into named entries so the decoy-only and reworded cases below compose the SAME
+   * measured strings rather than restating them: a hand-edited second copy of the decoy is
+   * how a "the decoy stays fatal" case quietly stops testing the decoy.
+   */
+  const PRE_RECEIVE_DECOY = {
+    resource: 'Release',
+    code: 'custom',
+    field: 'pre_receive',
+    message:
+      'pre_receive Repository rule violations found\n\nCannot create ref due to creations being restricted.\n\n',
+  };
+  const BURNED_TAG_NAME_ENTRY = {
+    resource: 'Release',
+    code: 'custom',
+    field: 'tag_name',
+    message: 'tag_name was used by an immutable release',
+  };
+  const NO_VALID_TAG_ENTRY = {
+    resource: 'Release',
+    code: 'custom',
+    message: 'Published releases must have a valid tag',
+  };
+
+  it('SKIPS the whole shard ONCE when createRelease reports the tag name was burned by an immutable release', async () => {
+    // A1. The month-shard tag scheme reuses a name GitHub has permanently burned: an
+    // immutable release published that tag once, and after its deletion the NAME is still
+    // unusable (documented behaviour; the resurrection-attack note extends it past the
+    // repository). Nothing in this run can make the tag creatable, so failing the whole
+    // publish job buys nothing -- it just turns a shard that cannot exist into a red build.
+    // The leg SKIPS loudly instead, and `publish-verify` is the downstream red gate.
+    //
+    // THREE hashes, and the multiplicity is load-bearing twice over. The lazy shard resolve
+    // re-runs on EVERY iteration while `shard` is unset, so a skip that merely leaves it
+    // unset issues one createRelease and one warning PER HASH (32 on the measured ubuntu
+    // leg) -- exactly the noise this file's own fault comment argues against. And with a
+    // SINGLE hash the called-ONCE assertions below are vacuous: one hash calls createRelease
+    // once either way, so a one-hash fixture cannot see the sentinel at all.
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+        { key: 'nx-cache-cc33' },
+      ]),
+      getReleaseByTag: vi.fn(async () => {
+        throw octokitFault(404);
+      }),
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [
+            PRE_RECEIVE_DECOY,
+            BURNED_TAG_NAME_ENTRY,
+            NO_VALID_TAG_ENTRY,
+          ],
+        });
+      }),
+    });
+
+    const result = await publishMirror(fake, { now: NOW });
+
+    // The counts stay HONEST, which is the whole reason this is a skip and not a silent
+    // success: every scanned entry is accounted for as skipped, nothing reads as mirrored,
+    // and `failed` stays 0 so the aggregate setFailed does not fire. A skipped shard must
+    // never be indistinguishable from a healthy mirror -- the warning is the only thing
+    // that separates them, hence the called-ONCE assertion on it below.
+    expect(result).toEqual({
+      scanned: 3,
+      mirrored: 0,
+      skipped: 3,
+      readMisses: 0,
+      failed: 0,
+    });
+    expect(result.skipped).toBe(result.scanned);
+    // THE SENTINEL. One create attempt and one warning for the whole leg, not one per
+    // hash: a burned tag cannot become creatable mid-run, so the second probe could only
+    // ever repeat the first answer.
+    expect(fake.createRelease).toHaveBeenCalledOnce();
+    expect(core.warning).toHaveBeenCalledOnce();
+    const warned = vi.mocked(core.warning).mock.calls[0][0];
+    expect(warned).toContain(shardTag(NOW));
+    expect(warned).toContain('immutable release');
+    expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
+    // GREEN leg, deliberately. This is the stated Window A outcome: publish green with the
+    // warning, publish-verify red because nothing was mirrored for it to read back.
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  it('still FAILS the run on a 422 carrying ONLY the pre_receive ruleset entry -- the decoy is not a burned name', async () => {
+    // A2, and it is the load-bearing half of the pair. The decoy's wording ("Cannot create
+    // ref due to creations being restricted") reads exactly like a tag ruleset, and on the
+    // measured payload it is the FIRST entry -- so it is what `faultReason().message`
+    // returns. A guard that matched this wording would swallow a GENUINE creations-restricted
+    // ruleset, which must stay fatal: that one IS fixable, by a human editing repo settings.
+    //
+    // Excluded twice over, and both reasons are kept: structurally, its `field` is not
+    // `tag_name`, so the field-scoped reader never looks at its message; and textually, its
+    // message carries no `immutable release`.
+    const fake = client({
+      getReleaseByTag: vi.fn(async () => {
+        throw octokitFault(404);
+      }),
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [PRE_RECEIVE_DECOY],
+        });
+      }),
+    });
+
+    await expect(publishMirror(fake, { now: NOW })).rejects.toThrow();
+
+    expect(fake.createRelease).toHaveBeenCalledOnce();
+    expect(core.error).toHaveBeenCalledOnce();
+    expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
+  });
+
+  it('FAILS CLOSED when the tag_name entry is reworded past the substring, and the fatal log names THAT entry not the decoy', async () => {
+    // A3, two facts in one clause because they are the same fact from two sides.
+    //
+    // FAIL-CLOSED: the matched string is an UNDOCUMENTED vendor string (GitHub documents the
+    // immutability behaviour and never the error text), so a rewording is the expected way
+    // this guard dies. It has to die by throwing, never by skipping -- a rewording that took
+    // the skip path would turn every future create fault into a green leg.
+    //
+    // AND THE LOG NAMES THE RIGHT ENTRY. `faultReason().message` returns the first entry
+    // carrying a message, which on the measured payload is the DECOY -- so the fatal log
+    // printed the ruleset wording for exactly the failure it exists to diagnose. The
+    // authoritative entry is the `tag_name`-scoped one; the log now prefers it.
+    const fake = client({
+      getReleaseByTag: vi.fn(async () => {
+        throw octokitFault(404);
+      }),
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [
+            PRE_RECEIVE_DECOY,
+            {
+              resource: 'Release',
+              code: 'custom',
+              field: 'tag_name',
+              message: 'tag_name is reserved',
+            },
+          ],
+        });
+      }),
+    });
+
+    await expect(publishMirror(fake, { now: NOW })).rejects.toThrow();
+
+    // Asserted against the ONE captured argument, never as a negated
+    // `toHaveBeenCalledWith`. That form is satisfied when ANY ONE call fails to match, so it
+    // states "some call lacks the decoy" rather than "no call carries it" -- vacuous the
+    // moment this path emits a second log line.
+    expect(core.error).toHaveBeenCalledOnce();
+    const logged = vi.mocked(core.error).mock.calls[0][0];
+    expect(logged).toContain('tag_name is reserved');
+    expect(logged).not.toContain('Repository rule violations');
+  });
+
   it('names the tag when the re-read after a genuine already_exists itself 404s', async () => {
     // The re-GET is read-after-write against an endpoint that can 404 transiently and
     // that does not resolve DRAFT releases at all. Unguarded, it propagates octokit's

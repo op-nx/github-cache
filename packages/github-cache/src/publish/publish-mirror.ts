@@ -7,7 +7,10 @@ import {
   parseHash,
   type Hash,
 } from '../lib/cache-key.js';
-import { faultReason } from '../lib/octokit-fault-reason.js';
+import {
+  faultMessageForField,
+  faultReason,
+} from '../lib/octokit-fault-reason.js';
 import { statusOf } from '../lib/octokit-status.js';
 import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
 import { shardTag } from '../lib/retention.js';
@@ -123,11 +126,21 @@ export interface PublishOptions {
  * site by reasoning rather than by measuring it -- "the ensureShardRelease 422 branch is
  * untouched, that one is a genuine race" -- which is how the sibling became the next
  * blocker. When a defect CLASS is fixed, sweep every instance of it.
+ *
+ * ONE 422 IS NEITHER A RACE NOR A FAULT WORTH FAILING FOR: GitHub reporting that the tag
+ * NAME was used by an immutable release. That is permanent and unfixable from inside a run
+ * -- an immutable release published the name once and, per GitHub's documented behaviour,
+ * deleting the release does not release the name (the resurrection-attack note extends the
+ * burn past the repository). No retry, no other leg, and no later month can make THIS tag
+ * creatable, so failing the whole publish job converts a shard that cannot exist into a red
+ * build for every subsequent push. `undefined` therefore means "shard skipped, nothing
+ * mirrorable", and the caller warns ONCE and skips the rest of the batch. Everything else,
+ * including every other 422, still throws.
  */
 async function ensureShardRelease(
   client: PublishClient,
   tag: string,
-): Promise<number> {
+): Promise<number | undefined> {
   try {
     const release = await client.getReleaseByTag(tag);
 
@@ -163,6 +176,43 @@ async function ensureShardRelease(
       }
     }
 
+    // THE TAG NAME IS BURNED: skip the shard loudly instead of failing the run. The
+    // predicate is a 422 carrying an `errors[]` entry whose `field` is `tag_name` and whose
+    // message contains `immutable release` -- read through the FIELD-SCOPED accessor and not
+    // through `reason.message`, which returns the first entry carrying a message and on the
+    // measured payload is the `pre_receive` DECOY, so the obvious substring test could never
+    // have fired.
+    //
+    // `immutable release` and not the whole measured sentence: the wording is UNDOCUMENTED
+    // vendor text (GitHub documents the immutability behaviour and never the error string),
+    // so the substring has to survive a tense or voice change while staying unique to the
+    // immutability rejection. Not the bare word `immutable` either -- that would also match a
+    // future `tag_name`-scoped message about immutability that is not a burn.
+    //
+    // FAIL-CLOSED in every direction. A rewording, a dropped or renamed `field`, a
+    // non-string message, and an unreadable body all miss this predicate and fall through to
+    // the throw below. The `pre_receive` decoy is excluded TWICE, and both reasons are load
+    // bearing rather than one being a restatement: STRUCTURALLY its field is not `tag_name`,
+    // so the accessor never reads its message at all; and TEXTUALLY its message carries no
+    // `immutable release`. Its own condition -- a genuine creations-restricted ruleset -- is
+    // fixable by a human editing repo settings and must stay fatal.
+    //
+    // Only the tag, the numeric status and GitHub's OWN tag_name-entry message are logged --
+    // never a token, never a raw workflow-command string.
+    const burnedTagMessage = faultMessageForField(error, 'tag_name');
+
+    if (
+      statusOf(error) === 422 &&
+      burnedTagMessage !== undefined &&
+      burnedTagMessage.includes('immutable release')
+    ) {
+      core.warning(
+        `github-cache: month-shard release ${tag} cannot be created -- GitHub rejected the tag name (status 422, message ${burnedTagMessage}). The name is permanently burned by an immutable release, so this leg mirrors NOTHING and skips every entry rather than failing the run; publish-verify is the downstream signal. Rotate the month-shard tag scheme to a prefix whose names are not burned.`,
+      );
+
+      return undefined;
+    }
+
     // THIS FAULT THROWS while D-12's oversized-asset fault only counts, and the two are
     // not in contradiction -- they are the two halves of the whole-run-vs-per-item split
     // (D-13) this file already draws. An oversized asset is a PER-ITEM fault: the rest of
@@ -176,8 +226,15 @@ async function ensureShardRelease(
     //
     // Only the tag, the numeric status, GitHub's own code and GitHub's own message are
     // logged -- never a token, never a raw workflow-command string.
+    //
+    // The MESSAGE prefers the `tag_name`-scoped entry over `reason.message`, which is the
+    // first entry carrying one ANYWHERE in the array. On a payload carrying both entries
+    // that first one is the `pre_receive` decoy, so this log printed the generic ruleset
+    // wording for precisely the tag-name failure it exists to diagnose -- the string a future
+    // reader would take away from the job log. On a decoy-only payload the two are identical,
+    // so this is a strict improvement with no behaviour change where nothing was wrong.
     core.error(
-      `github-cache: createRelease ${tag} was rejected (status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${reason.message ?? 'unknown'}); this is NOT a create race -- only an explicit already_exists is.`,
+      `github-cache: createRelease ${tag} was rejected (status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${burnedTagMessage ?? reason.message ?? 'unknown'}); this is NOT a create race -- only an explicit already_exists is.`,
     );
 
     throw error;
@@ -283,6 +340,15 @@ export async function publishMirror(
   // were always set together) on the first restorable entry.
   let shard: { id: number; names: Set<string> } | undefined;
 
+  // A SECOND sentinel, and it cannot be folded into `shard`: both states leave `shard`
+  // undefined, and the lazy resolve below re-runs on EVERY iteration while it is. So a skip
+  // that only returned early would issue one createRelease and one warning PER HASH -- 32 on
+  // the measured ubuntu leg, 33 on windows -- which is exactly the noise this file's own
+  // fault comment argues against ("isolating it would produce 32 identical warnings -- noise,
+  // not signal"). A burned tag name cannot become creatable mid-run, so the second probe
+  // could only ever repeat the first answer.
+  let burnedShardTag = false;
+
   // OBS-03: producer attribution as Release METADATA, outside the lookup name, so it
   // survives a namespace change to the name itself. COMMENT-LOCKED, and the lock is the
   // load-bearing half -- what this value means is easy to overstate and the overstatement
@@ -341,8 +407,28 @@ export async function publishMirror(
       continue;
     }
 
+    // The shard's tag name is permanently burned (see ensureShardRelease): every remaining
+    // entry is unmirrorable for the same reason, so skip it with NO further API call. The
+    // counts stay honest -- `skipped` rises, `mirrored` stays 0, `failed` stays 0 -- so the
+    // aggregate setFailed below does not fire and the leg is GREEN by design, with the
+    // single warning as the only thing distinguishing it from a healthy run and
+    // publish-verify as the downstream red gate.
+    if (burnedShardTag) {
+      skipped++;
+
+      continue;
+    }
+
     if (shard === undefined) {
       const id = await ensureShardRelease(client, tag);
+
+      if (id === undefined) {
+        burnedShardTag = true;
+        skipped++;
+
+        continue;
+      }
+
       shard = { id, names: new Set(await client.listReleaseAssets(id)) };
     }
 

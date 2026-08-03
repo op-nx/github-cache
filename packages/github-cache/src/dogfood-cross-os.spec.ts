@@ -566,6 +566,26 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
     );
   });
 
+  it('GUARDS that the caches response IS an actions_caches array, like its jobs-API sibling', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The caches response must be proven to BE an `actions_caches` array before anything ' +
+        'is read out of it. MEASURED under `set -euo pipefail`: an error payload from that ' +
+        'endpoint (`{"message":"Not Found"}` on a permissions fault, ' +
+        '`{"message":"API rate limit exceeded"}`, or any non-JSON body) makes ' +
+        '`.actions_caches[]` fail -- `jq: error (at <stdin>:0): Cannot iterate over null ' +
+        '(null)` -- and the subshell exits 5, killing the step with NO `o3-witness:` ' +
+        'message at all. The jobs-API block thirty lines below guards this exact case by ' +
+        'name, and its own comment says the guard "is not defensive noise: without it an ' +
+        'error payload ... arrives at the absent-step message -- reintroducing exactly the ' +
+        'wrong-cause report this block was just corrected for". The caches call had the ' +
+        'same exposure and none of the protection. Gap bounded to the single message line, ' +
+        'for the reason the M4 block records.',
+    ).toMatch(
+      /if \[ "\$\(printf '%s' "\$\{caches_body\}" \| jq -r 'if \(\.actions_caches \| type\) == "array" then "ok" else "bad" end'\)" != "ok" \]; then\n[^\n]*\n\s*exit 1\n/,
+    );
+  });
+
   it('EXCLUDES a row with no created_at before sorting, so a timeless row cannot win', () => {
     expect(
       jobBlock('o3-witness'),

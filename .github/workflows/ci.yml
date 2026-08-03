@@ -1247,8 +1247,26 @@ jobs:
             # older one exists there. That is correct -- the older copy is the stronger
             # evidence -- but a reader who takes the printed ref for "this run did not
             # produce it" would draw the wrong conclusion.
-            entry=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
-              "${api}/actions/caches?key=${key}&per_page=100" \
+            #
+            # THE RESPONSE IS PROVEN TO BE AN `actions_caches` ARRAY BEFORE ANYTHING IS READ
+            # OUT OF IT, mirroring the jobs-API guard thirty lines below rather than
+            # inventing a second shape. MEASURED under `set -euo pipefail`: an error payload
+            # (`{"message":"Not Found"}` on a permissions fault, `{"message":"API rate limit
+            # exceeded"}`, or any non-JSON body) makes `.actions_caches[]` fail with
+            # `jq: error (at <stdin>:0): Cannot iterate over null (null)`, the subshell exits
+            # 5, and the step dies with NO `o3-witness:` message at all. Without the guard
+            # the best case is worse than silence: the empty result reaches the absent-entry
+            # message below and reports "the entry never existed" about an API fault, which
+            # is the same wrong-cause report the sibling block was corrected for. jq's own
+            # parse error still reaches stderr alongside the verdict -- that is extra
+            # evidence, not noise, so it is deliberately not suppressed.
+            caches_body=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
+              "${api}/actions/caches?key=${key}&per_page=100")
+            if [ "$(printf '%s' "${caches_body}" | jq -r 'if (.actions_caches | type) == "array" then "ok" else "bad" end')" != "ok" ]; then
+              echo "o3-witness: FAIL -- the caches API returned no \`actions_caches\` array, so nothing was read about the entry at all. This is an API, rate-limit or permissions fault, NOT evidence about the entry and NOT attributable to the Windows MISS." >&2
+              exit 1
+            fi
+            entry=$(printf '%s' "${caches_body}" \
               | jq -c --arg key "${key}" --arg ref "${GITHUB_REF}" --arg baseref "${base_ref}" \
                 '[.actions_caches[] | select(.key == $key and (.ref == $ref or ($baseref != "" and .ref == $baseref)) and (.created_at | type) == "string")] | sort_by(.created_at) | first // empty')
             created=$(printf '%s' "${entry}" | jq -r '.created_at // empty')

@@ -605,10 +605,19 @@ third said `gsd/v0.0.2-os-invariant-cross-os-sharing` had no PR when PR #12 has 
   `main` restored and the restore VERIFIED after.
 - **Then run `/gsd:audit-milestone`.** All seven v0.0.2 phases are Complete (45 of 45 plans) with
   every post-completion gate closed.
-- **Re-run verification for Phase 13 before shipping.** `13-VERIFICATION.md` frontmatter still reads
-  `status: human_needed` and the ship gate correctly refuses to interpret it. The item itself was
-  closed by live observation (run 30745558383, `ee67055`); the file is a snapshot that is superseded
-  rather than back-edited, so resolve it by re-running verification, not by editing the file.
+- **Phase 13 verification: CLOSED 2026-08-03, `status: passed` 7/7.** Re-run by `gsd-verifier`
+  rather than resolved by editing the frontmatter -- editing `status:` to make a gate pass is the
+  self-certification this project forbids. The prior `human_needed` snapshot is preserved verbatim
+  as a dated superseded section. The item it waited on was closed AT STEP GRANULARITY, not by the
+  job's colour: on run `30745558383` step 9 (`Gate on the cross-OS remote-cache label count`) is
+  the failure while steps 7 and 8 are green, which matters because `ci.yml:527`'s readiness poll
+  carries a pre-existing bare `exit 1` and could redden the same job for an unrelated reason -- the
+  exact vacuity trap TEST-11 exists to catch. Three non-blocking flags in the report: the prior
+  single-line grep evidence method now under-covers a multi-line `toMatch` added by `40e4d21`; run
+  `30768540898` reads `conclusion: failure` at run level while ROADMAP marks Case B PROVEN (only
+  `o3-witness` was red -- the documented false red -- so the row deserves one clarifying sentence);
+  and two concurrent agents were measuring the same working tree, whose transient reds were
+  collisions rather than HEAD.
 - **Both live-CI residuals are now CLOSED.** Case B by quick 260802-toz (run 30768540898); **A1 by
   quick 260803-0rr**, answered AFFIRMATIVELY by local measurement rather than by the sidecar
   instrumentation the earlier note assumed would be needed -- `server.ts:128-133` returns the 403

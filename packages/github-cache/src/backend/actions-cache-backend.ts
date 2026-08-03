@@ -175,40 +175,56 @@ export function createReadOnlyActionsCacheBackend(): ReadableBackend {
     get(hash: Hash): Promise<GetResult> {
       return withHashLock(hash, async () => {
         const path = cacheArchivePath(hash);
-        // VER-03. `true` is enableCrossOsArchive and it is the 5TH POSITIONAL argument of
-        // restoreCache -- (paths, primaryKey, restoreKeys?, options?, enableCrossOsArchive?),
-        // verified against the exact-pinned @actions/cache@6.2.0 lib/cache.d.ts:58. Positions
-        // 2 and 3 are FILLED with undefined on purpose: the flag is not an appended argument,
-        // and shortening the call moves the flag into restoreKeys' slot.
+
+        // THE TRY OPENS BEFORE THE RESTORE, and the placement is the guarantee rather than
+        // the comment on the finally. It previously opened after the miss check, so the
+        // cleanup covered ONLY the hit branch: an early `return { kind: 'miss' }` skipped it,
+        // and a restoreCache that threw mid-extract was never wrapped at all -- leaving
+        // decrypted cache bytes at a DETERMINISTIC per-hash path. The throw then propagates
+        // through withHashLock to handleGet, which degrades it to a silent 404 MISS, so
+        // nothing about the leftover ever surfaces.
         //
-        // On LINUX this flag is a NO-OP on the cache version: cacheUtils.js:166 pushes the
-        // `windows-only` component only when `process.platform === 'win32' &&
-        // !enableCrossOsArchive`, so off win32 the component was never pushed at all. The flag
-        // ALONE therefore rotates only WINDOWS entries. The both-legs all-MISS this commit
-        // produces comes from VER-01's PATH change, whose components are pushed
-        // unconditionally (cacheUtils.js:159). See
-        // .planning/phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md -- an
-        // ASYMMETRIC (Windows-only) signal would mean the flag landed WITHOUT the path.
-        const matched = await cache.restoreCache(
-          [path],
-          cacheKeyFor(hash),
-          undefined,
-          undefined,
-          true,
-        );
-
-        if (matched === undefined) {
-          return { kind: 'miss' };
-        }
-
+        // WHY THE SPLIT MADE THIS REACHABLE. Before D-01, every Actions-backend instance also
+        // carried put, whose own finally rm'd the identical path -- so a leftover was usually
+        // swept incidentally by the next write. A CACHE_READ_ONLY leg issues ZERO puts, so
+        // that sweep never happens for the rest of the job. Opening the try here is what
+        // makes the finally's own claim ("remove it on every exit so nothing is left on a
+        // reused or shared runner", T-2-11/WR-01) true of all three exits rather than one.
         try {
+          // VER-03. `true` is enableCrossOsArchive and it is the 5TH POSITIONAL argument of
+          // restoreCache -- (paths, primaryKey, restoreKeys?, options?, enableCrossOsArchive?),
+          // verified against the exact-pinned @actions/cache@6.2.0 lib/cache.d.ts:58. Positions
+          // 2 and 3 are FILLED with undefined on purpose: the flag is not an appended argument,
+          // and shortening the call moves the flag into restoreKeys' slot.
+          //
+          // On LINUX this flag is a NO-OP on the cache version: cacheUtils.js:166 pushes the
+          // `windows-only` component only when `process.platform === 'win32' &&
+          // !enableCrossOsArchive`, so off win32 the component was never pushed at all. The flag
+          // ALONE therefore rotates only WINDOWS entries. The both-legs all-MISS this commit
+          // produces comes from VER-01's PATH change, whose components are pushed
+          // unconditionally (cacheUtils.js:159). See
+          // .planning/phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md -- an
+          // ASYMMETRIC (Windows-only) signal would mean the flag landed WITHOUT the path.
+          const matched = await cache.restoreCache(
+            [path],
+            cacheKeyFor(hash),
+            undefined,
+            undefined,
+            true,
+          );
+
+          if (matched === undefined) {
+            return { kind: 'miss' };
+          }
+
           const bytes = await readFile(path);
 
           return { kind: 'hit', bytes };
         } finally {
           // Mirror the put path (T-2-11 / WR-01): a restored archive is decrypted
           // cache bytes on disk; remove it on every exit so nothing is left on a
-          // reused or shared runner.
+          // reused or shared runner. ALL THREE exits, since the try above opens
+          // before the restore -- hit, miss, and a restore or read that throws.
           await rm(path, { force: true });
         }
       });

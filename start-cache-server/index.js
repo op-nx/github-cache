@@ -68290,17 +68290,17 @@ function createReadOnlyActionsCacheBackend() {
     get(hash) {
       return withHashLock(hash, async () => {
         const path11 = cacheArchivePath(hash);
-        const matched = await restoreCache(
-          [path11],
-          cacheKeyFor(hash),
-          void 0,
-          void 0,
-          true
-        );
-        if (matched === void 0) {
-          return { kind: "miss" };
-        }
         try {
+          const matched = await restoreCache(
+            [path11],
+            cacheKeyFor(hash),
+            void 0,
+            void 0,
+            true
+          );
+          if (matched === void 0) {
+            return { kind: "miss" };
+          }
           const bytes = await (0, import_promises.readFile)(path11);
           return { kind: "hit", bytes };
         } finally {

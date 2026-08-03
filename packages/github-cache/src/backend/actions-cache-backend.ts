@@ -132,8 +132,13 @@ export function createReadOnlyActionsCacheBackend(): ReadableBackend {
   // operator to a frame that never ran the check. Naming the wrong frame costs most on a
   // read-only leg, which has no write whose failure would surface -- there, an unnamed
   // divergence presents as "cross-OS restore is broken" instead of naming its cause.
-  // The rename is mechanically checkable, which is why the old prefix is not quoted
-  // anywhere here: no non-spec module under src/ may carry it (T-13-02-R1).
+  // The rename IS mechanically checked, which is why the old prefix is not quoted anywhere
+  // here: the T-13-02-R1 clause in actions-cache-backend.spec.ts scans every non-spec module
+  // under src/ and fails if any carries it. That sentence was here BEFORE the clause was --
+  // asserting a guard that did not exist, so the absence of the string read as evidence that
+  // something enforced the absence. The clause now exists; do not restore the claim without
+  // it. (Spec files are excluded by that scan: publish-mirror.spec.ts uses the same string as
+  // a vi.mock export KEY, which is not a message.)
   const cwd = process.cwd();
 
   if (!existsSync(join(cwd, 'nx.json'))) {

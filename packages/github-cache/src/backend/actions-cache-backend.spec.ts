@@ -708,6 +708,86 @@ describe('exactly ONE module in the whole package reaches @actions/cache (VER-09
   });
 });
 
+/**
+ * The old error-message prefix, as a MESSAGE prefix: the factory name immediately followed
+ * by a colon. `createActionsCacheBackend():` (the declaration) does not match, because the
+ * parens sit between -- so the needle is specific to the throw-message form.
+ */
+const WRITABLE_FACTORY_MESSAGE_PREFIX = 'createActionsCacheBackend:';
+
+/**
+ * VER-04's message prefix, guarded rather than merely asserted in prose.
+ *
+ * THE COMMENT IN THE SOURCE CLAIMED THIS GUARD ALREADY EXISTED -- "The rename is
+ * mechanically checkable, which is why the old prefix is not quoted anywhere here: no
+ * non-spec module under src/ may carry it (T-13-02-R1)" -- and it did not. That is worse
+ * than a plain gap: the comment is the stated REASON the prefix is left unquoted, so the
+ * ABSENCE of the string read as evidence that something was enforcing the absence.
+ *
+ * WHAT IT PROTECTS. Both VER-04 throws come from the READ-ONLY factory, which the write path
+ * reaches BY CALLING. A prefix naming the WRITABLE factory sends an operator to a frame that
+ * never ran the check -- and it costs most on a read-only leg, which has no write whose
+ * failure would surface, so an unnamed divergence there presents as "cross-OS restore is
+ * broken" instead of naming its cause.
+ *
+ * NOT COVERED BY THE MESSAGE CLAUSES ABOVE, which is why this is a separate scan: those
+ * assert on the message's SUBSTANCE -- which invariant failed -- and say so explicitly,
+ * never on a function-name prefix. Restoring the old prefix on either throw left the whole
+ * suite green.
+ *
+ * SPEC FILES ARE EXCLUDED and must stay excluded: publish-mirror.spec.ts uses exactly this
+ * string as a `vi.mock` factory KEY, which is a module export name and not a message.
+ */
+describe('the VER-04 throws name the factory that OWNS them (T-13-02-R1)', () => {
+  it(`no non-spec module under ${PACKAGE_SOURCE_ROOT} carries the writable factory's message prefix`, () => {
+    const carriers = readdirSync(PACKAGE_SOURCE_ROOT, {
+      encoding: 'utf8',
+      recursive: true,
+    })
+      .map((entry) => `${PACKAGE_SOURCE_ROOT}/${entry.replaceAll('\\', '/')}`)
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'))
+      .filter((file) =>
+        readFileSync(file, 'utf8').includes(WRITABLE_FACTORY_MESSAGE_PREFIX),
+      )
+      .sort();
+
+    expect(
+      carriers,
+      `These modules carry \`${WRITABLE_FACTORY_MESSAGE_PREFIX}\`. Both VER-04 throws belong ` +
+        'to createReadOnlyActionsCacheBackend, which the write path reaches BY CALLING, so a ' +
+        'prefix naming the WRITABLE factory sends an operator to a frame that never ran the ' +
+        'check. It costs most on a read-only leg, which has no write whose failure would ' +
+        'surface. The message clauses above cannot catch this -- they assert on WHICH ' +
+        'invariant failed, never on a name prefix. Restore the read-only prefix; do not ' +
+        'delete this clause. (Spec files are excluded on purpose: publish-mirror.spec.ts ' +
+        'uses this exact string as a vi.mock export KEY, which is not a message.)',
+    ).toStrictEqual([]);
+  });
+
+  // POSITIVE CONTROL, in the same test file rather than argued: the scan must be able to SEE
+  // the string it reports on. Without this an empty result is equally consistent with a
+  // broken scan (wrong root, wrong extension filter, a readdir that yields nothing) as with
+  // a clean tree, and a guard that cannot fail is not a guard.
+  it('the scan can actually detect the prefix -- control against a silently empty walk', () => {
+    const scanned = readdirSync(PACKAGE_SOURCE_ROOT, {
+      encoding: 'utf8',
+      recursive: true,
+    })
+      .map((entry) => `${PACKAGE_SOURCE_ROOT}/${entry.replaceAll('\\', '/')}`)
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'));
+
+    expect(scanned).toContain(
+      `${PACKAGE_SOURCE_ROOT}/backend/actions-cache-backend.ts`,
+    );
+    expect(
+      readFileSync(
+        `${PACKAGE_SOURCE_ROOT}/backend/actions-cache-backend.ts`,
+        'utf8',
+      ),
+    ).toContain('createReadOnlyActionsCacheBackend:');
+  });
+});
+
 describe('createActionsCacheBackend asserts the cwd/GITHUB_WORKSPACE conjunction at construction (VER-04) and creates the archive directory (VER-07)', () => {
   // A throwaway workspace under the ROOT .nx/cache, which is gitignored (.gitignore:41
   // covers `.nx/cache` specifically, not `.nx/` wholesale) and invisible to Nx's file map

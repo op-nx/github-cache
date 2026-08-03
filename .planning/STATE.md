@@ -102,6 +102,16 @@ pre-registered in `f5d03b0` BEFORE the run, with every ubuntu leg MISS-and-saved
 The scheduled detector went green on run 30603713356 on a real `windows-11-arm` runner. Both are
 recorded in 11-EVIDENCE.md's O4 section and 12-UAT.md.
 
+SUPERSEDED by quick 260803-mew, on the detector clause only (the O4 `[remote cache]` counts above
+are untouched). Run 30603713356 proved the THREE-target needle at `e757d4c`; `9e79009` replaced the
+needle with the FOUR-target form and `git merge-base --is-ancestor 9e79009 e757d4c` is FALSE, so
+that run cannot speak to the needle at HEAD. Both directions of the four-target needle are now
+observed on real `windows-11-arm` runners: run 30825110047 PASS (headSha 41f65e1, needle as genuine
+Nx output, `lint` executing) and run 30825602626 FAIL (throwaway 3-of-4 tree, red at the needle's
+grep with nx at exit 0 in the same step). The FAIL half had never been observed on a runner in
+either needle form. See
+.planning/quick/260803-mew-observe-phase-12-fail-half-on-real-run/260803-mew-EVIDENCE.md.
+
 RESEARCH assumption A1 is CLOSED by measurement -- both hash-parity artifacts from run 30586177358
 carry the hardened `node --no-warnings -p process.platform` with empty stderr and differing stdout.
 `12-VERIFICATION.md:20` and `12-SECURITY.md` still describe it as open; both were correct for the

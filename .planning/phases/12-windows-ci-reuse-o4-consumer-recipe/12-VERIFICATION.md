@@ -14,6 +14,7 @@ human_verification:
   - test: "After merge to main, dispatch `windows-regression-detector.yml` (`gh workflow run windows-regression-detector.yml`) and confirm the run's log contains the literal `Successfully ran targets build, typecheck, test for project`."
     expected: "The detector job goes green on a real windows-11-arm runner with the plural success line present."
     why_human: "GitHub only dispatches a workflow file present on the default branch, so this is structurally impossible to prove pre-merge. The command itself was measured green locally on win32/arm64 (12-03); only the CI dispatch is unverified."
+    superseded: "SUPERSEDED by quick 260803-mew. The three-target literal named above as the expected evidence is no longer the needle: it was measured at `e757d4c`, and `9e79009` replaced it with the FOUR-target `Successfully ran targets build, typecheck, test, lint for project` (`git merge-base --is-ancestor 9e79009 e757d4c` is FALSE, so the closing run 30603713356 predates the current needle). Both directions of the four-target form are now observed on real windows-11-arm runners without waiting for merge, via an operator-authorised temporary main window: run 30825110047 PASS at headSha 41f65e1, and run 30825602626 FAIL at the needle's grep with nx at exit 0 in the same step. See 260803-mew-EVIDENCE.md. This entry is a forward pointer only -- status, score and the other counters are deliberately unchanged, because this is not a re-verification."
 
   - test: "Once any CI run exists on a tree carrying `node --no-warnings -p process.platform` (post plan 12-04, commit 3d9f895+), download both hash-parity-<runner> artifacts and read the discriminator's stdout/stderr pair for linux and win32."
     expected: "stdout `linux`/`win32` respectively, stderr EMPTY on both legs, confirming `--no-warnings` closes the stderr channel on linux/arm64 too (RESEARCH assumption A1)."
@@ -124,6 +125,19 @@ No alternative vehicle was available and declined without cause. PENDING is the 
 **Test:** After merging to `main`, dispatch `windows-regression-detector.yml` and read the run's log.
 **Expected:** The plural success line `Successfully ran targets build, typecheck, test for project` appears; exit code alone is not sufficient evidence.
 **Why human:** `workflow_dispatch` only fires for a workflow file present on the default branch, so this is structurally unobservable before merge.
+
+**SUPERSEDED by quick 260803-mew.** The expected literal above is the THREE-target needle, measured
+at `e757d4c` by run `30603713356`. Commit `9e79009` replaced the needle with the FOUR-target form
+`Successfully ran targets build, typecheck, test, lint for project`, and
+`git merge-base --is-ancestor 9e79009 e757d4c` is FALSE -- so that run cannot close the needle at
+HEAD, and this item read as closed on a needle that no longer exists. Observed since, on real
+`windows-11-arm` runners inside an operator-authorised temporary `main` window rather than after
+merge: run **`30825110047`** (PASS, `headSha 41f65e1`, needle as genuine Nx output, `lint`
+confirmed executing) and run **`30825602626`** (FAIL on a throwaway 3-of-4 tree, red at the
+needle's `grep` with the plural three-target Nx line proving `nx` exited 0 in the same step). The
+"structurally unobservable before merge" reasoning above is CONFIRMED rather than overturned: the
+file still had to reach the default branch before the dispatch API would accept the call. See
+`.planning/quick/260803-mew-observe-phase-12-fail-half-on-real-run/260803-mew-EVIDENCE.md`.
 
 #### 3. RESEARCH assumption A1 (DOCS-07)
 

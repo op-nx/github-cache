@@ -58,6 +58,19 @@ project`. Exit code alone is NOT sufficient evidence.
 result: pass
 evidence: run 30603713356 (event=workflow_dispatch, headSha=e757d4c, job `detect` success, 3m49s)
 
+**SUPERSEDED by quick 260803-mew.** The observation below is preserved verbatim and remains true of
+the needle it measured, but it no longer speaks to the needle at HEAD. It proved the THREE-target
+line at `e757d4c`. Commit `9e79009` ("add lint to the detector, the one invariant it could not see",
+2026-08-01) then replaced the needle with the FOUR-target form `Successfully ran targets build,
+typecheck, test, lint for project`, and `git merge-base --is-ancestor 9e79009 e757d4c` is FALSE --
+so run `30603713356` ran a tree that predates the current needle and cannot close it. Both
+directions of the four-target needle were subsequently observed on real `windows-11-arm` runners:
+**run `30825110047`** (PASS, `headSha 41f65e1`, the needle as genuine Nx output with `lint`
+executing) and **run `30825602626`** (FAIL, the mutated 3-of-4 tree, red at the needle's `grep`
+with `nx` at exit 0 in the same step). See
+`.planning/quick/260803-mew-observe-phase-12-fail-half-on-real-run/260803-mew-EVIDENCE.md`. That
+window also closed the FAIL half, which this test never covered in either form.
+
 The needle is present as genuine Nx output, not merely as the echoed `grep -q` line that also
 carries it:
 

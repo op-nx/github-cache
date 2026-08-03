@@ -530,30 +530,142 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
    * REASON; the MECHANISM had no guard. The `max-parallel: 1` precedent above locks both
    * the value AND the prose about the value, which is the shape this now matches.
    *
+   * THREE CLAUSES WERE ADDED WHEN THE REF FILTER WAS WIDENED for Case B (run
+   * 30768540898), and they exist because that widening opens mutations the original five
+   * did not cover: the caches REQUEST must carry no server-side ref narrow (or the
+   * base-scope row never reaches jq at all), the empty-result branch must still `exit 1`
+   * (M4 -- nothing else forbids a skip-on-empty), and the OK line must print the matched
+   * ref (or Case A and Case B collapse into one indistinguishable verdict).
+   *
    * `codeLines` strips every `#` line, so each clause below is asserted against real
    * shell rather than against the comment that explains it -- verified by dumping the
-   * stripped block. Five separate cases, not one, because each mechanism survives or
-   * falls independently and a combined assertion would report five regressions
+   * stripped block. Eight separate cases, not one, because each mechanism survives or
+   * falls independently and a combined assertion would report eight regressions
    * identically.
    */
-  it('compares .key for EXACT equality and filters on ref -- ?key= is a prefix match', () => {
+  it('compares .key for EXACT equality and constrains the ref to an ALLOWLIST -- ?key= is a prefix match', () => {
     expect(
       jobBlock('o3-witness'),
-      'The witness must compare the returned .key for EXACT string equality AND filter on ' +
-        'ref. ?key= is a PREFIX match (measured: `?key=nx-cache-1` returns 40 entries, and ' +
-        'a full key minus its last character still returns 2), and ONE hash holds entries ' +
-        'on TWO refs, so neither a count nor a key-only match is an existence proof.',
-    ).toMatch(/select\(\s*\.key == \$key and \.ref == \$ref\s*\)/);
+      'The witness must compare the returned .key for EXACT string equality AND constrain ' +
+        'the ref. ?key= is a PREFIX match (measured: `?key=nx-cache-1` returns 40 entries, ' +
+        'and a full key minus its last character still returns 2), and ONE hash holds ' +
+        'entries on TWO refs, so neither a count nor a key-only match is an existence ' +
+        'proof. The ref constraint may therefore never be DROPPED. It is an ALLOWLIST ' +
+        'rather than an equality because a strict `.ref == $ref` encodes the Case-A shape ' +
+        'only: MEASURED on run 30768540898, every ubuntu producer HIT, nothing was written ' +
+        'to the PR merge ref, and the entry the Windows legs actually read lives in the ' +
+        'DEFAULT-branch scope -- so an equality test reports "the entry may never have ' +
+        'existed" about an entry that does exist. The allowlist is exactly the scope a run ' +
+        'can genuinely read: its own ref, plus a NON-EMPTY base ref.',
+    ).toMatch(
+      /select\(\s*\.key == \$key and \(\.ref == \$ref or \(\$baseref != "" and \.ref == \$baseref\)\)\s*\)/,
+    );
   });
 
-  it('terminates the cache extraction with // empty, so an absent match is not the string "null"', () => {
+  it('does NOT narrow the caches REQUEST by ref server-side, or the base-scope row never arrives', () => {
+    const cachesUrl = jobBlock('o3-witness').match(
+      /actions\/caches\?[^"]*/,
+    )?.[0];
+
+    // POSITIVE CONTROL: `expect(undefined).not.toMatch(...)` THROWS rather than asserting,
+    // and a clause that cannot be evaluated is not a clause. Prove the URL was extracted
+    // before asserting about its contents.
+    expect(
+      cachesUrl,
+      'o3-witness no longer issues an `actions/caches?` request at all, so the absence ' +
+        'this case guards cannot be evaluated.',
+    ).toBeDefined();
+
+    expect(
+      cachesUrl,
+      'The caches REQUEST must carry no ref parameter. A server-side narrow to $GITHUB_REF ' +
+        'cannot RETURN the base-scope row, so widening the client-side jq while leaving the ' +
+        'URL narrowed fixes nothing -- the row that proves prior existence is filtered out ' +
+        'at the server and never reaches jq at all. The character class stops at the ' +
+        "URL's closing quote, so this asserts about the request and not about the rest of " +
+        'the step.',
+    ).not.toMatch(/ref=/);
+  });
+
+  it('terminates BOTH cache extractions with // empty, so an absent match is not the string "null"', () => {
+    const emptyTerminatorReason =
+      'The jq extraction of created_at must be terminated with `// empty`. Without it an ' +
+      'absent match yields the literal four-character string `null`, and `[ -z "${created}" ]` ' +
+      'against `null` is FALSE -- so the guard would PASS on exactly the absence it exists ' +
+      "to detect. This file's own comment names this failure mode explicitly.";
+
+    // The terminator now sits on the created_at extraction itself rather than inside a
+    // parenthesised `first(...)`, because the filter selects the matching entry OBJECT
+    // (to carry its ref) instead of the timestamp alone.
+    expect(jobBlock('o3-witness'), emptyTerminatorReason).toMatch(
+      /\.created_at \/\/ empty/,
+    );
+
+    // The SECOND extraction, on the same footing and for the same reason. matched_ref is
+    // only printed, so a stray `null` there is cosmetic today -- but it is one of the six
+    // enumerated mutations and an unterminated extraction is the shape that reads as
+    // present when it is absent. Pinned for parity rather than left to the next reader.
+    expect(jobBlock('o3-witness'), emptyTerminatorReason).toMatch(
+      /\.ref \/\/ empty/,
+    );
+  });
+
+  /**
+   * M4, AND IT IS THE POINT OF THE CASE-B WIDENING. The five clauses around it cover the
+   * mutations that were possible BEFORE the widening; none of them forbids the
+   * empty-result branch from becoming a skip. A witness that skips when it finds nothing
+   * is disabled on precisely the runs it is hardest to satisfy -- the guard-green-because-
+   * it-asserts-nothing failure mode, arriving through the fix rather than through neglect.
+   *
+   * NOT NATURALLY RED, and that is recorded rather than hidden: today's `ci.yml` already
+   * exits 1 there, so this clause was proven by MUTATION -- `exit 1` temporarily changed
+   * to `exit 0`, the red observed, the mutation reverted.
+   *
+   * THE OBVIOUS FORM OF THIS CLAUSE IS VACUOUS, MEASURED. Written as
+   * `/if \[ -z "\$\{created\}" \]; then[\s\S]*?exit 1/` -- the shape the research
+   * proposed -- the `exit 0` mutation left it GREEN. Non-greedy bounds how much the gap
+   * PREFERS to consume, not how far it MAY reach: with the branch's own `exit 1` mutated
+   * away, the gap simply walked past the closing `fi` and matched the jobs-API `exit 1`
+   * a hundred lines further down. A structural guard that can satisfy itself from an
+   * unrelated part of the same block is not a guard. Hence the two clauses below: the gap
+   * is bounded to the branch's single message line, and `exit 0` is forbidden anywhere in
+   * the witness -- the second is what actually caught the mutation.
+   */
+  it('still FAILS on an empty cache result -- no skip-on-empty branch (M4)', () => {
+    const noSkipReason =
+      'The empty-result branch must still `exit 1`. Widening the ref filter to accept the ' +
+      'base-branch scope makes a skip-on-empty branch look reasonable -- "nothing was ' +
+      'created this run, so there is nothing to witness" -- and nothing else in this ' +
+      'describe forbids it. A witness that skips when it finds nothing asserts nothing ' +
+      'on exactly the runs it is hardest to satisfy. The correct response to a red here ' +
+      'is to RESTORE THE FAILURE, never to soften it.';
+
+    // The gap is `[^\n]*\n`, ONE line -- the branch's own message -- so the match cannot
+    // reach an `exit 1` outside the branch. See the block comment above: the unbounded
+    // non-greedy form was measured to survive the mutation this clause exists to catch.
+    expect(jobBlock('o3-witness'), noSkipReason).toMatch(
+      /if \[ -z "\$\{created\}" \]; then\n[^\n]*\n\s*exit 1\n/,
+    );
+
+    // And the same fact from the other side, because the positive shape above would also
+    // redden on a harmless extra diagnostic line and a reader could then be tempted to
+    // loosen it. This one has no such pressure: the witness has no legitimate `exit 0`.
+    // Every one of its exits is a verdict, and every verdict but the last is a failure --
+    // the successful path falls off the end of the block after printing EXISTENCE OK.
+    expect(jobBlock('o3-witness'), noSkipReason).not.toMatch(/exit 0\b/);
+  });
+
+  it('prints the MATCHED ref on the OK line, so the log records Case A versus Case B', () => {
     expect(
       jobBlock('o3-witness'),
-      'The jq extraction of created_at must be terminated with `// empty`. Without it an ' +
-        'absent match yields the literal four-character string `null`, and `[ -z "${created}" ]` ' +
-        'against `null` is FALSE -- so the guard would PASS on exactly the absence it exists ' +
-        "to detect. This file's own comment names this failure mode explicitly.",
-    ).toMatch(/\.created_at\) \/\/ empty/);
+      'The EXISTENCE OK line must print the ref the matched entry actually lives on. With ' +
+        'the ref constraint widened to an allowlist, the verdict no longer says WHICH of ' +
+        'the readable scopes satisfied it -- a run that wrote the entry itself and a run ' +
+        'that read an older copy from the base branch produce the same OK. Read it as the ' +
+        'provenance of the LOWER BOUND (the earliest readable copy is the one selected), ' +
+        'not as a claim about which run created the entry; that is precisely why it has to ' +
+        'be printed rather than inferred from the event.',
+    ).toMatch(/EXISTENCE OK[^\n]*matched_ref=\$\{matched_ref\}/);
   });
 
   it('demands the STATED 30-second minimum margin, not a bare <', () => {

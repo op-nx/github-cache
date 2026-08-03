@@ -421,8 +421,12 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
     'verb and is deliberately NOT requested.';
 
   // POSITIVE CONTROL, and it comes FIRST for the same reason every other control in this
-  // file does: every clause below is a `toMatch`, so a `jobBlock` that returned the WRONG
-  // non-empty block would have the six of them asserting about the wrong job. `needs:
+  // file does: every POSITIVE clause below is a `toMatch`, so a `jobBlock` that returned
+  // the WRONG non-empty block would have the six envelope clauses asserting about the wrong
+  // job. The qualifier is not pedantry -- two clauses in the body group below are
+  // `not.toMatch` (the `exit 0` ban and the $GITHUB_ENV sink ban), and an ABSENCE is exactly
+  // what a wrong-block extraction satisfies for free, which is why each of those carries its
+  // own positive control rather than leaning on this one. `needs:
   // integration` is real YAML, so it survives the comment strip, and it is unique in this
   // file -- every other `needs:` line names a different value.
   it('scopes to a real o3-witness job block that waits on integration', () => {
@@ -537,11 +541,20 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
    * (M4 -- nothing else forbids a skip-on-empty), and the OK line must print the matched
    * ref (or Case A and Case B collapse into one indistinguishable verdict).
    *
+   * TWO MORE CAME FROM THE CODE REVIEW OF THAT WIDENING, both defects it introduced or
+   * left standing rather than shapes it merely made possible: the response must be proven
+   * to BE an `actions_caches` array before anything is read out of it (an error payload
+   * otherwise exits 5 with no verdict printed at all), and a row with no `created_at` must
+   * be excluded BEFORE the sort (jq 1.8.1 sorts a null FIRST, so a timeless row wins
+   * `first` deterministically and reports a false absence).
+   *
    * `codeLines` strips every `#` line, so each clause below is asserted against real
    * shell rather than against the comment that explains it -- verified by dumping the
-   * stripped block. Eight separate cases, not one, because each mechanism survives or
-   * falls independently and a combined assertion would report eight regressions
-   * identically.
+   * stripped block. TEN separate cases, not one, because each mechanism survives or
+   * falls independently and a combined assertion would report ten regressions
+   * identically. THIS COUNT IS LOAD-BEARING PROSE AND HAS ALREADY GONE STALE TWICE: if a
+   * clause is added or removed below, correct it in the SAME commit, and sweep the
+   * sibling count in the sink block further down -- that is the exact pair that drifted.
    */
   it('compares .key for EXACT equality and constrains the ref to an ALLOWLIST -- ?key= is a prefix match', () => {
     expect(
@@ -656,8 +669,10 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
   });
 
   /**
-   * M4, AND IT IS THE POINT OF THE CASE-B WIDENING. The five clauses around it cover the
-   * mutations that were possible BEFORE the widening; none of them forbids the
+   * M4, AND IT IS THE POINT OF THE CASE-B WIDENING. The ORIGINAL five clauses -- the five
+   * enumerated in the block comment at the head of this group, not "the other clauses
+   * here", of which there are now nine -- cover the mutations that were possible BEFORE
+   * the widening; none of them forbids the
    * empty-result branch from becoming a skip. A witness that skips when it finds nothing
    * is disabled on precisely the runs it is hardest to satisfy -- the guard-green-because-
    * it-asserts-nothing failure mode, arriving through the fix rather than through neglect.
@@ -753,7 +768,7 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
   /**
    * THE SINK'S ABSENCE (T-11-28), and it is the one direction every clause above leaves
    * open. CR-01's fix was a DELETION rather than a filter: the `$GITHUB_ENV` export step is
-   * gone and `h_linux` is read inside its one consuming step. The five body clauses above
+   * gone and `h_linux` is read inside its one consuming step. The TEN body clauses above
    * assert what the job now DOES -- including that the shape check is present -- but nothing
    * asserted what it must never do again, so an editor could reinstate
    * `echo "H_LINUX=${h_linux}" >> "$GITHUB_ENV"` and the whole suite would stay green.

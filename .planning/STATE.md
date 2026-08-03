@@ -417,6 +417,7 @@ Items acknowledged and carried forward:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
+| Mirror design | **Immutable releases are structurally incompatible with the monthly-shard mirror.** A shard must accept assets all month; a GitHub immutable release accepts none after publication, so a shard born immutable is permanently empty and every upload 422s. The draft -> attach -> publish workaround is CLOSED OFF: a draft release is not anonymously readable, and anonymous read is the mirror's contract. Deferred by maintainer decision 2026-08-03 after the setting was found enabled and disabled again. **Standing exposure, not a resolved item:** anyone re-enabling the setting (repo OR org level -- which level is unmeasured, `orgs/op-nx/rulesets` needs `admin:org`) silently kills the mirror again. The `e96670e` classifier fix makes that failure LOUD rather than preventing it. Full diagnosis: `.planning/debug/publish-verify-422-empty-shard.md` | a later milestone (needs a mirror redesign, not a patch) | 2026-08-03 |
 | Storage | GHCR/OCI as an additional synced store (GHCR-01) | later-milestone revisit trigger (with PROV-01 + Docker) | 2026-07-18 |
 | Provenance | Cosign keyless attestation (PROV-01) | a later milestone | 2026-07-18 |
 | Distribution | Docker container form (FOUND-03) | a later milestone | 2026-07-18 |
@@ -582,14 +583,24 @@ Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates
 Phase 7; capture the pre-rename O2 baseline before Phase 10) were completed milestones ago, and the
 third said `gsd/v0.0.2-os-invariant-cross-os-sharing` had no PR when PR #12 has been open since.*
 
-- **FIRST, and blocking the merge: root-cause `publish-verify`.** It fails on BOTH legs at the
-  Phase 13 tip and succeeded on all five prior `main` pushes, so it is a regression this branch
-  introduced. It is push-gated and therefore structurally invisible to every PR run -- the only
-  reason it was found at all is the temporary `main` push in quick 260802-toz. Measured so far: the
-  `cache-mirror-202608` shard exists with ZERO assets, every asset upload returned 422 and was
-  swallowed as benign, and the seed asset is unique per run so its 422 cannot mean already-exists.
-  The mechanism is NOT established; the month-boundary hypothesis is unconfirmed because the shard
-  was created before the run. Needs no rewritten `main`.
+- **`publish-verify` is ROOT-CAUSED and fixed in code; one `main` window remains to prove it.**
+  `.planning/debug/publish-verify-422-empty-shard.md`. **It was never a regression this branch
+  introduced** -- the earlier note here said so and was wrong. `createRelease`
+  (`action/index.ts:103-111`), which decides the shard's born state, is byte-identical to
+  `origin/main`; the publish path is the same code that produced five green pushes. What changed is
+  a REPOSITORY SETTING: immutable releases were enabled between 2026-07-16 and 2026-08-02, so
+  `cache-mirror-202608` was born `immutable: true` and rejected all 65 uploads, while
+  `cache-mirror-202607` (field absent) holds 155 assets. The status-only 422 classifier then
+  reported that total failure as a GREEN publish leg, and the failure surfaced one job later in
+  `publish-verify`, naming the wrong subsystem. **Fixed by `e96670e`:** only an explicit
+  `already_exists` 422 earns the benign skip; an unreadable body falls through to the fault branch,
+  because guessing benign is the defect. TDD RED then GREEN, 980/980, no bundle drift. **Maintainer
+  actions done 2026-08-03:** immutability disabled; the dead `cache-mirror-202608` release AND its
+  tag deleted (both WERE deletable -- the debug session's "undeletable" claim was wrong, corrected
+  in its addendum), so August is recoverable rather than written off. The design incompatibility is
+  DEFERRED to a later milestone -- see Deferred Items. **Remaining:** one authorised `main` window
+  to prove `publish` and `publish-verify` both go green -- backup ref first, PR #16 closed first,
+  `main` restored and the restore VERIFIED after.
 - **Then run `/gsd:audit-milestone`.** All seven v0.0.2 phases are Complete (45 of 45 plans) with
   every post-completion gate closed.
 - **Re-run verification for Phase 13 before shipping.** `13-VERIFICATION.md` frontmatter still reads

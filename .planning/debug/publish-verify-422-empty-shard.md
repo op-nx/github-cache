@@ -541,3 +541,65 @@ reasoning_checkpoint:
     `code: 'immutable'` literal is illustrative, not measured. Whether the setting is enabled at
     repo or org level is also unmeasured: /orgs/op-nx/rulesets needs admin:org, and the plain repo
     object does not expose the flag."
+
+---
+
+## ADDENDUM -- maintainer actions 2026-08-03, and two corrections to this session
+
+### The branch is NOT the cause. This session's own trigger text is wrong on that point.
+
+Recorded because both `STATE.md` and this file's `trigger` call it "a regression this branch
+introduced" and cite "1888 insertions" in the publish path. **That inference does not hold.**
+
+`createRelease` -- the call that decides the shard's born state -- is in
+`action/index.ts:103-111` and is **byte-identical to `origin/main`**
+(`git diff origin/main...HEAD -- packages/github-cache/src/action/index.ts` shows no change to it).
+The publish path that creates the shard is the same code that produced five green `main` pushes.
+
+What actually changed is a **repository setting**, not the branch. The two shards side by side:
+
+| Shard | `immutable` | Assets | Created |
+|-------|-------------|--------|---------|
+| `cache-mirror-202607` | field **absent** | **155** | 2026-07-16 |
+| `cache-mirror-202608` | **`true`** | **0** | 2026-08-02 |
+
+Immutable releases were turned on somewhere between those two dates. The branch's only relationship
+to the failure is that it happened to be the tip pushed when the first post-change shard was born.
+
+### Correction: the immutable release WAS deletable
+
+This session concluded "immutability cannot be lifted, and deleting the release does not free the
+name". The first half is **wrong, measured**: `DELETE /releases/363897680` returned success and the
+release is gone (`GET` now 404s). The leftover tag ref was then deleted too, verified by exit code
+with a positive control (`cache-mirror-202607` still resolves; `cache-mirror-202608` does not; the
+only remaining `cache-mirror` tag is `202607`).
+
+Checked before deleting the tag: `ce197701` is an ancestor of the branch HEAD and present on
+origin, so removing the ref could not orphan it. Confirmed still reachable afterwards.
+
+Net: August is recoverable after all. A fresh `cache-mirror-202608` will be created by the next
+`main` push, now under the corrected setting, rather than the month being written off.
+
+### Maintainer actions taken
+
+1. **Immutable releases DISABLED** by the maintainer in repo settings (browser; not API-reachable
+   with the available token scopes).
+2. **`cache-mirror-202608` release and tag DELETED.** Zero assets, so nothing was lost.
+3. **The design limitation is DEFERRED to a later milestone**, by maintainer decision. Immutable
+   releases and the monthly-shard mirror are structurally incompatible -- a shard must accept
+   assets all month, an immutable release accepts none after publication, and the draft ->
+   attach -> publish workaround is closed off because a draft release is not anonymously readable
+   and anonymous read is the mirror's contract. This is a real limitation of the design, not a
+   bug, and it is now a standing exposure: anyone re-enabling the setting silently kills the
+   mirror again. Recorded in `STATE.md` Deferred Items.
+
+The classifier fix in `e96670e` stands on its own merit regardless of the setting: it is what makes
+this class of failure fail LOUD at the point of failure instead of surfacing one job later in the
+wrong subsystem. It is not a workaround for immutability.
+
+### Still to verify
+
+The fix and the setting change are both unproven end to end. Sequencing chosen by the maintainer:
+setting first (done), then a single authorised `main` window to prove `publish` and
+`publish-verify` both go green -- backup ref first, PR #16 closed first, `main` restored and the
+restore verified afterwards.

@@ -126,10 +126,24 @@ waiting for an entry to age out (ADR C15).
 ## 8. Read-only local by design
 
 There is no local write path. Locally the selected backend is read-only by
-construction: a local `put()` always returns 403. Only CI on a trusted trigger
-may write. This is not a mode flag a caller can get wrong -- read-write versus
-read-only is derived from runtime context (`selectBackend`), never from a
-caller-facing option.
+construction -- it has **no `put()` at all**, so a local write is unrepresentable
+rather than a runtime error value, and the server answers a `PUT` routed there with
+the Nx contract's 403 at the protocol boundary. Only CI on a trusted trigger may
+write.
+
+This is not a mode flag a caller can get wrong. Read-write versus read-only is
+derived from runtime context (`selectBackend`), never from a caller-facing API
+option: no argument to the server or to a backend factory can request write.
+
+One env knob participates, and only in the narrowing direction:
+[`CACHE_READ_ONLY`](configuration.md#cache_read_only) lets the workflow author
+declare that a job CONSUMES the cache but must not populate it. It is read as
+`selectBackend`'s LAST branch, after every branch that has already returned a
+read-only backend or thrown, so it is structurally incapable of widening -- it
+cannot resurrect a write path that runtime context declined. It supplies the one
+thing the runner cannot: producer-versus-consumer ROLE is not derivable from any
+GitHub-supplied env fact, since `push` and same-repo `pull_request` are both
+correctly write-trusted.
 
 ## 9. Extraction escape is handled by the Nx client, not by this server
 

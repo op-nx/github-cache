@@ -148,7 +148,10 @@ there is `pwsh`, which does not understand `$GITHUB_ENV` or `$(...)`.
   step reaches it.
 - **Read-write only where it is safe.** The backend is chosen from runtime
   context, never a caller flag: a trusted CI trigger with a resolvable token gets
-  the writable Actions-cache backend; everything else is read-only. See
+  the writable Actions-cache backend; everything else is read-only. A job that
+  reads the cache but should not populate it can decline the write for itself with
+  [`CACHE_READ_ONLY`](docs/configuration.md#cache_read_only) -- a one-way ratchet
+  that can only narrow what runtime context already allowed. See
   [Trust and security](docs/trust-and-security.md).
 - **Correct over clever.** Every read fault degrades to a cache MISS (a rebuild),
   never a wrong result or a broken build. That covers read **faults**, and it

@@ -23,16 +23,22 @@ read-write-versus-reader switch:
 
 | Context                                                                                                   | Backend                                 | Observable behavior                                                                                   |
 | --------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Untrusted (a developer machine, a fresh runner, an untrusted trigger)                                     | read-only GitHub Releases **reader**    | reads resolve from the mirror; a `put()` always returns `403`                                         |
+| Untrusted (a developer machine, a fresh runner, an untrusted trigger)                                     | read-only GitHub Releases **reader**    | reads resolve from the mirror; the server answers every `PUT` with `403`                              |
 | Trusted, but `GITHUB_REPOSITORY` is malformed                                                             | none -- it **throws**                   | fail-closed: the server does not start, rather than resolve into another repository's cache namespace |
-| Trusted, valid identity, but no resolvable token                                                          | an **empty read-only memory backend**   | **every read is a permanent MISS and every write a `403`, silently -- no error**                      |
+| Trusted, valid identity, but no resolvable token                                                          | an **empty read-only memory backend**   | **every read is a permanent MISS and every `PUT` a `403`, silently -- no error**                      |
 | Trusted, valid identity, resolvable token                                                                 | the writable **Actions-cache backend**  | full read-write caching                                                                               |
-| Trusted, valid identity, resolvable token, plus [`CACHE_READ_ONLY`](configuration.md#cache_read_only) set | the read-only **Actions-cache backend** | reads resolve from the real Actions cache; a `put()` always returns `403`                             |
+| Trusted, valid identity, resolvable token, plus [`CACHE_READ_ONLY`](configuration.md#cache_read_only) set | the read-only **Actions-cache backend** | reads resolve from the real Actions cache; the server answers every `PUT` with `403`                  |
+
+A read-only backend has **no `put()` at all** -- a write is unrepresentable rather
+than a runtime error value, and the `403` is produced by the server at the protocol
+boundary. So do not implement `put()` returning `'forbidden'` when supplying your
+own reader: `PutResult` is `'stored' | 'conflict'`, and a `'forbidden'` return does
+not typecheck.
 
 The third row is the one adopters actually hit: a trusted CI trigger with no
 `GH_TOKEN` / `GITHUB_TOKEN` wired does not fail -- it degrades to an empty backend
-that MISSes every read and `403`s every write with no error, so a "cache that
-never hits" on CI usually means a missing token, not a bug.
+that MISSes every read, with every `PUT` answered `403` and no error raised, so a
+"cache that never hits" on CI usually means a missing token, not a bug.
 
 What it needs from you:
 

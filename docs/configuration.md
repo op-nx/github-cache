@@ -88,8 +88,18 @@ already returned a read-only backend or thrown -- so it can only NARROW the outc
 never widen one: it cannot resurrect a backend an earlier branch declined. With it
 set on a context that would otherwise get the writable backend, the server
 constructs the read-only Actions-cache backend instead: reads resolve from the real
-Actions cache, and every write returns `403`. Unset (or empty) leaves the default
-read-write behaviour untouched.
+Actions cache, and the server answers every `PUT` with `403`. Unset (or empty) leaves
+the default read-write behaviour untouched.
+
+**Any non-empty value narrows -- including `false`, `0`, `no` and `off`.** The knob is
+read as bare truthiness, never parsed, because on a one-way ratchet that is the
+fail-SAFE direction: a typo like `flase` still declines the write, whereas a
+`'true'`-matching parser would silently restore the WRITABLE backend. The cost is that
+`CACHE_READ_ONLY: false` does NOT mean "read-write" -- it declines the write just as
+firmly as `1`. In YAML, `CACHE_READ_ONLY: ${{ ... }}` rendering to `false` behaves the
+same way. To leave a job read-write, do not set the variable at all (or set it to the
+empty string); a producer configured with a falsy-looking value goes permanently cold
+and nothing in the job reports it.
 
 Why you would want it: a leg that should read the cache another job populated, but
 whose own writes are redundant or unwanted -- the same posture GitHub documents for
@@ -106,8 +116,8 @@ but empty value falls through to the next source). The resolved token is used to
 - authenticate the opt-in Releases reader (tier 1 of the local-read chain).
 
 On a trusted trigger with **no** resolvable token the server does NOT fail -- it
-degrades to an empty read-only backend that MISSes every read and `403`s every
-write, silently. That is one of the five backend-selection outcomes; see
+degrades to an empty read-only backend that MISSes every read, with every `PUT`
+answered `403`, silently. That is one of the five backend-selection outcomes; see
 [How the backend is selected](advanced.md#how-the-backend-is-selected) for the
 full table rather than a binary framing.
 

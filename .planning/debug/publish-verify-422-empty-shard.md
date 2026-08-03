@@ -597,9 +597,66 @@ The classifier fix in `e96670e` stands on its own merit regardless of the settin
 this class of failure fail LOUD at the point of failure instead of surfacing one job later in the
 wrong subsystem. It is not a workaround for immutability.
 
-### Still to verify
+### Verification window RESULT -- run 30773689490. The fix WORKS. A SECOND defect is now the blocker.
 
-The fix and the setting change are both unproven end to end. Sequencing chosen by the maintainer:
-setting first (done), then a single authorised `main` window to prove `publish` and
-`publish-verify` both go green -- backup ref first, PR #16 closed first, `main` restored and the
-restore verified afterwards.
+Window executed and closed cleanly (see the log at the end of this section). Outcome:
+
+| | Before (`30767511870`) | After (`30773689490`) |
+|---|---|---|
+| `publish` | **green**, having mirrored nothing | **RED, at the point of failure** |
+| `publish-verify` | **red**, naming the wrong subsystem | `skipped` (never reached) |
+
+**That inversion is exactly what `e96670e` was for** and it is the fix's proof: the failure stopped
+laundering itself through a downstream job. The run is still red, but for an honest reason now.
+
+### E10 -- the SAME defect class exists at a SECOND site, and this session wrongly cleared it
+
+`publish` now dies with an UNCAUGHT `Not Found` on `get-a-release-by-tag-name`, on both legs
+(ubuntu 00:11:07, windows 00:14:10 -- three minutes apart, so not a race).
+
+`ensureShardRelease` has exactly one unguarded `getReleaseByTag`: the one INSIDE its 422 branch.
+So the measured sequence is forced:
+
+1. `getReleaseByTag('cache-mirror-202608')` -> **404** -> caught, falls through (correct)
+2. `createRelease('cache-mirror-202608')` -> **422** -> caught, assumed "another leg won the race"
+3. `getReleaseByTag('cache-mirror-202608')` -> **404 again** -> **UNCAUGHT** -> job dies
+
+**Step 2's assumption is falsified by direct measurement.** After the run, all four probes agree
+that nothing was created by anyone: no `cache-mirror-202608` release, no `cache-mirror-202608` tag
+ref (exit 1, with `cache-mirror-202607` as a passing positive control), no draft release, and the
+only `cache-mirror` tag on the remote is `202607`. A 422 meaning `already_exists` is impossible
+when the resource provably does not exist -- the identical logic that broke the upload path.
+
+This session explicitly cleared that branch in `e96670e`'s own commit body: *"The
+`ensureShardRelease` 422 branch is untouched -- that one is a genuine [race]"*. **That reasoning
+was wrong**, and it was wrong in precisely the way the session had just finished diagnosing one
+level down: `statusOf(error) === 422` tested alone, never the body's `errors[].code`. The fix
+closed one instance of the defect and left its sibling standing, then that sibling became the
+blocker on the very next run.
+
+**Why `createRelease` is rejected is NOT established.** The body is still unreadable for the same
+structural reason as E1 (the octokit request-log plugin logs no response body), and `createRelease`
+has no `uploadFaultCode` equivalent. Candidates, none measured: the immutable-releases setting not
+actually taking effect on this path, an org-level policy the repo toggle does not cover
+(`orgs/op-nx/rulesets` still needs `admin:org`), or a tag/ruleset restriction on `cache-mirror-*`.
+
+**Next move, and it is the only one that can see the body:** apply the same `errors[].code`
+discrimination to `ensureShardRelease` -- reuse `uploadFaultCode` (rename it to something
+site-neutral), require an explicit `already_exists` before the re-GET, and log the real code on
+every other 422. Then one more `main` window makes GitHub name its own reason.
+
+### Window log -- every step verified, not assumed
+
+| Step | Result |
+|------|--------|
+| Backup `main` | `refs/backups/main-pre-publish-verify-window` -> `fe25a3f`, confirmed present on the remote BEFORE the push |
+| Close PR #16 first | `state=CLOSED mergedAt=null` (its head `1162a01` WAS the tip being pushed, so this was mandatory) |
+| Push | `fe25a3f..1162a01` -> `refs/heads/main` |
+| PR #16 immediately after push | still `CLOSED mergedAt=null` -- the permanent-merge trap did not fire |
+| Restore `main` | `--force-with-lease` back to `fe25a3f`, re-read from the remote and confirmed |
+| PR #16 after restore | `CLOSED mergedAt=null`, then reopened -> `OPEN`, `mergedAt=null` |
+
+Also cleaned up beforehand and worth noting for the next window: the dead `cache-mirror-202608`
+release and tag were both deleted, so this run exercised the create-from-scratch path for the
+first time this month. That is WHY the second defect surfaced now rather than staying latent --
+before the deletion, `getReleaseByTag` always succeeded and steps 2 and 3 never ran.

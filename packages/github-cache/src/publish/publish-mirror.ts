@@ -53,8 +53,11 @@ export interface PublishRelease {
  *
  * listReleaseAssets returns the FULLY materialized set of asset names (the real adapter
  * paginates, never reading a release's inline `assets` first-page snapshot -- Pitfall 4).
- * getReleaseByTag throws a 404 when the shard does not exist yet; createRelease throws a
- * 422 when another matrix leg created the tag first.
+ * getReleaseByTag throws a 404 when the shard does not exist yet. createRelease throws a
+ * 422 for SEVERAL distinct reasons, only one of which is "another matrix leg created the
+ * tag first": GitHub multiplexes six `errors[].code` values onto that one status, and
+ * policy rejections arrive as `custom`. Which one it is can only be read from the BODY --
+ * see faultReason and the ensureShardRelease catch below.
  *
  * uploadReleaseAsset's `label` is free-form Release METADATA (OBS-03), deliberately
  * outside the lookup name -- see the construction site below for what it does and does
@@ -103,11 +106,87 @@ export interface PublishOptions {
 }
 
 /**
+ * The shape of the only part of a fault's body this module reads. Declared rather than
+ * inlined so the cast below is one expression instead of several nested `typeof` guards;
+ * every field is optional because NONE of them is guaranteed.
+ */
+interface FaultBody {
+  readonly response?: {
+    readonly data?: { readonly errors?: unknown; readonly message?: unknown };
+  };
+}
+
+/** GitHub's own reason for a rejected request, as far as the body reveals it. */
+interface FaultReason {
+  readonly code?: string;
+  readonly message?: string;
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * GitHub's OWN reason for a rejected request, read from the 422 body: the `code` is the
+ * first `errors[]` entry carrying a string `code`, and the `message` is THAT SAME entry's
+ * `message` when it is a string, falling back to the top-level `data.message`. Either
+ * field is undefined when the body is absent, is not the documented shape, or carries
+ * nothing readable.
+ *
+ * It serves BOTH 422 sites -- the createRelease catch in ensureShardRelease above and the
+ * uploadReleaseAsset catch below -- so the defect class is closed at both instances by one
+ * reader rather than by two body-parsers that can drift.
+ *
+ * WHY THE MESSAGE AND NOT ONLY THE CODE. GitHub's `errors[].code` enum is GLOBAL rather
+ * than per-endpoint and has exactly six members (missing, missing_field, invalid,
+ * already_exists, unprocessable, custom). Policy rejections -- rulesets, immutability, org
+ * settings -- get no code of their own: they arrive as `custom`, whose documented meaning
+ * is literally "refer to the message property to diagnose the error". A code-only reader
+ * is therefore a reader that CANNOT diagnose; it prints "code custom" and the next
+ * investigation window buys nothing. The top-level `data.message` is read too because some
+ * 422 bodies carry no `errors` array at all.
+ *
+ * Undefined is NOT benign, and neither call site may treat it as such: a status-only
+ * classifier that guessed benign is the entire defect this function exists to close, so
+ * re-introducing the guess one level down -- "unreadable body, probably a duplicate" --
+ * would be the same bug with more steps. Only an explicit `already_exists` earns the skip.
+ * Optional chaining absorbs a null/undefined error and a primitive one alike, so no
+ * caller-side pre-check is needed.
+ */
+function faultReason(error: unknown): FaultReason {
+  const data = (error as FaultBody | null)?.response?.data;
+  const errors = data?.errors;
+  const entry = Array.isArray(errors)
+    ? errors.find(
+        (candidate): candidate is { code: string; message?: unknown } =>
+          typeof (candidate as { code?: unknown } | null)?.code === 'string',
+      )
+    : undefined;
+
+  return {
+    code: entry?.code,
+    message:
+      stringOrUndefined(entry?.message) ?? stringOrUndefined(data?.message),
+  };
+}
+
+/**
  * Get-or-create the month-shard release, tolerating a concurrent-create race across the
  * per-OS matrix legs (D-05). Structural fault discrimination throughout (ROBUST-01):
  * only a 404 on the lookup means "not created yet"; a 422 on create means "another leg
- * created the tag first" -> re-read. Every other status is a REAL fault and propagates,
- * never inferred as absence.
+ * created the tag first" ONLY when the body explicitly says `already_exists`. Every other
+ * status, and every other 422, is a REAL fault and propagates, never inferred as absence.
+ *
+ * THE STATUS-ONLY READING WAS FALSIFIED BY MEASUREMENT, not by review. On run 30773689490
+ * both publish legs took the 422-means-race path, and afterwards there was NO
+ * `cache-mirror-202608` release, no such tag ref (exit 1, with `cache-mirror-202607` as a
+ * passing positive control) and no draft. A 422 cannot mean already_exists when the
+ * resource provably does not exist. The unguarded re-GET then 404'd and killed the job on
+ * a bare Not Found that named neither the tag nor the operation. Commit `e96670e` fixed
+ * exactly this defect at the upload site one level down, and its commit body CLEARED this
+ * site by reasoning rather than by measuring it -- "the ensureShardRelease 422 branch is
+ * untouched, that one is a genuine race" -- which is how the sibling became the next
+ * blocker. When a defect CLASS is fixed, sweep every instance of it.
  */
 async function ensureShardRelease(
   client: PublishClient,
@@ -128,46 +207,45 @@ async function ensureShardRelease(
 
     return release.id;
   } catch (error) {
-    if (statusOf(error) === 422) {
-      const release = await client.getReleaseByTag(tag);
+    const reason = faultReason(error);
 
-      return release.id;
+    if (statusOf(error) === 422 && reason.code === 'already_exists') {
+      // GUARDED, even on a genuine race. This re-GET is a read-after-write: it can 404
+      // transiently right after another leg's create, and get-by-tag does not resolve
+      // DRAFT releases at all. Unguarded it propagates octokit's bare "Not Found", which
+      // is what run 30773689490 actually died on -- a message naming neither the tag nor
+      // the operation, one job away from any reader who could act on it.
+      try {
+        const release = await client.getReleaseByTag(tag);
+
+        return release.id;
+      } catch (reReadError) {
+        throw new Error(
+          `github-cache: the re-read of shard release ${tag} after an already_exists 422 failed (status ${statusOf(reReadError) ?? 'unknown'}).`,
+          { cause: reReadError },
+        );
+      }
     }
+
+    // THIS FAULT THROWS while D-12's oversized-asset fault only counts, and the two are
+    // not in contradiction -- they are the two halves of the whole-run-vs-per-item split
+    // (D-13) this file already draws. An oversized asset is a PER-ITEM fault: the rest of
+    // the batch is still mirrorable, so counting it keeps the later entries and the
+    // accumulated counts. A shard that cannot be CREATED makes every remaining upload
+    // impossible, so isolating it would produce 32 identical warnings -- noise, not
+    // signal. The status quo already threw here, so propagating is not a regression.
+    //
+    // The ORIGINAL error is rethrown rather than the annotation: `statusOf` stays readable
+    // downstream, and the existing whole-run-throw cases stay honest.
+    //
+    // Only the tag, the numeric status, GitHub's own code and GitHub's own message are
+    // logged -- never a token, never a raw workflow-command string.
+    core.error(
+      `github-cache: createRelease ${tag} was rejected (status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${reason.message ?? 'unknown'}); this is NOT a create race -- only an explicit already_exists is.`,
+    );
 
     throw error;
   }
-}
-
-/**
- * The shape of the only part of an upload fault's body this module reads. Declared
- * rather than inlined so the cast below is one expression instead of four nested
- * `typeof` guards; every field is optional because NONE of them is guaranteed.
- */
-interface UploadFaultBody {
-  readonly response?: { readonly data?: { readonly errors?: unknown } };
-}
-
-/**
- * GitHub's OWN reason code for a rejected upload, read from the 422 body's
- * `errors[].code`, or undefined when the body is absent, is not the documented shape,
- * or carries no string `code`.
- *
- * Undefined is NOT benign, and the call site must not treat it as such: a status-only
- * classifier that guessed benign is the entire defect this function exists to close, so
- * re-introducing the guess one level down -- "unreadable body, probably a duplicate" --
- * would be the same bug with more steps. Only an explicit `already_exists` earns the skip.
- * Optional chaining absorbs a null/undefined error and a primitive one alike, so no
- * caller-side pre-check is needed.
- */
-function uploadFaultCode(error: unknown): string | undefined {
-  const errors = (error as UploadFaultBody | null)?.response?.data?.errors;
-
-  return Array.isArray(errors)
-    ? errors.find(
-        (entry): entry is { code: string } =>
-          typeof (entry as { code?: unknown } | null)?.code === 'string',
-      )?.code
-    : undefined;
 }
 
 /**
@@ -361,7 +439,7 @@ export async function publishMirror(
       shard.names.add(name);
       mirrored++;
     } catch (error) {
-      const code = uploadFaultCode(error);
+      const reason = faultReason(error);
 
       // D-05 first-write-wins: a duplicate-upload race (another leg wrote the same
       // byte-identical name between our list and our upload) is a benign no-op -- but
@@ -375,8 +453,8 @@ export async function publishMirror(
       // legs exited GREEN having mirrored nothing. The failure surfaced one job later in
       // publish-verify, naming the wrong subsystem. An UNREADABLE body is not benign
       // either -- it falls through to the fault branch, because guessing benign is the
-      // defect (see uploadFaultCode).
-      if (statusOf(error) === 422 && code === 'already_exists') {
+      // defect (see faultReason).
+      if (statusOf(error) === 422 && reason.code === 'already_exists') {
         skipped++;
 
         continue;
@@ -384,14 +462,16 @@ export async function publishMirror(
 
       // A real per-item fault (401/403/429/5xx, and every non-already_exists 422):
       // annotate + count, but isolate it so the rest of the batch still mirrors (D-13).
-      // The warning carries GitHub's own reason code alongside the asset name and status,
-      // so the next occurrence names itself in the job log instead of needing a body dive
-      // that the octokit request-log plugin makes impossible (it logs no response body).
-      // Only the name, the numeric status and that code are logged -- never a token,
-      // never a raw workflow-command string.
+      // The warning carries GitHub's own reason code AND its own message alongside the
+      // asset name and status, so the next occurrence names itself in the job log instead
+      // of needing a body dive that the octokit request-log plugin makes impossible (it
+      // logs no response body). The message is what makes a `code: custom` policy
+      // rejection diagnosable at all -- the code alone says only "read the message".
+      // Only the name, the numeric status, that code and GitHub's own message are logged
+      // -- never a token, never a raw workflow-command string.
       failed++;
       core.warning(
-        `github-cache: failed to mirror ${name} (status ${statusOf(error) ?? 'unknown'}, code ${code ?? 'unknown'}); continuing.`,
+        `github-cache: failed to mirror ${name} (status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${reason.message ?? 'unknown'}); continuing.`,
       );
     }
   }

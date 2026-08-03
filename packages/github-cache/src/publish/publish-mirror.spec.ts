@@ -6,6 +6,7 @@ import {
   cachePlatform,
   releaseAssetName,
 } from '../lib/release-asset-name.js';
+import { shardTag } from '../lib/retention.js';
 import { octokitFault } from '../test/octokit-fault.js';
 import {
   publishMirror,
@@ -57,6 +58,13 @@ vi.mock('../lib/release-asset-name.js', async (orig) => {
 
 const HASH = 'abc123' as Hash;
 const SHARD_ID = 555;
+
+/**
+ * A PINNED clock for the cases that assert on the shard TAG. The tag is derived through
+ * `shardTag(NOW)` rather than spelled as a literal, so the month-shard scheme lives in
+ * exactly one place and this file cannot drift from it.
+ */
+const NOW = new Date('2026-08-15T00:00:00Z');
 
 const cachePlatformMock = vi.mocked(cachePlatform);
 
@@ -316,7 +324,13 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
       uploadReleaseAsset: vi.fn(async () => {
         throw octokitFault(422, {
           message: 'Validation Failed',
-          errors: [{ resource: 'ReleaseAsset', code: 'immutable' }],
+          errors: [
+            {
+              resource: 'ReleaseAsset',
+              code: 'immutable',
+              message: 'Release asset is immutable',
+            },
+          ],
         });
       }),
     });
@@ -333,6 +347,16 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
     // Annotated per item, and loud in aggregate -- the two halves that were both missing.
     expect(core.warning).toHaveBeenCalledOnce();
     expect(core.setFailed).toHaveBeenCalledOnce();
+    // The upload site's observability gap is the CREATE site's gap one level down, so it
+    // closes here in the same commit: a `code: custom` policy rejection has to be
+    // diagnosable from the job log alone.
+    //
+    // `code immutable` and not the bare token: the MESSAGE also contains the word
+    // "immutable", so a bare `toContain('immutable')` would pass with the code slot empty
+    // -- it would assert the message twice rather than the code once.
+    const warned = vi.mocked(core.warning).mock.calls[0][0];
+    expect(warned).toContain('code immutable');
+    expect(warned).toContain('Release asset is immutable');
   });
 });
 
@@ -357,7 +381,10 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
     );
   });
 
-  it('re-reads the shard by tag when createRelease 422s (another leg won the create race)', async () => {
+  it('re-reads the shard by tag when the createRelease 422 body EXPLICITLY says already_exists', async () => {
+    // THE POSITIVE CONTROL, not the RED: a genuine create race still takes the re-read
+    // path. Its fault now carries an EXPLICIT `already_exists` body, because the status
+    // ALONE no longer earns that path -- see the two rejection cases below.
     const getReleaseByTag = vi
       .fn<PublishClient['getReleaseByTag']>()
       .mockRejectedValueOnce(octokitFault(404))
@@ -365,7 +392,7 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
     const fake = client({
       getReleaseByTag,
       createRelease: vi.fn(async () => {
-        throw octokitFault(422);
+        throw octokitFault(422, { errors: [{ code: 'already_exists' }] });
       }),
     });
 
@@ -378,6 +405,88 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
       releaseAssetName(HASH),
       expect.anything(),
       LABEL,
+    );
+  });
+
+  it('REJECTS a createRelease 422 whose body is UNREADABLE, never re-GETting on a guess', async () => {
+    // Fail CLOSED. An absent body carries no `already_exists`, so it is not a race, and
+    // reading it as one is the whole defect: run 30773689490 took the race path on both
+    // publish legs and afterwards NOTHING existed for a race to have created -- no
+    // release, no tag ref, no draft. The re-GET then 404'd and killed the job with a bare
+    // Not Found, naming nothing.
+    const getReleaseByTag = vi
+      .fn<PublishClient['getReleaseByTag']>()
+      .mockRejectedValueOnce(octokitFault(404))
+      .mockResolvedValueOnce({ id: SHARD_ID });
+    const fake = client({
+      getReleaseByTag,
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422);
+      }),
+    });
+
+    await expect(publishMirror(fake)).rejects.toThrow();
+
+    // The INITIAL lookup only. A second call would mean the re-GET ran, which is exactly
+    // the guess this case forbids -- and the mock is primed to RESOLVE on that second
+    // call, so a re-GET would turn the whole run green rather than merely red elsewhere.
+    expect(getReleaseByTag).toHaveBeenCalledOnce();
+    expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
+  });
+
+  it('REJECTS a POLICY 422 and names the tag, the code AND GitHub own message in one core.error line (B2)', async () => {
+    // B2 in one clause. GitHub's `errors[].code` enum is GLOBAL and six-membered, and a
+    // policy rejection (ruleset, immutability, org setting) arrives as `custom` with the
+    // entire diagnostic in `message`. A code-only reader prints "code custom" and the next
+    // window is spent for nothing, so the MESSAGE is the load-bearing half here.
+    const fake = client({
+      getReleaseByTag: vi.fn(async () => {
+        throw octokitFault(404);
+      }),
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [
+            {
+              resource: 'Release',
+              code: 'custom',
+              field: 'tag_name',
+              message: 'Tag name cannot be reused',
+            },
+          ],
+        });
+      }),
+    });
+
+    await expect(publishMirror(fake, { now: NOW })).rejects.toThrow();
+
+    // Read the ONE recorded call and assert the three substrings against it. Asserting
+    // three separate `toHaveBeenCalledWith(stringContaining(...))` would be satisfied by
+    // three DIFFERENT calls each carrying one substring; the whole point is that a single
+    // log line is readable on its own.
+    expect(core.error).toHaveBeenCalledOnce();
+    const logged = vi.mocked(core.error).mock.calls[0][0];
+    expect(logged).toContain(shardTag(NOW));
+    expect(logged).toContain('custom');
+    expect(logged).toContain('Tag name cannot be reused');
+  });
+
+  it('names the tag when the re-read after a genuine already_exists itself 404s', async () => {
+    // The re-GET is read-after-write against an endpoint that can 404 transiently and
+    // that does not resolve DRAFT releases at all. Unguarded, it propagates octokit's
+    // bare "Not Found", which names neither the tag nor the operation -- and that is the
+    // message run 30773689490 died on.
+    const fake = client({
+      getReleaseByTag: vi.fn(async () => {
+        throw octokitFault(404);
+      }),
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422, { errors: [{ code: 'already_exists' }] });
+      }),
+    });
+
+    await expect(publishMirror(fake, { now: NOW })).rejects.toThrow(
+      `re-read of shard release ${shardTag(NOW)}`,
     );
   });
 

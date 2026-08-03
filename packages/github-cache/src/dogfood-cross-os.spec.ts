@@ -568,14 +568,49 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
         'only: MEASURED on run 30768540898, every ubuntu producer HIT, nothing was written ' +
         'to the PR merge ref, and the entry the Windows legs actually read lives in the ' +
         'DEFAULT-branch scope -- so an equality test reports "the entry may never have ' +
-        'existed" about an entry that does exist. The allowlist is exactly the scope a run ' +
-        'can genuinely read: its own ref, plus a NON-EMPTY base ref. The pattern no longer ' +
-        'requires the select to CLOSE after the ref allowlist, because there is now a ' +
-        'THIRD conjunct after it (the created_at type guard); the close is pinned by that ' +
-        'clause instead, so nothing was traded away -- both conjuncts asserted here still ' +
-        'have to appear in this exact literal adjacency.',
+        'existed" about an entry that does exist. The allowlist must be exactly the scope a ' +
+        'run can genuinely read, and that is THREE refs and not two: its own ref, a ' +
+        'NON-EMPTY base ref, and a NON-EMPTY DEFAULT-branch ref. The third is not optional ' +
+        'padding -- `on.pull_request` carries no `branches:` filter, so a STACKED pull ' +
+        'request (base != the default branch) reaches this job, and on the Case-B shape ' +
+        'above the row proving prior existence lives on the DEFAULT branch, which neither ' +
+        'of the other two arms matches. Dropping it reproduces the same wrong-cause report ' +
+        'one scope over: the witness discards a row the request already returned and blames ' +
+        'a ref it can read. The pattern no longer requires the select to CLOSE after the ' +
+        'ref allowlist, because there is now a conjunct after it (the created_at type ' +
+        'guard); the close is pinned by that clause instead, so nothing was traded away -- ' +
+        'every arm asserted here still has to appear in this exact literal adjacency.',
     ).toMatch(
-      /select\(\s*\.key == \$key and \(\.ref == \$ref or \(\$baseref != "" and \.ref == \$baseref\)\)/,
+      /select\(\s*\.key == \$key and \(\.ref == \$ref or \(\$baseref != "" and \.ref == \$baseref\) or \(\$defaultref != "" and \.ref == \$defaultref\)\)/,
+    );
+  });
+
+  // THE ARG THE ALLOWLIST ARM READS, pinned separately from the arm itself because the two
+  // fail differently and only one is visible. `--arg defaultref` bound to an UNSET shell
+  // variable would abort the step under `set -u`; bound to an EMPTY one the arm above is
+  // structurally present and permanently false, so the clause above stays green while the
+  // default-branch scope is silently unreadable again. Reading the branch from the event
+  // payload rather than a hardcoded `main` is the other half: a literal fails OPEN on a
+  // branch rename, since a ref matching nothing just drops out of the allowlist.
+  it('derives the default-branch ref from the event payload, so the third arm is never empty', () => {
+    const block = jobBlock('o3-witness');
+
+    expect(
+      block,
+      'o3-witness must pass the repository default branch into the step environment as ' +
+        'DEFAULT_BRANCH, read from `github.event.repository.default_branch`. Both triggers ' +
+        'carry `repository`. Hardcoding `main` fails OPEN the day the branch is renamed.',
+    ).toMatch(
+      /^ {10}DEFAULT_BRANCH: \$\{\{ github\.event\.repository\.default_branch \}\}$/m,
+    );
+
+    expect(
+      block,
+      'o3-witness must build `default_ref` as `refs/heads/${DEFAULT_BRANCH}` under a ' +
+        'non-empty guard. The `:-` default form is required rather than tidy: the step runs ' +
+        'under `set -euo pipefail`, so reading the variable bare would abort it outright.',
+    ).toMatch(
+      /default_ref=''\n\s*if \[ -n "\$\{DEFAULT_BRANCH:-\}" \]; then\n\s*default_ref="refs\/heads\/\$\{DEFAULT_BRANCH\}"\n\s*fi/,
     );
   });
 

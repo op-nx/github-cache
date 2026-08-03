@@ -1213,6 +1213,11 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The repository's own default branch, read from the event payload rather than
+          # hardcoded: both triggers (`push` and `pull_request`) carry `repository`, and a
+          # literal `main` here would silently stop matching the day the branch is renamed --
+          # failing OPEN, since a ref that matches nothing simply drops out of the allowlist.
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           {
@@ -1235,6 +1240,24 @@ jobs:
             base_ref=''
             if [ -n "${GITHUB_BASE_REF:-}" ]; then
               base_ref="refs/heads/${GITHUB_BASE_REF}"
+            fi
+            # THE DEFAULT BRANCH IS THE THIRD READABLE SCOPE, and omitting it made the
+            # allowlist NARROWER than the scope this run can genuinely read -- while the
+            # paragraph below names that very scope as the reason the server-side filter was
+            # dropped. `on.pull_request` carries no `branches:` filter, so a STACKED pull
+            # request (base != the default branch) triggers this job, and on the exact shape
+            # the widening was built for -- Case B, every ubuntu producer HITs so nothing is
+            # written to this run's own ref -- the row proving prior existence lives on the
+            # DEFAULT branch. With only own-ref and base-ref allowed, the jq below discards a
+            # row the request already returned and the witness reports "no cache entry on any
+            # ref this run can read" about a ref it demonstrably CAN read: the misattributing
+            # wrong-cause report this block was rewritten to eliminate, reproduced one scope
+            # over. On a push to the default branch, and on a PR whose base IS the default
+            # branch, this arg duplicates one of the other two -- harmless, and the reason the
+            # gap stayed invisible.
+            default_ref=''
+            if [ -n "${DEFAULT_BRANCH:-}" ]; then
+              default_ref="refs/heads/${DEFAULT_BRANCH}"
             fi
             # NO SERVER-SIDE ref NARROW ON THE REQUEST, and dropping it is the fix rather
             # than a simplification. A `&ref=` parameter can only ever return rows on the
@@ -1327,12 +1350,12 @@ jobs:
               exit 1
             fi
             entry=$(printf '%s' "${caches_body}" \
-              | jq -c --arg key "${key}" --arg ref "${GITHUB_REF}" --arg baseref "${base_ref}" \
-                '[.actions_caches[] | select(.key == $key and (.ref == $ref or ($baseref != "" and .ref == $baseref)) and (.created_at | type) == "string")] | sort_by(.created_at) | first // empty')
+              | jq -c --arg key "${key}" --arg ref "${GITHUB_REF}" --arg baseref "${base_ref}" --arg defaultref "${default_ref}" \
+                '[.actions_caches[] | select(.key == $key and (.ref == $ref or ($baseref != "" and .ref == $baseref) or ($defaultref != "" and .ref == $defaultref)) and (.created_at | type) == "string")] | sort_by(.created_at) | first // empty')
             created=$(printf '%s' "${entry}" | jq -r '.created_at // empty')
             matched_ref=$(printf '%s' "${entry}" | jq -r '.ref // empty')
             if [ -z "${created}" ]; then
-              echo "o3-witness: FAIL -- no cache entry whose key is EXACTLY ${key} on any ref this run can read (own ref ${GITHUB_REF}, base ref '${base_ref}'). Two causes, and this message cannot tell them apart: the entry never existed, or it exists only OUTSIDE this run's readable scope. Either way the Windows MISS is NOT attributable." >&2
+              echo "o3-witness: FAIL -- no cache entry whose key is EXACTLY ${key} on any ref this run can read (own ref ${GITHUB_REF}, base ref '${base_ref}', default ref '${default_ref}'). Two causes, and this message cannot tell them apart: the entry never existed, or it exists only OUTSIDE this run's readable scope. Either way the Windows MISS is NOT attributable." >&2
               exit 1
             fi
             # Both selectors are literals that must match the integration job's step name

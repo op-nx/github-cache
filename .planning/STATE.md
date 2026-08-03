@@ -32,9 +32,11 @@ Plan: 6 of 6
 Status: COMPLETE. All six plans executed, verified 7/7, and the full audit tail closed this session:
 secure-phase 27/27 threats closed, validate-phase nyquist_compliant, learnings extracted and pooled
 Progress: 7/7 phases complete [##########] 100%
-Last activity: 2026-08-03 -- Quick 260803-0rr closed assumption A1 and propagated both live-CI
-closures across five artifacts. Milestone v0.0.2 awaits /gsd:audit-milestone, but the merge is
-still BLOCKED on the `publish-verify` regression (PR #16)
+Last activity: 2026-08-03 -- Quick 260803-fcd CLOSED the `publish-verify` blocker, proven live on
+run `30807461616` (FULL GREEN, zero failed jobs, fresh `nx-cache-202608` shard with 69 assets).
+Earlier the same day: 260803-0rr closed assumption A1 across five artifacts, and 260803-3g1 swept
+the status-only-422 defect class. **PR #16 is no longer blocked**; milestone v0.0.2 awaits
+/gsd:audit-milestone. 1011 tests.
 
 **BOTH AUDIT GATES FOUND REAL GAPS, and neither was visible by reading.** Each found a mechanical
 control that a plan DECLARED and that did not exist -- and in both cases the STATE was correct, so

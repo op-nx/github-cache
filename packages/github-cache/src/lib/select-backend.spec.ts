@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import * as cache from '@actions/cache';
 import {
@@ -518,4 +519,104 @@ describe('TRUST-14: CACHE_READ_ONLY is a ROLE signal that can only narrow', () =
       ).toBe(true);
     },
   );
+});
+
+/**
+ * `select-backend.ts` as TEXT, comment-stripped, for the two structural clauses below.
+ *
+ * COMMENT-STRIPPED IS THE POINT, not a convenience. Both properties these clauses assert are
+ * about CODE order and CODE form; prose that discusses either must not be able to satisfy or
+ * break them. The stripped read is also what frees the function's own JSDoc to DOCUMENT the
+ * knob -- the previous arrangement forbade naming it up there on the grounds that "a second
+ * mention up here would defeat the check", which was true only of a raw first-occurrence
+ * scan and is no longer a constraint on either the guard or the documentation.
+ *
+ * Read via import.meta.url (the pinned-deps / cleanup-workflow idiom), never process.cwd(),
+ * so the subject resolves from this file's own location rather than the runner's cwd.
+ */
+const selectBackendCode = readFileSync(
+  new URL('./select-backend.ts', import.meta.url),
+  'utf8',
+)
+  .split('\n')
+  .filter((line) => {
+    const trimmed = line.trim();
+
+    return (
+      !trimmed.startsWith('//') &&
+      !trimmed.startsWith('*') &&
+      !trimmed.startsWith('/*')
+    );
+  })
+  .join('\n');
+
+/**
+ * BRANCH ORDER AND KNOB FORM, made mechanical.
+ *
+ * The source comments claimed BOTH of these were already checked -- "the 'it is last'
+ * guarantee is checked mechanically by first-occurrence position" and "a zero-count grep for
+ * it guards this file" -- and NEITHER was. The first was an ad-hoc `indexOf` comparison run
+ * once during plan 13-03 that never became a clause; `git grep "zero-count"` returned only
+ * the comment asserting it. The behavioural table above is blind to the ordering for the
+ * reason its own T-13-03-E1 clause records: `outcomeOf` collapses BOTH read-only outcomes to
+ * one token, so a knob hoisted above `resolveGitHubToken` keeps every row passing.
+ *
+ * A phantom guard is worse than an absent one here, because the claim was the stated REASON
+ * for two other choices -- not documenting the knob in the JSDoc, and not quoting the
+ * rejected equality form. A maintainer told a positional check already exists is free to
+ * delete the one behavioural clause that partially covers it as redundant.
+ */
+describe('select-backend.ts keeps the knob LAST and reads it as bare truthiness (TRUST-14)', () => {
+  it('places the knob branch AFTER every narrowing branch and BEFORE the writable return', () => {
+    const token = selectBackendCode.indexOf('resolveGitHubToken(env)');
+    const knob = selectBackendCode.indexOf('env.CACHE_READ_ONLY');
+    const writable = selectBackendCode.indexOf(
+      'return createActionsCacheBackend()',
+    );
+
+    // POSITIVE CONTROLS: three `indexOf` misses are all -1, and -1 < -1 is false, so a
+    // renamed anchor would fail the ordering rather than pass it -- but it would fail with
+    // an unreadable message. Assert each anchor was FOUND so a rename says which one moved.
+    expect(token, 'the token-resolution anchor is gone').toBeGreaterThan(-1);
+    expect(knob, 'the CACHE_READ_ONLY read is gone').toBeGreaterThan(-1);
+    expect(writable, 'the writable return is gone').toBeGreaterThan(-1);
+
+    expect(
+      knob,
+      'CACHE_READ_ONLY must be read AFTER the token-resolution branch. T-13-03-E1 rates the ' +
+        'knob check placed before an existing narrowing branch HIGH, and MEASURED, hoisting ' +
+        'it above resolveGitHubToken left the whole suite green: the narrowing table cannot ' +
+        'see it, because outcomeOf collapses the memory-degrade and read-only-Actions ' +
+        'outcomes to the same token. Position IS the narrowing guarantee -- every branch ' +
+        'above has already returned read-only or thrown, so the knob is structurally ' +
+        'incapable of widening. Move it up and it can bypass a fail-safe branch instead.',
+    ).toBeGreaterThan(token);
+
+    expect(
+      knob,
+      'CACHE_READ_ONLY must be read BEFORE the writable return, or the knob is dead code ' +
+        'and every declared consumer leg silently becomes a WRITER again.',
+    ).toBeLessThan(writable);
+  });
+
+  it('reads the knob as bare truthiness, never an equality against a literal', () => {
+    expect(
+      selectBackendCode,
+      'The knob must be read as `if (env.CACHE_READ_ONLY)`. On a one-way ratchet truthiness ' +
+        'is the fail-SAFE direction: a value of `flase` still narrows, whereas an ' +
+        'exact-string parser would silently restore the WRITABLE backend on a typo. This is ' +
+        'the clause the source comment claimed ("a zero-count grep for it guards this file") ' +
+        'while nothing did.',
+    ).toContain('if (env.CACHE_READ_ONLY)');
+
+    expect(
+      selectBackendCode,
+      'select-backend.ts compares CACHE_READ_ONLY against a value. Any equality form -- ' +
+        "=== 'true', == '1', a 'true'/'1'/'yes' parser -- fails in the WRONG direction: a " +
+        'typo or an unexpected casing restores the writable backend on a leg that declared ' +
+        'itself a consumer. Only unset or the empty string may leave the writable outcome ' +
+        'intact, which bare truthiness already gives. Restore the truthiness read; do not ' +
+        'relax this clause.',
+    ).not.toMatch(/CACHE_READ_ONLY\s*[!=]==?/);
+  });
 });

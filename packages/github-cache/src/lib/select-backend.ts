@@ -28,11 +28,14 @@ import { isWriteTrusted } from './trust.js';
  * Untrusted context returns the read-only backend; trusted context validates the
  * repository identity fail-closed, resolves the token, and only then constructs
  * the writable Actions-cache backend -- unless the workflow author has DECLINED
- * write for this leg via the read-only ROLE knob (TRUST-14), the last branch below.
+ * write for this leg via `CACHE_READ_ONLY` (TRUST-14), the last branch below.
  *
- * That knob is named only at its own branch, deliberately: the "it is last" guarantee
- * is checked mechanically by first-occurrence position, so a second mention up here
- * would defeat the check rather than document it.
+ * THE KNOB IS SAFE TO NAME HERE. This block previously refused to, on the grounds that
+ * "the 'it is last' guarantee is checked mechanically by first-occurrence position, so a
+ * second mention up here would defeat the check". No such check existed -- it was an ad-hoc
+ * `indexOf` comparison run once during plan 13-03 that never became a clause. It exists now,
+ * in select-backend.spec.ts, and it reads the COMMENT-STRIPPED source, so prose cannot
+ * satisfy or break it and the documentation cost is gone.
  */
 export function selectBackend(
   env: NodeJS.ProcessEnv = process.env,
@@ -71,7 +74,8 @@ export function selectBackend(
     // read-only-cache changelog exposes no per-job lever. The workflow author supplies the one
     // thing the runner cannot.
     //
-    // POSITION IS THE GUARANTEE, not this paragraph -- do NOT move this check earlier. Every
+    // POSITION IS THE GUARANTEE, and it is now checked rather than asserted -- do NOT move
+    // this check earlier. Every
     // branch above has already returned a read-only backend or thrown, so the only outcome
     // still reachable here is the writable one. The knob is therefore structurally incapable
     // of WIDENING: it cannot resurrect the Releases branch, the fail-closed throw, or the
@@ -84,8 +88,12 @@ export function selectBackend(
     // equality against a 'true' literal, and no 'true'/'1'/'yes' parser. On a one-way ratchet
     // truthiness is the fail-SAFE direction: a value of `flase` still narrows, whereas an
     // exact-string parser would silently restore the WRITABLE backend on a typo. Only unset
-    // or the empty string leaves the writable outcome intact. (The equality form is spelled
-    // out in prose rather than quoted, because a zero-count grep for it guards this file.)
+    // or the empty string leaves the writable outcome intact. Guarded on two levels: the
+    // truthiness it.each rows in select-backend.spec.ts prove the BEHAVIOUR ('0', 'false',
+    // 'no', 'off', 'FALSE', ' ' all still narrow), and a textual clause in the same file
+    // rejects any equality comparison against the knob. The prose-not-quote convention is
+    // kept for the second one's benefit -- that clause used to be claimed here and did not
+    // exist, so do not restore the claim without it.
     //
     // An env-bag KEY, never a parameter: selectBackend.length stays 0 (TRUST-05), and no
     // `readOnly` field goes on ServeOptions (serve.ts:22-28) or on a backend factory (D-03).

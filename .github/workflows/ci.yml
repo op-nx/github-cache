@@ -1229,6 +1229,18 @@ jobs:
             # the strongest form of it. ISO-8601 sorts lexicographically, so a plain sort
             # is correct here.
             #
+            # A TIMELESS ROW IS EXCLUDED BEFORE THE SORT, and that guard is not decoration.
+            # MEASURED with jq 1.8.1: sort_by places a null created_at FIRST, so a matching
+            # row carrying no timestamp wins `first` DETERMINISTICALLY even when a perfectly
+            # good row is in the same array -- `created` then comes out empty and the message
+            # below reports "the entry never existed" about an entry jq had in hand. That is
+            # the misattributing wrong-cause report this whole block was corrected for,
+            # reached one field over. `created_at` carries no `required` marker in the
+            # cache-list schema, so this is unlikely, not impossible. Excluding rather than
+            # coalescing is deliberate: a row with no timestamp cannot supply the LOWER BOUND
+            # this witness asserts, so it is not evidence and must not be selected as such.
+            # A response of ONLY timeless rows still fails loud, which is the honest verdict.
+            #
             # READ `matched_ref` AS THE PROVENANCE OF THE LOWER BOUND, not as a claim about
             # which run created the entry. Because the EARLIEST readable copy is selected, a
             # run that also wrote its own copy still reports the base-branch ref when an
@@ -1238,7 +1250,7 @@ jobs:
             entry=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
               "${api}/actions/caches?key=${key}&per_page=100" \
               | jq -c --arg key "${key}" --arg ref "${GITHUB_REF}" --arg baseref "${base_ref}" \
-                '[.actions_caches[] | select(.key == $key and (.ref == $ref or ($baseref != "" and .ref == $baseref)))] | sort_by(.created_at) | first // empty')
+                '[.actions_caches[] | select(.key == $key and (.ref == $ref or ($baseref != "" and .ref == $baseref)) and (.created_at | type) == "string")] | sort_by(.created_at) | first // empty')
             created=$(printf '%s' "${entry}" | jq -r '.created_at // empty')
             matched_ref=$(printf '%s' "${entry}" | jq -r '.ref // empty')
             if [ -z "${created}" ]; then

@@ -556,9 +556,34 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
         'to the PR merge ref, and the entry the Windows legs actually read lives in the ' +
         'DEFAULT-branch scope -- so an equality test reports "the entry may never have ' +
         'existed" about an entry that does exist. The allowlist is exactly the scope a run ' +
-        'can genuinely read: its own ref, plus a NON-EMPTY base ref.',
+        'can genuinely read: its own ref, plus a NON-EMPTY base ref. The pattern no longer ' +
+        "requires the select to CLOSE after the ref allowlist, because there is now a " +
+        'THIRD conjunct after it (the created_at type guard); the close is pinned by that ' +
+        "clause instead, so nothing was traded away -- both conjuncts asserted here still " +
+        'have to appear in this exact literal adjacency.',
     ).toMatch(
-      /select\(\s*\.key == \$key and \(\.ref == \$ref or \(\$baseref != "" and \.ref == \$baseref\)\)\s*\)/,
+      /select\(\s*\.key == \$key and \(\.ref == \$ref or \(\$baseref != "" and \.ref == \$baseref\)\)/,
+    );
+  });
+
+  it('EXCLUDES a row with no created_at before sorting, so a timeless row cannot win', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The select must reject rows whose `created_at` is not a string, and it must do so ' +
+        'BEFORE the sort. MEASURED with jq 1.8.1: `sort_by(.created_at)` places a null ' +
+        'FIRST, so a matching row that carries no timestamp wins `first` deterministically ' +
+        'even when a perfectly good row is sitting in the same array -- the extraction then ' +
+        'yields the empty string and the job prints "the entry never existed" about an ' +
+        'entry jq had in hand. `created_at` carries no `required` marker in the ' +
+        'cache-list schema, so this is unlikely rather than impossible, and the sort is ' +
+        'what makes the bad row win DETERMINISTICALLY rather than by API ordering. It is ' +
+        'the misattributing wrong-cause report this whole witness was corrected for, ' +
+        'reached one field over. Asserted as the select\'s LAST conjunct immediately ' +
+        'followed by the sort, with no gap in the pattern at all: this file has already ' +
+        'measured that a non-greedy gap bounds what a match PREFERS, not how far it may ' +
+        'REACH.',
+    ).toMatch(
+      /\)\) and \(\.created_at \| type\) == "string"\)\] \| sort_by\(\.created_at\)/,
     );
   });
 

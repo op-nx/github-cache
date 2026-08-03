@@ -1808,6 +1808,138 @@ const MASKED_TOKEN_SITES = 8;
  * on exactly the run it fires is not worth the strength. The behavioural half is covered
  * instead by select-backend.spec.ts, which drives the real `selectBackend` on the real knob.
  */
+/**
+ * NO WORKFLOW EXPRESSION MAY APPEAR INSIDE A `run:` BODY -- and this clause exists because
+ * violating it took the ENTIRE workflow down, not because it is untidy.
+ *
+ * GitHub TEMPLATES a `run:` body before the shell ever sees it, so a brace-template
+ * expression is evaluated even inside a shell COMMENT. Status functions (`cancelled()`,
+ * `success()`, `failure()`) exist only in an `if:`, so one commented `if: <expr>` reference
+ * in a run body made GitHub reject the whole file -- "Unrecognized function: 'cancelled'",
+ * Invalid workflow file, ZERO jobs created, and no `pull_request` run at all. MEASURED on
+ * run 30852881995: the failure surfaces as a startup failure whose run NAME is the file path
+ * rather than `CI`, because GitHub could not read `name:` either.
+ *
+ * NOTHING ELSE IN THE TREE CATCHES IT. `codeLines` strips lines whose TRIMMED form starts
+ * with `#`, which is exactly what a shell comment inside a run body looks like -- so every
+ * other clause in this file is blind to run-body comments by construction. YAML parses fine
+ * (the body is an opaque block scalar), so `format:check`, `lint` and every local target stay
+ * green. The first signal is CI refusing to start, after the push.
+ *
+ * ZERO IS ALSO THE PROJECT'S SECURITY POSTURE, so the count is not merely convenient: this
+ * workflow deliberately routes untrusted values through the step ENVIRONMENT rather than
+ * interpolating them into scripts (the o3-witness block's own BASH_ENV injection analysis),
+ * and an expression templated into a shell body is the canonical script-injection sink. The
+ * two reasons point the same way, which is why this is a flat zero rather than an allowlist.
+ *
+ * SCOPED TO RUN BODIES, not grepped file-wide, and that scoping is REQUIRED rather than
+ * tidy: `ci.yml` legitimately carries brace-template expressions in `if:`, `env:` and `with:`
+ * values, and THREE of its YAML comments quote one while explaining a rule. A file-wide
+ * needle would be red on a correct file, which is how a reader talks themselves into
+ * deleting a guard.
+ *
+ * HAND-ROLLED BLOCK-SCALAR SCAN, deliberately, rather than a YAML parser: neither `js-yaml`
+ * nor `yaml` is a declared dependency of this workspace (both are merely transitive), and no
+ * spec in the tree parses YAML today. Adding a parser dependency to read one file would cost
+ * more than the scan, which is exact for the only shape this file uses -- `run: |` followed
+ * by lines indented deeper than the `run:` key itself.
+ */
+
+/**
+ * Every line inside a `run:` block scalar, with the job it belongs to. A block scalar owns
+ * every following line that is blank or indented MORE than its own `run:` key, which is the
+ * YAML rule and needs no parser to apply. Single-line `run: <cmd>` values are included too --
+ * an expression is the same injection sink there.
+ */
+function runBodyLines(): { job: string; line: string }[] {
+  // THE RAW FILE, not `codeLines`. `codeLines` drops every line whose trimmed form starts
+  // with `#`, which is precisely what a shell comment inside a run body looks like -- so
+  // reading the stripped view here would make this clause blind to the exact defect it
+  // exists to catch, and it would pass on the file that took CI down.
+  const rawLines = readFileSync(
+    new URL('../../../.github/workflows/ci.yml', import.meta.url),
+    'utf8',
+  ).split('\n');
+  const collected: { job: string; line: string }[] = [];
+  let job = '<before any job>';
+
+  for (let index = 0; index < rawLines.length; index++) {
+    const jobKey = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(rawLines[index]);
+
+    if (jobKey) {
+      job = jobKey[1];
+
+      continue;
+    }
+
+    const runKey = /^(\s*)run:(.*)$/.exec(rawLines[index]);
+
+    if (!runKey) {
+      continue;
+    }
+
+    const indent = runKey[1].length;
+    const inline = runKey[2].trim();
+
+    if (inline !== '' && inline !== '|' && inline !== '>') {
+      collected.push({ job, line: inline });
+
+      continue;
+    }
+
+    for (let body = index + 1; body < rawLines.length; body++) {
+      const text = rawLines[body];
+      const deeper = /^(\s*)\S/.exec(text);
+
+      if (text.trim() !== '' && (!deeper || deeper[1].length <= indent)) {
+        break;
+      }
+
+      collected.push({ job, line: text });
+    }
+  }
+
+  return collected;
+}
+describe('ci.yml keeps workflow expressions OUT of every run: body', () => {
+  it('has zero brace-template expressions inside any step script, comments included', () => {
+    const body = runBodyLines();
+    // Built by concatenation so this needle is not itself an offender when a future guard
+    // scans THIS file the same way.
+    const template = '${' + '{';
+    const offenders = body
+      .filter((entry) => entry.line.includes(template))
+      .map((entry) => `${entry.job}: ${entry.line.trim()}`);
+
+    // POSITIVE CONTROLS, both needed. An empty offender list is otherwise equally consistent
+    // with a broken scan -- a renamed `jobs:` key, a changed indent convention, or a
+    // readFileSync pointing at the wrong file -- as with a clean workflow.
+    expect(
+      body.length,
+      'the scan found no `run:` body lines in ci.yml at all, so this clause has no subject',
+    ).toBeGreaterThan(100);
+
+    expect(
+      body.filter((entry) => entry.line.includes('set -euo pipefail')).length,
+      'the scan found no `set -euo pipefail` line, which every scripted step in this file ' +
+        'opens with -- so it is not actually reading run bodies',
+    ).toBeGreaterThan(10);
+
+    expect(
+      offenders,
+      'These ci.yml run: bodies contain a workflow brace-template expression. GitHub ' +
+        'templates a run body BEFORE the shell sees it, so this is evaluated even in a shell ' +
+        'comment -- and a status function like cancelled() does not exist outside an `if:`, ' +
+        'which makes GitHub reject the ENTIRE FILE ("Unrecognized function") and start ZERO ' +
+        'jobs. It is also the canonical script-injection sink, and this workflow ' +
+        'deliberately passes untrusted values through the step environment instead. Name the ' +
+        'condition in PROSE inside a run body; put real expressions in `if:`, `env:` or ' +
+        '`with:`. Note codeLines strips `#`-leading lines, so no other clause in this file ' +
+        'can see a run-body comment.',
+    ).toStrictEqual([]);
+  });
+});
+
 describe('ci.yml starts each sidecar AFTER its leg declined the write (XOS-09, TRUST-14)', () => {
   it.each(['build-windows', 'typecheck-windows', 'test-windows'])(
     '%s writes CACHE_READ_ONLY in a step that COMPLETES before its sidecar step begins',

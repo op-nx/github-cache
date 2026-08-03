@@ -51,11 +51,17 @@ import type {
  * temp path, so there was never anything to protect there.
  *
  * SHAPE (D-01). Two factories, exactly ONE `get`:
- * createReadOnlyActionsCacheBackend owns the construction guards and the single
- * cache.restoreCache READ call site, and createActionsCacheBackend SPREADS it and
+ * createReadOnlyActionsCacheBackend owns the construction guards and the one
+ * entry-READING cache.restoreCache call site, and createActionsCacheBackend SPREADS it and
  * adds put. They restore at a byte-identical cache version not because two copies
  * agree but because there is only one -- a second read call site is precisely the
  * drift Phase 9 existed to remove.
+ *
+ * The file holds a SECOND `cache.restoreCache` all the same: put's `lookupOnly` existence
+ * probe, which downloads nothing and exists only to disambiguate saveCache's -1. It carries
+ * its own five positionals, so the version it probes at CAN drift from the version the save
+ * wrote at, and that possibility is guarded by a spec clause rather than removed by the
+ * shape. Read "exactly ONE" as scoped to the read path, never as a whole-file count.
  *
  * BOTH FACTORIES MUST STAY IN THIS ONE FILE, and it is a hard constraint rather than
  * a style preference. actions-cache-backend.spec.ts's ordered-member scan resolves
@@ -243,9 +249,23 @@ export function createReadOnlyActionsCacheBackend(): ReadableBackend {
  * The writable Actions-cache backend: the read-only one, plus put, and nothing else.
  *
  * The spread IS D-01's acceptance criterion in code. It carries over the single `get`
- * closure, so the package keeps exactly one cache.restoreCache READ call site and has
- * no second cache-version computation available to drift -- unrepresentable rather
- * than guarded. It also carries over the construction preamble, and that inheritance
+ * closure, so the two factories cannot disagree about how a cached entry is READ: there is
+ * one such closure, not two copies that happen to match, and a second one is the drift
+ * Phase 9 existed to remove.
+ *
+ * THAT IS A CLAIM ABOUT `get`, AND NOT ABOUT THE WHOLE FILE. This block used to say the
+ * package "has no second cache-version computation available to drift -- unrepresentable
+ * rather than guarded", which is false and self-refuting: put's lookupOnly existence probe
+ * below is a SECOND `cache.restoreCache` call with its own independent five positionals, so
+ * a second cache-version computation exists and is REACHED on every ambiguous save. It is
+ * GUARDED rather than unrepresentable -- by the VER-03 ordered-member clause in
+ * actions-cache-backend.spec.ts -- and the comment on that probe spells out exactly what
+ * drift costs: probing at a different version than the save reports "absent" for an entry
+ * that is PRESENT, so on Windows every write would take the not-stored branch and answer a
+ * spurious 409. A maintainer who believes the drift is unrepresentable has no reason to keep
+ * that clause alive, which is the harm the old wording did.
+ *
+ * It also carries over the construction preamble, and that inheritance
  * is load-bearing rather than incidental: VER-07's mkdir must NOT be lost from the
  * write path (its absence is the ENOENT-into-500 defect the comment there describes),
  * and calling the read-only factory is how it stays.

@@ -95,10 +95,26 @@ branch, to PR #16, or to a second window. Any deviation stops and re-asks.
 | Fact | Expected value |
 | --- | --- |
 | `main` | `fe25a3f865f20f3d4f8a40e96f8cb5717608ba8a`, detector file ABSENT |
-| Phase branch tip and local HEAD | `41f65e1b2ae7058e85580eff0eb97bb784d7726c` |
-| Detector blob at HEAD | `b2ff9f33279229ed2abc3105bf1cb260a617262e` |
-| `git status --porcelain` | only the untracked quick-task directory |
+| Phase branch REMOTE tip (the dispatch target) | `41f65e1b2ae7058e85580eff0eb97bb784d7726c` |
+| Local HEAD | `e6c34ed147012e8528c257a7d8901f806bda1d27` -- ONE commit ahead of the remote tip |
+| Detector blob at HEAD **and** at the remote tip | `b2ff9f33279229ed2abc3105bf1cb260a617262e` (IDENTICAL at both) |
+| `git status --porcelain` | EMPTY (clean) |
 | `git config user.email` | `larsbrinknielsen@gmail.com` (public repo; the plumbing commit lands on a public default branch) |
+
+**Why local HEAD is one commit ahead, and why it does NOT matter.** The orchestrator committed this
+plan plus its CONTEXT and RESEARCH as `e6c34ed` BEFORE dispatching you, so the plan is durable
+ahead of the `main` window. That commit touches `.planning/**` ONLY; the detector blob is
+byte-identical at both SHAs (`b2ff9f33...`, assert this in pre-flight rather than trusting this
+sentence). The phase branch is deliberately NOT pushed: the operator's authorisation is scoped to
+`refs/heads/main`, the backup ref and the throwaway ref, and explicitly does NOT extend to the
+phase branch or PR #16.
+
+**Consequence you must honour:** every dispatch target and every parent SHA in this plan stays at
+the REMOTE tip `41f65e1b2ae7058e85580eff0eb97bb784d7726c`, never at local HEAD. `--ref
+gsd/v0.0.2-os-invariant-cross-os-sharing` resolves server-side to `41f65e1`, so the GREEN run's
+`headSha` is `41f65e1` and the throwaway commit is parented on `41f65e1`. Do NOT push the phase
+branch to make these agree -- that is outside the authorised scope. If pre-flight finds local HEAD
+is neither `e6c34ed...` nor the remote tip, STOP and report.
 
 <tasks>
 
@@ -189,10 +205,15 @@ touching the tracked copy: `git show HEAD:.github/workflows/windows-regression-d
 The needle line itself stays EXACTLY as at HEAD. Then hash the mutated file with `git hash-object
 -w --path .github/workflows/windows-regression-detector.yml <scratchpad>/mutated.yml` -- `--path`
 is load-bearing, it applies the `* text=auto eol=lf` clean filter so any CRLF the editor introduced
-is normalised. Build the commit the same plumbing way as step 2 but with `read-tree HEAD` and
+is normalised. Build the commit the same plumbing way as step 2 but with
+`read-tree 41f65e1b2ae7058e85580eff0eb97bb784d7726c` and
 `-p 41f65e1b2ae7058e85580eff0eb97bb784d7726c`, and push to
-`refs/heads/throwaway/detector-red-260803-mew`. Before dispatching, prove the mutation is exactly
-the intended two lines: `git diff HEAD:.github/workflows/windows-regression-detector.yml
+`refs/heads/throwaway/detector-red-260803-mew`. Read-tree the REMOTE TIP, not `HEAD` -- local HEAD
+is one `.planning/**`-only commit ahead (`e6c34ed`), so read-treeing `HEAD` while parenting on
+`41f65e1` would build a commit whose tree silently carries that docs commit, making the mutation
+diff below noisy and the two dispatched trees differ by more than the intended two lines. Before
+dispatching, prove the mutation is exactly the intended two lines:
+`git diff 41f65e1b2ae7058e85580eff0eb97bb784d7726c:.github/workflows/windows-regression-detector.yml
 <throwaway-sha>:.github/workflows/windows-regression-detector.yml`. The push triggers no workflow --
 `ci.yml`'s triggers are `push: branches: [main]` plus `pull_request`, and a branch push with no PR
 fires neither (F-7) -- confirm this by checking `gh run list --repo op-nx/github-cache --limit 5`

@@ -386,6 +386,43 @@ describe('cleanupMirror DELETE phase isolation + fail-loud (TEST-04, OBS-01)', (
     expect(core.setFailed).toHaveBeenCalledOnce();
     expect(core.warning).toHaveBeenCalledOnce();
   });
+
+  it('names GitHub own code AND message on a delete failure, not the status alone', async () => {
+    // THE SAME BODY IS AVAILABLE ON A CLEANUP FAULT AS ON A PUBLISH FAULT, and B2's finding
+    // was that a CODE-ONLY reader is useless because a policy rejection arrives as `custom`
+    // whose documented meaning is "refer to the message". A STATUS-ONLY reader is strictly
+    // weaker than the one already measured useless. `faultReason` is a lib/ leaf precisely so
+    // this site reads the body on the same footing as the two publish sites -- one reader per
+    // fault class, shared by every call site of that class, not per file.
+    const policyClient = client({
+      listAllAssets: vi.fn(async () => [
+        { id: 1, name: 'facade-linux', created_at: EXPIRED },
+      ]),
+      deleteAsset: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [
+            {
+              resource: 'ReleaseAsset',
+              code: 'custom',
+              message: 'Release assets are immutable under this ruleset',
+            },
+          ],
+        });
+      }),
+    });
+
+    const result = await cleanupMirror(policyClient, 30);
+
+    expect(result.failed).toBe(1);
+    expect(core.warning).toHaveBeenCalledOnce();
+    const warned = vi.mocked(core.warning).mock.calls[0][0];
+    // `code custom` and not the bare token: the asset name and the message both risk
+    // carrying the word, so an unpinned substring would assert something else entirely
+    // (the identical hardening already applied at publish-mirror.spec.ts).
+    expect(warned).toContain('code custom');
+    expect(warned).toContain('Release assets are immutable under this ruleset');
+  });
 });
 
 describe('cleanupMirror observability (OBS-01)', () => {

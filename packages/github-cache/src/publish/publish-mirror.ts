@@ -7,6 +7,7 @@ import {
   parseHash,
   type Hash,
 } from '../lib/cache-key.js';
+import { faultReason } from '../lib/octokit-fault-reason.js';
 import { statusOf } from '../lib/octokit-status.js';
 import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
 import { shardTag } from '../lib/retention.js';
@@ -57,7 +58,7 @@ export interface PublishRelease {
  * 422 for SEVERAL distinct reasons, only one of which is "another matrix leg created the
  * tag first": GitHub multiplexes six `errors[].code` values onto that one status, and
  * policy rejections arrive as `custom`. Which one it is can only be read from the BODY --
- * see faultReason and the ensureShardRelease catch below.
+ * see `lib/octokit-fault-reason.ts` and the ensureShardRelease catch below.
  *
  * uploadReleaseAsset's `label` is free-form Release METADATA (OBS-03), deliberately
  * outside the lookup name -- see the construction site below for what it does and does
@@ -103,71 +104,6 @@ export interface PublishResult {
 /** Test-injection knobs only (no runtime mode surface). `now` pins the shard tag. */
 export interface PublishOptions {
   readonly now?: Date;
-}
-
-/**
- * The shape of the only part of a fault's body this module reads. Declared rather than
- * inlined so the cast below is one expression instead of several nested `typeof` guards;
- * every field is optional because NONE of them is guaranteed.
- */
-interface FaultBody {
-  readonly response?: {
-    readonly data?: { readonly errors?: unknown; readonly message?: unknown };
-  };
-}
-
-/** GitHub's own reason for a rejected request, as far as the body reveals it. */
-interface FaultReason {
-  readonly code?: string;
-  readonly message?: string;
-}
-
-function stringOrUndefined(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-/**
- * GitHub's OWN reason for a rejected request, read from the 422 body: the `code` is the
- * first `errors[]` entry carrying a string `code`, and the `message` is THAT SAME entry's
- * `message` when it is a string, falling back to the top-level `data.message`. Either
- * field is undefined when the body is absent, is not the documented shape, or carries
- * nothing readable.
- *
- * It serves BOTH 422 sites -- the createRelease catch in ensureShardRelease above and the
- * uploadReleaseAsset catch below -- so the defect class is closed at both instances by one
- * reader rather than by two body-parsers that can drift.
- *
- * WHY THE MESSAGE AND NOT ONLY THE CODE. GitHub's `errors[].code` enum is GLOBAL rather
- * than per-endpoint and has exactly six members (missing, missing_field, invalid,
- * already_exists, unprocessable, custom). Policy rejections -- rulesets, immutability, org
- * settings -- get no code of their own: they arrive as `custom`, whose documented meaning
- * is literally "refer to the message property to diagnose the error". A code-only reader
- * is therefore a reader that CANNOT diagnose; it prints "code custom" and the next
- * investigation window buys nothing. The top-level `data.message` is read too because some
- * 422 bodies carry no `errors` array at all.
- *
- * Undefined is NOT benign, and neither call site may treat it as such: a status-only
- * classifier that guessed benign is the entire defect this function exists to close, so
- * re-introducing the guess one level down -- "unreadable body, probably a duplicate" --
- * would be the same bug with more steps. Only an explicit `already_exists` earns the skip.
- * Optional chaining absorbs a null/undefined error and a primitive one alike, so no
- * caller-side pre-check is needed.
- */
-function faultReason(error: unknown): FaultReason {
-  const data = (error as FaultBody | null)?.response?.data;
-  const errors = data?.errors;
-  const entry = Array.isArray(errors)
-    ? errors.find(
-        (candidate): candidate is { code: string; message?: unknown } =>
-          typeof (candidate as { code?: unknown } | null)?.code === 'string',
-      )
-    : undefined;
-
-  return {
-    code: entry?.code,
-    message:
-      stringOrUndefined(entry?.message) ?? stringOrUndefined(data?.message),
-  };
 }
 
 /**
@@ -453,7 +389,7 @@ export async function publishMirror(
       // legs exited GREEN having mirrored nothing. The failure surfaced one job later in
       // publish-verify, naming the wrong subsystem. An UNREADABLE body is not benign
       // either -- it falls through to the fault branch, because guessing benign is the
-      // defect (see faultReason).
+      // defect (see `lib/octokit-fault-reason.ts`).
       if (statusOf(error) === 422 && reason.code === 'already_exists') {
         skipped++;
 

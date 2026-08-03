@@ -471,6 +471,43 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
     expect(logged).toContain('Tag name cannot be reused');
   });
 
+  it('names an errors[] message that carries NO code, instead of the generic top-level one', async () => {
+    // THE CODE-LESS ENTRY. GitHub's `errors[].code` enum is six-membered and global, so a
+    // rejection it has no member for can arrive with `resource`/`field`/`message` and no
+    // `code` at all. A reader that binds the entry ON the code then reads THAT entry's
+    // message discards the one useful string in the body and prints the generic top-level
+    // `Validation Failed` -- the same "the window buys nothing" outcome B2 measured, reached
+    // through a different door. The two lookups are INDEPENDENT facts about the body: the
+    // message is the first readable one anywhere in `errors[]`, and only then `data.message`.
+    const fake = client({
+      getReleaseByTag: vi.fn(async () => {
+        throw octokitFault(404);
+      }),
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [
+            {
+              resource: 'Release',
+              field: 'tag_name',
+              message: 'Blocked by org policy X',
+            },
+          ],
+        });
+      }),
+    });
+
+    await expect(publishMirror(fake, { now: NOW })).rejects.toThrow();
+
+    expect(core.error).toHaveBeenCalledOnce();
+    const logged = vi.mocked(core.error).mock.calls[0][0];
+    expect(logged).toContain('Blocked by org policy X');
+    // The code slot is honestly empty -- the entry carries none. Pinned so a future reader
+    // cannot "fix" the message half by inventing a code.
+    expect(logged).toContain('code unknown');
+    expect(logged).not.toContain('Validation Failed');
+  });
+
   it('names the tag when the re-read after a genuine already_exists itself 404s', async () => {
     // The re-GET is read-after-write against an endpoint that can 404 transiently and
     // that does not resolve DRAFT releases at all. Unguarded, it propagates octokit's

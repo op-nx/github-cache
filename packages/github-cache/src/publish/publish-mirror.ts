@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import { createActionsCacheBackend } from '../backend/actions-cache-backend.js';
+import { createReadOnlyActionsCacheBackend } from '../backend/actions-cache-backend.js';
 import type { GetResult } from '../backend/types.js';
 import {
   CACHE_KEY_PREFIX,
@@ -307,7 +307,15 @@ export async function publishMirror(
   options: PublishOptions = {},
 ): Promise<PublishResult> {
   const tag = shardTag(options.now);
-  const actionsCache = createActionsCacheBackend();
+  // THE READ-ONLY FACTORY, because this engine only ever READS. It calls `.get()` on one
+  // line and never `.put()` -- it mirrors Actions-cache bytes OUT to Release assets, so a
+  // write path here is capability it has no use for. Constructing the writable backend was
+  // the pre-D-01 shape carried forward: the read-only factory did not exist when this line
+  // was written, and it is the one read-only Actions consumer the split never migrated.
+  // Both factories share the same `get` closure (the writable one spreads this one), so the
+  // restore behaviour, the cache version and the VER-04/VER-07 construction guards are
+  // identical -- the only thing that changes is that `put` is now unrepresentable here.
+  const actionsCache = createReadOnlyActionsCacheBackend();
 
   const entries = await client.listCacheEntries();
   // Dedup to DISTINCT hashes. listCacheEntries returns one row per (key, version), so a

@@ -17,16 +17,20 @@ import {
   type PublishClient,
 } from './publish-mirror.js';
 
-// The engine restores bytes through createActionsCacheBackend().get on THIS OS leg
+// The engine restores bytes through createReadOnlyActionsCacheBackend().get on THIS OS leg
 // (D-03). Mock the backend module directly so get is fully mock-driven: this lets a
 // test control HIT/MISS and the restored byteLength deterministically -- crucial for
 // the ~2 GiB boundary, which cannot be exercised by allocating a real 2 GiB buffer.
+//
+// The double is a ReadableBackend -- get and NO put -- matching what the engine now
+// constructs. The old double carried a `put: vi.fn()` it never called, which is precisely
+// why the writable construction went unnoticed: a mock that supplies more capability than
+// the subject uses cannot report that the subject asked for too much.
 const { getMock } = vi.hoisted(() => ({ getMock: vi.fn() }));
 
 vi.mock('../backend/actions-cache-backend.js', () => ({
-  createActionsCacheBackend: vi.fn(() => ({
+  createReadOnlyActionsCacheBackend: vi.fn(() => ({
     get: getMock,
-    put: vi.fn(),
   })),
 }));
 

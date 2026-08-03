@@ -43,8 +43,28 @@ export interface FaultReason {
   readonly message?: string;
 }
 
+/**
+ * A READABLE string, or undefined -- and the empty string is not one.
+ *
+ * `''` IS TREATED AS ABSENT, and that is the whole point rather than tidiness. Every
+ * consumer below either falls back (`??`) or scans for the first defined value, and both
+ * of those idioms treat `''` as PRESENT: `'' ?? x` short-circuits to `''`, and
+ * `.find(v => v !== undefined)` accepts it. So an entry carrying an empty message SHADOWS
+ * the `data.message` fallback and this module returns nothing readable at exactly the site
+ * whose whole purpose is to print GitHub's own reason -- MEASURED on the body
+ * `{errors:[{code:'custom',message:''}], message:'Tag name cannot be reused under this
+ * ruleset'}`, which yielded `{code:'custom', message:''}` and dropped the one diagnostic in
+ * the payload. `custom` is precisely the code whose documented meaning is "refer to the
+ * message property", so the pair was maximally useless.
+ *
+ * The asymmetry is what makes it a bug rather than a preference: `message: null` was ALWAYS
+ * handled correctly, because null fails the `typeof` test. Rejecting `''` here makes the two
+ * empty-ish shapes behave the same, and makes this module's own docstring true -- "either
+ * field is undefined when the body carries nothing readable". An empty string is nothing
+ * readable.
+ */
 function stringOrUndefined(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+  return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
 /**

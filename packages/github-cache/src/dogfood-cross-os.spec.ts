@@ -581,8 +581,29 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
         'guard); the close is pinned by that clause instead, so nothing was traded away -- ' +
         'every arm asserted here still has to appear in this exact literal adjacency.',
     ).toMatch(
-      /select\(\s*\.key == \$key and \(\.ref == \$ref or \(\$baseref != "" and \.ref == \$baseref\) or \(\$defaultref != "" and \.ref == \$defaultref\)\)/,
+      /select\(type == "object"\) \| select\(\s*\.key == \$key and \(\.ref == \$ref or \(\$baseref != "" and \.ref == \$baseref\) or \(\$defaultref != "" and \.ref == \$defaultref\)\)/,
     );
+  });
+
+  // THE ELEMENT-LEVEL HALF of the response guard, asserted with the allowlist because they
+  // share one expression and a rewrite that drops either is the same edit. The container
+  // guard thirty lines up proves `.actions_caches` IS an array and says nothing about what
+  // is IN it. MEASURED with jq 1.8.1: `{"actions_caches":["scalar",3]}` passes that guard
+  // (`ok`) and then exits 5 here with `Cannot index string with string "key"` -- and since
+  // `entry=$(...)` is a plain assignment under `set -euo pipefail`, that kills the brace
+  // group with NO `o3-witness:` verdict at all, which is verbatim the failure the container
+  // guard claims to have eliminated. Pinned as the FIRST filter in the pipeline: placed
+  // after the key comparison it would never run, because the indexing fault happens first.
+  it('rejects a non-object ROW before indexing it, not just a non-array response', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The entry expression must open with `select(type == "object")`. Without it a single ' +
+        'non-object element in `actions_caches` -- which the container guard admits, because ' +
+        'the container IS an array -- aborts the step at jq exit 5 with no verdict printed. ' +
+        'It must come FIRST: after the key comparison it never runs, since indexing a scalar ' +
+        'is what faults. The container guard is NOT redundant with it and must stay: only ' +
+        'that one can tell an API or permissions fault apart from a genuinely empty result.',
+    ).toMatch(/\[\.actions_caches\[\] \| select\(type == "object"\) \|/);
   });
 
   // THE ARG THE ALLOWLIST ARM READS, pinned separately from the arm itself because the two

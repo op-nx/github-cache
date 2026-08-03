@@ -118,9 +118,7 @@ export function faultMessageForField(
   const errors: unknown[] = Array.isArray(raw) ? raw : [];
 
   return errors
-    .filter(
-      (entry) => (entry as { field?: unknown } | null)?.field === field,
-    )
+    .filter((entry) => (entry as { field?: unknown } | null)?.field === field)
     .map((entry) =>
       stringOrUndefined((entry as { message?: unknown } | null)?.message),
     )

@@ -591,12 +591,37 @@ jobs:
       # The `|| true` keeps a legitimate zero REACHING the comparison: under pipefail a
       # zero-match grep exits 1 and would abort the step before the gate ran, turning a
       # clear failure carrying an annotation into an opaque one carrying none.
+      # `-a` FORCES TEXT, and its absence was a fail-OPEN route rather than a tidiness
+      # lapse. A single NUL byte anywhere in the tee'd log -- routine for
+      # PowerShell-invoked tooling on windows-11-arm -- makes grep classify the file as
+      # BINARY and print one summary line instead of the matches, so `wc -l` returns 1 on
+      # ZERO real labels and clears a floor of 1. The same byte on a grep that routes that
+      # notice to stderr yields 0 instead, reddening this leg and blaming cross-OS restore
+      # for an encoding artefact. `-a` removes both directions at once.
+      # THE SHAPE CHECK IS WHAT MAKES THE COMPARISON A GATE, and it closes a fail-OPEN
+      # hole rather than hardening a working one. MEASURED: `[ "${count}" -lt 1 ]` sits in
+      # an `if` CONDITION, where `set -e` is SUSPENDED -- so a non-integer `count` prints
+      # `[: ...: integer expected` to stderr, the test reports FALSE, control takes the
+      # else branch, and THE STEP EXITS 0. The identical test outside a condition exits 2
+      # and aborts. So every non-decimal value -- empty, a grep notice, a truncated read --
+      # silently PASSED the leg's only gate while printing "GATED at a floor of 1". A gate
+      # a malformed count can launder is the same defect XOS-09 removed from the re-run
+      # direction, arriving through the comparison instead. Nx renders no count as anything
+      # but decimal digits, so `''|*[!0-9]*` rejects exactly the values that cannot be
+      # compared -- the same all-decimal idiom the o3-witness applies to its own hash
+      # record, for the same reason: never compose a verdict from an unvalidated value.
       - name: Gate on the cross-OS remote-cache label count for this leg
         shell: bash
         run: |
           set -euo pipefail
-          count=$({ grep -o -F '[remote cache]' build-nx.log || true; } | wc -l | tr -d '[:space:]')
+          count=$({ grep -a -o -F '[remote cache]' build-nx.log || true; } | wc -l | tr -d '[:space:]')
           echo "remote-cache label occurrences on windows-11-arm (build): ${count} -- GATED at a floor of 1"
+          case "${count}" in
+            ''|*[!0-9]*)
+              echo "::error::build-windows could not COUNT the [remote cache] labels: '${count}' is not a decimal number, so the floor below was never evaluated. This is a FAILURE and never a pass -- an unevaluated gate must not read as coverage. Check the tee'd log for a binary-file notice (a NUL byte in build-nx.log) or a truncated read."
+              exit 1
+              ;;
+          esac
           if [ "${count}" -lt 1 ]; then
             echo "::error::build-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu build job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
             exit 1
@@ -683,13 +708,20 @@ jobs:
       # that widened the dogfood trigger had to fix eight sites making one stale claim,
       # several of them copies that a previous edit had missed. Don't re-expand this.
       # The `|| true` keeps a legitimate zero reaching the comparison instead of
-      # aborting the step under pipefail.
+      # aborting the step under pipefail. `-a` and the all-decimal `case` are the
+      # fail-CLOSED half -- build-windows carries the measurement and the full rationale.
       - name: Gate on the cross-OS remote-cache label count for this leg
         shell: bash
         run: |
           set -euo pipefail
-          count=$({ grep -o -F '[remote cache]' typecheck-nx.log || true; } | wc -l | tr -d '[:space:]')
+          count=$({ grep -a -o -F '[remote cache]' typecheck-nx.log || true; } | wc -l | tr -d '[:space:]')
           echo "remote-cache label occurrences on windows-11-arm (typecheck): ${count} -- GATED at a floor of 1"
+          case "${count}" in
+            ''|*[!0-9]*)
+              echo "::error::typecheck-windows could not COUNT the [remote cache] labels: '${count}' is not a decimal number, so the floor below was never evaluated. This is a FAILURE and never a pass -- an unevaluated gate must not read as coverage. Check the tee'd log for a binary-file notice (a NUL byte in typecheck-nx.log) or a truncated read."
+              exit 1
+              ;;
+          esac
           if [ "${count}" -lt 1 ]; then
             echo "::error::typecheck-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu typecheck job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
             exit 1
@@ -776,13 +808,20 @@ jobs:
       # that widened the dogfood trigger had to fix eight sites making one stale claim,
       # several of them copies that a previous edit had missed. Don't re-expand this.
       # The `|| true` keeps a legitimate zero reaching the comparison instead of
-      # aborting the step under pipefail.
+      # aborting the step under pipefail. `-a` and the all-decimal `case` are the
+      # fail-CLOSED half -- build-windows carries the measurement and the full rationale.
       - name: Gate on the cross-OS remote-cache label count for this leg
         shell: bash
         run: |
           set -euo pipefail
-          count=$({ grep -o -F '[remote cache]' test-nx.log || true; } | wc -l | tr -d '[:space:]')
+          count=$({ grep -a -o -F '[remote cache]' test-nx.log || true; } | wc -l | tr -d '[:space:]')
           echo "remote-cache label occurrences on windows-11-arm (test): ${count} -- GATED at a floor of 1"
+          case "${count}" in
+            ''|*[!0-9]*)
+              echo "::error::test-windows could not COUNT the [remote cache] labels: '${count}' is not a decimal number, so the floor below was never evaluated. This is a FAILURE and never a pass -- an unevaluated gate must not read as coverage. Check the tee'd log for a binary-file notice (a NUL byte in test-nx.log) or a truncated read."
+              exit 1
+              ;;
+          esac
           if [ "${count}" -lt 1 ]; then
             echo "::error::test-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu test job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
             exit 1

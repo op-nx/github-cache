@@ -990,6 +990,19 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       'detector, and it reads the printed record rather than a comment on purpose: the echo is ' +
       'CODE and survives the comment strip, so a leg quietly returned to recording-without-' +
       `gating still says so in the one place an operator reads. ${RENAME_NOTE}`,
+    countShape:
+      `${leg} must PROVE its count is a decimal number before comparing it, and must force ` +
+      "grep to treat the tee'd log as TEXT. Both halves close the same fail-OPEN route, and it " +
+      'is MEASURED rather than argued: `[ "${count}" -lt 1 ]` sits in an `if` CONDITION, where ' +
+      '`set -e` is SUSPENDED, so a non-decimal count prints `[: ...: integer expected` to ' +
+      'stderr, tests FALSE, takes the else branch and EXITS 0 -- the identical test outside a ' +
+      'condition exits 2 and aborts. So the leg PASSES while printing "GATED at a floor of 1" ' +
+      'over a count it never evaluated. `-a` is the other half: one NUL byte in the log makes ' +
+      'grep report `Binary file ... matches` as a SINGLE line, and `wc -l` then returns 1 on ' +
+      'ZERO real labels -- clearing a floor of 1 outright. Neither the gatedCount clause nor ' +
+      'any other clause on this leg reads either line, so losing them leaves a gate that still ' +
+      'LOOKS present and can be satisfied by an encoding artefact. The correct response to a ' +
+      `red here is to RESTORE the guard, never to drop it as noise. ${RENAME_NOTE}`,
     backendToken:
       `${leg} must pass GITHUB_TOKEN into the sidecar step's own \`env:\`, and this clause is ` +
       'SEPARATE from the cacheClient one above because the two produce the SAME green-having-' +
@@ -1026,6 +1039,7 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     cacheObservation,
     readOnlyLeg,
     gatedCount,
+    countShape,
     backendToken,
     noIf,
   } = windowsLegReasons('build-windows', 'build', 'build');
@@ -1189,6 +1203,24 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 
+  // THE COMPARISON ABOVE IS ONLY A GATE ON A NUMBER, and neither the clause above nor any
+  // other on this leg reads the two lines that make it one. Both needles are pinned as
+  // WHOLE LINES so a partial revert (dropping `-a` while keeping the shape check, or the
+  // reverse) reddens: each closes a different fail-OPEN route to the same green.
+  // The `case` gap is bounded to ONE line -- the branch's own message -- for the reason
+  // the M4 o3-witness clause records: an unbounded non-greedy gap walks past its own
+  // block and satisfies itself from an unrelated `exit 1` further down the job.
+  it('proves the count is a decimal and reads the log as TEXT, so the gate cannot pass unevaluated (XOS-09)', () => {
+    const block = jobBlock('build-windows');
+
+    expect(block, countShape).toMatch(
+      /^ {10}count=\$\(\{ grep -a -o -F '\[remote cache\]' build-nx\.log \|\| true; \} \| wc -l \| tr -d '\[:space:\]'\)$/m,
+    );
+    expect(block, countShape).toMatch(
+      /^ {10}case "\$\{count\}" in\n {12}''\|\*\[!0-9\]\*\)\n[^\n]*\n {14}exit 1$/m,
+    );
+  });
+
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
     const block = jobBlock('build-windows');
 
@@ -1216,6 +1248,7 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     cacheObservation,
     readOnlyLeg,
     gatedCount,
+    countShape,
     backendToken,
     noIf,
   } = windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck');
@@ -1305,6 +1338,17 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 
+  it('proves the count is a decimal and reads the log as TEXT, so the gate cannot pass unevaluated (XOS-09)', () => {
+    const block = jobBlock('typecheck-windows');
+
+    expect(block, countShape).toMatch(
+      /^ {10}count=\$\(\{ grep -a -o -F '\[remote cache\]' typecheck-nx\.log \|\| true; \} \| wc -l \| tr -d '\[:space:\]'\)$/m,
+    );
+    expect(block, countShape).toMatch(
+      /^ {10}case "\$\{count\}" in\n {12}''\|\*\[!0-9\]\*\)\n[^\n]*\n {14}exit 1$/m,
+    );
+  });
+
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
     const block = jobBlock('typecheck-windows');
 
@@ -1332,6 +1376,7 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     cacheObservation,
     readOnlyLeg,
     gatedCount,
+    countShape,
     backendToken,
     noIf,
   } = windowsLegReasons('test-windows', 'test', 'test');
@@ -1419,6 +1464,17 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
       /^ {10}if \[ "\$\{count\}" -lt 1 \]; then$/m,
     );
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
+  });
+
+  it('proves the count is a decimal and reads the log as TEXT, so the gate cannot pass unevaluated (XOS-09)', () => {
+    const block = jobBlock('test-windows');
+
+    expect(block, countShape).toMatch(
+      /^ {10}count=\$\(\{ grep -a -o -F '\[remote cache\]' test-nx\.log \|\| true; \} \| wc -l \| tr -d '\[:space:\]'\)$/m,
+    );
+    expect(block, countShape).toMatch(
+      /^ {10}case "\$\{count\}" in\n {12}''\|\*\[!0-9\]\*\)\n[^\n]*\n {14}exit 1$/m,
+    );
   });
 
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {

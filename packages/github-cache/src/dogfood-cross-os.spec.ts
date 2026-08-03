@@ -982,14 +982,20 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       `step's do not (start-cache-server/action.yml records this). ${RENAME_NOTE}`,
     gatedCount:
       `${leg} must COMPARE its [remote cache] count against the floor of 1 and FAIL below it ` +
-      '(XOS-09, D-04/D-05), not merely print it. Matched on the COMPARISON line deliberately, ' +
-      'and never on a bare `exit 1`: this job block already contains one, in the "Wait for the ' +
-      'loopback sidecar" readiness poll, and it is not a comment so the strip above keeps it -- ' +
-      'an `/exit 1/` clause here was GREEN before the gate existed, which is a live vacuity trap ' +
-      'this file MEASURED rather than reasoned about. The paired absence check is the revert ' +
-      'detector, and it reads the printed record rather than a comment on purpose: the echo is ' +
-      'CODE and survives the comment strip, so a leg quietly returned to recording-without-' +
-      `gating still says so in the one place an operator reads. ${RENAME_NOTE}`,
+      '(XOS-09, D-04/D-05), not merely print it. The COMPARISON and the `exit 1` under it are ' +
+      "matched TOGETHER, with the gap bounded to the branch's single message line: a " +
+      '`::error::` workflow command only ANNOTATES, so a comparison whose exit was deleted ' +
+      'leaves the leg GREEN on a zero cross-OS count while still printing "GATED at a floor of ' +
+      '1" -- a gate that reads as coverage. A BARE `/exit 1/` needle remains rejected and that ' +
+      'rejection is why the gap is bounded: this job block already contains one, in the "Wait ' +
+      'for the loopback sidecar" readiness poll, it is not a comment so the strip above keeps ' +
+      'it, and an unbounded gap simply walks past the closing `fi` to reach it -- the same ' +
+      'vacuity this file MEASURED on the o3-witness M4 clause. The `exit 0` absence check is ' +
+      'the other half: ci.yml has ZERO legitimate `exit 0`, every exit in this leg is a ' +
+      "verdict, and a gate's passing path falls off the end of the step. The record-only " +
+      'absence check is the revert detector, and it reads the printed record rather than a ' +
+      'comment on purpose: the echo is CODE and survives the comment strip, so a leg quietly ' +
+      `returned to recording-without-gating still says so where an operator reads. ${RENAME_NOTE}`,
     countShape:
       `${leg} must PROVE its count is a decimal number before comparing it, and must force ` +
       "grep to treat the tee'd log as TEXT. Both halves close the same fail-OPEN route, and it " +
@@ -1194,12 +1200,29 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
   // test-windows): that leg's copy of this clause reddens ALONE. Nothing else moves -- in
   // particular the readOnlyLeg clause above stays green, so the knob and the comparison are
   // independently pinned rather than one covering for the other.
+  //
+  // THE COMPARISON WITHOUT ITS `exit 1` IS AN ANNOTATION, NOT A GATE, and pinning only the
+  // `if` line left exactly that gap. A `::error::` workflow command creates an annotation and
+  // does NOT fail the step, so deleting the `exit 1` below it -- the obvious response to a
+  // gate an operator believes is flaky -- leaves all three legs GREEN on a ZERO cross-OS
+  // restore count while still printing "GATED at a floor of 1". None of the three recorded
+  // mutations covers it: MUTATION 1 deletes the whole step and MUTATION 3 edits the operand,
+  // and neither removes the exit.
+  //
+  // The rejection of a BARE `/exit 1/` needle above is correct and stands -- the readiness
+  // poll supplies one. What was missing is the form that is not vacuous: a gap BOUNDED to the
+  // branch's single message line, which is the shape the M4 o3-witness clause already uses
+  // 470 lines up, plus the `exit 0` absence check it pairs with. `ci.yml` contains ZERO
+  // `exit 0` (measured over the whole file), so the negative needle is available here for the
+  // same reason it is there: every exit in these legs is a verdict, and a gate has no
+  // legitimate success exit -- the passing path falls off the end of the step.
   it('gates that count at a floor of 1 rather than only printing it (XOS-09)', () => {
     const block = jobBlock('build-windows');
 
     expect(block, gatedCount).toMatch(
-      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then$/m,
+      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then\n[^\n]*\n {12}exit 1$/m,
     );
+    expect(block, gatedCount).not.toMatch(/exit 0\b/);
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 
@@ -1333,8 +1356,9 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     const block = jobBlock('typecheck-windows');
 
     expect(block, gatedCount).toMatch(
-      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then$/m,
+      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then\n[^\n]*\n {12}exit 1$/m,
     );
+    expect(block, gatedCount).not.toMatch(/exit 0\b/);
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 
@@ -1461,8 +1485,9 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     const block = jobBlock('test-windows');
 
     expect(block, gatedCount).toMatch(
-      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then$/m,
+      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then\n[^\n]*\n {12}exit 1$/m,
     );
+    expect(block, gatedCount).not.toMatch(/exit 0\b/);
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 

@@ -42,9 +42,9 @@ const PINNED_NOW = new Date('2026-07-15T00:00:00Z');
 const EXPIRED = '2026-05-01T00:00:00Z';
 const WITHIN_WINDOW = '2026-07-10T00:00:00Z';
 
-// A mirror release and a non-mirror release, so the cache-mirror-* scope filter is
-// exercised (Pitfall 4: cleanup considers ONLY cache-mirror-* releases).
-const MIRROR_RELEASE = { id: 10, tag_name: 'cache-mirror-202607' };
+// A mirror release and a non-mirror release, so the nx-cache-* scope filter is
+// exercised (Pitfall 4: cleanup considers ONLY nx-cache-* releases).
+const MIRROR_RELEASE = { id: 10, tag_name: 'nx-cache-202607' };
 
 function client(overrides: Partial<CleanupClient> = {}): CleanupClient {
   return {
@@ -79,8 +79,8 @@ describe('cleanupMirror LIST phase fail-loud (RETAIN-01, D-10, C9)', () => {
       .mockRejectedValueOnce(octokitFault(500));
     const faultingClient = client({
       listAllReleases: vi.fn(async () => [
-        { id: 10, tag_name: 'cache-mirror-202606' },
-        { id: 20, tag_name: 'cache-mirror-202607' },
+        { id: 10, tag_name: 'nx-cache-202606' },
+        { id: 20, tag_name: 'nx-cache-202607' },
       ]),
       listAllAssets,
       deleteAsset,
@@ -119,7 +119,7 @@ describe('cleanupMirror LIST phase fail-loud (RETAIN-01, D-10, C9)', () => {
     expect(core.setFailed).not.toHaveBeenCalled();
   });
 
-  it('considers ONLY cache-mirror-* releases (Pitfall 4 scope)', async () => {
+  it('considers ONLY nx-cache-* releases (Pitfall 4 scope)', async () => {
     const listAllAssets = vi.fn(async () => [] as CleanupAsset[]);
     const deleteAsset = vi.fn(async () => {});
     const mixedClient = client({
@@ -137,16 +137,21 @@ describe('cleanupMirror LIST phase fail-loud (RETAIN-01, D-10, C9)', () => {
     expect(deleteAsset).not.toHaveBeenCalled();
   });
 
-  it('skips a non-shard cache-mirror-* release entirely (exact isShardTag, not a loose prefix)', async () => {
+  it('skips a non-shard nx-cache-* release entirely (exact isShardTag, not a loose prefix)', async () => {
     // The loose startsWith(SHARD_TAG_PREFIX) matched these; the exact isShardTag
-    // does not, so a cache-mirror-latest / cache-mirror-backup release is never
+    // does not, so a nx-cache-latest / nx-cache-backup release is never
     // scoped -- its assets are neither listed nor deleted.
+    //
+    // BOTH FIXTURES MUST CARRY THE CURRENT PREFIX. Spelled with a stale one they are
+    // skipped on the PREFIX instead of on the suffix shape, so this clause stays green
+    // while testing nothing -- and the comment above would survive as a claim it no
+    // longer backs. When the prefix moves, these move with it.
     const listAllAssets = vi.fn(async () => [] as CleanupAsset[]);
     const deleteAsset = vi.fn(async () => {});
     const nonShardClient = client({
       listAllReleases: vi.fn(async () => [
-        { id: 30, tag_name: 'cache-mirror-latest' },
-        { id: 31, tag_name: 'cache-mirror-backup' },
+        { id: 30, tag_name: 'nx-cache-latest' },
+        { id: 31, tag_name: 'nx-cache-backup' },
       ]),
       listAllAssets,
       deleteAsset,
@@ -204,7 +209,9 @@ describe('cleanupMirror DELETE phase prune/retain by created_at (TEST-06)', () =
   });
 });
 
-// The MEASURED census of shard `cache-mirror-202607` -- release id 354838660, read live
+// The MEASURED census of shard `cache-mirror-202607` (the PRE-RENAME tag scheme; the tag
+// name is left exactly as it was READ, because renaming a recorded measurement would claim
+// it was taken against a tag that never existed) -- release id 354838660, read live
 // 2026-07-29 and recorded in 10-EVIDENCE-PRE-RENAME.md. 122 assets total: 50 PoC-era
 // `<hash>.tar.gz`, 46 `<hash>-linux`, 26 `<hash>-windows`, ZERO `<hash>-macos`, ZERO
 // anything else. The shard tag is named here on purpose -- it rolls over 2026-08-01 and a

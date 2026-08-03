@@ -44,14 +44,14 @@ export interface CleanupResult {
  * behind the injected CleanupClient so it runs with no network. Two strictly ordered
  * phases:
  *
- * LIST PHASE -- materialize the COMPLETE cache-mirror-* release + asset set BEFORE a
+ * LIST PHASE -- materialize the COMPLETE nx-cache-* release + asset set BEFORE a
  * single deletion. This deliberately INVERTS the Phase 3 reader's swallow-every-fault-
  * into-a-MISS discipline (releases-backend.ts:53-57): on the cleanup path a swallowed
  * list fault reads as authoritative absence and would delete live data, so ANY throw
  * from listAllReleases/listAllAssets PROPAGATES and aborts the whole run with ZERO
  * deletions. `octokit.paginate` in the real adapter rejects on any page fault
  * (incomplete pagination == abort) -- the RETAIN-01/C9 guarantee. Cleanup enumerates
- * EVERY cache-mirror-* release (deliberately wider than the reader's window: an
+ * EVERY nx-cache-* release (deliberately wider than the reader's window: an
  * out-of-window shard must still be pruned, Pitfall 4), sharing only the maxAgeDays
  * cutoff with the reader.
  *

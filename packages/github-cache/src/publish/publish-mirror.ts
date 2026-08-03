@@ -119,7 +119,8 @@ export interface PublishOptions {
  * THE STATUS-ONLY READING WAS FALSIFIED BY MEASUREMENT, not by review. On run 30773689490
  * both publish legs took the 422-means-race path, and afterwards there was NO
  * `cache-mirror-202608` release, no such tag ref (exit 1, with `cache-mirror-202607` as a
- * passing positive control) and no draft. A 422 cannot mean already_exists when the
+ * passing positive control) and no draft -- both tags quoted as they were PROBED, under the
+ * PRE-RENAME tag scheme. A 422 cannot mean already_exists when the
  * resource provably does not exist. The unguarded re-GET then 404'd and killed the job on
  * a bare Not Found that named neither the tag nor the operation. Commit `e96670e` fixed
  * exactly this defect at the upload site one level down, and its commit body CLEARED this

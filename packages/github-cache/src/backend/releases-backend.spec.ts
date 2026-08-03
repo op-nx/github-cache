@@ -76,7 +76,7 @@ const throwingClient: ReleaseReadClient = {
 
 // Pin the clock so the reader's shardTagsForWindow(resolveMaxAgeDays(env)) walk is
 // calendar-date-independent: 2026-07-15 mid-month + the default 30-day knob yields a
-// deterministic TWO-shard window ['cache-mirror-202607', 'cache-mirror-202606'] on every
+// deterministic TWO-shard window ['nx-cache-202607', 'nx-cache-202606'] on every
 // run, regardless of the real date. The reader reads new Date() internally, so faking the
 // system clock is the only way to fix the window without changing the reader's signature.
 const PINNED_NOW = new Date('2026-07-15T00:00:00Z');
@@ -462,11 +462,11 @@ describe('createReleasesReadClient REST sequence (FOUND-02, D-03)', () => {
 describe('createReleasesReadClient retention window walk (D-08)', () => {
   it('walks to the prior shard when the newest shard 404s and resolves the HIT there', async () => {
     // Pinned now (2026-07-15) + the default 30-day knob => a two-shard window
-    // ['cache-mirror-202607', 'cache-mirror-202606'], newest first. The newest shard
+    // ['nx-cache-202607', 'nx-cache-202606'], newest first. The newest shard
     // 404s (nothing published this month yet), so the reader MUST try the prior shard
     // rather than concluding MISS after one lookup -- an asset written last month has to
     // survive the month boundary (D-08). Non-vacuous: asserts the SECOND lookup targets
-    // cache-mirror-202606, not merely that a HIT resolved.
+    // nx-cache-202606, not merely that a HIT resolved.
     mockToken.mockResolvedValue('ghs_faketoken');
     mockRepo.mockResolvedValue('op-nx/github-cache');
     const fetchSpy = vi
@@ -488,10 +488,10 @@ describe('createReleasesReadClient retention window walk (D-08)', () => {
 
     expect(bytes).toEqual(Buffer.from('walked-bytes'));
     expect(String(fetchSpy.mock.calls[0][0])).toContain(
-      'releases/tags/cache-mirror-202607',
+      'releases/tags/nx-cache-202607',
     );
     expect(String(fetchSpy.mock.calls[1][0])).toContain(
-      'releases/tags/cache-mirror-202606',
+      'releases/tags/nx-cache-202606',
     );
   });
 
@@ -510,7 +510,7 @@ describe('createReleasesReadClient retention window walk (D-08)', () => {
     expect(bytes).toBeUndefined();
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(String(fetchSpy.mock.calls[1][0])).toContain(
-      'releases/tags/cache-mirror-202606',
+      'releases/tags/nx-cache-202606',
     );
   });
 });

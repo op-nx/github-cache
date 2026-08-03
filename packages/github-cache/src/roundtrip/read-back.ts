@@ -119,7 +119,8 @@ async function assertPublishedByThisLeg(
   // whole job: `publish` uploads into the shard current at ITS clock, then `publish-verify`
   // runs minutes later. A push publishing at 2026-07-31T23:58Z and verifying at
   // 2026-08-01T00:03Z got a correct HIT from the reader's walk and then a 404 on
-  // `cache-mirror-202608`, reddening the job on a fully correct publisher, reader and
+  // `cache-mirror-202608` (the PRE-RENAME tag scheme -- the observed 404 is quoted as it
+  // was READ), reddening the job on a fully correct publisher, reader and
   // label -- and the 404 arrived through assertResponseOk, which blames "a transport or
   // permission fault". The one message that names the month boundary is on the
   // asset-not-found branch below, which that earlier throw made unreachable in exactly the
@@ -204,7 +205,9 @@ async function assertPublishedByThisLeg(
 /**
  * The page ceiling for the walk below, expressed in ASSETS rather than pages so it stays
  * meaningful if `ASSETS_PER_PAGE` changes. 10,000 is two orders of magnitude above the
- * live cache-mirror-202607 shard (122 assets) and above anything monthly sharding plus
+ * live cache-mirror-202607 shard (122 assets, MEASURED under the PRE-RENAME tag scheme;
+ * the count is what makes the ceiling meaningful and it was read from that shard) and
+ * above anything monthly sharding plus
  * the retention window can produce, so a healthy walk can never reach it.
  */
 const MAX_ASSET_PAGES = Math.ceil(10_000 / ASSETS_PER_PAGE);
@@ -215,7 +218,8 @@ const MAX_ASSET_PAGES = Math.ceil(10_000 / ASSETS_PER_PAGE);
  * PAGINATE, and do NOT read the release payload's inline `assets` array. That snapshot is
  * a non-paginated FIRST PAGE -- the publisher's own recorded Pitfall 4, which is why
  * createPublishClient.listReleaseAssets paginates too -- and the live cache-mirror-202607
- * shard already holds 122 assets, so this leg's seed asset can legitimately sit beyond
+ * shard (MEASURED, the PRE-RENAME tag scheme) already held 122 assets, so this leg's seed
+ * asset can legitimately sit beyond
  * page one. A single-page read would therefore redden publish-verify on a CORRECT
  * implementation, and a guard that fails on correct work gets disabled (OBS-04's lesson).
  * RESEARCH's recommendation named the tags endpoint without naming the cap; this is that

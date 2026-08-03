@@ -360,7 +360,8 @@ describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U
   it.each(CACHE_OS_VALUES)(
     'a %s reader REJECTS an EMPTY label -- a legacy asset must not read as a pass',
     async (os) => {
-      // MEASURED: all 122 assets in the live cache-mirror-202607 shard carry an empty
+      // MEASURED: all 122 assets in the live cache-mirror-202607 shard (the PRE-RENAME tag
+      // scheme -- the shard that was actually censused) carry an empty
       // label, because every one predates OBS-03. So "no label" is the COMMON case in the
       // shard and treating it as satisfied would make this guard vacuous on contact with
       // real data rather than on some hypothetical.

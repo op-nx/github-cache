@@ -12,7 +12,7 @@ The default Actions-cache backend is scoped to a repository's Actions cache,
 which is not shared with a developer's machine and is capped at 10 GB
 ([Configuration](configuration.md#two-limits-to-know-about)). The GitHub Releases
 store is a second, cross-context layer: cache entries mirrored to a monthly
-GitHub Release (`cache-mirror-YYYYMM`) can be read from anywhere with repository
+GitHub Release (`nx-cache-YYYYMM`) can be read from anywhere with repository
 read access.
 
 ### How the backend is selected
@@ -62,7 +62,7 @@ a per-target exception.
 
 - **Publish / sync.** Enumerates the repository's `nx-cache-*` Actions-cache
   entries, restores them, and uploads them to the current month's
-  `cache-mirror-YYYYMM` Release. **Restore is not same-OS.** From v0.0.2 the
+  `nx-cache-YYYYMM` Release. **Restore is not same-OS.** From v0.0.2 the
   archive path is a workspace-relative literal and the cross-OS archive flag is
   set, so the `@actions/cache` cache version no longer partitions by runner OS
   and a leg can restore an entry that was saved on another OS. Two legs are still

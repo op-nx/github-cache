@@ -28,13 +28,19 @@
 
 /**
  * The shape of the only part of a fault's body this module reads. Declared rather than
- * inlined so the cast below is one expression instead of several nested `typeof` guards;
- * every field is optional because NONE of them is guaranteed.
+ * inlined so the cast in `faultData` is one expression instead of several nested `typeof`
+ * guards; every field is optional because NONE of them is guaranteed.
+ *
+ * Two interfaces, not one, so `faultData` can name its return type directly -- reaching it
+ * through `FaultBody`'s optional `response` needs a conditional type that does not compile.
  */
+interface FaultData {
+  readonly errors?: unknown;
+  readonly message?: unknown;
+}
+
 interface FaultBody {
-  readonly response?: {
-    readonly data?: { readonly errors?: unknown; readonly message?: unknown };
-  };
+  readonly response?: { readonly data?: FaultData };
 }
 
 /** GitHub's own reason for a rejected request, as far as the body reveals it. */
@@ -68,6 +74,41 @@ function stringOrUndefined(value: unknown): string | undefined {
 }
 
 /**
+ * Where GitHub puts a rejection body -- the ONE place this module knows that. Keep it one
+ * place: the header's rule ("one body reader per fault class") applies to this file's own
+ * internals, and all three exports below used to open with their own copy of the path.
+ *
+ * Optional chaining absorbs a null, undefined or primitive `error` alike, so no caller-side
+ * pre-check is needed.
+ */
+function faultData(error: unknown): FaultData | undefined {
+  return (error as FaultBody | null)?.response?.data;
+}
+
+/**
+ * The `errors[]` array, or EMPTY -- never undefined, so every consumer below is a plain array
+ * pipeline. A non-array `errors` is untrusted remote input (V5) and collapses to empty here
+ * rather than throwing at a `.map`.
+ *
+ * Empty is NOT benign, per the module rule: it means GitHub named no errors, which earns a
+ * caller no benign branch.
+ */
+function faultErrors(error: unknown): unknown[] {
+  const raw = faultData(error)?.errors;
+
+  return Array.isArray(raw) ? raw : [];
+}
+
+/**
+ * One READABLE string field of one `errors[]` entry, applying the empty-string rule uniformly.
+ * Field-NAMED rather than split into `entryCode`/`entryMessage`, which would be this same cast
+ * and guard authored twice.
+ */
+function entryField(entry: unknown, name: string): string | undefined {
+  return stringOrUndefined((entry as Record<string, unknown> | null)?.[name]);
+}
+
+/**
  * THE TWO LOOKUPS ARE INDEPENDENT, and coupling them loses messages. `code` is the first
  * `errors[]` entry carrying a string `code`; `message` is the first entry carrying a string
  * `message`, ANYWHERE in the array, falling back to the top-level `data.message` (some 422
@@ -80,23 +121,17 @@ function stringOrUndefined(value: unknown): string | undefined {
  * carries nothing readable.
  */
 export function faultReason(error: unknown): FaultReason {
-  const data = (error as FaultBody | null)?.response?.data;
-  const raw = data?.errors;
-  const errors: unknown[] = Array.isArray(raw) ? raw : [];
+  const errors = faultErrors(error);
 
   return {
     code: errors
-      .map((entry) =>
-        stringOrUndefined((entry as { code?: unknown } | null)?.code),
-      )
+      .map((entry) => entryField(entry, 'code'))
       .find((code) => code !== undefined),
     message:
       errors
-        .map((entry) =>
-          stringOrUndefined((entry as { message?: unknown } | null)?.message),
-        )
+        .map((entry) => entryField(entry, 'message'))
         .find((message) => message !== undefined) ??
-      stringOrUndefined(data?.message),
+      stringOrUndefined(faultData(error)?.message),
   };
 }
 
@@ -124,13 +159,7 @@ export function faultReason(error: unknown): FaultReason {
  * and an unreadable body still earns none.
  */
 export function hasFaultCode(error: unknown, code: string): boolean {
-  const raw = (error as FaultBody | null)?.response?.data?.errors;
-  const errors: unknown[] = Array.isArray(raw) ? raw : [];
-
-  return errors.some(
-    (entry) =>
-      stringOrUndefined((entry as { code?: unknown } | null)?.code) === code,
-  );
+  return faultErrors(error).some((entry) => entryField(entry, 'code') === code);
 }
 
 /**
@@ -167,13 +196,15 @@ export function faultMessageForField(
   error: unknown,
   field: string,
 ): string | undefined {
-  const raw = (error as FaultBody | null)?.response?.data?.errors;
-  const errors: unknown[] = Array.isArray(raw) ? raw : [];
-
-  return errors
-    .filter((entry) => (entry as { field?: unknown } | null)?.field === field)
-    .map((entry) =>
-      stringOrUndefined((entry as { message?: unknown } | null)?.message),
-    )
-    .find((message) => message !== undefined);
+  return (
+    faultErrors(error)
+      // A RAW equality, deliberately NOT `entryField(entry, 'field')`. The empty-string rule
+      // belongs to values this module RETURNS, not to the selector a caller passes: routing the
+      // scope through `stringOrUndefined` would make `faultMessageForField(e, '')` stop matching
+      // an entry whose own `field` is `''`. No caller does that today, and none should, but the
+      // scope filter has no business changing meaning to share a helper.
+      .filter((entry) => (entry as { field?: unknown } | null)?.field === field)
+      .map((entry) => entryField(entry, 'message'))
+      .find((message) => message !== undefined)
+  );
 }

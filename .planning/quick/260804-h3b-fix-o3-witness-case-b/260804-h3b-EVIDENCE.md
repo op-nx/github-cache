@@ -174,9 +174,9 @@ is invented here.
 
 ```
 VERDICT SUBCLAIM-A-PRIOR-EXISTENCE-DELTA: CLOSED
-VERDICT SUBCLAIM-B-DEFAULTREF-CLAUSE: PENDING
-VERDICT MAIN-RESTORE: PENDING
-VERDICT RESTORE-RUN-RELEASE-WRITE: PENDING
+VERDICT SUBCLAIM-B-DEFAULTREF-CLAUSE: CLOSED
+VERDICT MAIN-RESTORE: RESTORED
+VERDICT RESTORE-RUN-RELEASE-WRITE: NONE
 ```
 
 ## Optional follow-up, deliberately NOT taken here
@@ -305,3 +305,233 @@ first time.
 **This does NOT prove the `$defaultref` clause.** The witness matched `refs/pull/16/merge` -- the
 run's OWN ref, satisfying the `$ref` arm of the jq chain. `$defaultref` was never reached, let alone
 satisfied. The clause `e5d3cd3` added remains unobserved until sub-claim (b).
+
+### Collateral run, named so it cannot be mistaken for the observed one
+
+The commit that appended this section was itself pushed, which fired a further `.planning/`-only
+Case-B run on PR #16: **run `30908269720`** (headSha `dd780f8da1273b915dc6ccc6032aa278222d3b43`,
+`pull_request`, concluded `success`). It is harmless and expected, and it is NOT the observed run for
+sub-claim (a) -- that is `30907575624`. Recorded here rather than in its own commit because a commit
+whose only content is "the previous commit's push fired a run" would itself fire a run, without
+bound.
+
+## OBSERVATION -- sub-claim (b)
+
+SUBCLAIM-B RUN: 30910935382 headSha=2ed3f5dd24f8baeacaea30e3c928d157b154f9fe
+
+**Probe PR #17**, base `gsd/v0.0.2-os-invariant-cross-os-sharing`, head
+`obs/case-b-defaultref-260804-h3b`, `isDraft: true`, created via `gh stack link` as part of stack
+#18. Repo `default_branch` = `main`. So `base_ref` (`refs/heads/gsd/v0.0.2-os-invariant-cross-os-sharing`)
+!= `default_ref` (`refs/heads/main`) -- read from PR and repo metadata, because the success line
+prints `matched_ref` but not `base_ref`.
+
+### The main window, as it actually ran
+
+| Step | What happened | Evidence |
+|---|---|---|
+| 2 -- build `W` | `W` = `5693d908cbfb9d6f41893efce01a4abf3438f3a8`, built with `GIT_INDEX_FILE` pointed at the session scratchpad, OUTSIDE the repo | Tree `8e33664d944e671b1e352d76d0d359a2d5ece6c4`. ASSERTED, not trusted: `git diff --stat dd780f8 W` EMPTY (identical trees, so the pre-registered `H_linux` is correct) and `git merge-base --is-ancestor dd780f8 W` FALSE (feature tip NOT in `W`'s ancestry, so PR #16 cannot be marked merged). Parent = `fe25a3f`; author and committer both `larsbrinknielsen@gmail.com`. The message carries no CI-skip token in subject OR body -- the run IS the deliverable |
+| 3 -- back up | `fe25a3f...` pushed to `refs/backups/main-pre-window-260804-h3b` (a NEW name; the five stale `refs/backups/*` were neither reused nor cleaned up) | `git ls-remote` confirmed the ref at `fe25a3f865f20f3d4f8a40e96f8cb5717608ba8a` |
+| 4 -- ADVANCE (**window opens**) | `fe25a3f..5693d90  -> main` | Advance run `30909525695`, `push`, head `5693d90`, created 2026-08-04T12:32:08Z |
+| 5 -- positive control | `GET contents/docs/cross-os.md?ref=main` -> **200**, `cross-os.md size=11265 sha=4116532715d05b72aa4d29728bec02328a7dff04` | This is what makes the STEP 8 404 evidence rather than an always-404 probe |
+| 6 -- confirm the save | `refs/heads/main  nx-cache-16483311331776729079  2026-08-04T12:32:44.447744000Z` | The key is EXACTLY the pre-registered one, so **assumption A2 HELD** -- no correction was needed. Saved 36 s after run creation (34 s on the `30807461616` precedent) |
+| 7 -- RESTORE (**window closes**) | `git push --force-with-lease=main:5693d90... origin fe25a3f...:refs/heads/main` -> `+ 5693d90...fe25a3f  (forced update)` | The EXPLICIT lease form, never the bare flag, so a concurrent third-party push would have ABORTED the restore rather than being overwritten. Restore run `30909793853` created 2026-08-04T12:35:38Z |
+
+**Window duration: 3 minutes 30 seconds** (12:32:08Z to 12:35:38Z), inside the 2-to-4-minute figure
+disclosed in advance. Nothing in STEPs 5 or 6 needed the unconditional-restore rule invoked -- every
+reading came back as predicted -- but the rule governed throughout.
+
+### STEP 8 -- the three-way restore verification (the task's blocking gate)
+
+| Check | Result |
+|---|---|
+| (i) remote SHA equality | `git ls-remote origin refs/heads/main` -> `fe25a3f865f20f3d4f8a40e96f8cb5717608ba8a`. **PASS** |
+| (ii) `docs/cross-os.md` 404 on `main` | `{"message":"Not Found",...,"status":"404"}`. **PASS** -- and load-bearing, because STEP 5 measured the same path at 200 during the window. The TREE reverted, not merely the ref |
+| (iii) empty diff against the backup ref | backup `fe25a3f865f20f3d4f8a40e96f8cb5717608ba8a`, main `fe25a3f865f20f3d4f8a40e96f8cb5717608ba8a`, `git diff --stat` empty. **PASS**, recorded as belt-and-braces -- it is tautological once (i) passes, since identical SHAs cannot differ in tree |
+
+PR #16 re-asserted immediately after: `main OPEN null` -- base unchanged, still open, never merged.
+Only then was the backup ref deleted (STEP 9), confirmed gone, with the five stale `refs/backups/*`
+left untouched.
+
+### STEP 10(a) -- the three ubuntu producer saves the probe run depends on
+
+All three landed under `refs/heads/main`, and each is byte-identical to the hash research Q4 measured
+LOCALLY as the baseline -- an independent cross-check that the local instrument is CI's instrument:
+
+| Target | Key | Ref | `created_at` |
+|---|---|---|---|
+| `build` | `nx-cache-17727199787119239487` | `refs/heads/main` | 2026-08-04T12:32:42.023727000Z |
+| `typecheck` | `nx-cache-9209124846809945647` | `refs/heads/main` | 2026-08-04T12:32:45.120181000Z |
+| `test` | `nx-cache-3225206396952678183` | `refs/heads/main` | 2026-08-04T12:32:41.912330000Z |
+| `integration` H_linux | `nx-cache-16483311331776729079` | `refs/heads/main` | 2026-08-04T12:32:44.447744000Z |
+| `integration` H_win | `nx-cache-4100361685679151443` | `refs/heads/main` | 2026-08-04T12:36:01.523851000Z |
+
+So the A3 collateral risk did NOT materialise: no Windows leg reddened for want of a producer entry.
+
+**The advance run was FULL GREEN: 26 of 26 jobs `success`**, including BOTH `publish` legs and BOTH
+`publish-verify` legs. It wrote real Release assets into the live `nx-cache-202608` shard, exactly as
+disclosed and authorised, matching the `30807461616` precedent.
+
+### STEP 10(b) -- A1 re-check on the RESTORE run
+
+The restore run `30909793853` concluded `failure`, and the failure is confined to precisely the two
+legs research Q3 predicted: `publish (ubuntu-24.04-arm)` and `publish (windows-11-arm)` failed,
+`publish-verify` skipped, and all 13 other jobs succeeded. The failure mode, quoted:
+
+```
+GET /repos/op-nx/github-cache/releases/tags/cache-mirror-202608 - 404
+POST /repos/op-nx/github-cache/releases - 422
+GET /repos/op-nx/github-cache/releases/tags/cache-mirror-202608 - 404
+```
+
+**No Release asset was uploaded.** Re-check after the window: `cache-mirror-202608` still returns
+404, and the full tag census returns exactly:
+
+```
+nx-cache-202608
+v0.0.1
+```
+
+No `cache-mirror-*` release exists at all -- stronger than "none that was absent at pre-flight".
+
+**AUGUST BOUND, stated explicitly.** This check comes out this way ONLY because the name-scoped
+`cache-mirror-202608` tag is burned for this month. In September the tag would be FRESH, the
+`fe25a3f`-era code would create a legacy-named release and mirror `fe25a3f`-era entries into it, and
+this same check would be expected to come out the OTHER way. The property is time-bounded, not fixed.
+
+### STEP 11 -- which `gh stack` path was taken
+
+**`gh stack link 16 obs/case-b-defaultref-260804-h3b` succeeded, EXIT 0.** The exit-9 rollout
+fallback was NOT needed -- stacked pull requests are enabled for this repository. Output:
+
+```
+Checking existing stacks...
+Pushing 1 branch to origin...
+Looking up PRs for 2 branches...
+Creating 1 PR...
+Created PR #17 for obs/case-b-defaultref-260804-h3b (base: gsd/v0.0.2-os-invariant-cross-os-sharing)
+Created stack with 2 PRs (stack #18)
+```
+
+`--open` was deliberately not passed, so PR #17 stayed a DRAFT; drafts still fire `pull_request`
+opened runs, and run `30768540898` on draft PR #14 is this repo's own precedent. PR #16's
+`baseRefName` was ASSERTED still `main` immediately afterwards rather than assumed -- `link` corrects
+bases that do not match the expected chain, and `--base` defaults to the repo default branch, which
+was already PR #16's base, so no change was expected and none occurred. Bare `gh stack view` was
+never run (it launches a TUI that hangs); verification went through `gh api .../stacks` and
+`gh pr view --json`.
+
+### The witness lines, quoted
+
+```
+o3-witness: H_linux=16483311331776729079
+o3-witness: key=nx-cache-16483311331776729079 created_at=2026-08-04T12:32:44.447744000Z started_at=2026-08-04T12:53:36Z delta=1252s margin=30s matched_ref=refs/heads/main
+o3-witness: EXISTENCE OK key=nx-cache-16483311331776729079 created_at=2026-08-04T12:32:44.447744000Z started_at=2026-08-04T12:53:36Z delta=1252s margin=30s matched_ref=refs/heads/main
+```
+
+### Both `integration` legs, quoted
+
+```
+integration (ubuntu-24.04-arm)  integration hash=16483311331776729079 cacheStatus=remote-cache-hit status=0 -> integration-hash.txt
+integration (ubuntu-24.04-arm)  positive control: GET /v1/cache/16483311331776729079 -> 200 (wanted 200)
+integration (windows-11-arm)    integration hash=4100361685679151443 cacheStatus=remote-cache-hit status=0 -> integration-hash.txt
+integration (windows-11-arm)    positive control: GET /v1/cache/4100361685679151443 -> 200 (wanted 200)
+```
+
+### The three read-only Windows legs, quoted
+
+```
+remote-cache label occurrences on windows-11-arm (build): 1 -- GATED at a floor of 1
+remote-cache label occurrences on windows-11-arm (typecheck): 2 -- GATED at a floor of 1
+remote-cache label occurrences on windows-11-arm (test): 1 -- GATED at a floor of 1
+```
+
+All three carry `CACHE_READ_ONLY: 1` in their step env, all three cleared the floor, and the familiar
+1 / 2 / 1 shape reproduced -- this time restoring from the window's `refs/heads/main` saves.
+
+### Prediction versus measurement
+
+| Predicted | Measured | Verdict |
+|---|---|---|
+| `key=nx-cache-16483311331776729079` | `nx-cache-16483311331776729079` | PASS |
+| `matched_ref=refs/heads/main` | `refs/heads/main` | PASS -- **this is the observation the whole task exists for** |
+| `created_at` = the window save's timestamp | `2026-08-04T12:32:44.447744000Z`, byte-identical to the STEP 6 caches-API reading | PASS |
+| `delta` on the order of minutes | `delta=1252s` = 20 m 52 s | PASS |
+| delta clears the 30 s floor (else VOID) | 1252 s, 41x the floor | PASS -- the named VOID risk did not materialise |
+| `margin=30s` | `margin=30s` | PASS |
+| own-ref scope holds no row for the key | `refs/pull/17/merge` holds exactly ONE row, `nx-cache-30910935382` (the run-id-keyed seed) -- NOT the key | PASS |
+| base-ref scope holds no row for the key | `refs/heads/gsd/v0.0.2-os-invariant-cross-os-sharing` holds **0 rows in total** | PASS, and stronger than predicted: the `$baseref` arm cannot be satisfied by ANY key, not merely by this one |
+| hash does not rotate (all five targets Case B) | ubuntu `integration` logged `cacheStatus=remote-cache-hit` at hash `16483311331776729079` -- unchanged, and it saved nothing into its own scope | PASS -- so outcome (ii) is excluded by measurement, not by assumption |
+| `base_ref != default_ref` | base `gsd/v0.0.2-os-invariant-cross-os-sharing` vs `default_branch` `main` | PASS |
+| both `integration` legs green, both controls 200 | both `success`, both `-> 200 (wanted 200)` | PASS |
+| the three Windows gate counts at or above 1 | 1 / 2 / 1 | PASS |
+
+Whole-run conclusions: 21 `success`, 3 `skipped` (`consumer-smoke`, `publish`, `publish-verify` --
+all normal for a `pull_request`), **0 failures**.
+
+### THE DISCRIMINATOR, read out
+
+The witness matched **`refs/heads/main`**. Paired with the two INDEPENDENT scope readings taken at
+observation time, that match is attributable to the `$defaultref` clause and to nothing else:
+
+1. The probe run's OWN ref `refs/pull/17/merge` held no row for the key (its single row is the
+   run-id-keyed seed `nx-cache-30910935382`), so the `$ref` arm was unsatisfiable for this key.
+2. The base scope `refs/heads/gsd/v0.0.2-os-invariant-cross-os-sharing` held ZERO rows of any kind,
+   so the `$baseref` arm was unsatisfiable outright.
+
+`$defaultref` was therefore the ONLY satisfiable arm of the jq `or` chain, which makes it the
+SATISFYING arm. **Sub-claim (b) is CLOSED.** The clause `e5d3cd3` added has now been the satisfying
+clause on a real run, which it had never been before -- every prior green run, `30896484130`
+included, matched its own merge ref and was Case A.
+
+Outcome (ii) is excluded by measurement rather than argument: the hash did not rotate
+(`16483311331776729079` on both the window run and the probe run) and the probe run's ubuntu leg
+HIT rather than saving, so the run did not degrade to Case A. And consistent with the
+pre-registration, the 09:29:14Z `refs/pull/16/merge` row was never a candidate -- `ci.yml:1366-1367`
+binds the filter to this run's own three refs, and another PR's own scope is not among them at any
+allowlist width.
+
+### STEP 14 -- teardown, confirmed
+
+| Action | Result |
+|---|---|
+| `gh stack unstack 18` (explicit number form) | `Stack removed on GitHub (stack #18)`, exit 0 |
+| `gh pr close 17` | `Closed pull request op-nx/github-cache#17`. CLOSED, never merged |
+| delete remote + local probe branch | `- [deleted]  obs/case-b-defaultref-260804-h3b`; local branch deleted (was `2ed3f5d`) |
+| `gh api .../stacks -q 'length'` | `0` |
+| `git ls-remote origin 'refs/heads/obs/*'` | empty |
+| PR #16 | `main OPEN null` -- base `main`, OPEN, never merged |
+| PR #17 | `CLOSED mergedAt=null` |
+| `main` | `fe25a3f865f20f3d4f8a40e96f8cb5717608ba8a` |
+| backup ref | deleted |
+
+Nothing this task created survives on the public repo except the two closed-out PR records
+themselves.
+
+### The probe file's content, preserved
+
+`obs/case-b-defaultref-260804-h3b` (commit `2ed3f5dd24f8baeacaea30e3c928d157b154f9fe`) carried ONE
+new file, `.planning/quick/260804-h3b-fix-o3-witness-case-b/260804-h3b-PROBE-B.md`, reproduced here
+because the branch was deleted at teardown:
+
+```markdown
+# Quick Task 260804-h3b -- probe file for sub-claim (b)
+
+This file exists ONLY to give the probe branch `obs/case-b-defaultref-260804-h3b` a non-empty diff
+against its base, so opening a PR fires a `pull_request` run.
+
+**Sub-claim it triggers:** (b), the `$defaultref` clause matching. The probe PR's base is the FEATURE
+branch `gsd/v0.0.2-os-invariant-cross-os-sharing`, NOT `main`. That is the whole point: with base =
+`main`, `base_ref` and `default_ref` are the same string and the `$baseref` arm of the jq chain is
+satisfied first, making the match unattributable. `ci.yml:1255-1257` names that exact duplication as
+"the reason the gap stayed invisible".
+
+**Why it is ONE file under `.planning/`:** a `.planning/`-only diff rotates no Nx task hash
+(research Q4, measured with a same-modality positive control), so all five targets are Case B on the
+probe run. That is the pre-registered shape. A second file, or an empty commit, would be unmeasured.
+
+**Pre-registration, observation and verdicts:**
+`.planning/quick/260804-h3b-fix-o3-witness-case-b/260804-h3b-EVIDENCE.md`
+
+This branch and its PR are torn down at the end of the task. The file's content is reproduced in the
+EVIDENCE file so it survives the deletion.
+```

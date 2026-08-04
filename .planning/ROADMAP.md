@@ -734,8 +734,8 @@ reported SEPARATELY there because they prove different things: (a) is the SUBSTA
 `40e4d21` restored, and (b) is the SPECIFIC clause `e5d3cd3` added, which no real run had ever
 matched on -- run `30896484130` matched its OWN merge ref, which is Case A.
 
-- Sub-claim (a), the prior-existence delta allowance -- PENDING
-- Sub-claim (b), the `$defaultref` clause matching -- PENDING
+- Sub-claim (a), the prior-existence delta allowance, run `30907575624` (`headSha` EQUALS the pre-registration commit `d4dc093`): `EXISTENCE OK` at `delta=9596s matched_ref=refs/pull/16/merge` -- CLOSED
+- Sub-claim (b), the `$defaultref` clause matching, run `30910935382` on stacked draft PR #17 (base = the feature branch, so `base_ref != default_ref`): `EXISTENCE OK` at `delta=1252s matched_ref=refs/heads/main`, with the own-ref and base-ref scopes both measured empty for the key -- CLOSED
 
 ## Traceability
 

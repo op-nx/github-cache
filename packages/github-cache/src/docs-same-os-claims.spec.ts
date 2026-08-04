@@ -518,8 +518,23 @@ const DOCS_08_SITES = [
      * own block. Two `curl` probes now run in that job against the same sidecar with two
      * DIFFERENT acceptance sets, and the whole value of the second one is the difference: the
      * readiness poll accepts 404 or 200 because it proves REACHABILITY, while the positive
-     * control on the leg's own just-saved key accepts 200 ALONE, because a 404 there means a
-     * dead sidecar masqueraded as a cache MISS.
+     * control on the leg's own key accepts 200 ALONE, because a 404 there means the read
+     * path could not produce a key this run's own scope demonstrably holds.
+     *
+     * CORRECTED by quick 260804-lc3, and this row is a SITE of the correction rather than
+     * only its guard. The sentence above used to carry both defects the `ci.yml` block
+     * carried. It attributed the key's presence to the leg's task having written it, when
+     * the GET resolves through an UNCONDITIONAL cache.restoreCache that is not conditioned
+     * on a write -- MEASURED on runs 30907575624 and 30910935382, where every integration
+     * leg HIT, wrote nothing, and every control still returned 200. And it blamed a
+     * non-answering sidecar for a 404, when a 404 is the readiness poll's own proof-of-life
+     * signature and the real agent is `server.ts` degrading any backend read fault to a 404
+     * MISS (SRV-05). WHY THIS ROW DID NOT CATCH EITHER: it pinned the acceptance SET and
+     * left the REASONS unguarded, so every phrase it asserted stayed true while the prose
+     * around them drifted. The two additive phrases below close that gap. The superseded
+     * wording is described BY CONCEPT and deliberately not quoted here -- this file's read
+     * is RAW and this row is its own subject, so a quoted stale phrase would be
+     * indistinguishable from a regression to a repo-wide search.
      *
      * WHY THE PROSE IS WORTH LOCKING AND NOT MERELY WRITING. Two probes that differ only in
      * their acceptance set look like duplication, and the natural tidy-up is to collapse them
@@ -529,7 +544,21 @@ const DOCS_08_SITES = [
      *
      * Independently deletable: the acceptance-set sentence and the do-not-collapse sentence
      * are separate claims -- the first can survive a rewrite that still merges the probes.
-     * `forbidden` is EMPTY: new prose. Note that `wanted 404 or 200` already appears in the
+     * The two REASON phrases are independently deletable from those two AND from each
+     * other, because the MECHANISM and the ATTRIBUTION are separate claims about separate
+     * code. `UNCONDITIONAL cache.restoreCache` pins WHY presence is a disjunction, so
+     * renarrowing the premise back to a write requires deleting it, and it survives any
+     * rewording that stays true. `404 means the sidecar DID answer` pins the code
+     * discrimination that a 404 proves the sidecar spoke HTTP, so restoring the
+     * dead-sidecar attribution requires deleting it. A failure report has to tell a
+     * renarrowed premise apart from a restored misattribution, and one phrase covering both
+     * could not. The disjunction's OWN wording is deliberately NOT pinned -- it is short,
+     * generic, and exactly the kind of phrasing that gets legitimately reworded; the CAUSE
+     * and the discrimination are what survive.
+     * `forbidden` is EMPTY, for the reason three other rows here already record: an absence
+     * check on the superseded wording is satisfied by deleting the whole comment, and a
+     * correction-history paragraph legitimately quotes its own superseded wording. Note that
+     * `wanted 404 or 200` already appears in the
      * readiness step's own failure message, which is why this row's phrase says `accepts 404
      * or 200 on purpose` instead -- a phrase matching the existing message would lock nothing.
      */
@@ -538,6 +567,8 @@ const DOCS_08_SITES = [
     required: [
       'the acceptance set is 200 ALONE -- a 404 here is a control FAILURE',
       'the readiness poll accepts 404 or 200 on purpose; do not collapse them',
+      'UNCONDITIONAL cache.restoreCache',
+      '404 means the sidecar DID answer',
     ],
     forbidden: [],
   },

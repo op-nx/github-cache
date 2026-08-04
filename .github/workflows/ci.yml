@@ -207,9 +207,9 @@ jobs:
   #     path", which dropped the scope qualifier and turned CONTAINMENT into DENIAL
   #     -- contradicting the scope-isolation half of its own sentence, and implying
   #     the integration job's 200-only positive control must redden on every fork
-  #     PR. It does not: that probe reads the same merge-ref scope its own save just
-  #     wrote. Dropping the qualifier is an easy misreading, which is why the
-  #     qualifier is now spelled in capitals rather than assumed.
+  #     PR. It does not: that probe reads the same merge-ref scope its own run
+  #     RESTORED OR WROTE. Dropping the qualifier is an easy misreading, which is
+  #     why the qualifier is now spelled in capitals rather than assumed.
   #       CITED from GitHub's docs, not reproduced here -- this repo has had no fork
   #     PR on record. Same standing, and the same caveat, as the !cancelled()-past-a-
   #     FAILED-needs citation on the publish job.
@@ -1000,10 +1000,41 @@ jobs:
       # above, with a DIFFERENT acceptance set:
       # the acceptance set is 200 ALONE -- a 404 here is a control FAILURE
       # the readiness poll accepts 404 or 200 on purpose; do not collapse them
-      # The poll proves REACHABILITY against a hash nothing creates; this probe proves
-      # the service really round-tripped the entry this leg's own task just saved. A 404
-      # here would therefore mean a dead sidecar had masqueraded as a cache MISS, which
-      # would make the whole MISS observation inadmissible. Two probes, two acceptance
+      # The poll proves REACHABILITY against a hash nothing creates; this probe proves the
+      # service really round-tripped an entry THIS RUN'S OWN SCOPE HOLDS -- the leg either
+      # RESTORED it from that scope or WROTE it into that scope, and both routes end in the
+      # same place, because the GET resolves through an UNCONDITIONAL cache.restoreCache in
+      # actions-cache-backend.ts that is not conditioned on this run having written first.
+      #   THE DISJUNCTION IS MEASURED, not defensive: on runs 30907575624 and 30910935382
+      # every integration leg took a remote-cache HIT and wrote NOTHING -- four
+      # leg-observations across those two runs -- and every control still returned 200. This
+      # comment used to attribute the key's presence to the leg's task having written it,
+      # which those runs falsify.
+      #   A NON-200 SAYS DIFFERENT THINGS AT ITS TWO CODES. 000 is the sidecar not answering
+      # at all, and the `|| true` paragraph below carries that mechanism in full. But a
+      # 404 means the sidecar DID answer -- 404 is the readiness poll's own proof-of-life
+      # signature, and this file must not read one status code as proof of life at the poll
+      # above and as proof of death in this block. The fault is DOWNSTREAM of the HTTP layer:
+      # handleGet's catch in server.ts degrades EVERY backend fault to a 404 MISS (SRV-05),
+      # which is what makes a broken read path indistinguishable from a genuine absence at
+      # this boundary. That degradation, not a dead sidecar, is the masquerade agent this
+      # control exists to catch.
+      #   THE CONSEQUENCE DEPENDS ON THE LEG'S OUTCOME, and both branches are stated because
+      # which one applies is a property of the run, not of this file.
+      #   * On a MISS-then-write leg -- the load-bearing case -- a read path that cannot
+      #     produce a key this run itself wrote could equally have MANUFACTURED the MISS: a
+      #     token-less sidecar falls to createReadOnlyMemoryBackend in select-backend.ts and
+      #     404s everything. The MISS observation is INADMISSIBLE.
+      #   * On a HIT leg the leg's own remote-cache-hit already proved the round trip through
+      #     this same sidecar process, and the backend is chosen ONCE at sidecar startup, so
+      #     a HIT excludes the degraded one. A 404 retracts nothing already observed; it
+      #     reports read-path NON-DETERMINISM inside one job. That leaves the step
+      #     REDUNDANT AS A LIVENESS PROOF and nothing weaker: its ENFORCEMENT is not
+      #     redundant at all, because cacheStatus is RECORDED and never GATED, so on such a
+      #     leg this step is the only thing in the job that hard-fails on a broken read path.
+      #   THE FAILURE DIRECTION IS NEVER OBSERVED. No 404 has ever come back from this step,
+      # so every claim above about what a non-200 would MEAN is derived from the code rather
+      # than measured; only the presence disjunction is measured. Two probes, two acceptance
       # sets, two questions -- collapsing them into one helper with the looser set would
       # leave both steps green while destroying the control, so do not reuse the poll's
       # deadbeef hash here either.
@@ -1018,30 +1049,48 @@ jobs:
       # read-only restriction is SCOPED: only high-trust triggers can create or overwrite
       # caches in the DEFAULT BRANCH'S SCOPE, while a pull_request run -- fork included --
       # still CREATES its cache, in the merge ref (refs/pull/.../merge). This step's GET
-      # runs inside that same run and therefore reads that same scope, so "the key is
-      # known-present after the task's own save" holds on a fork exactly as it does on the
-      # same-repo branch PRs every run to date has exercised.
+      # runs inside that same run and therefore reads that same scope, so the key is
+      # known-present in this run's own scope on a fork exactly as it is on the same-repo
+      # branch PRs every run to date has exercised.
+      #   AND THE DISJUNCTION ADDS A SECOND, INDEPENDENT LEG here. The restore disjunct
+      # needs NO WRITE PERMISSION at all -- a fork PR that HITS restored the entry from a
+      # scope it only had to READ, and GitHub's restriction is on WRITING -- so that
+      # disjunct carries a HIT run with zero reliance on the fork-write citation below,
+      # while the merge-ref argument above still carries a MISS run. Two independent legs
+      # where there was one. That is NOT the fork question closed: see the escape hatch.
       #   The misreading is named because it is an easy one to repeat: drop the "in the
       # default branch's scope" qualifier and containment reads as denial. CITED from
       # GitHub's docs, not reproduced -- no fork PR on record -- with the same standing as
       # the !cancelled() citation on the publish job.
       #   IF A FORK PR EVER DOES REDDEN HERE, that is new evidence about the platform, and
       # the fix is to gate this step on the trigger. Never admit 404 into the acceptance
-      # set: that would destroy the control on the one failure it exists to detect, a dead
-      # sidecar masquerading as a cache MISS.
+      # set: a set that ADMITS THE DEGRADATION cannot detect it, and that degradation is
+      # the one failure this control exists to detect -- handleGet's catch in server.ts
+      # turning any backend read fault into a 404 MISS (SRV-05), which is indistinguishable
+      # at this boundary from the genuine absence the leg is trying to report. Not a dead
+      # sidecar: that yields 000, as the paragraph below records.
       #
-      # No retry loop, deliberately: the key is known-present after the task's own save,
-      # so a retry could only paper over a real failure. And a 200 can only have come
-      # from a real cache-service hit -- the backend calls restoreCache BEFORE any local
-      # read and returns a miss when the service does not match, and server.ts degrades
-      # any backend fault to a 404 -- so this control is strictly conservative: it can
-      # false-negative, never false-positive.
+      # No retry loop, deliberately: the key is known-present in this run's own scope,
+      # restored or written, so a retry could only paper over a real failure. The naive
+      # objection INVERTS -- a transient fault that a retry would HIDE IS exactly the
+      # read-path NON-DETERMINISM this control exists to surface on a HIT leg, so adding
+      # the retry would delete the finding rather than stabilise the step. And a 200 can
+      # only have come from a real cache-service hit -- the backend calls restoreCache
+      # BEFORE any local read and returns a miss when the service does not match, and
+      # server.ts degrades any backend fault to a 404 -- so this control is strictly
+      # conservative: it can false-negative, never false-positive.
       #
-      # Placement: AFTER the Nx run, because it is that task's own save that makes the
-      # key present, and BEFORE `cancel: cache-server`, because the probe goes through
-      # the sidecar. The bearer token is built in a shell variable from the env var the
-      # pre-set step already ::add-mask::ed, never interpolated, and only the HTTP code
-      # is echoed.
+      # Placement: AFTER the Nx run, and the leading reason is premise-INDEPENDENT -- this
+      # step's own INPUT DOES NOT EXIST before the Nx run. own_hash is read from
+      # integration-hash.txt, which the run.json reader step writes, and that reader needs
+      # .nx/cache/run.json, which only the Nx run produces. Secondary, and Case-A specific:
+      # on a MISS-then-write leg the write is what makes the key present, so an earlier
+      # placement would 404 every time, breaking the control exactly where it is
+      # load-bearing. On a HIT leg an earlier placement would merely be harmless, which is
+      # why the mechanical reason leads. And BEFORE `cancel: cache-server`, because the
+      # probe goes through the sidecar. The bearer token is built in a shell variable from
+      # the env var the pre-set step already ::add-mask::ed, never interpolated, and only
+      # the HTTP code is echoed.
       #
       # THE `|| true` IS LOAD-BEARING, and its absence defeated this control on the ONE
       # case it exists to detect. On connection-refused -- a DEAD SIDECAR -- curl exits 7,

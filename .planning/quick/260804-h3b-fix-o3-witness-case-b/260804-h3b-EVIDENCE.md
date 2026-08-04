@@ -173,7 +173,7 @@ section above enumerates which shapes are REACHABLE for it; no outcome the mecha
 is invented here.
 
 ```
-VERDICT SUBCLAIM-A-PRIOR-EXISTENCE-DELTA: PENDING
+VERDICT SUBCLAIM-A-PRIOR-EXISTENCE-DELTA: CLOSED
 VERDICT SUBCLAIM-B-DEFAULTREF-CLAUSE: PENDING
 VERDICT MAIN-RESTORE: PENDING
 VERDICT RESTORE-RUN-RELEASE-WRITE: PENDING
@@ -225,3 +225,83 @@ bare deletion leaves a future reader holding a documented argument for undoing t
   `cache-mirror-202608` tag. In September that tag is fresh, and the `fe25a3f`-era code would create
   a legacy-named release and mirror `fe25a3f`-era entries into it. This task pre-flights the 404 and
   re-checks after the window; it does not fix the underlying shape.
+
+## OBSERVATION -- sub-claim (a)
+
+PRE-REGISTRATION COMMIT: d4dc09384d7bcc8650d76bfe0a4b209874e99dea
+
+SUBCLAIM-A RUN: 30907575624 headSha=d4dc09384d7bcc8650d76bfe0a4b209874e99dea
+
+**The two SHAs are EQUAL.** The pre-registration commit IS the run's head, so every prediction above
+was provably in the tree the run measured -- the `13-EVIDENCE.md` idiom, and the property the Phase 13
+security audit independently re-verified. Exactly ONE run carried that `headSha` (no re-run), so no
+selection was needed; the run was created 2026-08-04T12:05:34Z as a `pull_request` synchronize of
+PR #16 and completed `success` at 12:10:45Z.
+
+### The witness lines, quoted
+
+```
+o3-witness: H_linux=16483311331776729079
+o3-witness: key=nx-cache-16483311331776729079 created_at=2026-08-04T09:29:14.513483000Z started_at=2026-08-04T12:09:10Z delta=9596s margin=30s matched_ref=refs/pull/16/merge
+o3-witness: EXISTENCE OK key=nx-cache-16483311331776729079 created_at=2026-08-04T09:29:14.513483000Z started_at=2026-08-04T12:09:10Z delta=9596s margin=30s matched_ref=refs/pull/16/merge
+```
+
+### Both `integration` legs, quoted
+
+```
+integration (ubuntu-24.04-arm)  integration hash=16483311331776729079 cacheStatus=remote-cache-hit status=0 -> integration-hash.txt
+integration (ubuntu-24.04-arm)  positive control: GET /v1/cache/16483311331776729079 -> 200 (wanted 200)
+integration (windows-11-arm)    integration hash=4100361685679151443 cacheStatus=remote-cache-hit status=0 -> integration-hash.txt
+integration (windows-11-arm)    positive control: GET /v1/cache/4100361685679151443 -> 200 (wanted 200)
+```
+
+### Prediction versus measurement
+
+| Predicted | Measured | Verdict |
+|---|---|---|
+| `key=nx-cache-16483311331776729079` | `nx-cache-16483311331776729079` | PASS |
+| `H_linux=16483311331776729079` | `16483311331776729079` | PASS -- so assumption A2's key is confirmed live on the feature tip |
+| `created_at=2026-08-04T09:29:14.513483000Z`, full sub-second | `2026-08-04T09:29:14.513483000Z`, byte-identical | PASS. Recording the full precision was the right call -- a truncated `...09:29:14Z` would not have matched the log |
+| `matched_ref=refs/pull/16/merge` | `refs/pull/16/merge` | PASS |
+| delta on the order of 10^4 s (hours), far above the `-lt 30` floor | `delta=9596s` = 2h 39m 56s | PASS, and the exact figure is recorded rather than the expectation: 9596 s is 0.96 x 10^4, i.e. just UNDER a clean 10^4. The load-bearing halves both held -- it is hours, and it is 320x the floor |
+| `margin=30s` | `margin=30s` | PASS |
+| `started_at` = the Windows `integration` step start | `2026-08-04T12:09:10Z`, and the Windows leg's hash read is logged at 12:09:26Z | PASS -- consistent, and several minutes into a run that began 12:05:34Z, which is the same reason (b)'s delta will clear the floor |
+| ubuntu `integration` HITs and writes nothing | `cacheStatus=remote-cache-hit` | PASS. Nothing entered the merge-ref scope during this run, so the intra-run path cannot explain the match |
+| both `integration` legs green | both `success` | PASS |
+| both positive controls `-> 200 (wanted 200)` | both `-> 200 (wanted 200)` | PASS. Research Q1's finding holds live |
+
+**One measurement the pre-registration did not predict, recorded because it STRENGTHENS Q1 rather
+than contradicting it.** The WINDOWS leg was also `cacheStatus=remote-cache-hit`, so its positive
+control returned 200 from a RESTORE. Q1 had only ever measured the Windows leg in the SAVE direction
+(`30807461616`, `cache-miss` then 200) and reasoned the restore direction from code. Both directions
+of the "restored OR saved" invariant are now measured on a real runner, on both legs. This is also
+direct evidence for the documentation defect noted under `## Optional follow-up`: `ci.yml:1004`
+describes the probed key as "the entry this leg's own task just saved", and on this run NEITHER leg
+saved anything.
+
+### Per-job conclusions, whole run
+
+Zero failures. `24` jobs: 21 `success`, 3 `skipped`, 0 `failure`, 0 `cancelled`. Listing the
+non-success entries in full so nothing is absorbed into a headline:
+
+| Job | Conclusion | Note |
+|---|---|---|
+| `consumer-smoke` | skipped | Its normal state on a `pull_request` run |
+| `publish` | skipped | Push-gated to `main`; correctly not reached |
+| `publish-verify` | skipped | Same push gate |
+
+All 21 others -- `fallow`, `lint`, `ppe`, `pack-check`, `format-check`, `typecheck`,
+`action-bundle-drift`, `test`, `hash-parity` x2, `integration` x2, `dogfood-seed`, `build`,
+`dogfood-verify` x2, `build-windows`, `typecheck-windows`, `test-windows`, `hash-parity-compare`,
+`o3-witness` -- concluded `success`.
+
+### What this observation does and does not settle
+
+Sub-claim (a) is **CLOSED**: an entry created OUTSIDE this run, on a ref this run could read, was
+matched with a delta of 9596 seconds and the witness printed `EXISTENCE OK` instead of reddening.
+That is the delta allowance and the absent server-side `&ref=` narrow, both exercised live for the
+first time.
+
+**This does NOT prove the `$defaultref` clause.** The witness matched `refs/pull/16/merge` -- the
+run's OWN ref, satisfying the `$ref` arm of the jq chain. `$defaultref` was never reached, let alone
+satisfied. The clause `e5d3cd3` added remains unobserved until sub-claim (b).

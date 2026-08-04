@@ -39,12 +39,6 @@ const MIN_AGE_DAYS = 7;
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * The month-shard release tag: `nx-cache-` plus the UTC year and zero-padded month
- * (e.g. nx-cache-202607). Moved verbatim from the Phase 3 releases-backend seam so the
- * tag scheme has exactly one home. Computed from the clock (not a fixed constant) so it
- * already tracks the current month.
- */
-/**
  * The month-shard tag prefix. Authored HERE, the one home for the tag scheme, so the
  * cleanup engine's `startsWith` scope filter cannot drift from the tag shardTag builds
  * (I8). Never inline a second copy of this literal.
@@ -61,6 +55,12 @@ export const MS_PER_DAY = 24 * 60 * 60 * 1000;
  */
 export const SHARD_TAG_PREFIX = 'nx-cache-';
 
+/**
+ * The month-shard release tag: `nx-cache-` plus the UTC year and zero-padded month
+ * (e.g. nx-cache-202607). Moved verbatim from the Phase 3 releases-backend seam so the
+ * tag scheme has exactly one home. Computed from the clock (not a fixed constant) so it
+ * already tracks the current month.
+ */
 export function shardTag(date: Date = new Date()): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');

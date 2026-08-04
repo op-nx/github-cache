@@ -253,7 +253,9 @@ describe('both factories share ONE get closure, so they restore identically (VER
   // The phase's acceptance criterion in one assertion. Two backends that HAPPEN to agree
   // today are precisely the ROADMAP's named risk -- an OS-dependent cache version is the bug
   // Phase 9 existed to fix -- so what is asserted is the WHOLE recorded argument array from
-  // EACH factory, matching the positional-pin convention at :409-430. Indexing single
+  // EACH factory, matching the convention of the 'passes the flag at the 5th positional'
+  // clause below -- referenced by its NAME, because the line range this used to cite
+  // (":409-430") pointed at the withHashLock serialization test instead. Indexing single
   // positions says nothing about positions 2-4, which is exactly where enableCrossOsArchive
   // lives and exactly where a copy-pasted second read site would drift.
   it('produces the same HIT and the SAME whole restoreCache argument array from either factory (VER-08, D-01)', async () => {
@@ -631,6 +633,40 @@ const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
 const ACTIONS_CACHE_SPECIFIER = /['"]@actions\/cache(?:\/[^'"]*)?['"]/;
 
 /**
+ * Every non-spec `.ts` module under the package source root, workspace-relative. The tree walk
+ * for all three scans below, authored ONCE.
+ *
+ * A FUNCTION, not a module-scope constant, and that is a constraint rather than a preference:
+ * path resolution reuses the workspace-root cwd that `src/test/workspace-root-cwd.ts` enters
+ * file-wide, and that hook has NOT run at collection time -- so the walk must happen inside an
+ * `it`. Every path it yields is workspace-relative by construction, which is why the expected
+ * literals need no normalisation beyond the separator.
+ *
+ * `encoding` is named rather than left to the default so the overload resolves to `string[]`;
+ * without it the return type widens to `string[] | Buffer[]` and the normalisation does not
+ * typecheck.
+ *
+ * The separator transform is a FIXED, unconditional string replace and deliberately NOT
+ * `node:path`'s `sep`, which LINT-02/CORR-06 bans in a unit spec because it derives an
+ * expectation from the running machine. `readdirSync` emits `\` on Windows and none on POSIX,
+ * so the same tree yields the same array either way -- the whole point of an OS-invariant
+ * guard, and the reason this normalisation must not be duplicated: three copies of it are
+ * three chances to get the one correctness detail wrong in a way that makes a guard silently
+ * scan nothing on one OS.
+ *
+ * Unsorted on purpose -- the two clauses that assert an exact array sort AFTER filtering, and
+ * the positive control does not care.
+ */
+function nonSpecModules(): string[] {
+  return readdirSync(PACKAGE_SOURCE_ROOT, {
+    encoding: 'utf8',
+    recursive: true,
+  })
+    .map((entry) => `${PACKAGE_SOURCE_ROOT}/${entry.replaceAll('\\', '/')}`)
+    .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'));
+}
+
+/**
  * The same line-leading comment strip the two file-scoped clauses above use, applied per
  * file. It is REQUIRED, not defensive: five non-spec modules name `@actions/cache` in
  * PROSE today (action/index.ts, lib/cache-archive-path.ts, lib/compression-method.ts,
@@ -638,10 +674,13 @@ const ACTIONS_CACHE_SPECIFIER = /['"]@actions\/cache(?:\/[^'"]*)?['"]/;
  * red before the phase changed anything -- and a spurious red on a drift guard is how a
  * later reader talks themselves into weakening it.
  *
- * The strip pipeline at :501-510 is deliberately NOT refactored into this helper: the
- * phase's own confirmation that the composed shape is right is that the VER-03 clauses
- * pass with ZERO edits, and rewiring their input would forfeit that signal for a six-line
- * saving.
+ * `strippedBackendSource` is deliberately NOT rewired through this helper. The two are not
+ * the same shape -- that one strips a single named file eagerly at module scope for the
+ * VER-03 clauses, this one strips an arbitrary file lazily inside an `it` -- so unifying them
+ * would mean making the eager read lazy, which is a change to the VER-03 clauses' input for
+ * no saving. (The previous version of this paragraph pointed at ":501-510" for that pipeline,
+ * which was already wrong when it landed: those lines are the `toStrictEqual` discussion.
+ * Referenced by NAME here, because a line range decays on the next edit above it.)
  */
 function importsActionsCache(file: string): boolean {
   const code = readFileSync(file, 'utf8')
@@ -676,31 +715,14 @@ describe('exactly ONE module in the whole package reaches @actions/cache (VER-09
   // deleted immediately (the suite returned to 31 passed) and never committed; re-run the
   // mutation if the scan's shape ever changes.
   //
-  // Exact array, never a bare count -- the :524-525 convention. `length === 1` is satisfied
+  // Exact array, never a bare count -- the same convention as the positional-pin clause's own
+  // `toStrictEqual` on `restoreCache.mock.calls[0]`. `length === 1` is satisfied
   // by a tree that DELETED the real importer and added a different one (Phase 8 D-23).
   //
-  // Path resolution reuses the workspace-root cwd that src/test/workspace-root-cwd.ts
-  // already entered file-wide, rather than a second root idiom. Two consequences: the scan
-  // must run INSIDE the `it` (the hook has not run at collection time, unlike the
-  // import.meta.url reads above), and every path it yields is workspace-relative by
-  // construction, so the expected literal needs no normalisation beyond the separator.
+  // The walk, the separator normalisation and the non-spec filter live in nonSpecModules()
+  // -- including why it must be called INSIDE the `it` rather than hoisted to module scope.
   it(`is the ONLY non-spec module under ${PACKAGE_SOURCE_ROOT} that imports @actions/cache (VER-09)`, () => {
-    // `encoding` is named rather than left to the default so the overload resolves to
-    // string[]; without it the return type widens to `string[] | Buffer[]` and the
-    // normalisation below does not typecheck.
-    const importers = readdirSync(PACKAGE_SOURCE_ROOT, {
-      encoding: 'utf8',
-      recursive: true,
-    })
-      // A FIXED, unconditional string transform, and deliberately NOT `node:path`'s `sep`
-      // -- which LINT-02/CORR-06 bans in a unit spec because it derives an expectation from
-      // the running machine. This normalisation reads the same on every OS: `readdirSync`
-      // emits `\` separators on Windows and none on POSIX, so the same tree yields the same
-      // array either way, which is the whole point of an OS-invariant guard.
-      .map((entry) => `${PACKAGE_SOURCE_ROOT}/${entry.replaceAll('\\', '/')}`)
-      .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'))
-      .filter(importsActionsCache)
-      .sort();
+    const importers = nonSpecModules().filter(importsActionsCache).sort();
 
     expect(importers).toStrictEqual([
       `${PACKAGE_SOURCE_ROOT}/backend/actions-cache-backend.ts`,
@@ -740,12 +762,7 @@ const WRITABLE_FACTORY_MESSAGE_PREFIX = 'createActionsCacheBackend:';
  */
 describe('the VER-04 throws name the factory that OWNS them (T-13-02-R1)', () => {
   it(`no non-spec module under ${PACKAGE_SOURCE_ROOT} carries the writable factory's message prefix`, () => {
-    const carriers = readdirSync(PACKAGE_SOURCE_ROOT, {
-      encoding: 'utf8',
-      recursive: true,
-    })
-      .map((entry) => `${PACKAGE_SOURCE_ROOT}/${entry.replaceAll('\\', '/')}`)
-      .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'))
+    const carriers = nonSpecModules()
       .filter((file) =>
         readFileSync(file, 'utf8').includes(WRITABLE_FACTORY_MESSAGE_PREFIX),
       )
@@ -769,12 +786,7 @@ describe('the VER-04 throws name the factory that OWNS them (T-13-02-R1)', () =>
   // broken scan (wrong root, wrong extension filter, a readdir that yields nothing) as with
   // a clean tree, and a guard that cannot fail is not a guard.
   it('the scan can actually detect the prefix -- control against a silently empty walk', () => {
-    const scanned = readdirSync(PACKAGE_SOURCE_ROOT, {
-      encoding: 'utf8',
-      recursive: true,
-    })
-      .map((entry) => `${PACKAGE_SOURCE_ROOT}/${entry.replaceAll('\\', '/')}`)
-      .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'));
+    const scanned = nonSpecModules();
 
     expect(scanned).toContain(
       `${PACKAGE_SOURCE_ROOT}/backend/actions-cache-backend.ts`,

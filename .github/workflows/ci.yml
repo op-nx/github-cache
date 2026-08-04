@@ -623,7 +623,7 @@ jobs:
               ;;
           esac
           if [ "${count}" -lt 1 ]; then
-            echo "::error::build-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu build job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
+            echo "::error::build-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu build job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), the ubuntu producer never populated the entry this run, or Nx stopped printing the literal '[remote cache]' label this grep counts (an Nx upgrade renames it and fails all three legs at once on a HEALTHY cache). Check the producer job's own log: a HIT there points at cross-OS restore, a save without a HIT at the producer, and no label at all on a green producer at the Nx rename."
             exit 1
           fi
       - cancel: cache-server
@@ -723,7 +723,7 @@ jobs:
               ;;
           esac
           if [ "${count}" -lt 1 ]; then
-            echo "::error::typecheck-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu typecheck job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
+            echo "::error::typecheck-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu typecheck job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), the ubuntu producer never populated the entry this run, or Nx stopped printing the literal '[remote cache]' label this grep counts (an Nx upgrade renames it and fails all three legs at once on a HEALTHY cache). Check the producer job's own log: a HIT there points at cross-OS restore, a save without a HIT at the producer, and no label at all on a green producer at the Nx rename."
             exit 1
           fi
       - cancel: cache-server
@@ -823,7 +823,7 @@ jobs:
               ;;
           esac
           if [ "${count}" -lt 1 ]; then
-            echo "::error::test-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu test job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), or the ubuntu producer never populated the entry this run. Check the producer job's own log for a HIT or a save before assuming the former."
+            echo "::error::test-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu test job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), the ubuntu producer never populated the entry this run, or Nx stopped printing the literal '[remote cache]' label this grep counts (an Nx upgrade renames it and fails all three legs at once on a HEALTHY cache). Check the producer job's own log: a HIT there points at cross-OS restore, a save without a HIT at the producer, and no label at all on a green producer at the Nx rename."
             exit 1
           fi
       - cancel: cache-server

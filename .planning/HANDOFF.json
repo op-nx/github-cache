@@ -1,0 +1,127 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-04T13:59:18.259Z",
+  "phase": null,
+  "phase_name": "quick task 260804-lc3 (no active phase -- all 7 v0.0.2 phases complete)",
+  "phase_dir": ".planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s",
+  "context": "default",
+  "context_ambiguity": "Not phase/spike/sketch/deliberation/research work. This is QUICK-TASK work, which the pause-work detector does not enumerate, so the handoff lands at the default path. All 7 v0.0.2 phases are complete and the milestone is audited; the active work is a quick task.",
+  "plan": 1,
+  "task": 0,
+  "total_tasks": 1,
+  "status": "paused",
+  "paused_deliberately_at": "Immediately before plan execution, by operator request.",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Milestone v0.0.2 audit (/gsd:audit-milestone)",
+      "status": "done",
+      "commit": "3c67513",
+      "detail": "status tech_debt: 51/51 requirements satisfied, 7/7 phases verified, 8/8 integration seams wired, 4/4 outcomes achieved, 7/7 nyquist. Zero blockers. Artifacts: .planning/v0.0.2-MILESTONE-AUDIT.md and .planning/v0.0.2-INTEGRATION-CHECK.md"
+    },
+    {
+      "id": 2,
+      "name": "Quick 260804-h3b -- retire the o3-witness Case-B note and observe the fix live",
+      "status": "done",
+      "commit": "d4dc093,dd780f8,76a9e9b,d1600f6",
+      "detail": "Verified 8/8. Both sub-claims CLOSED: (a) delta allowance, run 30907575624, delta=9596s matched_ref=refs/pull/16/merge, headSha equal to its own pre-registration commit; (b) $defaultref clause, run 30910935382, delta=1252s matched_ref=refs/heads/main, other two jq arms MEASURED empty. main window open 3m30s, restored to fe25a3f behind a three-way gate."
+    },
+    {
+      "id": 3,
+      "name": "Quick 260804-lc3 -- CONTEXT + RESEARCH + PLAN authored, one plan-check round complete",
+      "status": "in_progress",
+      "progress": "CONTEXT.md, RESEARCH.md and PLAN.md all written but UNCOMMITTED (untracked). Plan-check iteration 1 returned 2 blockers + 5 warnings. A revision was requested from the planner and HAS NOT LANDED -- see blockers."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 4,
+      "name": "Confirm the lc3 plan revision landed (2 blockers + set -e gate form + 2 added gates)",
+      "status": "not_started"
+    },
+    {
+      "id": 5,
+      "name": "Plan-check iteration 2 of 2 on the revised lc3 plan",
+      "status": "not_started"
+    },
+    {
+      "id": 6,
+      "name": "Execute lc3 (gsd-executor): correct 7 ci.yml sites + 1 spec docstring + add 2 lock phrases, ONE commit",
+      "status": "not_started"
+    },
+    {
+      "id": 7,
+      "name": "Verify lc3 (gsd-verifier), update STATE.md Quick Tasks table, commit task artifacts",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "THE lc3 PLAN ON DISK IS THE UNREVISED VERSION AND MUST NOT BE EXECUTED AS-IS. Plan-check iteration 1 found 2 blockers; a revision was dispatched to the planner and had not landed when this handoff was written. Verified at pause time: 5 occurrences of the set -e-unsafe 'test $? -eq 1' idiom remain, and the spec-file failure-implication absence gate is absent (zero matches).",
+      "type": "technical",
+      "workaround": "Re-check the plan before executing. Confirm all four revision items landed (see human_actions_pending). If the planner never returned, apply the four edits directly to the <verify> and <done> blocks -- the editorial instructions in PART A/B/C are SOUND and need no change."
+    },
+    {
+      "description": "Whether the executor harness wraps <automated> gate commands in 'set -e' is EXPLICITLY OPEN. Neither the plan-checker nor I could establish it from execute-plan.md. If it does, every 'cmd; test $? -eq 1' gate false-fails on a CORRECT (absence-confirming) result.",
+      "type": "technical",
+      "workaround": "Convert every absence gate to the set -e-exempt form: 'if git grep -q -F \"X\" -- <file>; then exit 1; fi'. This is one of the four requested revision items and is strictly safer regardless of the answer."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Verify the four lc3 plan revision items landed before executing",
+      "context": "(1) Add a spec-file absence gate for 'dead sidecar masqueraded as a cache MISS' scoped to packages/github-cache/src/docs-same-os-claims.spec.ts -- without it a compliant run ships a corrected ci.yml alongside a still-false docstring in the very guard file added to prevent that. (2) Add one distinguishing single-line-safe required literal per site for :210, :1022, :1033 and the :1028-1031 escape-hatch closing restatement -- currently a pure deletion leaving a dangling sentence passes every gate. (3) Convert all absence gates to the set -e-exempt 'if ... then exit 1; fi' form. (4) Add a gate for the qualified phrase 'redundant AS A LIVENESS PROOF' and a ci.yml-scoped comment-only diff gate.",
+      "blocking": true
+    },
+    {
+      "action": "Decide whether to push the branch",
+      "context": "HEAD is d1600f6, 471 commits ahead of origin/main (fe25a3f). PR #16 is OPEN with base main. Nothing about lc3 requires a push -- it is a local prose correction. Pushing will fire a CI run and, because ci.yml is a declared test input, test will genuinely re-run rather than replay a cached PASS.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "lc3 corrects SEVEN ci.yml sites plus one live spec docstring, not the one line the defect report named",
+      "rationale": "Root-cause discipline plus the repo's own DOCS-09 precedent ('all SEVEN sites ... corrected in the SAME commit'). Five sites carry the presence-mechanism defect (:210, :1004, :1022, :1033, :1040); two carry the failure-implication defect (:1005-1006, :1030-1031); docs-same-os-claims.spec.ts:522 carries BOTH.",
+      "phase": "260804-lc3"
+    },
+    {
+      "decision": "The comment lock goes on the EXISTING row D of docs-same-os-claims.spec.ts, as two phrases -- no new row",
+      "rationale": "That spec is table-driven (DOCS_08_SITES, iterated at :615-642) and its read is RAW, so it can see comments -- unlike dogfood-cross-os.spec.ts, whose codeLines filter strips every # line and makes a lock there vacuous by construction (its own policy note at :223-225 says so). Row D already owns this step. Pin 'UNCONDITIONAL cache.restoreCache' and '404 means the sidecar DID answer' -- the cause and the code discrimination, never the disjunction's incidental wording.",
+      "phase": "260804-lc3"
+    },
+    {
+      "decision": "The prose must distinguish MEASURED from REASONED, and this is the plan's top quality constraint",
+      "rationale": "The presence disjunction ('restored OR saved') is MEASURED -- runs 30907575624 and 30910935382, both legs HIT, control returned 200. The failure-implication correction is REASONED from code and has NEVER been observed: the control's FAIL direction has no run behind it. A freshly-asserted wrong claim is worse than the inherited defect, which at least predates the evidence.",
+      "phase": "260804-lc3"
+    },
+    {
+      "decision": "The dead-sidecar negative gates are SENTENCE-scoped, never file-wide",
+      "rationale": "Two of the four ci.yml occurrences are legitimate and must survive: :1015 (the historical record of the claim being corrected) and :1047 (the || true paragraph, where a dead sidecar genuinely DOES yield 000 -- the fact that makes the correction true). A file-wide == 0 gate would delete the evidence the correction rests on.",
+      "phase": "260804-lc3"
+    },
+    {
+      "decision": "'known-present' is deliberately NOT gated",
+      "rationale": "It is REQUIREMENTS.md's own word and the corrected prose may legitimately reuse it. Gating it would fire on correct work. The gate is narrowed to 'own save|just saved'.",
+      "phase": "260804-lc3"
+    },
+    {
+      "decision": "No behaviour change: acceptance set (200 alone), no-retry-loop, and step placement all UNCHANGED",
+      "rationale": "Only the REASONS are wrong. :1040 is the one site whose stated reason is false for Case B; its replacement leads with a premise-independent reason (own_hash comes from integration-hash.txt, written by the run.json reader, so the step's INPUT does not exist before the Nx run). Placement itself is unchanged.",
+      "phase": "260804-lc3"
+    },
+    {
+      "decision": "h3b ran on the MAIN TREE with no worktree isolation, and lc3 should too",
+      "rationale": "Single sequential plan means no parallelism to gain, and a junctioned node_modules makes check:action report FALSE bundle drift (esbuild rewrites module paths with no source edit) -- only the main tree gives a true bundle verdict. AGENTS.md's own decision rule says sequential-on-main.",
+      "phase": "260804-h3b"
+    }
+  ],
+  "uncommitted_files": [
+    ".planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s/260804-lc3-CONTEXT.md",
+    ".planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s/260804-lc3-RESEARCH.md",
+    ".planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s/260804-lc3-PLAN.md"
+  ],
+  "next_action": "Read .planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s/260804-lc3-PLAN.md and check whether the revision landed: 'rg -c \"if git .*grep -q\"' should be non-zero and 'rg -c \"test \\$\\? -eq 1\"' should be zero. If the revision is absent, apply the four edits from human_actions_pending to the <verify>/<done> blocks yourself -- do NOT execute the plan as it stands on disk.",
+  "context_notes": "The through-line of this session is that every gate which LOOKED like coverage and asserted nothing got caught by an independent pass, never by the author. The milestone audit's own follow-up #1 was already fixed and the note just predated the fix. h3b's append-only gate would have killed its own task 2 by freezing a file it then instructed editing. lc3's checker found the guard file would have kept the false claim it was added to prevent. Keep spending the plan-checker; it has paid every time. Also: rg undercounts here -- 'dead sidecar' reads as 2 lines with a naive search but is 4 occurrences across case (DEAD SIDECAR at :1047) and a hard wrap (:1030-1031). Use -i, and -U with \\s+ for anything that might wrap. The comment prose being audited wraps mid-sentence across # lines by default."
+}

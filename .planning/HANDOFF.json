@@ -30,7 +30,7 @@
       "id": 3,
       "name": "Quick 260804-lc3 -- CONTEXT + RESEARCH + PLAN authored, one plan-check round complete",
       "status": "in_progress",
-      "progress": "CONTEXT.md, RESEARCH.md and PLAN.md all written but UNCOMMITTED (untracked). Plan-check iteration 1 returned 2 blockers + 5 warnings. A revision was requested from the planner and HAS NOT LANDED -- see blockers."
+      "progress": "CONTEXT.md, RESEARCH.md and PLAN.md all written but UNCOMMITTED (untracked). Plan-check iteration 1 returned 2 blockers + 5 warnings; the revision LANDED at 14:12Z and all four items are verified present (gate count 19 -> 23). Remaining: plan-check iteration 2, then execute, verify, STATE.md, commit."
     }
   ],
   "remaining_tasks": [
@@ -57,21 +57,26 @@
   ],
   "blockers": [
     {
-      "description": "THE lc3 PLAN ON DISK IS THE UNREVISED VERSION AND MUST NOT BE EXECUTED AS-IS. Plan-check iteration 1 found 2 blockers; a revision was dispatched to the planner and had not landed when this handoff was written. Verified at pause time: 5 occurrences of the set -e-unsafe 'test $? -eq 1' idiom remain, and the spec-file failure-implication absence gate is absent (zero matches).",
+      "description": "RESOLVED at 2026-08-04T14:12Z, AFTER this handoff was first written. The lc3 plan revision LANDED and all four items are verified present by measurement: 6 'if git grep -q ...; then exit 1; fi' gates; the spec-file absence gate for 'dead sidecar masqueraded as a cache MISS' scoped to docs-same-os-claims.spec.ts; all four per-site required literals (RESTORED OR WROTE for :210, NO WRITE PERMISSION for :1022, 'a retry would HIDE' for :1033, SRV-05 with a count -ge 2 for the :1028-1031 escape hatch); the REDUNDANT AS A LIVENESS PROOF literal; and the awk-based ci.yml-scoped comment-only diff gate. The two surviving 'test $? -eq 1' strings are prose WARNING AGAINST the idiom at plan lines 157 and 399 -- verified that neither sits inside an <automated> gate. Gate count 19 -> 23.",
       "type": "technical",
-      "workaround": "Re-check the plan before executing. Confirm all four revision items landed (see human_actions_pending). If the planner never returned, apply the four edits directly to the <verify> and <done> blocks -- the editorial instructions in PART A/B/C are SOUND and need no change."
+      "workaround": "No longer blocking. The plan is now in a checkable state. It still needs plan-check iteration 2 of 2 before execution, which is a normal remaining step rather than a defect."
     },
     {
-      "description": "Whether the executor harness wraps <automated> gate commands in 'set -e' is EXPLICITLY OPEN. Neither the plan-checker nor I could establish it from execute-plan.md. If it does, every 'cmd; test $? -eq 1' gate false-fails on a CORRECT (absence-confirming) result.",
+      "description": "CLOSED BY MEASUREMENT rather than left open. The planner reproduced the set -e hazard empirically: under 'set -e', 'cmd; test $? -eq 1' aborts at the git grep and never reaches test (its probe never printed REACHED-test; outer exit 1), while the 'if' form printed REACHED-end and exited 0. So this was a real defect, not a theoretical one, and all five absence gates were converted. The plan's own Shell conventions section now warns AGAINST the idiom rather than prescribing it -- it had gone stale in the same edit that introduced the fix.",
       "type": "technical",
-      "workaround": "Convert every absence gate to the set -e-exempt form: 'if git grep -q -F \"X\" -- <file>; then exit 1; fi'. This is one of the four requested revision items and is strictly safer regardless of the answer."
+      "workaround": "None needed. Do not reintroduce the 'cmd; test $? -eq 1' form in any gate in this repo."
+    },
+    {
+      "description": "REMAINING, and the only thing now gating execution: plan-check iteration 2 of 2 has not run on the revised plan. Both iteration-1 blockers are fixed, but the fixes are themselves unreviewed. The planner self-reported finding a defect in one of its OWN new gates while testing it -- the SRV-05 count gate failed pre-edit with 'test: : integer expected' (exit 2) rather than a clean assertion failure, because 'git grep -c' prints nothing on zero matches; hardened with '|| true' plus '${N:-0}'. That is precisely the argument for a second independent pass over the newly added gates.",
+      "type": "technical",
+      "workaround": "Run gsd-plan-checker on the revised plan as iteration 2 of the 2-iteration cap, focused on the four newly added gates rather than re-reviewing what iteration 1 already passed."
     }
   ],
   "async_jobs": [],
   "human_actions_pending": [
     {
-      "action": "Verify the four lc3 plan revision items landed before executing",
-      "context": "(1) Add a spec-file absence gate for 'dead sidecar masqueraded as a cache MISS' scoped to packages/github-cache/src/docs-same-os-claims.spec.ts -- without it a compliant run ships a corrected ci.yml alongside a still-false docstring in the very guard file added to prevent that. (2) Add one distinguishing single-line-safe required literal per site for :210, :1022, :1033 and the :1028-1031 escape-hatch closing restatement -- currently a pure deletion leaving a dangling sentence passes every gate. (3) Convert all absence gates to the set -e-exempt 'if ... then exit 1; fi' form. (4) Add a gate for the qualified phrase 'redundant AS A LIVENESS PROOF' and a ci.yml-scoped comment-only diff gate.",
+      "action": "Run plan-check iteration 2 of 2 on the revised plan, then execute",
+      "context": "All four revision items from iteration 1 are LANDED and verified (see blockers[0] for the measured evidence). What remains is the second independent pass over the FOUR NEWLY ADDED gates specifically -- the planner found a defect in one of its own new gates while testing it, so the new gates deserve a reviewer other than their author. Focus the checker there rather than re-reviewing what iteration 1 passed: (a) does the spec-file absence gate cover the failure-implication claim and not just the presence half; (b) is each of the four per-site literals genuinely single-line-safe against RAW ci.yml, given the file wraps prose across # boundaries; (c) does the SRV-05 count -ge 2 gate distinguish 'both sites reattributed' from 'only PART A reattributed'; (d) does the awk comment-only diff gate handle the +++/--- headers and stay scoped to ci.yml.",
       "blocking": true
     },
     {
@@ -122,6 +127,6 @@
     ".planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s/260804-lc3-RESEARCH.md",
     ".planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s/260804-lc3-PLAN.md"
   ],
-  "next_action": "Read .planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s/260804-lc3-PLAN.md and check whether the revision landed: 'rg -c \"if git .*grep -q\"' should be non-zero and 'rg -c \"test \\$\\? -eq 1\"' should be zero. If the revision is absent, apply the four edits from human_actions_pending to the <verify>/<done> blocks yourself -- do NOT execute the plan as it stands on disk.",
+  "next_action": "Spawn gsd-plan-checker as iteration 2 of 2 on .planning/quick/260804-lc3-close-the-ci-yml-positive-control-just-s/260804-lc3-PLAN.md, scoped to the four newly added gates (see human_actions_pending[0] for the four questions). On VERIFICATION PASSED, execute with gsd-executor on the MAIN TREE (no worktree isolation), then verify with gsd-verifier, update STATE.md's Quick Tasks Completed table, and commit the task artifacts. The plan revision is already landed and verified -- do not re-request it.",
   "context_notes": "The through-line of this session is that every gate which LOOKED like coverage and asserted nothing got caught by an independent pass, never by the author. The milestone audit's own follow-up #1 was already fixed and the note just predated the fix. h3b's append-only gate would have killed its own task 2 by freezing a file it then instructed editing. lc3's checker found the guard file would have kept the false claim it was added to prevent. Keep spending the plan-checker; it has paid every time. Also: rg undercounts here -- 'dead sidecar' reads as 2 lines with a naive search but is 4 occurrences across case (DEAD SIDECAR at :1047) and a hard wrap (:1030-1031). Use -i, and -U with \\s+ for anything that might wrap. The comment prose being audited wraps mid-sentence across # lines by default."
 }

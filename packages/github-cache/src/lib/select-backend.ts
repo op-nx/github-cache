@@ -1,3 +1,4 @@
+import * as core from '@actions/core';
 import {
   createActionsCacheBackend,
   createReadOnlyActionsCacheBackend,
@@ -97,6 +98,30 @@ export function selectBackend(
     //
     // An env-bag KEY, never a parameter: selectBackend.length stays 0 (TRUST-05), and no
     // `readOnly` field goes on ServeOptions (serve.ts:22-28) or on a backend factory (D-03).
+    //
+    // SAY SO IN THE LOG, because bare truthiness is fail-SAFE for the CACHE and fail-CONFUSING
+    // for the operator. The two directions are not symmetric: an adopter who writes
+    // `CACHE_READ_ONLY: false` on a PRODUCER job -- reading the name as a boolean, which is how
+    // every other `*_READ_ONLY` env var in the ecosystem reads -- gets the narrowing anyway,
+    // every PUT answered 403, exit 0, and a cache that is permanently cold. Before this line
+    // there was NOTHING to find: selectBackend emitted nothing, serve() logs only the listen URL
+    // and the token, and a leg that DECLINED the write was indistinguishable in its log from one
+    // that never had it. docs/configuration.md already names that trap; this is the signal that
+    // makes it diagnosable from the job log instead of only from the docs.
+    //
+    // info, NOT warning, and the level is the judgement rather than an oversight. Every other
+    // silent-degradation path in this package warns (the saveCache -1 ambiguity, the
+    // all-restore-MISS run, the asset cap, an unparseable created_at) because each is a
+    // SURPRISE. This one is a REQUEST: the workflow author asked for it, on purpose, on three
+    // legs of every run in this repo alone. A warning there is an annotation on correct
+    // configuration three times per run, which is how a project teaches its operators to
+    // ignore annotations -- the same tripwire-that-fires-on-correct-work failure D-30 forbids.
+    // The message names the CONSEQUENCE, not the setting, so the misconfigured-producer case is
+    // greppable by what went wrong.
+    core.info(
+      'github-cache: CACHE_READ_ONLY is set, so this job serves the READ-ONLY Actions-cache backend and will NOT populate the cache -- every PUT is answered 403. Any non-empty value narrows, including "false" and "0". Unset the variable entirely to let this job write.',
+    );
+
     return createReadOnlyActionsCacheBackend();
   }
 

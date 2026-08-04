@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import * as cache from '@actions/cache';
+import * as core from '@actions/core';
 import {
   afterAll,
   afterEach,
@@ -25,6 +26,13 @@ import { selectBackend } from './select-backend.js';
 // it -- exactly as actions-cache-backend.spec.ts does. Auto-mock hoists above the
 // imports and replaces every export with a vi.fn().
 vi.mock('@actions/cache');
+
+// The narrowing's LOG LINE is asserted below, so the workflow-command stream has to be a mock
+// rather than the real one writing to this run's stdout -- the same auto-mock the seven other
+// specs that assert on annotations use (D-14: annotations only through @actions/core). It also
+// silences the put path's genuine `core.warning` on the write-trusted cases here, which were
+// printing real `::warning::` lines into the test output.
+vi.mock('@actions/core');
 
 // The local/untrusted branch now returns the REAL Releases reader (D-01), whose
 // default client resolves the developer's token and repo identity via local-context
@@ -519,6 +527,38 @@ describe('TRUST-14: CACHE_READ_ONLY is a ROLE signal that can only narrow', () =
       ).toBe(true);
     },
   );
+
+  // THE NARROWING MUST BE OBSERVABLE, and nothing above this clause can tell whether it is.
+  // Every assertion in this describe reads the RETURNED BACKEND, so all of them stay green on
+  // a knob that narrows in total silence -- which is what it did until this line existed:
+  // selectBackend emitted nothing, serve() logs only the listen URL and the token, and a leg
+  // that DECLINED the write was indistinguishable in its own job log from one that never had
+  // it. The case that costs is an adopter writing `CACHE_READ_ONLY: false` on a PRODUCER and
+  // getting a permanently cold cache with exit 0 and no annotation.
+  //
+  // Asserted on the CONSEQUENCE words rather than the whole string, so rewording stays free
+  // while deleting the diagnosis does not: 'will NOT populate' is the sentence an operator
+  // greps for, and '403' ties the line to what a PUT actually receives.
+  //
+  // The unset row is the non-vacuity half and shares the test so neither half can be dropped:
+  // an unconditional core.info at the top of selectBackend would satisfy the narrowed
+  // assertion and prove nothing about the branch.
+  it('SAYS SO in the job log when it narrows, and stays silent when it does not (TRUST-14)', () => {
+    selectBackend({ ...trusted, CACHE_READ_ONLY: '1' });
+
+    expect(core.info).toHaveBeenCalledWith(
+      expect.stringContaining('will NOT populate'),
+    );
+    expect(core.info).toHaveBeenCalledWith(expect.stringContaining('403'));
+
+    vi.mocked(core.info).mockClear();
+
+    selectBackend({ ...trusted });
+
+    expect(core.info).not.toHaveBeenCalledWith(
+      expect.stringContaining('will NOT populate'),
+    );
+  });
 });
 
 /**

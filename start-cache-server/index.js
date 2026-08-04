@@ -68708,6 +68708,9 @@ function selectBackend(env = process.env) {
     return createReadOnlyMemoryBackend();
   }
   if (env.CACHE_READ_ONLY) {
+    info(
+      'github-cache: CACHE_READ_ONLY is set, so this job serves the READ-ONLY Actions-cache backend and will NOT populate the cache -- every PUT is answered 403. Any non-empty value narrows, including "false" and "0". Unset the variable entirely to let this job write.'
+    );
     return createReadOnlyActionsCacheBackend();
   }
   return createActionsCacheBackend();

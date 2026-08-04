@@ -98,8 +98,22 @@ fail-SAFE direction: a typo like `flase` still declines the write, whereas a
 `CACHE_READ_ONLY: false` does NOT mean "read-write" -- it declines the write just as
 firmly as `1`. In YAML, `CACHE_READ_ONLY: ${{ ... }}` rendering to `false` behaves the
 same way. To leave a job read-write, do not set the variable at all (or set it to the
-empty string); a producer configured with a falsy-looking value goes permanently cold
-and nothing in the job reports it.
+empty string).
+
+A producer misconfigured this way still goes permanently cold, but it is no longer
+silent about it: whenever the knob narrows, the server logs
+
+```
+github-cache: CACHE_READ_ONLY is set, so this job serves the READ-ONLY Actions-cache
+backend and will NOT populate the cache -- every PUT is answered 403. Any non-empty
+value narrows, including "false" and "0". Unset the variable entirely to let this job
+write.
+```
+
+`info`, not a warning, deliberately: on a declared consumer leg the narrowing is
+CORRECT, and an annotation on every correct run is how a project teaches its operators
+to ignore annotations. Grep a cold producer's job log for `will NOT populate` to tell a
+declined write apart from a context that never had one.
 
 Why you would want it: a leg that should read the cache another job populated, but
 whose own writes are redundant or unwanted -- the same posture GitHub documents for

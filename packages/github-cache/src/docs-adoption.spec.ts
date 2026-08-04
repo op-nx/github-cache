@@ -136,7 +136,12 @@ describe('documented snippets mask the bearer token before writing $GITHUB_ENV (
   );
 });
 
-describe('advanced.md documents all five selectBackend outcomes (F11)', () => {
+// The count lives in ONE place -- advanced.md's prose sentence, pinned by the last clause in
+// this describe -- and deliberately nowhere else. It was previously restated at five sites of
+// which only that one was guarded, so the four -> five correction had to find the others by
+// hand and MISSED memory-backend.ts until a review caught it. This title, configuration.md
+// and memory-backend.ts now all say "documented" instead of a number.
+describe('advanced.md documents every selectBackend outcome (F11)', () => {
   // selectBackend is not the binary read-write-versus-reader switch the old prose
   // implied. Two outcomes were invisible in it -- the fail-closed THROW on a
   // malformed identity, and the empty-memory permanent-MISS degrade on a

@@ -131,7 +131,7 @@ but empty value falls through to the next source). The resolved token is used to
 
 On a trusted trigger with **no** resolvable token the server does NOT fail -- it
 degrades to an empty read-only backend that MISSes every read, with every `PUT`
-answered `403`, silently. That is one of the five backend-selection outcomes; see
+answered `403`, silently. That is one of the documented backend-selection outcomes; see
 [How the backend is selected](advanced.md#how-the-backend-is-selected) for the
 full table rather than a binary framing.
 

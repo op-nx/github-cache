@@ -1859,8 +1859,9 @@ const MASKED_TOKEN_SITES = 8;
 /**
  * Every line inside a `run:` block scalar, with the job it belongs to. A block scalar owns
  * every following line that is blank or indented MORE than its own `run:` key, which is the
- * YAML rule and needs no parser to apply. Single-line `run: <cmd>` values are included too --
- * an expression is the same injection sink there.
+ * YAML rule and needs no parser to apply. Single-line values are included too, in BOTH
+ * spellings -- bare `run: <cmd>` and the dash-prefixed `- run: <cmd>` that is the only form
+ * this file actually uses -- because an expression is the same injection sink there.
  */
 function runBodyLines(): { job: string; line: string }[] {
   // THE RAW FILE, not `codeLines`. `codeLines` drops every line whose trimmed form starts
@@ -1883,7 +1884,21 @@ function runBodyLines(): { job: string; line: string }[] {
       continue;
     }
 
-    const runKey = /^(\s*)run:(.*)$/.exec(rawLines[index]);
+    // THE OPTIONAL `- ` IS INSIDE GROUP 1, and it has to be, or this scan is blind to the
+    // form ci.yml actually uses for one-liners. `/^(\s*)run:/` cannot match
+    // `      - run: npm ci`: after `\s*` the next character is `-`, not `r`. Every single-line
+    // `run:` in this file is dash-prefixed -- 35 of them -- so the `inline !== ''` branch below
+    // was UNREACHABLE and the docstring's claim that single-line values are included was false.
+    //
+    // MEASURED before and after: collected lines 524 -> 559, of which the 19 `npm ci`
+    // one-liners went from 0 to 19; the `set -euo pipefail` positive control is 34 under both;
+    // ZERO previously-collected entries are lost; and an injected
+    // `- run: echo "<expression>"` goes from 0 offenders to 1 while an expression inside a
+    // block-scalar comment is still caught by both. Capturing the whole prefix rather than
+    // adding a second group keeps `indent` meaning what it meant -- the column the `run:` key
+    // starts at -- so block-scalar body collection is untouched. ci.yml carries zero
+    // `- run: |` / `- run: >`, so no body-collection path changes today either.
+    const runKey = /^(\s*(?:-\s+)?)run:(.*)$/.exec(rawLines[index]);
 
     if (!runKey) {
       continue;

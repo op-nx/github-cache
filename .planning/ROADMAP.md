@@ -704,6 +704,39 @@ assertion has no event to observe and the job reddens. The first post-Phase-13 P
 declared input will hit this. It is a FALSE red: the cross-OS property holds, as the three green
 read-only legs in run `30768540898` show. The witness silently assumes the Case-A shape.
 
+### The NEW follow-up -- STATUS as of 2026-08-04: CLOSED IN CODE
+
+The paragraph above was ACCURATE when it was written (`da462b5`, 2026-08-03 01:09) and is now
+SUPERSEDED by quick 260804-h3b -- two commits landed the SAME DAY it was written, both AFTER it, and
+neither retired it. The original text is kept for the reasoning it records.
+
+| Half of the defect | Fixed by | Guard that pins it |
+|---|---|---|
+| The server-side `&ref=` narrow filtered the caches request down to this run's own scope, so the row proving PRIOR existence never arrived | `40e4d21` `fix(ci): make o3-witness read the base-branch cache scope (Case B)` | `dogfood-cross-os.spec.ts:733` asserts the composed URL `.not.toMatch(/ref=/)` |
+| The default-branch scope was absent from the CLIENT-side ref allowlist, so even an arriving row was discarded | `e5d3cd3` `fix(ci): admit the default-branch scope to the o3-witness ref allowlist (D-17)` | `:584` pins the three-ref jq select by exact regex; `:634` pins the `default_ref` derivation block |
+| The delta on a Case-B run is hours or days rather than minutes | never a defect -- `ci.yml:1456-1461` states in its own words that a LARGER delta is STRONGER evidence, and forbids an upper bound | `:827` pins the `-lt 30` floor; `:816` pins the `matched_ref` print, so Case A and Case B are distinguishable in the log |
+
+**Ordering proof.** `git merge-base --is-ancestor da462b5 40e4d21` and `... da462b5 e5d3cd3` are BOTH
+true, which is why the paragraph above is STALE rather than wrong.
+
+**Guard line numbers RE-DERIVED at commit time** (2026-08-04, at `3c67513`), not copied from the
+plan: `git grep -n` against `packages/github-cache/src/dogfood-cross-os.spec.ts` measures the
+assertions at `:584`, `:634`, `:733`, `:816` and `:827`, inside the `it()` blocks opening at `:559`,
+`:616`, `:711`, `:806` and `:819` respectively. One correction worth recording, because this repo
+carries a defect class of exactly this shape (`2df3af5` exists to stop citing line numbers that have
+moved): the task's own CONTEXT.md cites `:806` for the `matched_ref` guard, which is that test's
+`it()` line -- its assertion is at `:816`. `npx vitest run -t "o3-witness"` measured **24 assertions
+passed across 2 files** at `3c67513`, matching the count recorded when the fixes landed.
+
+**Live observation.** The code fix is closed; the LIVE path had never been exercised. See
+`.planning/quick/260804-h3b-fix-o3-witness-case-b/260804-h3b-EVIDENCE.md`. Two sub-claims are
+reported SEPARATELY there because they prove different things: (a) is the SUBSTANCE of the mechanism
+`40e4d21` restored, and (b) is the SPECIFIC clause `e5d3cd3` added, which no real run had ever
+matched on -- run `30896484130` matched its OWN merge ref, which is Case A.
+
+- Sub-claim (a), the prior-existence delta allowance -- PENDING
+- Sub-claim (b), the `$defaultref` clause matching -- PENDING
+
 ## Traceability
 
 Every v0.0.2 requirement maps to exactly one phase.

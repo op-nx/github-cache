@@ -1142,11 +1142,22 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
   // does: the no-`if:` clause at the end is a `not.toMatch`, which an empty or mis-extracted
   // block satisfies trivially. `jobBlock` THROWS on an absent job key, so this clause is
   // simultaneously the presence guard and the extraction control.
+  //
+  // THE `\|` AND `\.` ARE LOAD-BEARING, and their absence made this needle an ALTERNATION
+  // rather than a tightening. Unescaped, `/^ {10}npm run build 2>&1 | tee build-nx.log$/`
+  // reads as `(^ {10}npm run build 2>&1 )` OR `( tee build-nx.log$)` -- so it was satisfied by
+  // `npm run typecheck 2>&1 | tee build-nx.log` (wrong target, right logfile), by a bare
+  // ` tee build-nx.log` tail with no `npm run` at all, and by the prefix alone with the tee
+  // dropped for a `> /dev/null`. MEASURED on all four shapes before and after the escape: the
+  // escaped form rejects every one and still matches all three real ci.yml lines. That is what
+  // makes the target-to-logfile PAIRING the ownTarget reason claims to pin actually pinned --
+  // the two `not.toMatch` clauses below only exclude the other two targets' run lines, and
+  // neither of them reads the logfile name.
   it('scopes to a real build-windows job block that runs npm run build', () => {
     const block = jobBlock('build-windows');
 
     expect(block, presence).toMatch(
-      /^ {10}npm run build 2>&1 | tee build-nx.log$/m,
+      /^ {10}npm run build 2>&1 \| tee build-nx\.log$/m,
     );
   });
 
@@ -1172,7 +1183,7 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     const block = jobBlock('build-windows');
 
     expect(block, ownTarget).toMatch(
-      /^ {10}npm run build 2>&1 | tee build-nx.log$/m,
+      /^ {10}npm run build 2>&1 \| tee build-nx\.log$/m,
     );
     expect(block, ownTarget).not.toMatch(/^ {10}npm run typecheck 2>&1/m);
     expect(block, ownTarget).not.toMatch(/^ {10}npm run test 2>&1/m);
@@ -1368,7 +1379,7 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     const block = jobBlock('typecheck-windows');
 
     expect(block, presence).toMatch(
-      /^ {10}npm run typecheck 2>&1 | tee typecheck-nx.log$/m,
+      /^ {10}npm run typecheck 2>&1 \| tee typecheck-nx\.log$/m,
     );
   });
 
@@ -1394,7 +1405,7 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     const block = jobBlock('typecheck-windows');
 
     expect(block, ownTarget).toMatch(
-      /^ {10}npm run typecheck 2>&1 | tee typecheck-nx.log$/m,
+      /^ {10}npm run typecheck 2>&1 \| tee typecheck-nx\.log$/m,
     );
     expect(block, ownTarget).not.toMatch(/^ {10}npm run build 2>&1/m);
     expect(block, ownTarget).not.toMatch(/^ {10}npm run test 2>&1/m);
@@ -1497,7 +1508,7 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     const block = jobBlock('test-windows');
 
     expect(block, presence).toMatch(
-      /^ {10}npm run test 2>&1 | tee test-nx.log$/m,
+      /^ {10}npm run test 2>&1 \| tee test-nx\.log$/m,
     );
   });
 
@@ -1523,7 +1534,7 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     const block = jobBlock('test-windows');
 
     expect(block, ownTarget).toMatch(
-      /^ {10}npm run test 2>&1 | tee test-nx.log$/m,
+      /^ {10}npm run test 2>&1 \| tee test-nx\.log$/m,
     );
     expect(block, ownTarget).not.toMatch(/^ {10}npm run build 2>&1/m);
     expect(block, ownTarget).not.toMatch(/^ {10}npm run typecheck 2>&1/m);

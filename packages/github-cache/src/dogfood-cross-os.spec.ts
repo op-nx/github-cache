@@ -956,24 +956,25 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
  * the SAME token -- so every clause below is anchored at its indent level: a job's own keys at
  * FOUR spaces, their step children at SIX.
  *
- * AND EVERY CLAUSE IS SCOPED TO `jobBlock(<leg>)`, never to the file. `windows-11-arm` occurs 13
- * times in the COMMENT-STRIPPED `ci.yml` this guard actually reads (29 times in the raw file),
- * so a whole-file `toContain('windows-11-arm')` passes unconditionally whatever these three jobs
- * actually say.
+ * AND EVERY CLAUSE IS SCOPED TO `jobBlock(<leg>)`, never to the file. `windows-11-arm` occurs
+ * many times over in the COMMENT-STRIPPED `ci.yml` this guard actually reads, so a whole-file
+ * `toContain('windows-11-arm')` passes unconditionally whatever these three jobs actually say.
  *
- * WHICH ARTIFACT the number is measured against is not a footnote, and this block previously got
- * it wrong in both directions (WR-07). It said 19, which was (a) measured at author time, BEFORE
- * this phase's own `ci.yml` edit landed, and never re-measured -- these guards were authored RED,
- * so the number was frozen against a tree that did not yet contain the three legs -- and (b) the
- * RAW count, when `codeLines` strips every `#` line, so the reading that supports the vacuity
- * argument is the comment-stripped one. It was 7 stripped / 19 raw at `0251bd3`, 10 stripped /
- * 25 raw when that correction landed, and is 13 stripped / 29 raw at HEAD, re-measured against
- * the POST-edit file after XOS-09 converted these three legs. It drifted to 13/29 in the commits
- * that widened the dogfood pair to same-repo pull requests (CR-18), NOT in the XOS-09 edit, which
- * added no `windows-11-arm` line -- which is the point: the reading rots on any `ci.yml` change,
- * not only on one that touches these jobs. The ARGUMENT holds at any of these numbers; the number
- * is this file's own house standard, which is MEASURED, not predicted. Re-measure BOTH readings
- * when `ci.yml` next changes shape.
+ * THE NUMBER IS COMPUTED, NOT RESTATED, and that is this block's third attempt at it (WR-07).
+ * It first said 19, which was wrong in both directions: measured at author time BEFORE this
+ * phase's own `ci.yml` edit landed and never re-measured (these guards were authored RED, so the
+ * number was frozen against a tree that did not yet contain the three legs), and measured RAW
+ * when `codeLines` strips every `#` line -- so the reading that supports the vacuity argument is
+ * the comment-stripped one. Corrected to 7/19, then to 10/25, then to 13/29, each time by hand.
+ * It drifted AGAIN inside this same phase: `c84ae43` added a `windows-11-arm` mention to a gate
+ * rationale COMMENT after the 29 was refreshed, so the raw half was stale on landing -- the
+ * fourth drift, and the second one caused by a change that touched no job at all.
+ *
+ * So the raw half is gone and the stripped half is derived from `codeLines` below. The raw count
+ * rots on any `ci.yml` comment edit while supporting no argument this file makes -- `codeLines`
+ * is what every clause here reads -- and a recorded measurement that no longer measures is the
+ * exact defect class this phase set out to remove. The ARGUMENT holds at any value, so nothing
+ * is lost by not pinning one.
  *
  * NO COMMENT-PHRASE ASSERTION BELONGS HERE. `codeLines` strips every `#` line, so a comment lock
  * placed in this file is vacuous by construction; the sidecar-invariant and graph-premise prose
@@ -983,6 +984,21 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
 const RENAME_NOTE =
   'If the job was legitimately renamed, update this describe in the SAME commit; do not ' +
   'delete the assertion to make the suite green.';
+
+/**
+ * How many lines of the COMMENT-STRIPPED `ci.yml` name the Windows runner -- derived from
+ * `codeLines`, the same view every clause in this file reads, rather than restated as a literal
+ * that four separate `ci.yml` edits have already outrun (see the block above).
+ *
+ * It feeds the `runsOn` failure message, whose job is to tell a reader why the clause is scoped
+ * to one job block instead of to the file: any value above 1 makes a whole-file
+ * `toContain('windows-11-arm')` vacuous, and the count is only there to show HOW vacuous. Lines
+ * rather than occurrences because `codeLines` is a line array; the two readings are equal today
+ * (13 and 13, measured) and nothing here depends on them staying equal.
+ */
+const strippedRunnerLines = codeLines.filter((line) =>
+  line.includes('windows-11-arm'),
+).length;
 
 function windowsLegReasons(leg: string, target: string, producer: string) {
   return {
@@ -995,9 +1011,9 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
     runsOn:
       `${leg} must run on windows-11-arm. It is the CONSUMER half of XOS-04, and a leg that ` +
       'quietly moved back to ubuntu proves nothing about cross-OS reuse while staying green. ' +
-      'Asserted against this job block alone: `windows-11-arm` occurs 13 times in the ' +
-      'COMMENT-STRIPPED ci.yml this guard reads (29 in the raw file), so a whole-file match ' +
-      `would pass unconditionally. ${RENAME_NOTE}`,
+      'Asserted against this job block alone: `windows-11-arm` names ' +
+      `${strippedRunnerLines} lines of the COMMENT-STRIPPED ci.yml this guard reads, so a ` +
+      `whole-file match would pass unconditionally. ${RENAME_NOTE}`,
     needs:
       `${leg} must declare \`needs: ${producer}\` -- a BARE SCALAR naming exactly ONE ` +
       'producer, never a list (XOS-08, D-02). The edge is what makes this leg a CONSUMER of ' +

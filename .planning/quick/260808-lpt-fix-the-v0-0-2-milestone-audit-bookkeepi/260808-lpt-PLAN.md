@@ -30,7 +30,7 @@ must_haves:
     - "ROADMAP.md's Phase 12 phase checkbox and every v0.0.2 plan checkbox are ticked -- Phase 10's eight, Phase 11's seven, Phase 13's six -- each row asserted to still EXIST and now be ticked, so no count is satisfiable by deletion."
     - "Exactly one unticked box survives in ROADMAP.md, the v0.0.2 milestone rollup, asserted positively because /gsd:complete-milestone owns it."
     - "12-VERIFICATION.md's frontmatter, body status line and counters agree with each other, the four behaviour-unverified items each cite the downstream artifact that closed them, and the original 13-truth findings table is left exactly as written."
-    - "STATE.md's 260726-pjz row carries a verdict re-derived this task, and its unresolvable `research/STACK.md` citation is corrected to a path that exists at HEAD."
+    - "STATE.md's 260726-pjz row carries a verdict re-derived this task, and the unresolvable `research/STACK.md:75,77` citation in its OPEN clause is corrected to a path that exists at HEAD. MEASURED: the row carries TWO such citations; the second (`:16-40`, in the description) is out of scope because Edit B leaves the description alone."
     - "Nothing outside `.planning/` is modified."
   artifacts:
     - .planning/REQUIREMENTS.md
@@ -170,7 +170,7 @@ Design rules, each of which has fired in this repo:
   The mechanism is worth understanding, because the same rule flipped outcome purely on POSITION. The
   unbounded form was safe for the two Task 3 region gates, whose sections are APPENDED at EOF, so
   "to EOF" and "this section" are the same range. G8 was the first region gate aimed at a section in
-  the MIDDLE of a multi-section file -- the per-ID evidence section is listed FIRST of eight in
+  the MIDDLE of a multi-section file -- the per-ID evidence section is listed FIRST of NINE in
   `<output>` -- and the form was carried over without adapting the bound. Unbounded, it broke in BOTH
   directions at once: the presence checks passed on an EMPTY section because downstream text satisfied
   them, and the forbidden-literal check false-FAILED on legitimate downstream text. Same rule,
@@ -312,8 +312,10 @@ Sources, per group:
 **These three cells are REQUIRED to flip.** Hazard rule 4's "leave it alone" permission does NOT
 extend to them: their evidence has been located and is named above, so leaving them is a failure to
 look, not an honest shortfall. G4 and G6b require the flip and G8 requires the citation. If you
-genuinely cannot re-derive one of the four sites above, that is a discrepancy against a measurement
-in this plan -- stop and report it rather than silently leaving the cell or weakening the gate.
+genuinely cannot re-derive one of the SIX sites above -- four in `10-VERIFICATION.md` (`:55`, `:107`,
+`:116`, `:137`) and two in `11-EVIDENCE.md` (`:1004`, `:1006`), all re-measured at the current tree --
+that is a discrepancy against a measurement in this plan -- stop and report it rather than silently
+leaving the cell or weakening the gate.
 
 Do not touch the `**Coverage:** 57 requirements...` line or the closing amendment notes -- the
 totals-reconciliation half belongs to Task 2 and lands in the same commit as its ROADMAP mirror.
@@ -382,7 +384,7 @@ test -z "$D" || { echo "FAIL G7: out-of-scope files touched: $D"; exit 1; }
 # prove.
 #
 # The END BOUND is load-bearing and this gate is why the rule exists. The per-ID section is
-# listed FIRST of eight in <output>, so it is NOT last in the SUMMARY. Unbounded, the region
+# listed FIRST of NINE in <output>, so it is NOT last in the SUMMARY. Unbounded, the region
 # ran to EOF and swallowed every later section, which broke the gate in BOTH directions:
 # G8c passed on a per-ID section containing ZERO quotes (the nine ID tokens were satisfied by a
 # downstream disposition line that happens to list them), and G8e false-FAILED on a downstream
@@ -589,12 +591,19 @@ whose text starts with a word. Re-measured with the correct pattern:
 git grep -c -F -e '- [ ]' -- .planning ':!.planning/milestones' ':!.planning/quick' ':!.planning/ROADMAP.md'
 ```
 
-**102 unticked boxes across 20 files.** Nine of those are REQUIREMENTS.md's own requirement
-checkboxes, which Task 1 ticks, leaving **93 across 19 files** once Task 1 lands. Per class:
-`.planning/research/` 35 in 3 files; phase `*-RESEARCH.md` 30 in 5 files; `PROJECT.md` 7 in 1 file;
-and the remaining 21 spread across phase SUMMARY / PLAN / LEARNINGS / VERIFICATION / deferred-items
-files -- including THREE in `12-01-SUMMARY.md`, not one. Both `.planning/research/` and `PROJECT.md`
-were missing from the earlier claim entirely.
+**102 unticked boxes across 20 files AT `c84ebd5`.** Nine of those are REQUIREMENTS.md's own
+requirement checkboxes, which Task 1 ticks, leaving **93 across 19 files** once Task 1 lands. Per
+class: `.planning/research/` 35 in 3 files; phase `*-RESEARCH.md` 30 in 5 files; `PROJECT.md` 7 in 1
+file; and the remaining 21 spread across phase SUMMARY / PLAN / LEARNINGS / VERIFICATION /
+deferred-items files -- including THREE in `12-01-SUMMARY.md`, not one. Both `.planning/research/`
+and `PROJECT.md` were missing from the earlier claim entirely.
+
+**That commit anchor is load-bearing, because the figure has ALREADY moved once inside this task.**
+Re-measured at `ff21356`: **109 across 22 files**. The delta is entirely this task's own transient
+handoff artifacts -- `.planning/.continue-here.md` (6 boxes) and `.planning/HANDOFF.json` (1) -- which
+did not exist at `c84ebd5` and will not exist once they are consumed. Every per-class figure above is
+byte-for-byte unchanged at `ff21356`. This plan demonstrating its own thesis: a checkbox census rots
+between two commits of the task that measured it.
 
 Re-run that command yourself and use YOUR figure, dated, in the SUMMARY. Do not carry the numbers
 above forward as fact -- they are this plan's measurement, not yours, and boxes get added.
@@ -636,11 +645,19 @@ if git grep -q -E '^\| PARITY-03 \| Phase 8 \| Byte-identical `integration`' -- 
 RT=$(git grep -c -E '^\| [A-Z]+-[0-9]+ \| Phase ' -- "$R" | rg -o '[0-9]+$' || true)
 test "${RT:-0}" -eq 53 || { echo "FAIL G4: ${RT:-0} traceability rows, expected 53"; exit 1; }
 
-# ---- G5/G6/G7: the twelve invariant-prose sites, PAIRED per site ----
+# ---- G5/G6/G7: THIRTEEN stale invariant-prose literals across ELEVEN lines ----
+# "SITE" IN THIS PLAN MEANS ONE STALE LITERAL AT ONE LINE -- the unit the gates are written in,
+# not the unit the lines are counted in. ROADMAP :815 and :831 each carry TWO literals, so EIGHT
+# ROADMAP lines yield TEN absence gates (G6a..j) and THREE REQUIREMENTS lines yield three
+# (G7c..e): thirteen absence gates for thirteen literals, matching the "ELEVEN live lines ...
+# carrying THIRTEEN stale literals" measured in the action above.
+# ELEVEN of the thirteen are PAIRED with a presence gate (G5a..i, G7a..b). The two remaining
+# literals are the ID-list rewrites at ROADMAP :831 and REQUIREMENTS :790, which have no
+# positive-form pair by design -- their post-edit form is carried by the survival gates G7f/G7g.
 # Every literal below was measured individually at the current tree and is unique to exactly
-# ONE line, so each pair localises to its own site. A gate pair per site is what stops a
-# partial fix -- the earlier draft gated only three of the twelve, and a fix to :815 that left
-# :816 alone passed every gate while shipping a sentence contradicting its own operands.
+# ONE line, so each gate localises to its own site. A gate per literal is what stops a partial
+# fix -- the earlier draft gated only three of them, and a fix to :815 that left :816 alone
+# passed every gate while shipping a sentence contradicting its own operands.
 #
 # Helper: p = presence (must exist after), a = absence (must be gone after).
 p(){ git grep -q -F -e "$2" -- "$1" || { echo "FAIL $3"; exit 1; }; }
@@ -840,6 +857,12 @@ Run these probes, checking exit codes and running the positive control on the sa
    tokens (`rejected outright`, `content-keyed`, `clean eviction`), positive control
    `Residual notes` on the same path. Count the bullets under `## Residual notes` against the
    eight the row claims were retained.
+
+   **EXPECT A MISMATCH, and do not read it as your own error.** MEASURED at the current tree: the
+   section holds SEVEN bullets, not the eight the row claims -- and one of those seven postdates
+   the pjz task by roughly five weeks, so the count at the time the row was written was six. The
+   row's "eight" was wrong when written. That discrepancy is part of what this probe exists to
+   surface; record it in the re-derived verdict rather than adjusting your count to match the row.
 2. If it is gone, find the commit that removed it and read its message:
    `git log --oneline -S 'content-keyed' -- .planning/THREAT-MODEL.md .planning/ARCHITECTURE-DECISION.md`
    (the file was renamed, so both paths are needed).
@@ -848,7 +871,11 @@ Run these probes, checking exit codes and running the positive control on the sa
    `.planning/milestones`, which is the same exclusion `260726-pjz-VERIFICATION.md` used. Record per
    token whether it now has a home. **Beware: a trailing `| tr` or `| head` in the pipeline makes
    `$?` the filter's exit code, not `git grep`'s** -- capture the exit code before piping.
-4. The row cites `research/STACK.md:75,77`. MEASURED at `c84ebd5`: `research/` does NOT exist at the
+4. The row cites `research/STACK.md:75,77`. **MEASURED: the row carries TWO `research/STACK.md`
+   citations, not one -- `:16-40` in its description and `:75,77` in its OPEN clause, both
+   unresolvable. Only the OPEN-clause one is in scope here; the last bullet below leaves the
+   description alone, so `:16-40` stays unresolvable and gate G5c cannot tell the two apart.**
+   MEASURED at `c84ebd5`: `research/` does NOT exist at the
    repo root, so that citation is unresolvable, and both a search of it AND its positive control
    return failure -- which reads as "absent" rather than "wrong path". The real file is
    `.planning/research/STACK.md`. Re-derive the correct line numbers for the two Reject rows the
@@ -883,9 +910,16 @@ supersede convention -- it already carries three such blocks from 260804-h3b. Do
 place, exactly as 260804-h3b did.
 
 Its heading must be exactly `## Bookkeeping debt closed` followed by this task's id, **at line
-start**. Gate G7 line-anchors on that heading and region-scopes all ten component checks inside the
+start**. Gate G7 line-anchors on that heading and region-scopes ELEVEN literal checks inside the
 section, because three of them (`requirements_completed`, `Phase 10`, `Phase 11`) already appear
 elsewhere in the audit and would otherwise pass on an empty edit.
+
+**Those eleven literals do NOT map one-to-one onto the seven numbered components below.** Component
+2 alone needs three literals and component 4's three-part finding needs four, while components 1 and
+7 have NO literal gate at all -- component 1 because the eight dispositions are open-ended prose and
+component 7 because its subject is a drift this task deliberately does not touch. Both are carried
+by this instruction and by review, not by a grep. Write them anyway; do not read a green G7 as
+proof that all seven are present.
 
 The block records:
 
@@ -898,7 +932,12 @@ The block records:
    structurally non-discriminating here; the `two sources of record` are the phase VERIFICATION.md
    verdict and REQUIREMENTS.md's traceability table. Use both of those quoted phrases verbatim --
    G7d and G7e gate on them. State explicitly that NO sealed SUMMARY was back-edited and that
-   backfilling 30 REQ-IDs across Phases 7-9 was declined for that reason.
+   backfilling the 30 REQ-IDs THE AUDIT NAMES was declined for that reason. **Attribute that figure
+   to the audit; do not re-assert it as this task's measurement.** MEASURED at the current tree:
+   ROADMAP's Phases 7-9 carry 22 traceability rows and REQUIREMENTS' carry 27, so the audit's "30 of
+   the 51 roadmapped REQ-IDs (all of Phase 7, all of Phase 8, all of Phase 9)" matches neither its
+   own scope nor either table, and is not re-derivable here. Task 2's edit moves the roadmapped
+   Phase 7-9 figure again, 22 -> 24, which is a second reason to quote rather than restate it.
 3. The roadmapped-subset arithmetic moving 51 -> 53 and the documented difference SIX -> FOUR, so the
    audit's own as-audited counts are not silently contradicted by Task 2's edit.
 4. **A finding about the AUDIT's own completeness**, in three measured parts: its item 7 said "all
@@ -916,7 +955,8 @@ The block records:
    The reason, which is the same reason this whole task exists: a precise count in a sealed artifact
    rots the moment anyone adds a checklist item, and an audit that carries a rotted count is what
    produced these eight items. An earlier revision of this plan was about to insert a FALSE count
-   here (twenty, against a measured 93); that near-miss is itself worth one clause in the note.
+   here (twenty, against a measured 93 at `c84ebd5`); that near-miss is itself worth one clause in
+   the note.
 6. The ONE box left unticked in ROADMAP.md by design -- the v0.0.2 milestone rollup, owned by
    `/gsd:complete-milestone`.
 7. That the paragraph-level "11 items across 7 areas" vs frontmatter "13 items across 8 areas" drift
@@ -995,17 +1035,24 @@ ROW=$(git grep -h -F -e '| 260726-pjz |' -- "$S")
 echo "$ROW" | rg -q -F -e '| Needs Review |' && { echo "FAIL G6: the pjz row still holds the review-pending value -- resolve it or restate what remains open"; exit 1; }
 echo "$ROW" | rg -q -F -e '260726-pjz' || { echo "FAIL G6b: row extraction failed"; exit 1; }
 
-# G7 the audit closing note exists and carries all SEVEN numbered components from the action,
-# checked by ELEVEN region-scoped gates (component 2 alone needs three literals, and component
-# 4's three-part finding needs four), so a partial note cannot pass.
+# G7 the audit closing note exists and carries the SEVEN numbered components from the action,
+# checked by ELEVEN region-scoped literal gates (component 2 alone needs three literals, and
+# component 4's three-part finding needs four), so a partial note cannot pass.
+#
+# HONEST BOUND: those eleven literals cover FIVE of the seven components. Components 1 (the
+# eight dispositions) and 7 (the pre-existing 11-vs-13 drift note) have no literal gate -- both
+# are open-ended prose with no stable token to key on, and inventing one would gate the wording
+# rather than the content. G7 green therefore means "five components present and the note is
+# real", not "all seven present". Do not report it as the latter.
 #
 # REGION-SCOPED for the same reason as G1. MEASURED at c84ebd5: 'requirements_completed',
 # 'Phase 10' and 'Phase 11' are ALREADY present elsewhere in the audit -- the first in the
 # tech_debt frontmatter that raised the item, the others in the open_by_design list -- so
 # file-wide gates on them pass on an EMPTY edit. The section anchor is verified ABSENT at
 # c84ebd5 (positive control '^## Tech Debt Summary' matched on the same path), so scoping
-# every component gate inside it makes all seven non-vacuous by construction. Line-anchored,
-# per the G1 note.
+# every literal gate inside it makes each GATED literal non-vacuous by construction. That is a
+# claim about the eleven literals, not about all seven components -- see the honest bound above.
+# Line-anchored, per the G1 note.
 #
 # The note's heading must therefore be exactly '## Bookkeeping debt closed ...' at line start.
 AN=$(rg -n --no-heading -e '^## Bookkeeping debt closed' "$A" | rg -o '^[0-9]+' | head -1)
@@ -1061,8 +1108,9 @@ Re-run G6 AFTER the orchestrator commits STATE.md, to confirm the edit survived.
   positive controls, cites `.planning/research/STACK.md` with re-derived line numbers, and is
   MODIFIED BUT UNSTAGED, with its new Status cell and OPEN clause reproduced verbatim in the SUMMARY
   for the orchestrator.
-- The audit carries one dated closing block with all six components, and its `tech_debt` frontmatter
-  and `audited_at_commit` are untouched.
+- The audit carries one dated closing block with all SEVEN numbered components -- five of them
+  gated by literal, components 1 and 7 carried by review rather than by a grep -- and its
+  `tech_debt` frontmatter and `audited_at_commit` are untouched.
 - Nothing outside `.planning/` is modified.
 - Committed with `git commit -F <msg file>`, staging
   `.planning/phases/12-windows-ci-reuse-o4-consumer-recipe/12-VERIFICATION.md` and
@@ -1088,9 +1136,9 @@ Re-run G6 AFTER the orchestrator commits STATE.md, to confirm the edit survived.
 |-----------|----------|-----------|----------|-------------|-----------------|
 | T-lpt-01 | Tampering | the nine REQUIREMENTS.md checkboxes | high | mitigate | Per-ID verification against 08-VERIFICATION.md's own row, nine quoted evidence citations in the SUMMARY, the milestone audit forbidden as a source, and hazard rule 4 keeping an unevidenced box unticked. `<the_one_hazard>`. |
 | T-lpt-02 | Repudiation | 12-VERIFICATION.md's findings | high | mitigate | Supersede in place: the 13-truth table, the at-verification score and the Central Question section are preserved and gated (T3 G4), so the reconciliation cannot be mistaken for a re-verification. |
-| T-lpt-03 | Tampering | every absence/count gate in this plan | high | mitigate | Every absence and count gate is paired with a per-item presence gate (T1 G1/G4, T2 G1/G9/G10a/G10b, T3 G1/G5), so deletion cannot satisfy any of them. |
+| T-lpt-03 | Tampering | every absence/count gate in this plan | high | mitigate | Deletion cannot satisfy any absence or count gate. Eleven of the thirteen stale literals are paired with a per-item presence gate (T1 G1/G4, T2 G1/G9/G10a/G10b, T3 G1/G5). The two ID-list rewrites -- ROADMAP G6j and REQUIREMENTS G7e -- have NO presence partner by design, because their post-edit form is a different list rather than a reworded sentence; their survival is carried by G7f/G7g, which assert the four-ID tail still exists. Do not restate this as a blanket pairing claim: it is false as measured, and the blanket form of exactly this claim was deleted from this plan once already. |
 | T-lpt-04 | Information disclosure | commit messages and file content | high | mitigate | ASCII only, no work email and no bare work domain in any committed file or commit message, no CI-skip token even as prose. Committer identity verified as the public address at plan time. |
-| T-lpt-05 | Denial of service | the Nx cache and CI | low | accept | Only `.planning/` files change, and `.planning/` is not a declared input of any Nx target, so no task hash rotates and no CI leg is affected. Gated by the scope checks (T1 G7, T2 G11, T3 G8c). |
+| T-lpt-05 | Denial of service | the Nx cache and CI | low | accept | Only `.planning/` files change, and `.planning/` is not a declared input of any Nx target, so no task hash rotates and no CI leg is affected. Gated by the scope checks (T1 G7, T2 G12, T3 G8c). |
 | T-lpt-SC | Tampering | npm/pip/cargo installs | low | accept | No package-manager install task exists in this plan and no dependency changes. The Package Legitimacy Gate has nothing to audit. |
 </threat_model>
 
@@ -1099,10 +1147,24 @@ Whole-task checks, after all three commits:
 
 1. The eight audit items each have a disposition recorded in the SUMMARY: closed with evidence, or
    left open with the reason and the ID/site named. Eight dispositions, no fewer.
-2. `git diff --name-only c84ebd5..HEAD` lists only paths under `.planning/`. No source file, no
+2. `git diff --name-only $BASE..HEAD` lists only paths under `.planning/`. No source file, no
    `nx.json`, no `package.json`, no `ci.yml`.
-3. `git log --format=%s c84ebd5..HEAD` shows three subjects, all ASCII, none carrying a CI-skip
+3. `git log --format=%s $BASE..HEAD` shows three subjects, all ASCII, none carrying a CI-skip
    token or a work-email domain.
+
+   **`$BASE` is CAPTURED, not hardcoded.** Run `BASE=$(git rev-parse HEAD)` as your FIRST action,
+   before Task 1's commit, and use it for both checks. Do NOT substitute a literal SHA.
+
+   A hardcoded baseline has already rotted twice inside this plan's own lifetime: it was written
+   as `c84ebd5`, the pause commit `ff21356` then landed inside that range, and correcting it to
+   `ff21356` would rot again the moment this plan revision is itself committed. Every commit
+   between the measurement and the execution shifts the count -- and the count is the whole point
+   of check 3, so a relative form like `HEAD~3..HEAD` is no fix either: it would always show
+   exactly three subjects and therefore assert nothing. Capturing at start is the only form that
+   both survives and still discriminates.
+
+   `c84ebd5` remains correct everywhere else in this plan, where it names the tree a measurement
+   was taken against rather than an endpoint of a range.
 4. Re-run `gate-t1.sh`, `gate-t2.sh` and `gate-t3.sh` against the final tree. All three pass
    together -- Task 2's edits must not have re-broken Task 1's row counts.
 5. Re-run T3's G6 after the orchestrator's STATE.md commit lands.

@@ -72,7 +72,7 @@ cache, and the public-repo exposure surface, are not deferred.
   helper, and recognisable to the cleanup filter. Supersedes CORR-01's "OS-namespaced by default"
   branch.
 
-- [ ] **CORR-03**: A single cross-OS measurement, run as a build-gating CI job over BOTH matrix
+- [x] **CORR-03**: A single cross-OS measurement, run as a build-gating CI job over BOTH matrix
   legs at one commit, asserts: (a) exactly two platform records exist, each carrying a non-empty
   hash per target -- fewer than two is a FAILURE, not a skip; (b) the `integration` hash DIFFERS
   between legs; (c) `build`, `typecheck` and `test` hashes are IDENTICAL. Clause (c) is the
@@ -81,7 +81,7 @@ cache, and the public-repo exposure surface, are not deferred.
   stderr are recorded per leg. A textual assertion that `nx.json` contains the input does NOT
   satisfy this.
 
-- [ ] **CORR-04**: `integration` declares a platform discriminator in its Nx inputs, and is the
+- [x] **CORR-04**: `integration` declares a platform discriminator in its Nx inputs, and is the
   ONLY target that does. After VER-03 this is the SOLE mechanism separating OS-sensitive targets;
   removing it is a Core-Value regression.
 
@@ -198,7 +198,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
 
 ### Nx task-hash parity (PARITY)
 
-- [ ] **PARITY-01**: The divergence is root-caused node-by-node and RECORDED before any fix is
+- [x] **PARITY-01**: The divergence is root-caused node-by-node and RECORDED before any fix is
   applied, controlling for BOTH axes the pre-flight probe identified
   (`research/v0.0.2/PROBE-RESULTS.md`):
   (a) a real OS axis -- cold-ubuntu differs from cold-windows for every target; and
@@ -211,7 +211,7 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   visible ONLY on a cold graph -- the `@nx/vitest` / `@nx/js/typescript` OS-dependent
   `ProjectConfiguration` class, freshness-gated, which is why the v0.0.1 fixes appeared to hold.
 
-- [ ] **PARITY-02**: The named capture instrument emits the per-NODE hash `details` map
+- [x] **PARITY-02**: The named capture instrument emits the per-NODE hash `details` map
   (`TaskHashDetails.details`). `nx show target inputs` is NOT sufficient and a "no difference"
   result from it is not evidence: it SKIPS `ProjectConfiguration` (per `HashPlanInspector`'s own
   API doc) and reports file PATHS rather than content hashes -- both of v0.0.1's named suspects are
@@ -219,30 +219,30 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   `nx/src/hasher/*`. `.nx/cache/run.json` is the per-TASK surface and is complementary, not a
   substitute; it is overwritten by every `nx` invocation, so read it immediately.
 
-- [ ] **PARITY-03**: `build`, `typecheck` and `test` compute a byte-identical Nx task hash for the
+- [x] **PARITY-03**: `build`, `typecheck` and `test` compute a byte-identical Nx task hash for the
   same commit at all three observation points -- native Windows workstation (O1's precondition),
   windows-11-arm runner (O4's precondition), ubuntu-24.04-arm runner -- with the Windows workstation
   measured in BOTH graph states. Four values per target, not two. Enforced continuously by
   CORR-03(c), not measured once.
 
-- [ ] **PARITY-04**: "A warm local box computes the hash cold CI published" is a SEPARATE named
+- [x] **PARITY-04**: "A warm local box computes the hash cold CI published" is a SEPARATE named
   acceptance question from cross-OS parity. If it is false, O1 is unreachable regardless of OS
   parity. It MUST NOT be resolved silently by `nx reset`: TEST-10's mandated reset clears
   `.nx/workspace-data` too and forces the COLD state, which is convenient for the proof and
   misleading as evidence of the everyday developer experience. Record which question each proof
   answers.
 
-- [ ] **PARITY-05**: `integration` computes a byte-identical hash between the native Windows
+- [x] **PARITY-05**: `integration` computes a byte-identical hash between the native Windows
   workstation and windows-11-arm (O2's precondition).
 
-- [ ] **PARITY-06**: Every measurement records the Nx version, the Node version, the install mode
+- [x] **PARITY-06**: Every measurement records the Nx version, the Node version, the install mode
   (`npm ci` vs `npm install`), and the GRAPH STATE (cold / warm `.nx/workspace-data`). The
   23.0.2 -> 23.1.0 hash-planner rewrite makes cross-version measurements non-comparable, and
   `.node-version` is a moving alias (`lts/krypton`). Note `typecheck` carries a THIRD variance
   source beyond OS and freshness -- four distinct values across the four probe measurements --
   plausibly install mode reaching it via `dependentTasksOutputFiles` or `externalDependencies`.
 
-- [ ] **PARITY-07**: The public-surface guard passes unchanged -- no new env knob, no new action
+- [x] **PARITY-07**: The public-surface guard passes unchanged -- no new env knob, no new action
   input, no new package export (D2-02).
 
 - [x] **PARITY-08**: `{workspaceRoot}/.github/workflows/ci.yml` is registered as a `test` input and
@@ -716,15 +716,15 @@ honour table: `.planning/ROADMAP.md`.
 | LINT-05 | Phase 7 | Complete |
 | LINT-06 | Phase 7 | Complete |
 | CORR-06 | Phase 7 | Complete |
-| PARITY-01 | Phase 8 | Pending (must control BOTH the OS and freshness axes) |
-| PARITY-02 | Phase 8 | Pending (per-node `details` instrument) |
-| PARITY-03 | Phase 8 | Pending (four values per target, not two) |
-| PARITY-04 | Phase 8 | Pending (warm-local vs cold-CI as a named question) |
-| PARITY-05 | Phase 8 | Pending |
-| PARITY-06 | Phase 8 | Pending |
-| PARITY-07 | Phase 8 | Pending |
-| CORR-03 | Phase 8 | Pending |
-| CORR-04 | Phase 8 | Pending |
+| PARITY-01 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED -- both axes separated with their own diffs, zero `nx.json` commits in `7bfe64f..eeace53`) |
+| PARITY-02 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED -- per-node `details` instrument, `hash.details.nodes` at `capture-hashes.mjs:305`, M4 re-proves instrument == Nx) |
+| PARITY-03 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED with the commit-spread qualification recorded -- M3 plus M5/M6, four values per target) |
+| PARITY-04 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED -- warm-local vs cold-CI kept as its own Q2-only section, M2 proves no reset in the recipe) |
+| PARITY-05 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED -- same-OS pair, zero differing nodes across all 430 post-fix) |
+| PARITY-06 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED -- all four fields on every record and on both CI legs) |
+| PARITY-07 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED -- both `git diff --name-only` runs empty, M9 asserts the tarball exclusion) |
+| CORR-03 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED -- build-gating job, (a) and (c) observed RED on real legs with matching GREENs, (b) fixture-proven) |
+| CORR-04 | Phase 8 | Complete (08-VERIFICATION.md Requirements Coverage: SATISFIED -- re-derived from `nx.json`: exactly one `{ "runtime": ... }`, at `:101`) |
 | PARITY-08 | Phase 9 | Complete (`nx.json:69`; landed FIRST, before any spec asserted on `ci.yml`) |
 | VER-01 | Phase 9 | Complete |
 | VER-02 | Phase 9 | Complete |
@@ -738,8 +738,8 @@ honour table: `.planning/ROADMAP.md`.
 | DOCS-08 | Phase 9 | Complete (four corrections + two additive, phrase-pinned; `read-back.ts` and `ci.yml:693` were always Phase 10 scope) |
 | CORR-02 | Phase 10 | Complete |
 | RETAIN-04 | Phase 10 | Complete (landed in 10-07, the same commit as CORR-02; row was stale against its own ticked checkbox) |
-| RETAIN-05 | Phase 10 | Pending (same commit as CORR-02) |
-| CORR-05 | Phase 10 | Pending (4 sites; 1 removed in Phase 9 with VER-02; site 4 needs an explicit Phase 10 call) |
+| RETAIN-05 | Phase 10 | Complete (10-VERIFICATION.md:107 round-1 row `RETAIN-05(a)(b)(c): tar.gz disposition, mutual exclusivity, 4-consumer lock` VERIFIED; corroborated by the `:137` ticked list) |
+| CORR-05 | Phase 10 | Complete (10-VERIFICATION.md:55 `### #12 CORR-05 -- VERIFIED (was Uncertain)` and `:116` `CORR_05_SITES` empty with the positive assertion present; site 4 called explicitly as D-17, `release-asset-name.spec.ts:60`; corroborated by the `:137` ticked list) |
 | OBS-03 | Phase 10 | Complete |
 | OBS-05 | Phase 10 | Complete (both clauses observed live on run 30471772954; see 10-EVIDENCE-LIVE-CI.md) |
 | XOS-06 | Phase 10 | Complete |
@@ -751,7 +751,7 @@ honour table: `.planning/ROADMAP.md`.
 | XOS-01 | Phase 11 | Complete (live-workstation measurement taken in 11-03: 1 `[remote cache]` occurrence each for `build`, `typecheck`, `test`; see 11-EVIDENCE.md O1) |
 | XOS-02 | Phase 11 | Complete (baseline captured in Phase 10 before CORR-02; post-rename non-regression measured in 11-03 against BOTH baseline halves; see 11-EVIDENCE.md O2) |
 | XOS-03 | Phase 11 | Complete (live-CI: push run 30500255530; Windows `integration` EXECUTED with 0 remote-cache label occurrences and `cacheStatus=cache-miss`; see 11-EVIDENCE.md O3) |
-| TEST-08 | Phase 11 | Pending (O4 evidence row appended in Phase 12) |
+| TEST-08 | Phase 11 | Complete (11-EVIDENCE.md:1004 `## O4 (XOS-04, XOS-05)`; `:1006` records the reservation as DISCHARGED by plan 12-06, appended IN PLACE per D-22 -- the append the placeholder was waiting on) |
 | TEST-09 | Phase 11 | Complete (all three parts on push run 30500255530: inequality CITED from CORR-03(b), o3-witness delta 144s against a 30s margin, positive control 200 on both legs; see 11-EVIDENCE.md O3) |
 | TEST-10 | Phase 11 | Complete |
 | OBS-02 | Phase 11 | Complete |

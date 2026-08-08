@@ -1,107 +1,121 @@
 {
   "version": "1.0",
-  "timestamp": "2026-08-08T00:00:00.000Z",
+  "timestamp": "2026-08-08T22:09:08.112Z",
   "phase": null,
   "phase_name": "no active phase -- all 7 v0.0.2 phases complete, milestone audited",
-  "phase_dir": ".planning/quick/260808-lpt-fix-the-v0-0-2-milestone-audit-bookkeepi",
+  "phase_dir": ".planning/quick/260808-wxg-close-the-two-open-by-design-observation",
   "context": "default",
-  "context_ambiguity": "Quick-task work, which the pause-work detector does not enumerate, so this handoff lands at the default path. ITEMS 1 AND 2 ARE COMPLETE AND VERIFIED. Item 3 is the only one left and is NOT started.",
+  "context_ambiguity": "Quick-task work, which the pause-work detector does not enumerate, so this handoff lands at the default path. ITEMS 1 AND 2 OF THE OPERATOR PLAN ARE COMPLETE AND VERIFIED. ITEM 3 IS PLANNED, PLAN-CHECKED, AND NOT STARTED -- the window has NOT been opened and nothing outward-facing has been touched.",
   "plan": 3,
-  "task": 2,
+  "task": 0,
   "total_tasks": 3,
-  "status": "item_2_complete",
+  "status": "paused",
+  "paused_deliberately_at": "Immediately BEFORE opening the temporary main window, by agreement. The plan and its plan-check are committed and pushed; pre-flight has NOT been executed. Paused here on purpose: the window is the only stateful operation in this milestone and it should start with a full context budget, because it involves waiting on two live CI runs and must be CLOSED in the same sitting.",
   "operator_plan": [
     {
       "item": 1,
       "name": "Fix bookkeeping -- the v0.0.2 milestone audit's stale-artifact debt",
       "status": "complete",
-      "detail": "Quick task 260808-lpt. Executed on the main tree as c3fe74d, d5841c2, fed70f4; gap fix 142ea72; STATE.md 7f2ba26. Verifier: 8/9, the one gap closed. Full record in the task's SUMMARY and VERIFICATION, and in STATE.md's Quick Tasks Completed row."
+      "detail": "Quick task 260808-lpt. Commits ccd8248, c3fe74d, d5841c2, fed70f4, 142ea72, 7f2ba26. Verifier 8/9, the one gap closed."
     },
     {
       "item": 2,
       "name": "Resolve the two genuine follow-ups",
       "status": "complete",
-      "detail": "Quick task 260808-u2q, commits 71773ee (plan) and 92998de..5d60ea4. (a) CLOSED by mechanism: publish now carries `&& !github.event.forced`, so a restore (a rewind, therefore forced) skips it while a window-open push (a fast-forward) still publishes. publish-verify follows via needs. Research corrected the premise: ELEVEN prior restore pushes, not five -- backup refs are reused by name so they cannot count events -- and FOUR of those runs published for real (not five; the fifth success is the merge push that CREATED fe25a3f and SHOULD have published). (b) CLOSED as a triage rather than a fix: 69bd1b7 is docs-only, no CI run ever existed, output was discarded by a redirect. Unactionable until it recurs WITH output, so the work was capture -- the tee idiom now lives in AGENTS.md with its status captured to a variable rather than `exit` (which would end the battery loop after one iteration) and an iteration suffix on the log name (one-second timestamps collapse fast iterations). Verifier human_needed 4/6: the two RUNTIME directions are item 3's to observe."
+      "detail": "Quick task 260808-u2q, commits 71773ee, 92998de, 0cd43b4, 43f3612, 5d60ea4, plus the effective-date correction d70c667. publish now carries `&& !github.event.forced`. The 69bd1b7 failure is triaged as unactionable-until-recurrence with the capture idiom fixed in AGENTS.md. Verifier human_needed 4/6; the two runtime directions are item 3's to observe."
     },
     {
       "item": 3,
-      "name": "Close the two open-by-design observations",
-      "status": "not_started",
-      "detail": "Phase 9's first post-merge publish-verify (windows-11-arm) leg, and Phase 10's OBS-01 summary + shard census. Both require a real push to main that RUNS the publish legs -- they are gated off pull_request events and were skipped on run 30947535877. Operator APPROVED a temporary main window (backup before, restore after) as the instrument, and PROHIBITED using a merge. Run via /gsd-core:quick --full with discuss-phase --auto semantics. MUST be done AFTER item 2, because item 2 fixes the defect in the very procedure item 3 uses. WINDOW PROCEDURE -- THREE HOPS, CORRECTED 2026-08-08. The two-hop version recorded earlier was WRONG and would have failed on a correct gate. A push event runs the workflow at the PUSHED TIP (GITHUB_SHA is documented as the tip commit pushed to the ref, and the push trigger \"includes workflows that are not merged into the default branch\" -- only possible if the workflow comes from the pushed commit). The restore lands on fe25a3f, which PREDATES the !github.event.forced clause, so that hop runs the UNGATED workflow and publishes exactly as before. The clause is correct but DORMANT for restores until main itself contains it, which is at merge, which the maintainer has placed LAST -- after additional code and security reviews over the proven milestone. HOP 1, open: `git push origin HEAD:main` -- a plain push, never --force. Fast-forward, gated workflow, forced=false. EXPECT publish + publish-verify to RUN. This hop delivers item 3s own two observations (the windows-11-arm publish-verify leg, and the OBS-01 summary + shard census). HOP 2, the skip proof: rewind main to 43f3612, a forced push whose tip DOES carry the clause. EXPECT publish SKIPPED and publish-verify SKIPPED by cascade, with no POST to /releases. 43f3612s ci.yml is BYTE-IDENTICAL to the feature tips (verified with git diff), so forced is the ONLY variable between hop 1 and hop 2 -- a controlled experiment the original design could not have produced. HOP 3, restore: rewind main to fe25a3f. This hop runs the UNGATED workflow, so DISABLE the ci.yml workflow for this one push and re-enable immediately after. Verify the disable mechanism BEFORE relying on it, and verify main == fe25a3f and the workflow is re-enabled at the end. Never open a window while a previous one is still open: a tip that does not descend from the tip already on main is a rewind, and on a gated tip that now SKIPS publish -- so the measurement is silently lost rather than merely wrong. RECORD BOTH DIRECTIONS. Recording only the skip would leave an over-broad gate undetected: a clause that skips everything satisfies the restore direction and destroys the instrument."
+      "name": "Close the open-by-design live-CI observations via a three-hop temporary main window",
+      "status": "planned_not_started",
+      "detail": "Quick task 260808-wxg. PLAN.md and PLAN-CHECK.md are COMMITTED AND PUSHED (c4b532f, 7b4b5b3). The plan is the contract -- follow it, do not re-plan. Pre-flight has NOT run: PR #16 is still OPEN, no backup ref was created, the window is CLOSED."
     }
   ],
   "completed_tasks": [
     {
       "id": 1,
-      "name": "Quick task 260804-lc3",
+      "name": "Item 1 -- quick task 260808-lpt",
       "status": "done",
-      "commit": "abb722d,c84ebd5",
-      "detail": "The ci.yml positive control's two false premises corrected at all eight sites. Verified 24/24, 0 gaps."
+      "commit": "ccd8248..7f2ba26",
+      "detail": "Three plan-check iterations plus a 66-aggregate re-derivation. Verifier 8/9; the single gap was this task's own defect class inside its own output."
     },
     {
       "id": 2,
-      "name": "Quick task 260808-lpt -- item 1, planned, hardened, executed, verified",
+      "name": "Item 2 -- quick task 260808-u2q",
       "status": "done",
-      "commit": "ccd8248,c3fe74d,d5841c2,fed70f4,142ea72,7f2ba26",
-      "detail": "Three plan-check iterations plus a full 66-aggregate re-derivation. Iteration 3 found two blockers in the REVISION itself. Executed on the main tree. Verifier 8/9; the one gap was this task's own defect class inside its own output -- a five-weeks interval asserted as measured that is one week -- corrected at five sites across four files."
+      "commit": "71773ee..d70c667",
+      "detail": "Two plan-check rounds. Round 1 caught the plan about to write a known falsehood into tracked files; round 2 caught the fix for round 1 having introduced a gate that could not fail, and proved it with a probe. Code review then found the shipped comment asserting four-as-five. A post-hoc finding corrected the gate's EFFECTIVE DATE."
+    },
+    {
+      "id": 3,
+      "name": "Item 3 -- planned and plan-checked",
+      "status": "done",
+      "commit": "c4b532f,7b4b5b3",
+      "detail": "Pre-flight investigation found TWO scope corrections the handoff's version would have missed, and the plan-check found TWO blockers in the plan. All four are fixed in the committed plan. See blockers[] for what must not be re-litigated."
     }
   ],
   "remaining_tasks": [
     {
       "id": 4,
-      "name": "Item 3 -- close the two open-by-design observations",
+      "name": "Execute the 260808-wxg window -- pre-flight, three hops, restore, record",
       "status": "not_started",
-      "detail": "START HERE. Phase 9's first post-merge publish-verify (windows-11-arm) leg, and Phase 10's OBS-01 summary + shard census. Both need a real push to main that RUNS the publish legs. Never a merge. RUN IT AS THREE HOPS, not two -- see window_procedure below. Hop 1 delivers item 3's own observations; hop 2 is the first behavioural proof of item 2's gate in the SKIP direction; hop 3 is the restore. It is also the first time `github.event.forced` is OBSERVED at all: the Events API does not expose it, so every classification behind the fix is ancestry-based inference plus a protocol argument."
+      "detail": "Follow 260808-wxg-PLAN.md exactly. Pre-flight blocks the open push and every item in it matters. Then hop 1 (open, publishes, carries all four observations), hop 2 (rewind to 43f3612, must SKIP), hop 3 (disable CI, restore to fe25a3f, re-enable). Then reopen PR #16 and assert mergedAt is still null. Then write 260808-wxg-EVIDENCE.md, update 09-VALIDATION.md's OPEN row and 10-VERIFICATION.md's live_ci_only_items, verify, and commit."
+    },
+    {
+      "id": 5,
+      "name": "After item 3: the maintainer's additional code review and security review",
+      "status": "not_started",
+      "detail": "NOT this agent's call to start or skip. The merge is gated behind these, and they are gated behind item 3. Anything that landed late -- the u2q ci.yml gate and its spec assertion especially -- POSTDATES the milestone audit and belongs in their scope."
     }
   ],
   "blockers": [
     {
-      "description": "NONE BLOCKING. Item 1 is closed and its findings are recorded in its own artifacts; do not re-litigate them.",
+      "description": "NONE BLOCKING. Recorded so the next session does not re-litigate settled ground. CONFIRMED SOUND by an adversarial plan-check, with commands: no path through the window can mark anything merged (one open PR, no branch protection, no rulesets, no merge queue, allow_auto_merge false, autoMergeRequest null); 43f3612 is the correct hop-2 target on all three counts (carries the gate, is an ancestor of HEAD, executable ci.yml identical); fe25a3f genuinely lacks the gate; no paths filter, so hop 2 triggers a run and the skip is visible inside a populated 21-job run; the cascade skip and O-D's ordering guarantee check out; run 30909525695 shows both publish-verify legs green, so the August 2 breakage is resolved and O-C/O-D are achievable; recovery is complete at all seven death points; the workflow id, the five backup refs and the 78-asset shard count had NOT rotted.",
       "type": "informational",
       "workaround": "Not applicable."
+    },
+    {
+      "description": "OPEN RESIDUE, admitted rather than hidden: the gate shipped in item 2 is DORMANT for restores until main itself contains it, which happens at merge, which the maintainer has placed LAST. Hop 3 therefore needs the workflow disabled for that one push, and will for every window until v0.0.2 lands.",
+      "type": "technical",
+      "workaround": "gh workflow disable 313666980 before hop 3, re-enable immediately after, and assert active."
     }
   ],
   "async_jobs": [],
   "human_actions_pending": [
     {
       "action": "NONE blocking. The operator has delegated plan-check findings: fix them, re-run the checker, or rule that they do not block -- do not escalate them as questions.",
-      "context": "Escalate only what the recorded decisions do not cover: a merge, an outward-facing action in a repo the maintainer does not own, or a main-window instrument beyond the one already approved.",
+      "context": "Escalate only what the recorded decisions do not cover: a merge, an outward-facing action in a repo the maintainer does not own, or an instrument beyond the approved temporary window.",
       "blocking": false
     }
   ],
   "decisions": [
     {
       "decision": "NEVER merge v0.0.2, any other milestone, PR #16, or any other PR until the operator explicitly says so",
-      "rationale": "Stated once and restated twice after a narrower reading proved wrong. No condition satisfies this implicitly -- not a green CI run, not a passed verification, not a clean audit, not a MERGEABLE PR. Saved as the memory never-merge-milestone-without-explicit-approval.",
+      "rationale": "The merge is gated behind ADDITIONAL code reviews and security reviews, which are themselves gated behind proving everything the milestone claims. So 'all the evidence is in' is NOT an argument for merging -- it is the argument for STARTING the reviews. That is the inference an agent gets wrong, because from inside the proving step the work looks finished and a green board reads as permission.",
+      "phase": "260808-u2q"
+    },
+    {
+      "decision": "Temporary pushes to main ARE approved as the instrument, with backup-before and restore-after; pushing any branch and opening/closing any PR are also approved",
+      "rationale": "The counterpart to the merge prohibition, so a merge is never needed as a measurement device.",
       "phase": "260808-lpt"
     },
     {
-      "decision": "Temporary pushes to main ARE approved as the instrument for anything a PR cannot verify, with backup-before and restore-after; pushing any branch and opening/closing any PR are also approved",
-      "rationale": "The counterpart to the merge prohibition, so a merge is never needed as a measurement device. It is what makes item 3 possible without merging.",
-      "phase": "260808-lpt"
+      "decision": "Item 3 runs as THREE hops, not two",
+      "rationale": "A push event runs the workflow at the PUSHED TIP. The restore lands on fe25a3f, which predates the gate, so it runs the UNGATED workflow. The skip direction is still provable without merging by rewinding to a tip that DOES carry the gate -- hop 2 -- and the final restore is suppressed by disabling the workflow.",
+      "phase": "260808-wxg"
     },
     {
-      "decision": "Items 2 and 3 run via /gsd-core:quick --full with discuss-phase --auto semantics",
-      "rationale": "Single pass, auto-pick the recommended option per gray area, no human checkpoint. NOTE: --auto is NOT a flag quick parses (measured: quick.md parses only --full/--validate/--discuss/--research/--text), so passing it literally would land the string in the task DESCRIPTION and pollute the slug. Apply the semantics, not the flag. The documented exception still holds: a gray area that is BOTH high-impact and not-high-confidence goes into CONTEXT.md as an explicit UNRESOLVED with competing options, never auto-locked.",
-      "phase": "260808-lpt"
-    },
-    {
-      "decision": "Item 2 before item 3, and this ordering is load-bearing rather than cosmetic",
-      "rationale": "Item 2 fixes the defect in the very procedure item 3 uses -- the main-window restore force-push fires the production publish legs. Fixing it first means item 3's window inherits a decided procedure instead of improvising against a known-defective one.",
-      "phase": "260808-lpt"
+      "decision": "PR #16 is CLOSED before the open push and REOPENED after the restore",
+      "rationale": "Its base is main and its head is the branch being pushed there, so with it open GitHub auto-closes it AS MERGED and sets mergedAt -- a de-facto merge reached by an action nobody would call merging. Precedent: PR #12 was closed first for this reason during the Phase 13 window.",
+      "phase": "260808-wxg"
     },
     {
       "decision": "Plan-check findings are the agent's to resolve, not the operator's to arbitrate",
-      "rationale": "Operator directive 2026-08-08: fix them, re-run the checker, or rule that they do not block, then proceed to execution. Do not present findings as a question. Report outcomes and judgment calls, not line numbers or gate IDs -- the detail belongs in the artifact file.",
+      "rationale": "Operator directive: fix them, re-run the checker, or rule that they do not block, then proceed. Report outcomes and judgment calls, not line numbers or gate IDs -- the detail belongs in the artifact file.",
       "phase": "260808-lpt"
-    },
-    {
-      "decision": "The merge is gated behind additional code reviews and security reviews, which are themselves gated behind proving everything the milestone claims",
-      "rationale": "Stated by the maintainer 2026-08-08 as the REASON for the merge prohibition, which had until then been recorded as a bare rule. The order is: (1) prove every open observation -- the temporary main windows do this; (2) additional code review and security review over the proven result; (3) the merge decision. So \"all the evidence is in\" is NOT an argument for merging -- it is the argument for STARTING step 2. That is the inference an agent gets wrong, because from inside step 1 the work looks finished and a green board reads as permission. Corollary: anything landing on the branch late -- the 260808-u2q ci.yml gate and its spec assertion, for instance -- POSTDATES the milestone audit and belongs in step 2 scope. The quick review it got during its own task is not the review being planned.",
-      "phase": "260808-u2q"
     }
   ],
   "uncommitted_files": [],
-  "next_action": "Start ITEM 2 via /gsd-core:quick --full with discuss-phase --auto semantics. Its load-bearing half is the temporary-main-window restore force-push firing a full production ci.yml run, both publish legs writing for real, because [skip ci] is structurally unavailable to a re-push of an existing commit. Five stale refs/backups/* on origin suggest five prior undisclosed occurrences. The second half -- one unattributed test failure at 69bd1b7, not reproducible in 7 attempts with no output captured -- is likely UNACTIONABLE until it recurs with output; say so plainly rather than manufacturing an investigation. Then ITEM 3, never before.",
-  "context_notes": "The through-line across every task this session: a claim that LOOKS like coverage and asserts nothing is caught only by an independent pass, never by its author -- and a FIX deserves the same scrutiny as the original. Item 1 produced six fresh instances. The sharpest is the last: the verifier's single gap was a five-week interval stated AS MEASURED in the plan, never measured, that then propagated into the summary twice and into STATE.md on the strength of the assertion. Five weeks after 2026-07-26 is a future date, so it was unreachable, not merely wrong. Then the sweep to correct it hit the same line-wrap dead-literal trap the task documents as an anti-pattern: the phrase search failed in the plan and succeeded in the other three files, so a three-of-four sweep would have read as complete. Carry forward the measured false-zero shapes, each of which reads as confident absence: a literal spanning a line wrap; rg -U with \\s+ cannot bridge a wrap whose continuation carries a '#' (use [\\s#]+); a SHAPE-anchored regex failing because a file records verdicts as headings rather than table rows. Always check the exit code (1 = genuine no-match, 2 = the command FAILED) and run a positive control on the same path. And git grep needs -e when the pattern starts with '-'. Two more from item 1 worth keeping: a plan's own verification step can be UNSATISFIABLE by construction (T1/T2 scope gates excluded STATE.md while T3 required it dirty -- no tree state satisfies all three), which is a finding to report rather than a gate to weaken; and a region gate that greps the wrong heading LEVEL is satisfied by unrelated prose, so it proves nothing while reading as coverage."
+  "next_action": "Open a FRESH session and run the 260808-wxg window end to end, following .planning/quick/260808-wxg-close-the-two-open-by-design-observation/260808-wxg-PLAN.md exactly. START WITH PRE-FLIGHT and do not skip an item: close PR #16 FIRST (the auto-merge hazard), push the backup ref, verify the workflow-disable mechanism, re-measure shard headroom, and assert origin/main == fe25a3f with a clean tree. Then hop 1, wait for the run to CONCLUDE, record all four observations against its run id, then hop 2, then hop 3. CLOSE THE WINDOW IN THE SAME SITTING.",
+  "context_notes": "The window is the only stateful operation in this milestone -- everything before it was append-only commits, safe to abandon halfway. It is paused here deliberately, fully prepared, so it starts with a full context budget. THE WINDOW IS OPEN WHENEVER origin/main != fe25a3f; the plan's RECOVERY section detects and closes it from any of seven death points, and it is on the remote. Two lessons from this session bear directly on the window. FIRST: five independent passes -- planner, two plan-check rounds, code review, verifier -- all missed that a push event runs the workflow at the PUSHED TIP, because every one of them read the workflow in the working tree and none asked which commit's copy executes. A blind spot shared by every pass is a different failure class from a gate nobody checked, and re-running the same shape of review would never have found it. SECOND: the window plan's own pre-registered observation for phase 9 was IMPOSSIBLE BY CONSTRUCTION -- publish-verify is a per-leg self round-trip that ENFORCES reader == producer, so the linux-producer line it asked for on the Windows leg is the exact condition the assertion rejects. The stale expectation was in the SOURCE ROW, inherited unexamined. Executed as written it would have spent the window and left the row open, or closed it falsely by loose-matching a neighbouring line. Also carry the measured false-zero shapes, each of which reads as confident absence: a literal spanning a line wrap (fired three times, once on the sweep correcting it); rg -U with \\s+ cannot bridge a wrap whose continuation carries a '#' (use [\\s#]+); a SHAPE-anchored regex failing because a file records verdicts as headings not table rows; git grep needing -e for a dash-leading pattern; and rg -rn being parsed as --replace n, which returns plausible prose with every match overwritten. Always check the exit code (1 = genuine no-match, 2 = the command FAILED) and run a positive control on the same path."
 }

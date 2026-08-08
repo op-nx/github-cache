@@ -860,7 +860,8 @@ Run these probes, checking exit codes and running the positive control on the sa
 
    **EXPECT A MISMATCH, and do not read it as your own error.** MEASURED at the current tree: the
    section holds SEVEN bullets, not the eight the row claims -- and one of those seven postdates
-   the pjz task by roughly five weeks, so the count at the time the row was written was six. The
+   the pjz task by ONE WEEK (`45dd0f4` 2026-07-26 -> `7b45c38` 2026-08-02), so the count at the
+   time the row was written was six. The
    row's "eight" was wrong when written. That discrepancy is part of what this probe exists to
    surface; record it in the re-derived verdict rather than adjusting your count to match the row.
 2. If it is gone, find the commit that removed it and read its message:

@@ -177,8 +177,8 @@ live number. Every per-class figure is unchanged.
 
 **F2 -- Probe 1 in Task 3 Edit B will fire, and it should.** The pjz row claims "8 residue rows
 retained IN the ADR under `## Residual notes`". MEASURED: **7** top-level bullets in that section --
-and one of those seven (`CACHE_READ_ONLY`, labelled "Phase 13, 2026-08-02") was added five weeks
-AFTER the pjz task, so the count at pjz time was **6**, not 8. The plan's instruction to "count the
+and one of those seven (`CACHE_READ_ONLY`, labelled "Phase 13, 2026-08-02") was added ONE WEEK
+AFTER the pjz task (`45dd0f4` 2026-07-26 -> `7b45c38` 2026-08-02), so the count at pjz time was **6**, not 8. The plan's instruction to "count the
 bullets ... against the eight the row claims" is a faithful restatement of the row and needs no
 correction; I am flagging the expected outcome so the executor does not read a mismatch as its own
 error. Command: `tail -n +84 .planning/THREAT-MODEL.md | awk 'NR==1{print;next} /^## /{exit} {print}'

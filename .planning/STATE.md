@@ -5,9 +5,9 @@ milestone_name: framing
 current_phase: 13
 current_phase_name: read-only-actions-cache-backend
 status: complete
-last_updated: "2026-08-04T20:15:00.000Z"
-last_activity: 2026-08-04
-last_activity_desc: "Quick 260804-lc3: the ci.yml positive control's TWO false premises corrected at all EIGHT sites in one commit (abb722d), with the corrected reasons pinned on row D. Verified 24/24, 0 gaps, by tracing the shipped prose to source rather than to the plan. Plan-check iteration 2 caught that the SRV-05 count gate could not localize, so the escape hatch could have been satisfied by deletion alone with every gate green"
+last_updated: "2026-08-08T23:40:00.000Z"
+last_activity: 2026-08-08
+last_activity_desc: "Quick 260808-wxg: the three-hop temporary main window RAN AND CLOSED in one sitting (open 65m25s, 22:19:01Z-23:24:26Z; commit 6708929). All four live-CI observations sampled from run 31281406708. O-A, O-C, O-D CLOSED; O-A's source row superseded in place because its expectation -- a 'linux' producer on the Windows publish-verify leg -- is the exact condition assertPublishedByThisLeg exists to reject. Hops 1 and 2 are a controlled experiment, not two observations: executable ci.yml held at 823/823 identical, so forced is the only variable -- non-forced publish RAN, forced publish SKIPPED, which is the 260808-u2q gate's first behavioural evidence in the skip direction. O-B did NOT close clean: readMisses is 63, not the pre-registered 0, contradicting a zero that 09-VALIDATION's own OBS-04 section had already falsified at 41/41 on run 30400231720 -- carried forward as an open sub-item, not closed. Every post-window assertion passes; nothing merged"
 progress:
   total_phases: 7
   completed_phases: 7
@@ -474,6 +474,33 @@ Items acknowledged and carried forward:
 | Release | Cut and push the `v0` git tag | release-checklist item, NOT an action: deliberately not created during quick 260722-0od (outward-facing, hard to retract); the maintainer cuts it at publish time | 2026-07-22 |
 
 ## Session Continuity
+
+### Session resumed at quick 260808-wxg and RAN THE WINDOW to completion (2026-08-08)
+
+Resumed from `HANDOFF.json` + `.planning/.continue-here.md` (both committed at `b276bdc`). Both
+one-shot artifacts are now CONSUMED and deleted. The pause was correct: the window needed a full
+context budget, it opened and closed in one sitting, and it was never left open across a session.
+
+**The window is CLOSED and every post-window assertion passes.** `origin/main` is `fe25a3f`, CI
+workflow `313666980` is `active`, PR #16 is OPEN with `mergedAt` null, the five pre-existing
+`refs/backups/*` are untouched, and nothing is merged. Open 65m25s, 22:19:01Z to 23:24:26Z.
+
+Operator-plan item 3 is COMPLETE (commit `6708929`). Item 4 -- the maintainer's additional code
+review and security review, which gate the merge -- remains NOT STARTED and is explicitly not the
+agent's call to begin. **The merge prohibition is unchanged and still absolute.** Anything that
+landed after the milestone audit belongs in the reviews' scope: the `260808-u2q` `ci.yml` gate and
+its spec assertion, and now this window's evidence and the two source-row updates.
+
+Two things a next session needs that no artifact would otherwise carry:
+
+1. **`gh workflow disable` is DENIED to the agent by the auto-mode classifier.** Hop 3's suppression
+   had to be run by the maintainer. Every future window hits this -- budget for it up front rather
+   than discovering it mid-window with `main` forward.
+2. **A job summary is invisible to `gh` and to any unauthenticated fetch.** Two of the four
+   observations had a component that exists ONLY in the job summary, and they were first recorded
+   NOT OBSERVED until the maintainer supplied a signed-in browser via `playwright-cli --extension`.
+   That read is what surfaced the `readMisses` finding. An observable that lives only in a summary
+   will otherwise be silently filed as unobservable.
 
 ### Session resumed at quick 260804-lc3 and carried it to completion (2026-08-04)
 

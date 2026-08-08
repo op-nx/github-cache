@@ -9,6 +9,31 @@
  * lacked, D-08). Never inline a second copy of the prefix or the pattern: a
  * duplicate authored literal is exactly the drift T-05-08-02 guards against.
  *
+ * THE PREFIX NOW GOVERNS FOUR DISTINCT CONSUMERS (RETAIN-05c), not one. Since
+ * CORR-02 collapsed the Release asset namespace onto it, all four derive from this
+ * single literal:
+ *   1. the Actions-cache KEY -- `cacheKeyFor` below;
+ *   2. the Actions-cache ENUMERATION filter -- `isServerProducedKey` below, which
+ *      decides which entries the publisher may mirror at all;
+ *   3. the Release ASSET NAME -- `releaseAssetName` (release-asset-name.ts), which
+ *      IMPORTS this literal rather than re-authoring it;
+ *   4. the cleanup ACCEPT FILTER's current-shape branch -- `isCurrentAssetName`
+ *      (release-asset-name.ts), which decides what may be DELETED.
+ * Four consumers of ONE prefix, deliberately NOT aliases of one builder: 3 is not
+ * folded into 1 and 4 is not folded into 2, so a change meant for the Actions-cache
+ * namespace cannot silently move the Release namespace with it. Both refusals are
+ * comment-locked at their sites.
+ *
+ * THE CONSEQUENCE OF CHANGING THE LITERAL, which is why the lock is this loud:
+ * editing this string ORPHANS THE ENTIRE MIRROR. Every already-published asset keeps
+ * its old name, so consumers 3 and 4 stop resolving and stop pruning them at the
+ * same instant -- a silent all-MISS read plus unbounded shard growth, with no error
+ * raised anywhere. And RETAIN-04's LEGACY filter branch does NOT cover those
+ * orphans: it only knows the pre-CORR-02 `<hash>-<os>` shape, so assets written
+ * under a superseded prefix would be prunable by neither branch and would sit in the
+ * shard until it rolls over. The authored-occurrence count is pinned across this
+ * leaf and its consumers by cache-key.spec.ts.
+ *
  * Kept a true leaf -- it imports NOTHING from ../backend, ../publish, ../server,
  * or ./select-backend -- so every consumer can adopt it without opening an import
  * cycle, matching the github-identity.ts leaf-extraction precedent (Phase 4).

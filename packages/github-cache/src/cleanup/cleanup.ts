@@ -1,4 +1,5 @@
 import * as core from '@actions/core';
+import { faultReason } from '../lib/octokit-fault-reason.js';
 import { statusOf } from '../lib/octokit-status.js';
 import { isServerProducedAssetName } from '../lib/release-asset-name.js';
 import { isShardTag, MS_PER_DAY } from '../lib/retention.js';
@@ -43,14 +44,14 @@ export interface CleanupResult {
  * behind the injected CleanupClient so it runs with no network. Two strictly ordered
  * phases:
  *
- * LIST PHASE -- materialize the COMPLETE cache-mirror-* release + asset set BEFORE a
+ * LIST PHASE -- materialize the COMPLETE nx-cache-* release + asset set BEFORE a
  * single deletion. This deliberately INVERTS the Phase 3 reader's swallow-every-fault-
  * into-a-MISS discipline (releases-backend.ts:53-57): on the cleanup path a swallowed
  * list fault reads as authoritative absence and would delete live data, so ANY throw
  * from listAllReleases/listAllAssets PROPAGATES and aborts the whole run with ZERO
  * deletions. `octokit.paginate` in the real adapter rejects on any page fault
  * (incomplete pagination == abort) -- the RETAIN-01/C9 guarantee. Cleanup enumerates
- * EVERY cache-mirror-* release (deliberately wider than the reader's window: an
+ * EVERY nx-cache-* release (deliberately wider than the reader's window: an
  * out-of-window shard must still be pruned, Pitfall 4), sharing only the maxAgeDays
  * cutoff with the reader.
  *
@@ -81,11 +82,23 @@ export async function cleanupMirror(
     const assets = await client.listAllAssets(release.id);
 
     for (const asset of assets) {
-      // Prune only the publisher's <hash>-<os> assets, mirroring the read/write
-      // side's isServerProducedKey discipline: a foreign asset dropped into a
-      // genuine shard is never deleted as ours. First statement in the loop so a
-      // foreign asset (even one with a malformed created_at) is skipped silently
-      // and `scanned` counts only genuine mirror assets considered.
+      // Prune only the publisher's own assets, in BOTH name families (RETAIN-04):
+      // the CURRENT `nx-cache-<hash>` shape and the LEGACY pre-CORR-02
+      // `<hash>-<os>` shape. The widening is purely ADDITIVE -- the legacy branch
+      // is the pre-rename filter preserved verbatim, so every name that was
+      // accepted before is still accepted, which is what keeps the 122 assets
+      // already published under the old shape prunable instead of turning them
+      // into permanent shard growth. It had to land in the SAME COMMIT as the
+      // rename: a publisher writing the new name against an unwidened filter
+      // silently stops pruning, with no error anywhere.
+      //
+      // Unchanged and still in force: this mirrors the read/write side's
+      // isServerProducedKey discipline, so a foreign asset dropped into a genuine
+      // shard is never deleted as ours -- neither branch admits an unrecognised
+      // shape, and there is deliberately no third branch for the PoC-era
+      // `<hash>.tar.gz` family (D-08). First statement in the loop so a foreign
+      // asset (even one with a malformed created_at) is skipped silently and
+      // `scanned` counts only genuine mirror assets considered.
       if (!isServerProducedAssetName(asset.name)) {
         continue;
       }
@@ -130,9 +143,17 @@ export async function cleanupMirror(
         continue;
       }
 
+      // GitHub's OWN code and message ride alongside the status, through the same lib/ leaf
+      // the two publish sites read. A status-only line is strictly WEAKER than the code-only
+      // reader B2 already measured useless: a policy rejection (ruleset, immutability, org
+      // setting) arrives as `custom` with the entire diagnostic in `message`, and this site
+      // gets the same body a publish fault does. Only the asset name, the numeric status,
+      // that code and that message are logged -- never a token, never a raw workflow command.
+      const reason = faultReason(error);
+
       failed++;
       core.warning(
-        `github-cache cleanup: failed to delete ${asset.name} (status ${statusOf(error) ?? 'unknown'}); continuing.`,
+        `github-cache cleanup: failed to delete ${asset.name} (status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${reason.message ?? 'unknown'}); continuing.`,
       );
     }
   }

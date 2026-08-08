@@ -4,7 +4,10 @@ import {
   resolveRepoIdentity,
 } from '../lib/local-context.js';
 import type { Hash } from '../lib/cache-key.js';
-import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
+import {
+  CACHE_OS_VALUES,
+  releaseAssetName,
+} from '../lib/release-asset-name.js';
 import {
   createReleasesReadBackend,
   createReleasesReadClient,
@@ -28,14 +31,20 @@ const mockRepo = vi.mocked(resolveRepoIdentity);
 // temp-file race like actions-cache-backend.spec.ts guards against with a
 // per-spec unique hash.
 const INVARIANT_HASH = 'deadbeef' as Hash;
-const SENSITIVE_HASH = 'beefcafe' as Hash;
 
-// The OS discriminator this test process is NOT running under, so a "foreign OS"
-// seeded entry is genuinely foreign on every CI matrix leg (Windows, Linux,
-// macOS). cachePlatform(OTHER_PLATFORM) is always different from the running one,
-// so releaseAssetName(hash) (running platform) never collides with the seed.
-const OTHER_PLATFORM: NodeJS.Platform =
-  cachePlatform(process.platform) === 'windows' ? 'linux' : 'win32';
+// DELETED BY CORR-02, with its `eslint-disable-next-lin[e] no-restricted-syntax`
+// directive and its `CORR_05_SITES` row, all three in the one commit those rules
+// force together. The single-character character class in that token is LOAD-BEARING,
+// the same contortion docs-same-os-claims.spec.ts uses and for the same reason: CORR-05
+// is verified by enumerating surviving directives with `rg`, and spelling the token in
+// prose that RECORDS a deletion would return a hit indistinguishable from a live
+// violation. Do not tidy the bracket out.
+// `OTHER_PLATFORM` was DEFINED as the OS this process is not running
+// under, so that a seeded entry could be made genuinely foreign on every matrix leg.
+// Once the asset name carries no OS there is no foreign-OS name to construct: "here"
+// and "there" are the same string, so the concept has no referent and the constant
+// could not be re-pointed at anything meaningful. `SENSITIVE_HASH` left with it --
+// its only consumer was the cross-OS MISS case below.
 
 interface RecordingClient extends ReleaseReadClient {
   readonly requested: readonly string[];
@@ -67,7 +76,7 @@ const throwingClient: ReleaseReadClient = {
 
 // Pin the clock so the reader's shardTagsForWindow(resolveMaxAgeDays(env)) walk is
 // calendar-date-independent: 2026-07-15 mid-month + the default 30-day knob yields a
-// deterministic TWO-shard window ['cache-mirror-202607', 'cache-mirror-202606'] on every
+// deterministic TWO-shard window ['nx-cache-202607', 'nx-cache-202606'] on every
 // run, regardless of the real date. The reader reads new Date() internally, so faking the
 // system clock is the only way to fix the window without changing the reader's signature.
 const PINNED_NOW = new Date('2026-07-15T00:00:00Z');
@@ -82,40 +91,46 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('createReleasesReadBackend get cross-OS round-trip (CORR-01, TEST-05)', () => {
-  it('returns THIS platform bytes for an OS-invariant hash present under both platforms (CORR-01)', async () => {
-    const here = releaseAssetName(INVARIANT_HASH);
-    const there = releaseAssetName(INVARIANT_HASH, OTHER_PLATFORM);
+describe('createReleasesReadBackend get over the OS-invariant asset name (CORR-02, TEST-05)', () => {
+  it('returns the bytes stored under the single OS-invariant name, whichever leg wrote them (CORR-02)', async () => {
+    // RE-AUTHORED by CORR-02, not edited, and the re-authoring IS the requirement's
+    // payoff. Its predecessor seeded TWO names for one hash -- this platform's and
+    // another platform's -- and asserted the reader picked its own. With one name per
+    // hash there is no second name to pick between: the publishing leg's OS is
+    // unrepresentable in the name, so whichever leg mirrored these bytes, THIS is the
+    // name they sit under and this read HITs where it would previously have MISSED.
+    const name = releaseAssetName(INVARIANT_HASH);
     const backend = createReleasesReadBackend(
-      recordingClient(
-        new Map([
-          [here, Buffer.from('here-bytes')],
-          [there, Buffer.from('there-bytes')],
-        ]),
-      ),
+      recordingClient(new Map([[name, Buffer.from('mirrored-bytes')]])),
     );
 
     const result = await backend.get(INVARIANT_HASH);
 
-    expect(result).toEqual({ kind: 'hit', bytes: Buffer.from('here-bytes') });
+    expect(result).toEqual({
+      kind: 'hit',
+      bytes: Buffer.from('mirrored-bytes'),
+    });
   });
 
-  it('MISSES an OS-sensitive hash present ONLY under another platform -- never a wrong-OS artifact (CORR-01)', async () => {
-    // Non-vacuous: a positive-only correct-hit assertion above still passes with
-    // OS-namespacing deleted entirely (releaseAssetName ignoring its platform).
-    // THIS negative case is the one that actually proves CORR-01 -- it goes red the
-    // moment the reader would serve a foreign-OS artifact as a valid hit. The repo
-    // has already shipped one tautological guard (select-backend.spec.ts:196-198);
-    // that failure mode must not recur here.
-    const there = releaseAssetName(SENSITIVE_HASH, OTHER_PLATFORM);
-    const backend = createReleasesReadBackend(
-      recordingClient(new Map([[there, Buffer.from('there-bytes')]])),
-    );
-
-    const result = await backend.get(SENSITIVE_HASH);
-
-    expect(result).toEqual({ kind: 'miss' });
-  });
+  // DELETED BY CORR-02 -- the trade recorded here rather than left to be inferred
+  // from a diff.
+  //
+  // WHAT WAS REMOVED: `MISSES an OS-sensitive hash present ONLY under another
+  // platform -- never a wrong-OS artifact (CORR-01)`. It seeded a hash under the
+  // other platform's asset name only, and asserted the reader MISSED rather than
+  // serving a foreign-OS artifact as a valid hit. It was CORR-01's documented
+  // non-vacuity proof: the positive HIT case above passes even with OS-namespacing
+  // deleted entirely, so this negative was the assertion that actually bit.
+  //
+  // WHY IT BECAME INCOHERENT: CORR-02 destroys it ON PURPOSE. With no platform in the
+  // name, "the name another platform would have written" IS this name, so the case
+  // would seed the very asset it then asserts is absent. It is not weakened by the
+  // rename, it is unstateable -- which is why re-pointing it was never an option.
+  //
+  // WHERE THE REPLACEMENT LIVES: the `name derivation (TEST-05)` describe below, whose
+  // third clause asserts the requested name carries NO member of CACHE_OS_VALUES.
+  // Plan 10-06 authored it one commit BEFORE this deletion, deliberately, so the
+  // invariant is never left with zero guards.
 });
 
 describe('createReleasesReadBackend name derivation (TEST-05)', () => {
@@ -131,6 +146,24 @@ describe('createReleasesReadBackend name derivation (TEST-05)', () => {
     await backend.get('abc123' as Hash);
 
     expect(client.requested).toEqual([releaseAssetName('abc123' as Hash)]);
+
+    // D-18, and it is the NAMED REPLACEMENT for the cross-OS MISS proof CORR-02
+    // destroys on purpose -- the `MISSES an OS-sensitive hash present ONLY under
+    // another platform` case above. That case is CORR-01's documented non-vacuity
+    // proof, and once the asset name carries no OS there is no wrong-OS asset left to
+    // miss, so the proof cannot survive the rename. What survives is this: the
+    // requested name carries NO platform token. Authored HERE, one commit BEFORE the
+    // proof it replaces is deleted, so the invariant is never left with zero guards
+    // and a reader sees the TRADE rather than inferring it from a later deletion.
+    //
+    // Checked against the WHOLE CACHE_OS_VALUES tuple -- never against "the OS this
+    // machine is not", which LINT-02 bans at this path and which samples at a rate of
+    // ZERO under the ubuntu-only `test` target. Deliberately NOT paired with a fourth
+    // "exactly one" guard: the array equality above already pins the length, and three
+    // guards for one invariant can share one blind spot (Phase 8's learning).
+    for (const os of CACHE_OS_VALUES) {
+      expect(client.requested[0]).not.toContain(os);
+    }
   });
 });
 
@@ -429,11 +462,11 @@ describe('createReleasesReadClient REST sequence (FOUND-02, D-03)', () => {
 describe('createReleasesReadClient retention window walk (D-08)', () => {
   it('walks to the prior shard when the newest shard 404s and resolves the HIT there', async () => {
     // Pinned now (2026-07-15) + the default 30-day knob => a two-shard window
-    // ['cache-mirror-202607', 'cache-mirror-202606'], newest first. The newest shard
+    // ['nx-cache-202607', 'nx-cache-202606'], newest first. The newest shard
     // 404s (nothing published this month yet), so the reader MUST try the prior shard
     // rather than concluding MISS after one lookup -- an asset written last month has to
     // survive the month boundary (D-08). Non-vacuous: asserts the SECOND lookup targets
-    // cache-mirror-202606, not merely that a HIT resolved.
+    // nx-cache-202606, not merely that a HIT resolved.
     mockToken.mockResolvedValue('ghs_faketoken');
     mockRepo.mockResolvedValue('op-nx/github-cache');
     const fetchSpy = vi
@@ -455,10 +488,10 @@ describe('createReleasesReadClient retention window walk (D-08)', () => {
 
     expect(bytes).toEqual(Buffer.from('walked-bytes'));
     expect(String(fetchSpy.mock.calls[0][0])).toContain(
-      'releases/tags/cache-mirror-202607',
+      'releases/tags/nx-cache-202607',
     );
     expect(String(fetchSpy.mock.calls[1][0])).toContain(
-      'releases/tags/cache-mirror-202606',
+      'releases/tags/nx-cache-202606',
     );
   });
 
@@ -477,7 +510,7 @@ describe('createReleasesReadClient retention window walk (D-08)', () => {
     expect(bytes).toBeUndefined();
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(String(fetchSpy.mock.calls[1][0])).toContain(
-      'releases/tags/cache-mirror-202606',
+      'releases/tags/nx-cache-202606',
     );
   });
 });

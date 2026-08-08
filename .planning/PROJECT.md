@@ -14,7 +14,7 @@ public and private** GitHub repositories - not only for dogfooding in this repo.
 **one backend per process, chosen by runtime context** (default: Actions-cache CI-RW only);
 an opt-in reader/cross-context store and its publish/cleanup are a separate, reader-specific
 step. Write-trust is an allowlist; the full CREEP control ledger is in
-`.planning/ARCHITECTURE-DECISION.md`. **v0.0.1 (the greenfield MVP rebuild) shipped
+`.planning/THREAT-MODEL.md`. **v0.0.1 (the greenfield MVP rebuild) shipped
 2026-07-22** — merged to `main` and tagged. The reader adapter is **LOCKED = GitHub Releases**
 (FOUND-01 spike, forward merits) and the Docker container form is **deferred to a later
 milestone** (FOUND-03); GHCR/OCI is the later-milestone revisit trigger (with cosign + Docker).
@@ -26,6 +26,30 @@ nothing extra to host.** A remote cache must never serve a wrong or poisoned art
 never let an untrusted trigger write - correctness and CREEP-safety come before every other
 feature. If everything else fails, reads must stay best-effort (a fault degrades to a MISS,
 never a broken build) and writes must stay gated.
+
+## Current Milestone: v0.0.2 OS-invariant cross-OS sharing
+
+**Goal:** A Windows developer reuses Linux CI's portable task artifacts, and Windows CI reuses
+them too, with the OS-sensitive target still provably separated. Proven by dogfooding this repo,
+then documented as a recipe consumers can copy.
+
+**Target outcomes** (the acceptance frame; every requirement serves one):
+
+- **O1** - local Windows dev gets cache HITs for `build`/`typecheck`/`test` produced by Linux CI
+- **O2** - local Windows dev gets cache HITs for `integration` produced by Windows CI
+- **O3** - Windows CI gets cache MISSes for `integration` produced by Linux CI
+- **O4** - Windows CI gets cache HITs for `build`/`typecheck`/`test` produced by Linux CI
+
+**Mandatory ordering:** O1 must be PROVEN before O4 is enabled. Windows CI today runs only
+`integration`, so any local Windows HIT on the other three targets is unambiguously Linux-produced.
+Enabling O4 makes Windows CI a second producer of those hashes and permanently destroys that clean
+attribution.
+
+**Key context:** the work splits across two independent layers - the Releases mirror (O1, O2) and
+the Actions cache (O3, O4) - which is what makes the ordering achievable. O1's dominant blocker is
+Nx task-hash parity, not the asset name: `build` currently hashes differently on ubuntu CI and
+Windows CI for the same commit. O3 already holds today via the declared platform discriminator on
+`integration`.
 
 ## Requirements
 
@@ -49,8 +73,27 @@ Shipped and verified in **v0.0.1 Greenfield MVP Rebuild** (all 7 phases verified
 
 ### Active
 
-_None — v0.0.1 shipped the full MVP requirement set. Run `/gsd:new-milestone` to define the
-next version (fresh REQUIREMENTS.md)._
+**v0.0.2 OS-invariant cross-OS sharing.** Full requirement set with REQ-IDs:
+`.planning/REQUIREMENTS.md`. Summary of the scope:
+
+- [ ] Releases mirror asset names carry no OS discriminator (CORR-02), superseding CORR-01's
+      "OS-namespaced by default" branch in favour of the documented-consumer-discrimination
+      alternative that the CORR-01 row in `## Key Decisions` below already sanctions
+- [ ] OS-sensitive targets stay separated by their declared Nx input, proven behaviourally (CORR-03)
+- [x] Nx task-hash parity for `build`/`typecheck`/`test` across Windows and Linux, root-caused
+      before it is fixed (PARITY-01..05) -- Phase 8, complete 2026-07-28
+- [x] The `@actions/cache` archive path becomes a deliberate OS-invariant constant instead of an
+      inherited `os.tmpdir()` value, with `enableCrossOsArchive` hardcoded (VER-01..07, plus
+      PARITY-08, ROBUST-04, OBS-04, DOCS-08) -- Phase 9, complete 2026-07-28. Closed
+      BEHAVIOURALLY: a `windows-11-arm` runner read back a Linux-produced entry and asserted the
+      bytes were `'linux'`-produced (run `30400231720`). The cache version is now OS-invariant, so
+      the publisher-equals-producer identity no longer holds -- Phase 10's OBS-05 owns the
+      consequences, and the pre-change producer attribution is preserved in
+      `phases/09-*/09-EVIDENCE.md`
+- [x] ESLint adopted, with the ambient-platform-read ban enforced in unit specs and allowed in
+      integration specs (LINT-01..06, CORR-06) -- Phase 7, complete 2026-07-27
+- [ ] Live cross-OS proofs for O1-O4 in the mandated order (XOS-01..07, TEST-08..10, OBS-02..05)
+- [ ] Consumer-facing cross-OS adoption recipe, drift-guarded (DOCS-07/08)
 
 Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per the FOUND-01 ledger):
 
@@ -95,6 +138,7 @@ Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per
 ## Constraints
 
 - **Tech stack**: TypeScript (strict, ESM, `module: nodenext`), Node 24 LTS, Nx 23, Vitest - relative imports carry `.js`; the two GitHub JS actions must be dependency-free CommonJS (they run before `npm ci`).
+- **Nx contract**: the self-hosted-cache HTTP contract is an OpenAPI 3.0.0 spec embedded in the Nx docs source with no standalone artifact, and the Nx 21+ floor is HARD - the Nx client (`HttpRemoteCache`) matches PUT success strictly as `200`, so a `202`-returning server breaks it - which is why the conformance fixture pins a named Nx version and hashes the full vendored spec rather than watching `info.version`; the endpoint/status table, the `202`->`200` drift and the reason `info.version` cannot detect it live in `.planning/research/STACK.md` section 1.
 - **Platform**: GitHub-native only - candidate storage primitives under verification (Actions cache, Release assets, ghcr.io/OCI, GitHub Packages, git-native), via `@actions/cache`, `@octokit/rest`, the `gh` CLI, and/or git; no hosted deployment; runs as a loopback sidecar.
 - **Auth / repo scope**: local environments are assumed authenticated to GitHub; the design MUST work for private repositories and MUST NOT depend on anonymous/public access. Anonymous read is an optional OSS-only convenience.
 - **Security**: writes gated to trusted trigger events; server binds `127.0.0.1` only; GitHub's server-side read-only cache token (since 2026-06-26) is the load-bearing CREEP control, the in-code gate is defense-in-depth (env is fork-spoofable).
@@ -105,16 +149,22 @@ Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| **One backend per process, context-selected** (`selectBackend`); default = Actions-cache CI-RW only; opt-in reader store + its publish/cleanup are a separate reader-specific step | Matches the ecosystem norm; minimal default, pay-as-you-compose; the publisher/cleanup subsystem is reader-specific (not port-isolated) | [OK] Decided (see ARCHITECTURE-DECISION.md) |
+| **One backend per process, context-selected** (`selectBackend`); default = Actions-cache CI-RW only; opt-in reader store + its publish/cleanup are a separate reader-specific step | Matches the ecosystem norm; minimal default, pay-as-you-compose; the publisher/cleanup subsystem is reader-specific (not port-isolated) | [OK] Decided - the project-level CREEP control ledger C1-C18 backing this and every other trust decision is `.planning/THREAT-MODEL.md`; re-read and reconcile it at each milestone Key Decisions audit (updated 2026-07-26) |
 | Reader / cross-context adapter: **GitHub Releases** (v0.0.1) | Forward merits (FOUND-01 spike): fewer incident/operational hazards + no public poison-remediation gap (vs GHCR's >5000 wall, child-manifest, delete-cred, visibility); reversible/additive. GHCR = later-milestone trigger with cosign + Docker | [OK] LOCKED (FOUND-01) |
 | **Write-trust = allowlist-only** (default-deny; no denylist); `pull_request`/`release` on **only where GitHub's untrusted-default-branch cache guard exists — host-detected from `GITHUB_SERVER_URL`** (`github.com`/`*.ghe.com` → ON; all GHES → OFF, fail-closed; no caller flag) | In-code gate is fork-spoofable defense-in-depth; the host-based check is a pure env-var function; no GA GHES has the guard yet (floor unpublished) | [OK] Decided |
 | **Sync gate = a separate predicate = `{push, schedule}` only**, test-locked to reject all other events + non-default refs | Syncing a PR- or dispatch-influenced entry into a shared store recreates the CREEP precondition | [OK] Decided (load-bearing) |
 | **Shipped installable PPE-hygiene gate** (best-effort/advisory) + default-branch-protection prerequisite | Heuristic linters can't catch novel evasions, so the load-bearing containment is the `{push,schedule}` sync gate + branch protection; the gate is defense-in-depth | [OK] Decided |
 | **No content signing as a CREEP control**; digest-pin iff GHCR | CVE-2025-36852: poison precedes hashing, so signing is ineffective; CREEP is defended at the write/sync gates | [OK] Decided |
 | Retention: native Actions LRU (CI tier) + age-only (RO tier); **no LRU manifest** | A manifest adds mutable retention state (security-negative); GHCR exposes no last-accessed signal | [OK] Decided |
-| **OS-namespace the store by default** (or documented consumer OS-discrimination) | Cross-OS cache hit must never serve a wrong-OS artifact (Core Value: never a wrong result) | [OK] Decided |
+| **OS-namespace the store by default** (or documented consumer OS-discrimination) | Cross-OS cache hit must never serve a wrong-OS artifact (Core Value: never a wrong result) | [WARN] SUPERSEDED in v0.0.2 - switched to the second branch (see below) |
 | Runtime-context backend selection instead of a mode flag | No caller can misconfigure read-write vs read-only | [OK] Good |
 | Publish/cleanup I/O uses Octokit (`error.status`) from the start, never `gh` stderr text-matching | `gh` gives no structured errors for already-exists/404 and is version-fragile; Octokit discriminates structurally | [OK] Decided (greenfield - no gh-CLI to migrate from) |
+| **v0.0.2: take CORR-01's SECOND branch** - the store is OS-INVARIANT and OS discrimination lives only in the consumer's declared Nx input | The CORR-01 row above sanctions both branches ("or documented consumer OS-discrimination"); the first cost a Windows dev every cross-OS hit. Ecosystem norm is trust-the-hash (`nx-remotecache-custom` keys on `hash + ".tar.gz"`, no OS component) | [OK] Decided (v0.0.2) |
+| **v0.0.2: the `@actions/cache` archive path becomes a deliberate OS-invariant constant**, not an inherited `os.tmpdir()` value | `tmpdir()` in the version-hashed path was ACCIDENTAL correctness - it also silently over-partitions on any runner with a different `TMPDIR`, username, or container, costing hits invisibly. Upstream docs forbid absolute paths cross-OS | [OK] Decided (v0.0.2) |
+| **v0.0.2: no OS-separation knob** | YAGNI - this repo is the only consumer, and the knob is additive if that changes. NOTE: TRUST-05 does NOT forbid it; TRUST-05 is scoped to RW-vs-RO only, and an earlier draft mis-cited it | [OK] Decided (v0.0.2) |
+| **v0.0.2: Releases asset name is `nx-cache-<hash>`** (prefix, single-sourced from `CACHE_KEY_PREFIX`) | Satisfies C16's "distinguishing namespace/prefix" literally; a suffix accept-list on a DELETE filter would grow per scheme revision | [OK] Decided (v0.0.2) |
+| **v0.0.2: cross-OS sharing rests on target platform-agnosticism, NEVER on publish-leg ordering** | An ordering-based argument (ubuntu-first wins the first-write-wins race) was proposed and REJECTED as brittle: it would rest a wrong-result guarantee on CI job scheduling - a third accidental-correctness dependency in a milestone whose premise is removing two | [OK] Decided (v0.0.2) |
+| **v0.0.2: the `test`-agnostic / `integration`-OS-specific split is enforced by lint**, not documentation | The strategy already existed (`ci.yml:336-337`) but three spec files silently violated it. This repo has no linter today, so ESLint 9 flat config is adopted as its own phase; intentional opt-outs require a described disable annotation and stale disables fail | [OK] Decided (v0.0.2) |
 
 ## Evolution
 
@@ -134,4 +184,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-22 after v0.0.1 milestone (Greenfield MVP Rebuild) complete. Shipped 7 phases / 33 plans: the Nx self-hosted-cache HTTP server (SRV-01..05), Actions-cache CI-RW backend + context-derived `selectBackend` (TRUST-05, ROBUST-04), authenticated GitHub Releases reader with OS-namespacing (FOUND-01/02, CORR-01), `{push,schedule}`-gated publish/cleanup + coupled retention + fail-loud observability (TRUST-02, RETAIN-01/03, ROBUST-01/02/05, OBS-01), host-detected trust-widening + server-produced-key filter + advisory PPE gate (TRUST-01/06/08), and npm package + `start-cache-server` JS action + docs/governance (DOCS-01..06, GOV-01..03). Merged via PR #3, tagged v0.0.1. Milestone audit passed (6/6 E2E flows wired, all threats closed). Later-milestone triggers: GHCR-01, PROV-01, FOUND-03 (Docker). See milestones/v0.0.1-* and ARCHITECTURE-DECISION.md.*
+*Last updated: 2026-07-29 after Phase 9 (OS-Invariant Actions-Cache Version) complete -- 8 plans, all 11 requirements closed, verification/security/validation all `passed`. v0.0.2 is 3 of 6 phases done (7, 8, 9); Phase 10 (OS-Invariant Releases Mirror) is next. Two live-CI items remain `human_needed` at the real merge: `publish-verify (windows-11-arm)` green with a `'linux'` producer line, and OBS-04's rotation signal is SPENT (sampled on run `30400231720`; a later merge shows all-HIT, so read `09-EVIDENCE.md`'s ADDENDUM, not the merge run). Prior update: 2026-07-26 at v0.0.2 milestone start - see the Current Milestone section and REQUIREMENTS.md. Prior update: 2026-07-22 after v0.0.1 milestone (Greenfield MVP Rebuild) complete. Shipped 7 phases / 33 plans: the Nx self-hosted-cache HTTP server (SRV-01..05), Actions-cache CI-RW backend + context-derived `selectBackend` (TRUST-05, ROBUST-04), authenticated GitHub Releases reader with OS-namespacing (FOUND-01/02, CORR-01), `{push,schedule}`-gated publish/cleanup + coupled retention + fail-loud observability (TRUST-02, RETAIN-01/03, ROBUST-01/02/05, OBS-01), host-detected trust-widening + server-produced-key filter + advisory PPE gate (TRUST-01/06/08), and npm package + `start-cache-server` JS action + docs/governance (DOCS-01..06, GOV-01..03). Merged via PR #3, tagged v0.0.1. Milestone audit passed (6/6 E2E flows wired, all threats closed). Later-milestone triggers: GHCR-01, PROV-01, FOUND-03 (Docker). See milestones/v0.0.1-* and THREAT-MODEL.md.*

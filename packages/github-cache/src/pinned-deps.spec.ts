@@ -19,6 +19,25 @@ describe('pinned toolkit dependencies (ROBUST-03)', () => {
 
   const EXACT_SEMVER = /^\d+\.\d+\.\d+$/;
 
+  // BUMP NOTE (VER-05). On ANY @actions/cache bump, re-read `getCompressionMethod`
+  // and `getVersion` at `lib/internal/cacheUtils.js:100-136` before accepting the new
+  // version. `src/lib/compression-method.ts` DUPLICATES that branch, because the
+  // function is not on the package's exported surface and the value it derives is a
+  // cache-version component pushed unconditionally at `cacheUtils.js:162-163`. A
+  // change to upstream's branch OR to its argv (`zstd --quiet --version`) makes this
+  // repo's REPORTED value diverge from the version the library actually computes --
+  // and a probe that reports `gzip` where the library computed `zstd` sends the next
+  // reader debugging a cross-OS MISS to the wrong component. The duplicate's doc block
+  // pins 6.2.0 by name; update it in the same commit as the specifier.
+  //
+  // Recorded correction, not a silent relocation: VER-05 and D-13 both direct this
+  // note to "the @actions/cache bump checklist", and NO SUCH CHECKLIST EXISTS -- zero
+  // hits for `checklist` across docs/, packages/, README.md and CONTRIBUTING.md. This
+  // file was chosen instead because it already names the same silent-MISS mechanism
+  // (see the describe block above) and it is the one file a bumper cannot avoid
+  // editing, since it asserts the exact specifier. Creating a new docs/ document for
+  // one line would be a document nobody reads at the moment it matters. The
+  // requirement's dangling reference is recorded here rather than treated as satisfied.
   it('@actions/cache is pinned to an exact version, never a range (ROBUST-03)', () => {
     const specifier = manifest.dependencies?.['@actions/cache'];
 
@@ -81,6 +100,74 @@ describe('pinned build tooling (ROBUST-03)', () => {
 
   it('esbuild is pinned to an exact version in the workspace devDependencies, never a range (ROBUST-03)', () => {
     const specifier = workspaceManifest.devDependencies?.['esbuild'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  // The five ESLint packages (D-02) join the ROBUST-03 class, and the precedent is
+  // genuinely ambiguous enough that the REASONING has to be recorded, not just the
+  // outcome. `lint` is a build GATE: a silent minor bump can change which findings a
+  // recommended set produces, so a range operator could turn the ambient-platform ban
+  // (LINT-02/CORR-06) from enforced into merely configured with no diff to review --
+  // the same argument that put esbuild in this list. prettier is deliberately OUT of
+  // the class: it is formatting-only, `nx format:check` asserts an outcome rather than
+  // a rule set, and a bump there cannot silence a gate. All five were verdict OK in the
+  // 07-RESEARCH Package Legitimacy Audit (official eslint / typescript-eslint /
+  // eslint-community / nrwl orgs) and re-confirmed at install time to carry no install
+  // script. Each name is listed EXPLICITLY rather than looped over
+  // Object.keys(devDependencies): this guard is a hard-coded NAME list, because the
+  // workspace deliberately carries ranges for typescript, vitest, prettier and
+  // @types/node (D-04). This spec fails the build the moment any of the five widens.
+  it('eslint is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier = workspaceManifest.devDependencies?.['eslint'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('@eslint/js is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier = workspaceManifest.devDependencies?.['@eslint/js'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('typescript-eslint is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier = workspaceManifest.devDependencies?.['typescript-eslint'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('@eslint-community/eslint-plugin-eslint-comments is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier =
+      workspaceManifest.devDependencies?.[
+        '@eslint-community/eslint-plugin-eslint-comments'
+      ];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  it('@nx/eslint is pinned to an exact version in the workspace devDependencies, never a range (LINT-01)', () => {
+    const specifier = workspaceManifest.devDependencies?.['@nx/eslint'];
+
+    expect(specifier).toMatch(EXACT_SEMVER);
+  });
+
+  // `nx` joins the class for a reason the five above do not share, and it was
+  // named as MISSING rather than assumed present: `08-01-PLAN.md`'s T-08-03
+  // accepted the risk of `capture-hashes.mjs` importing six `nx/src/*` internal
+  // subpaths -- paths with NO semver guarantee -- on the stated basis that "`nx`
+  // is exact-pinned at 23.1.0 and `pinned-deps.spec.ts` fails the build if a
+  // specifier widens". The first half was true; the second half was not, because
+  // this list asserted ten names and `nx` was not one of them. An accepted risk
+  // resting on a guard that does not exist is the weakest kind of accepted risk.
+  //
+  // `nx-target-inputs.spec.ts` imports the same internal subpaths, so a widened
+  // range that resolved a new minor could break BOTH the instrument and this
+  // suite at import time -- loudly, which is the desired failure mode, but only
+  // once someone regenerates `package-lock.json`. Until then the lockfile pins
+  // the resolved version and `npm ci` honours it, which is why the plan's
+  // overstatement was low severity rather than a live hole. This closes it.
+  it('nx is pinned to an exact version in the workspace devDependencies, never a range (T-08-03)', () => {
+    const specifier = workspaceManifest.devDependencies?.['nx'];
 
     expect(specifier).toMatch(EXACT_SEMVER);
   });

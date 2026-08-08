@@ -5,9 +5,10 @@
 **Confidence:** HIGH for the trigger/token/permission model (section 1) and testability seams (section 4); MEDIUM for recency/LRU retention (section 2, hinges on `download_count` semantics); HIGH-on-conclusion / MEDIUM-on-specifics for storage-primitive choice (section 3).
 
 > This research informs building the cache from scratch on the LOCKED foundation
-> (`.planning/ARCHITECTURE-DECISION.md`): one `CacheBackend` read port, a context-derived
+> (`.planning/PROJECT.md` `## Key Decisions`, with the CREEP controls in
+> `.planning/THREAT-MODEL.md`): one `CacheBackend` read port, a context-derived
 > `selectBackend`, a conservative write-trust gate, a separate `{push, schedule}` sync gate,
-> and reader = GitHub Releases (FOUND-01). It does NOT re-derive the ADR. It answers how the
+> and reader = GitHub Releases (FOUND-01). It does NOT re-derive them. It answers how the
 > domain capabilities are built against that architecture, validated against GitHub's 2026-06-26
 > cache-token model and comparable systems. Phase structure lives in `.planning/ROADMAP.md`.
 
@@ -154,7 +155,7 @@ a possible later-milestone spike gated on the `download_count` signal proving re
 
 ### Decision: reader = GitHub Releases is LOCKED
 
-FOUND-01 is resolved: the cross-context reader is **GitHub Releases** (`.planning/ARCHITECTURE-DECISION.md` Decision 3; FOUND-01 spike `.planning/spikes/001-005`). The two-backend split maps cleanly onto the two access patterns - CI needs authenticated RW with native eviction (Actions cache); local needs an anonymous keyed read path (Releases). The GHCR/OCI registry was the one serious alternative and was validated in the spike; it is deferred to the **later-milestone GHCR revisit trigger (GHCR-01)**, to be re-evaluated only when the Docker container form and cosign provenance (PROV-01) graduate together. Do not build a runtime store-selection framework; build the one locked reader.
+FOUND-01 is resolved: the cross-context reader is **GitHub Releases** (`.planning/PROJECT.md` `## Key Decisions` - the locked reader / cross-context adapter row; FOUND-01 spike `.planning/spikes/001-005`). The two-backend split maps cleanly onto the two access patterns - CI needs authenticated RW with native eviction (Actions cache); local needs an anonymous keyed read path (Releases). The GHCR/OCI registry was the one serious alternative and was validated in the spike; it is deferred to the **later-milestone GHCR revisit trigger (GHCR-01)**, to be re-evaluated only when the Docker container form and cosign provenance (PROV-01) graduate together. Do not build a runtime store-selection framework; build the one locked reader.
 
 ### How the read port isolates a future store change
 
@@ -236,7 +237,7 @@ PPE gate, distribution + docs + governance). This research feeds those phases; i
 - Nx enterprise security ("writes only from trusted CI branches", CREEP framing, PR artifacts isolated): <https://nx.dev/enterprise/security> - HIGH (corroborates the scope-isolation design; note it is Nx-Cloud marketing framing).
 - Nx `@nx/azure-cache` plugin overview (comparable adapter shape: single storage backend behind the Nx contract, `localMode`/`ciMode`, OIDC): <https://21.nx.dev/docs/reference/remote-cache-plugins/azure-cache/overview> - HIGH.
 - CVE-2025-36852 CREEP background: <https://nx.dev/blog/cve-2025-36852-critical-cache-poisoning-vulnerability-creep> - referenced (already in project context).
-- Locked foundation (grounding, not re-derived): `.planning/ARCHITECTURE-DECISION.md` (control ledger C1-C18), `.planning/REQUIREMENTS.md`, FOUND-01 reader spike `.planning/spikes/001-005`.
+- Locked foundation (grounding, not re-derived): `.planning/THREAT-MODEL.md` (control ledger C1-C18), `.planning/REQUIREMENTS.md`, FOUND-01 reader spike `.planning/spikes/001-005`.
 
 ---
 *Architecture research for: self-hosted Nx remote cache on GitHub-native primitives*

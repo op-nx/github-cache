@@ -5,7 +5,16 @@ import { isEntrypoint } from '../lib/is-entrypoint.js';
 import { isSyncTrusted } from '../lib/sync-gate.js';
 import { createResilientOctokit } from '../lib/resilient-octokit.js';
 import { dogfoodBody } from '../lib/dogfood-body.js';
+import { mirrorSeedHash } from '../lib/mirror-seed.js';
+import { cachePlatform } from '../lib/release-asset-name.js';
 import { writeCountSummary } from '../lib/summary.js';
+// The ONLY import site of compression-method.js in the repo, and it must stay that
+// way (D-17). The committed sidecar bundle has a single entry,
+// start-cache-server/entry.ts, which does not reach this module -- so importing the
+// probe from runPublish keeps a child-process spawn out of the bundle every consumer
+// resolves via `uses:`, and out of ROBUST-04's rebuild obligation. `npm run
+// check:action` returning an EMPTY diff is what proves it stayed out.
+import { resolveCompressionMethod } from '../lib/compression-method.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
@@ -37,6 +46,38 @@ export function createPublishClient(
     async listCacheEntries() {
       // getActionsCacheList needs the job's actions:read scope (Pitfall 3). Scope to
       // this ref (refs/heads/<default-branch>) so only default-branch entries mirror.
+      //
+      // THAT `ref` IS THE SOLE IN-REPO CONTROL for the property it carries, and it did
+      // not used to be. What it governs: only default-branch Actions-cache entries are
+      // ENUMERATED, and the engine mirrors nothing it was not handed -- so only
+      // default-branch entries can reach the anonymously-readable Release.
+      //
+      // Why nothing else carries it. Two facts, both readable in this tree:
+      //  1. `TRUSTED_EVENTS` (lib/trust.ts) admits `push` with NO ref check, so a push
+      //     to ANY branch is write-trusted and its entries really are in the Actions
+      //     cache, waiting to be enumerated. The sync gate does NOT cover this: it
+      //     decides whether THIS RUN may publish at all (`isSyncTrusted` requires the
+      //     run's own ref to be the default branch, runPublish's first statement), which
+      //     is a different question from WHICH ENTRIES a legitimately-running
+      //     default-branch publisher may see. Only the argument below answers that one.
+      //  2. Until Phase 9 the `@actions/cache` version differed per OS, so a leg could
+      //     restore only a fraction of what it enumerated. That barrier was never
+      //     ref-based -- it narrowed the reachable set incidentally -- and VER-01/VER-03
+      //     removed it. A single leg can now restore everything handed to it, so the
+      //     enumeration is the only place the set is still narrowed.
+      // The C-numbered control ledger is at .planning/THREAT-MODEL.md (C1, C2, C16);
+      // it is cited, not restated.
+      //
+      // FAILURE MODE OF LOSING IT: a non-default-branch trusted write becomes reachable
+      // from a world-readable Release asset. That is an INFORMATION-DISCLOSURE change,
+      // not a cache MISS -- nothing goes red, no restore fails, and the mirror keeps
+      // reporting success while publishing bytes it should never have seen.
+      //
+      // PINNED BY SPEC, in action/index.spec.ts's
+      // `createPublishClient.listCacheEntries ref scoping (TRUST-10)` describe: a
+      // whole-argument-array deep equality driven with two distinct constructor refs,
+      // plus a SEPARATE call-count pin so a second unscoped enumeration cannot be added
+      // silently. Deleting this comment does not delete the guard.
       const caches = await octokit.paginate(
         octokit.rest.actions.getActionsCacheList,
         { owner, repo, ref, per_page: 100 },
@@ -78,15 +119,25 @@ export function createPublishClient(
       return assets.map((asset) => asset.name);
     },
 
-    async uploadReleaseAsset(releaseId, name, bytes) {
+    async uploadReleaseAsset(releaseId, name, bytes, label) {
       // Explicit content-length: uploads.github.com mishandles a missing/streamed
       // length on large assets (Pitfall 5). The Buffer is passed as data as-is
       // (Octokit accepts it); the ~2 GiB pre-upload guard lives in the engine (D-12).
+      //
+      // `label` (OBS-03) is a SEPARATE optional query param on
+      // repos/upload-release-asset -- read from the installed Octokit types, not from
+      // prose: the route is `...assets{?name,label}` and the schema declares
+      // `query: { name: string; label?: string }`. Two consequences worth keeping,
+      // because they are what make stamping it safe: it can influence neither the asset
+      // filename nor the download URL (both are their own fields), and the 422
+      // already-exists response is documented as keyed on FILENAME -- so a label can
+      // never alter the first-write-wins arbitration the mirror depends on (D-05).
       await octokit.rest.repos.uploadReleaseAsset({
         owner,
         repo,
         release_id: releaseId,
         name,
+        label,
         data: bytes as unknown as string,
         headers: {
           'content-type': 'application/octet-stream',
@@ -166,6 +217,40 @@ export async function runPublish(): Promise<void> {
     ['restore-MISS (of skipped)', result.readMisses],
     ['failed', result.failed],
   ]);
+
+  // VER-05: the compression method is a THIRD cache-version component, pushed into
+  // the version unconditionally by @actions/cache's getCacheVersion
+  // (cacheUtils.js:162-163) BEFORE and independent of the enableCrossOsArchive
+  // branch at :166 -- so the flag plan 09-03 hardcoded cannot rescue a mismatch on
+  // this axis. Reporting it is how a reader of a cross-OS MISS can tell which of the
+  // three components moved.
+  const compressionMethod = resolveCompressionMethod();
+
+  core.info(
+    `github-cache publish: @actions/cache resolved compression method ${compressionMethod}.`,
+  );
+
+  // Three things are load-bearing about the two lines below.
+  //
+  // 1. core.summary.write() APPENDS by default -- @actions/core/lib/summary.js:69-77
+  //    picks appendFile unless options.overwrite is truthy -- and write() empties the
+  //    buffer. So a SECOND write() after writeCountSummary's adds to the rendered
+  //    summary rather than clobbering the table. The leading newline is what puts a
+  //    blank line after the table's closing HTML so this line renders as markdown
+  //    instead of being absorbed into the HTML block.
+  // 2. writeCountSummary cannot carry this value. It takes [string, number] pairs and
+  //    renders a column headed `count`, and `zstd-without-long` under a `count`
+  //    header is wrong. summary.ts's own doc block already states the shared renderer
+  //    is not widened for one caller, and the writeCountSummary call above repeats it
+  //    -- cited rather than restated a third time.
+  // 3. SURFACED, NEVER GATED. No branch anywhere reads this value; it reaches the log
+  //    and the job summary and stops (T-09-31). If some future requirement wants to
+  //    gate on it, that is a new decision and not an extension of this one.
+  core.summary.addRaw(
+    `\ncompression method (@actions/cache): ${compressionMethod}`,
+    true,
+  );
+  await core.summary.write();
 }
 
 /**
@@ -221,8 +306,14 @@ export async function run(): Promise<void> {
 
   const authorization = `Bearer ${running.token}`;
   const url = `${running.url}/v1/cache/${hash}`;
-  const body = dogfoodBody(hash);
 
+  // The dogfoodBody call is deliberately NOT here. It lives INSIDE each branch below,
+  // one per leg, because the two legs pass DIFFERENT producer-OS arguments and those
+  // arguments must stay physically apart (C-01, T-09-37). Computing a conditional
+  // `producerOs` above the branch -- or hoisting a shared `body` back to this line --
+  // reintroduces the one-expression coupling that makes VER-06's vacuity trap
+  // reachable, and it hides the asymmetry at the point where it matters. Do not
+  // "simplify" the two calls back together.
   try {
     // `operation` selects ONLY which HTTP verb this dogfood drives. It has no
     // influence whatsoever on read-versus-write capability -- that is derived from
@@ -231,6 +322,12 @@ export async function run(): Promise<void> {
     // fails the job explicitly: a silent pass on a miss is precisely the failure mode
     // this dogfood exists to catch (T-2-20).
     if (operation === 'seed') {
+      // cachePlatform() -- an ambient read, legitimate here because this is a bin and
+      // LINT-02's ban on deriving an expectation from the running machine is scoped to
+      // spec files (eslint.config.mjs:263). The seed leg is the PRODUCER, so its own
+      // platform IS the correct provenance stamp.
+      const body = dogfoodBody(hash, cachePlatform());
+
       const put = await fetch(url, {
         method: 'PUT',
         headers: { authorization },
@@ -250,14 +347,92 @@ export async function run(): Promise<void> {
       return;
     }
 
+    if (operation === 'mirror-seed') {
+      // A THIRD SIBLING of the two branches around it, never a variant of `seed`:
+      // dogfood-seed/dogfood-verify REQUIRE one shared key per RUN, and seeding that
+      // key per OS is exactly the vacuity trap VER-06 closed (D-13). This operation
+      // seeds the OPPOSITE thing -- a key only THIS publish leg can produce (OBS-05).
+      //
+      // THE URL IS BUILT LOCALLY, AND THAT IS THE WHOLE GUARD. The `url` binding above
+      // these branches is composed from the RAW `hash` input, so reusing it here would
+      // PUT at nx-cache-<run_id> while read-back.ts looks under nx-cache-<derived
+      // seed>. The PUT would still return 200, so nothing would fail on this side and
+      // the break would surface only as a publish-verify MISS. Nothing is hoisted above
+      // the branches either -- see the no-hoist lock above, which exists for the same
+      // class of coupling. action/index.spec.ts asserts the requested PATH rather than a
+      // substring, because the derived seed CONTAINS the run id.
+      //
+      // cachePlatform() -- an ambient read, legitimate here for the same reason the
+      // seed branch's is: this is a bin, LINT-02's ban on deriving an expectation from
+      // the running machine is scoped to spec files, and THIS leg is the producer, so
+      // its own platform IS the correct provenance stamp. The local is inside the
+      // branch, which is what the lock above requires; it is the conditional-above-the-
+      // branch shape that is banned, not a branch-local binding.
+      //
+      // `operation` still selects only a verb and now a key derivation with it. It
+      // cannot influence read-versus-write capability -- that is derived from runtime
+      // context inside selectBackend and no action input may steer it (TRUST-05).
+      const producerOs = cachePlatform();
+      const seedHash = mirrorSeedHash(hash, producerOs);
+      const seedUrl = `${running.url}/v1/cache/${seedHash}`;
+      const body = dogfoodBody(seedHash, producerOs);
+
+      const put = await fetch(seedUrl, {
+        method: 'PUT',
+        headers: { authorization },
+        body,
+      });
+
+      if (put.status !== 200) {
+        core.setFailed(
+          `github-cache mirror-seed: expected PUT 200, got ${put.status}.`,
+        );
+
+        return;
+      }
+
+      core.info(
+        `github-cache mirror-seed: stored ${seedHash} for this ${producerOs} publish leg (PUT 200).`,
+      );
+
+      return;
+    }
+
     if (operation === 'verify') {
+      // THE LITERAL 'linux', and the VACUITY CONDITION it encodes (D-19, D-20, D-21).
+      //
+      // dogfood-seed is ubuntu-ONLY BY DESIGN, so the expected producer is Linux, and
+      // asserting that literal is what makes this job a PROVENANCE check rather than a
+      // presence check: on the windows-11-arm matrix leg, matching these bytes proves
+      // the restored body was produced on LINUX and crossed an OS boundary. On the
+      // ubuntu leg the same claim is trivially true, and the leg is kept anyway because
+      // it preserves the v0.0.1 same-OS round-trip close.
+      //
+      // IF A WINDOWS dogfood-seed LEG IS EVER ADDED, THIS LITERAL IS WHAT MUST CHANGE.
+      // Until it does, the assertion silently weakens to "the body came from whichever
+      // OS seeded it" -- which is what a presence-only check already gives for free,
+      // with cross-OS restore possibly completely dead. The seed key is
+      // nx-cache-<GITHUB_RUN_ID>: ONE key per RUN, not per OS. dogfood-cross-os.spec.ts
+      // asserts dogfood-seed declares no matrix so this cannot happen unnoticed.
+      //
+      // NO ACTION INPUT carries this value on purpose: an input would be a SECOND place
+      // for the two legs to disagree, and the seed leg's OS is a property of the
+      // workflow rather than of the run. Nothing about `operation` or any other input
+      // may steer read-versus-write capability either (TRUST-05).
+      const expectedProducerOs = 'linux';
+      const body = dogfoodBody(hash, expectedProducerOs);
+
       const get = await fetch(url, { headers: { authorization } });
 
       if (get.status === 404) {
         core.setFailed(
           `github-cache dogfood verify: cache MISS for ${hash} (GET 404). The round-trip ` +
             "did not reach GitHub's cache service -- suspect the cacheArchivePath archive-path " +
-            'derivation or a pinned @actions/cache upgrade that changed the archive version hash.',
+            'derivation or a pinned @actions/cache upgrade that changed the archive version hash. ' +
+            `This runner is ${cachePlatform()} and the seed leg is ${expectedProducerOs}: on a ` +
+            'NON-LINUX runner a MISS additionally suggests the archive VERSION still differs ' +
+            'across OSes -- the enableCrossOsArchive flag or the archive path literal -- rather ' +
+            'than cross-OS extraction itself failing. Those are different repairs.',
         );
 
         return;
@@ -274,23 +449,31 @@ export async function run(): Promise<void> {
       const received = Buffer.from(await get.arrayBuffer());
 
       if (!received.equals(body)) {
+        // Names the EXPECTED producer OS so a mismatch reads as a PROVENANCE failure
+        // rather than as generic corruption. The received buffer is deliberately NOT
+        // interpolated: it is restored cache content and this log is public. Phase 8's
+        // WR-01 lesson is that a log line used as a signal must be both escaped and
+        // anchored; naming our own expectation is sufficient here, so the restored
+        // bytes never reach the log at all (T-09-38).
         core.setFailed(
           'github-cache dogfood verify: cache HIT but the returned bytes did not match ' +
-            'the seeded payload -- the round-trip crossed the cache service but returned wrong data.',
+            `the payload seeded by a '${expectedProducerOs}' producer -- the round-trip crossed ` +
+            'the cache service but returned a body this leg cannot attribute to the seed job.',
         );
 
         return;
       }
 
       core.info(
-        `github-cache dogfood verify: cache HIT for ${hash} with matching bytes.`,
+        `github-cache dogfood verify: cache HIT for ${hash} on ${cachePlatform()} with bytes ` +
+          `matching a '${expectedProducerOs}'-produced payload.`,
       );
 
       return;
     }
 
     core.setFailed(
-      `github-cache dogfood: unknown operation '${operation}' (expected 'seed' or 'verify').`,
+      `github-cache dogfood: unknown operation '${operation}' (expected 'publish', 'seed', 'mirror-seed' or 'verify').`,
     );
   } finally {
     // Drain and close on EVERY path -- success and failure alike -- so the process

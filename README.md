@@ -13,7 +13,36 @@ already have.
 ## Quickstart (5 minutes)
 
 **Prerequisites:** an Nx workspace on Nx 21 or later (the self-hosted remote
-cache API) and a GitHub Actions workflow.
+cache API), a GitHub Actions workflow, and a job whose working directory is the
+workspace root -- the directory that holds `nx.json`.
+
+That last one is a hard precondition, checked at startup on the path that can
+write: when the sidecar resolves the Actions cache backend it refuses to start
+unless `nx.json` sits in the process working directory and that directory matches
+`GITHUB_WORKSPACE`. Both are startup checks rather than read faults, so they fail
+the step loudly instead of degrading to a MISS. **A pull request -- fork included
+-- reaches this check**: on `github.com` a `pull_request` run is write-trusted, so
+it resolves the Actions cache backend like any other. What makes a PR read-only in
+practice is GitHub's own cache scope isolation -- its writes land in the PR's merge
+ref, invisible to your default branch -- and that containment happens well after
+this startup check has already run. A local run is the only context that genuinely
+never constructs the backend. The reason the precondition matters is that the
+cache archive path is workspace-relative (see
+[Advanced usage](docs/advanced.md)), so a working directory anywhere else would
+have this action extract under one anchor and read under the other. The cache
+would then never serve anything again: `@actions/cache` reports a hit, the bytes
+are unreachable, the sidecar turns that into a 404, and every task rebuilds. It
+is a permanent silent all-MISS -- slow, never wrong -- and the startup check
+exists because nothing about it looks like a failure while it is happening.
+
+Two layouts trip it today, and neither is currently supported:
+
+- An Nx workspace in a subdirectory (`frontend/`, `web/`, most polyglot repos).
+- `actions/checkout` with a `path:` input, which leaves `GITHUB_WORKSPACE` as the
+  parent of the checkout.
+
+If you need either, open an issue rather than working around it with a `cd` --
+the archive anchor, not the check, is what would need to move.
 
 Add the sidecar as a background step in your existing build job. Because a
 background step cannot export environment variables to later steps, you set the
@@ -119,10 +148,17 @@ there is `pwsh`, which does not understand `$GITHUB_ENV` or `$(...)`.
   step reaches it.
 - **Read-write only where it is safe.** The backend is chosen from runtime
   context, never a caller flag: a trusted CI trigger with a resolvable token gets
-  the writable Actions-cache backend; everything else is read-only. See
+  the writable Actions-cache backend; everything else is read-only. A job that
+  reads the cache but should not populate it can decline the write for itself with
+  [`CACHE_READ_ONLY`](docs/configuration.md#cache_read_only) -- a one-way ratchet
+  that can only narrow what runtime context already allowed. See
   [Trust and security](docs/trust-and-security.md).
 - **Correct over clever.** Every read fault degrades to a cache MISS (a rebuild),
-  never a wrong result or a broken build.
+  never a wrong result or a broken build. That covers read **faults**, and it
+  assumes a cached task's outputs do not depend on which OS produced them: the
+  store does not partition by runner OS, so a task whose output genuinely differs
+  per OS must declare that difference as an Nx input. See
+  [Advanced usage](docs/advanced.md).
 - **`cancel:` is mandatory.** The server runs until torn down, so the `cancel:`
   step is required -- without it the job hangs at the implicit `wait-all` before
   post-job cleanup.
@@ -142,6 +178,8 @@ dogfood action and is not for consumer use.
   Actions-cache 10 GB per-repo limit, and the no-default-local-read note.
 - [Advanced usage](docs/advanced.md) -- the opt-in Releases read store, publish /
   sync, cleanup, the `&` fallback for older runners, and the JS-action rationale.
+- [Cross-OS caching](docs/cross-os.md) -- the safe default for sharing one cache
+  across operating systems, and the checklist that earns a per-target exception.
 - [Trust and security](docs/trust-and-security.md) -- which events may write, the
   CREEP posture, the github.com-only backstop, and adopter prerequisites.
 - [Versioning](docs/versioning.md) -- the versioned consumer contract and what

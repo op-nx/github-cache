@@ -6,7 +6,8 @@
 
 > Greenfield note: this pins the contract/versions the build must target and confirms the storage
 > primitives are the right ones to build on in 2026. The storage model is LOCKED
-> (`.planning/ARCHITECTURE-DECISION.md`): Actions cache = CI RW default; GitHub Releases = the
+> (`.planning/PROJECT.md` `## Key Decisions`, with the CREEP controls in
+> `.planning/THREAT-MODEL.md`): Actions cache = CI RW default; GitHub Releases = the
 > cross-context reader (FOUND-01). This file grounds those choices; it does not re-open them.
 
 ---

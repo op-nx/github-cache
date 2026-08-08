@@ -44,11 +44,55 @@ Thumbs.db
 # fallow dead-code analysis cache (self-ignored via .fallow/.gitignore too)
 .fallow/
 
+# capture-hashes.mjs measurement records, written at the workspace ROOT by the
+# hash-parity CI job and by a local `npm run capture:hashes` / `assert:graph-premise`.
+# Ignored so they never dirty the working tree the NEXT record measures: both modes
+# record `workingTreeClean`, which exists to reveal an uncommitted nx.json edit, and
+# an untracked sibling record would peg the field to false and destroy that signal.
+# The COMMITTED copies of these records live under .planning/, never here.
+/hash-parity-*.json
+/graph-premise-*.json
+
+# O3 probe records, written at the workspace ROOT by ci.yml's integration and
+# o3-witness steps and by a local `node read-integration-hash.mjs`. Ignored for the
+# same reason as the records above -- an untracked sibling would dirty the tree the
+# next `workingTreeClean` measurement reads -- and because integration-hash.txt's
+# contents become a cache key, so it must never be committed and mistaken for one.
+/integration-nx.log
+/integration-hash.txt
+/o3-witness.log
+
+# The remaining workspace-ROOT logs the CI jobs tee, for the SAME reason as the two
+# above and completing that set: `build-nx.log`, `typecheck-nx.log` and `test-nx.log`
+# (the three Windows reuse legs' runtime cache observation), `lint.log`,
+# `hash-parity.log` (the `^hash-parity: PARITY OK` grep target) and `detector.log`
+# (windows-regression-detector.yml). Only the two O3 logs were listed, which made the
+# rule look like an O3 special case rather than what it is: a `tee` at the workspace
+# root leaves an UNTRACKED file, and `capture-hashes.mjs` records `workingTreeClean`
+# from `git status --porcelain`, so any of these sitting beside a capture pegs that
+# field to false and destroys the signal it exists to carry. Latent today only because
+# no job both tees and captures in one checkout -- which is a scheduling accident, not
+# a guarantee, and the hash-parity job already tees `hash-parity.log`.
+/build-nx.log
+/typecheck-nx.log
+/test-nx.log
+/lint.log
+/hash-parity.log
+/detector.log
+
 # op-nx/github-cache act test harness (test-only, never a runtime dep)
 .act-cache
 .act-artifacts
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
+
+# GSD research-tool response cache (hash-named JSON, written by the `research-*`
+# query handlers). Generated, never authored, and worthless as history -- but it is
+# NOT merely noise: it lands untracked under `.planning/`, and `capture-hashes.mjs`
+# records `workingTreeClean` from `git status --porcelain`, so a research probe run
+# in the same checkout as a hash capture pegs that field to false and destroys the
+# signal, exactly as the workspace-root logs above would. Same rule, new writer.
+.planning/research/.cache/
 
 .claude/worktrees
 .claude/settings.local.json

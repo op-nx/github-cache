@@ -1,0 +1,108 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-08T00:00:00.000Z",
+  "phase": null,
+  "phase_name": "no active phase -- all 7 v0.0.2 phases complete, milestone audited",
+  "phase_dir": ".planning/quick/260808-lpt-fix-the-v0-0-2-milestone-audit-bookkeepi",
+  "context": "default",
+  "context_ambiguity": "Quick-task work, which the pause-work detector does not enumerate, so this handoff lands at the default path. ITEM 1 of the three-item operator plan is now COMPLETE and verified. Items 2 and 3 are queued and not started.",
+  "plan": 2,
+  "task": 1,
+  "total_tasks": 3,
+  "status": "item_1_complete",
+  "operator_plan": [
+    {
+      "item": 1,
+      "name": "Fix bookkeeping -- the v0.0.2 milestone audit's stale-artifact debt",
+      "status": "complete",
+      "detail": "Quick task 260808-lpt. Executed on the main tree as c3fe74d, d5841c2, fed70f4; gap fix 142ea72; STATE.md 7f2ba26. Verifier: 8/9, the one gap closed. Full record in the task's SUMMARY and VERIFICATION, and in STATE.md's Quick Tasks Completed row."
+    },
+    {
+      "item": 2,
+      "name": "Resolve the two genuine follow-ups",
+      "status": "not_started",
+      "detail": "(a) The temporary-main-window restore force-push fires a full production ci.yml run (both publish legs writing for real) because [skip ci] is structurally unavailable to a re-push of an existing commit; five stale refs/backups/* on origin suggest five prior undisclosed occurrences. (b) One unattributed test failure at 69bd1b7, not reproducible in 7 attempts, no output captured -- actionable only on a second occurrence WITH output. Operator directed: run via /gsd-core:quick --full with discuss-phase --auto semantics."
+    },
+    {
+      "item": 3,
+      "name": "Close the two open-by-design observations",
+      "status": "not_started",
+      "detail": "Phase 9's first post-merge publish-verify (windows-11-arm) leg, and Phase 10's OBS-01 summary + shard census. Both require a real push to main that RUNS the publish legs -- they are gated off pull_request events and were skipped on run 30947535877. Operator APPROVED a temporary main window (backup before, restore after) as the instrument, and PROHIBITED using a merge. Run via /gsd-core:quick --full with discuss-phase --auto semantics. MUST be done AFTER item 2, because item 2 fixes the defect in the very procedure item 3 uses."
+    }
+  ],
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Quick task 260804-lc3",
+      "status": "done",
+      "commit": "abb722d,c84ebd5",
+      "detail": "The ci.yml positive control's two false premises corrected at all eight sites. Verified 24/24, 0 gaps."
+    },
+    {
+      "id": 2,
+      "name": "Quick task 260808-lpt -- item 1, planned, hardened, executed, verified",
+      "status": "done",
+      "commit": "ccd8248,c3fe74d,d5841c2,fed70f4,142ea72,7f2ba26",
+      "detail": "Three plan-check iterations plus a full 66-aggregate re-derivation. Iteration 3 found two blockers in the REVISION itself. Executed on the main tree. Verifier 8/9; the one gap was this task's own defect class inside its own output -- a five-weeks interval asserted as measured that is one week -- corrected at five sites across four files."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 3,
+      "name": "Item 2 -- resolve the two genuine follow-ups",
+      "status": "not_started",
+      "detail": "Start here. The main-window restore force-push defect is the load-bearing half, because item 3 uses that exact procedure. The test-failure half is likely UNACTIONABLE until a second occurrence with captured output -- say so rather than manufacturing an investigation."
+    },
+    {
+      "id": 4,
+      "name": "Item 3 -- close the two open-by-design observations",
+      "status": "not_started",
+      "detail": "Only after item 2. Temporary main window, backup before and restore after. Never a merge."
+    }
+  ],
+  "blockers": [
+    {
+      "description": "NONE BLOCKING. Item 1 is closed and its findings are recorded in its own artifacts; do not re-litigate them.",
+      "type": "informational",
+      "workaround": "Not applicable."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "NONE blocking. The operator has delegated plan-check findings: fix them, re-run the checker, or rule that they do not block -- do not escalate them as questions.",
+      "context": "Escalate only what the recorded decisions do not cover: a merge, an outward-facing action in a repo the maintainer does not own, or a main-window instrument beyond the one already approved.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "NEVER merge v0.0.2, any other milestone, PR #16, or any other PR until the operator explicitly says so",
+      "rationale": "Stated once and restated twice after a narrower reading proved wrong. No condition satisfies this implicitly -- not a green CI run, not a passed verification, not a clean audit, not a MERGEABLE PR. Saved as the memory never-merge-milestone-without-explicit-approval.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Temporary pushes to main ARE approved as the instrument for anything a PR cannot verify, with backup-before and restore-after; pushing any branch and opening/closing any PR are also approved",
+      "rationale": "The counterpart to the merge prohibition, so a merge is never needed as a measurement device. It is what makes item 3 possible without merging.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Items 2 and 3 run via /gsd-core:quick --full with discuss-phase --auto semantics",
+      "rationale": "Single pass, auto-pick the recommended option per gray area, no human checkpoint. NOTE: --auto is NOT a flag quick parses (measured: quick.md parses only --full/--validate/--discuss/--research/--text), so passing it literally would land the string in the task DESCRIPTION and pollute the slug. Apply the semantics, not the flag. The documented exception still holds: a gray area that is BOTH high-impact and not-high-confidence goes into CONTEXT.md as an explicit UNRESOLVED with competing options, never auto-locked.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Item 2 before item 3, and this ordering is load-bearing rather than cosmetic",
+      "rationale": "Item 2 fixes the defect in the very procedure item 3 uses -- the main-window restore force-push fires the production publish legs. Fixing it first means item 3's window inherits a decided procedure instead of improvising against a known-defective one.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Plan-check findings are the agent's to resolve, not the operator's to arbitrate",
+      "rationale": "Operator directive 2026-08-08: fix them, re-run the checker, or rule that they do not block, then proceed to execution. Do not present findings as a question. Report outcomes and judgment calls, not line numbers or gate IDs -- the detail belongs in the artifact file.",
+      "phase": "260808-lpt"
+    }
+  ],
+  "uncommitted_files": [],
+  "next_action": "Start ITEM 2 via /gsd-core:quick --full with discuss-phase --auto semantics. Its load-bearing half is the temporary-main-window restore force-push firing a full production ci.yml run, both publish legs writing for real, because [skip ci] is structurally unavailable to a re-push of an existing commit. Five stale refs/backups/* on origin suggest five prior undisclosed occurrences. The second half -- one unattributed test failure at 69bd1b7, not reproducible in 7 attempts with no output captured -- is likely UNACTIONABLE until it recurs with output; say so plainly rather than manufacturing an investigation. Then ITEM 3, never before.",
+  "context_notes": "The through-line across every task this session: a claim that LOOKS like coverage and asserts nothing is caught only by an independent pass, never by its author -- and a FIX deserves the same scrutiny as the original. Item 1 produced six fresh instances. The sharpest is the last: the verifier's single gap was a five-week interval stated AS MEASURED in the plan, never measured, that then propagated into the summary twice and into STATE.md on the strength of the assertion. Five weeks after 2026-07-26 is a future date, so it was unreachable, not merely wrong. Then the sweep to correct it hit the same line-wrap dead-literal trap the task documents as an anti-pattern: the phrase search failed in the plan and succeeded in the other three files, so a three-of-four sweep would have read as complete. Carry forward the measured false-zero shapes, each of which reads as confident absence: a literal spanning a line wrap; rg -U with \\s+ cannot bridge a wrap whose continuation carries a '#' (use [\\s#]+); a SHAPE-anchored regex failing because a file records verdicts as headings rather than table rows. Always check the exit code (1 = genuine no-match, 2 = the command FAILED) and run a positive control on the same path. And git grep needs -e when the pattern starts with '-'. Two more from item 1 worth keeping: a plan's own verification step can be UNSATISFIABLE by construction (T1/T2 scope gates excluded STATE.md while T3 required it dirty -- no tree state satisfies all three), which is a finding to report rather than a gate to weaken; and a region gate that greps the wrong heading LEVEL is satisfied by unrelated prose, so it proves nothing while reading as coverage."
+}

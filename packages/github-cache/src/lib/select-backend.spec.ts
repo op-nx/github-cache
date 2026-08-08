@@ -1,12 +1,24 @@
+import { readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import * as cache from '@actions/cache';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as core from '@actions/core';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
 import { resolveLocalReadToken, resolveRepoIdentity } from './local-context.js';
 import type { Hash } from './cache-key.js';
 import { resolveGitHubToken } from './github-identity.js';
 import { releaseAssetName } from './release-asset-name.js';
 import { isWritableBackend } from '../backend/types.js';
+import { enterWorkspaceRootCwd } from '../test/workspace-root-cwd.js';
 import { selectBackend } from './select-backend.js';
 
 // @actions/cache only actually works inside a JS action on real CI, so the
@@ -14,6 +26,13 @@ import { selectBackend } from './select-backend.js';
 // it -- exactly as actions-cache-backend.spec.ts does. Auto-mock hoists above the
 // imports and replaces every export with a vi.fn().
 vi.mock('@actions/cache');
+
+// The narrowing's LOG LINE is asserted below, so the workflow-command stream has to be a mock
+// rather than the real one writing to this run's stdout -- the same auto-mock the seven other
+// specs that assert on annotations use (D-14: annotations only through @actions/core). It also
+// silences the put path's genuine `core.warning` on the write-trusted cases here, which were
+// printing real `::warning::` lines into the test output.
+vi.mock('@actions/core');
 
 // The local/untrusted branch now returns the REAL Releases reader (D-01), whose
 // default client resolves the developer's token and repo identity via local-context
@@ -25,12 +44,40 @@ vi.mock('./local-context.js');
 
 const saveCache = vi.mocked(cache.saveCache);
 
+// The READ side of the same auto-mock. TRUST-14's narrowing clause drives the
+// returned backend's get to tell the read-only ACTIONS backend apart from the
+// memory-degrade backend -- both are read-only, and only one touches @actions/cache.
+const restoreCache = vi.mocked(cache.restoreCache);
+
 // A hash UNIQUE to this spec: the writable-path cases drive the Actions backend's
 // put, which writes cacheArchivePath(HASH) to the shared tmpdir. Vitest runs spec
 // files in parallel workers that share the filesystem, so reusing another spec's
 // hash (e.g. actions-cache-backend.spec.ts's 'abc123') would race on the same
 // temp file. Keep this value distinct from every other spec's hash.
 const HASH = 'selectbackendfixture' as Hash;
+
+// VER-04's spec accommodation, the same three lines as actions-cache-backend.spec.ts and
+// serve.spec.ts. This file is CONFIRMED to need it, not "probably" (09-RESEARCH.md's
+// per-spec table hedges): it mocks @actions/cache but NOT the backend module, so its four
+// write-trusted call sites (:58, :64, :156, :170 -- five runtime invocations, the last an
+// it.each of two) reach the REAL createActionsCacheBackend() and hit VER-04's guard, whose
+// first conjunct is false under `nx test`.
+//
+// NOT the contradiction it looks like. This is also the file whose "never mutates
+// process.env" test below asserts process-global hygiene, and this repo has zero other
+// `process.chdir` in any spec. A chdir touches the cwd, NOT `process.env`, so the two do
+// not conflict and that assertion stays exactly as strong as it was. The reconciliation is
+// stated here because an ASYMMETRICAL hook in THIS file -- or a missing one -- would be the
+// most visible possible inconsistency in the package.
+let restoreCwd: () => void;
+
+beforeAll(() => {
+  restoreCwd = enterWorkspaceRootCwd();
+});
+
+afterAll(() => {
+  restoreCwd();
+});
 
 // A well-formed trusted CI context: Actions on, a trusted event, a valid
 // owner/name repo, and a resolvable token. Individual tests spread over this to
@@ -299,5 +346,317 @@ describe('TRUST-05: no caller-facing mode surface', () => {
     const backend = selectBackend(env);
 
     expect(isWritableBackend(backend)).toBe(false);
+  });
+});
+
+/**
+ * The three observable outcomes of a selectBackend call, folded into ONE value so the
+ * narrowing table can compare a knobbed run against an un-knobbed one uniformly. A
+ * throw is an OUTCOME here rather than a test failure: the fail-closed branch is one of
+ * the rows the proof has to cover, and "the knob does not rescue it" is a claim about
+ * that outcome, not an accident of the harness.
+ */
+type SelectOutcome = 'writable' | 'read-only' | 'throws';
+
+function outcomeOf(env: NodeJS.ProcessEnv): SelectOutcome {
+  try {
+    return isWritableBackend(selectBackend(env)) ? 'writable' : 'read-only';
+  } catch {
+    return 'throws';
+  }
+}
+
+/** The single forbidden transition: a non-writable outcome becoming writable. */
+function widened(withoutKnob: SelectOutcome, withKnob: SelectOutcome): boolean {
+  return withKnob === 'writable' && withoutKnob !== 'writable';
+}
+
+describe('TRUST-14: CACHE_READ_ONLY is a ROLE signal that can only narrow', () => {
+  // ROLE (producer vs consumer), NOT trust: `push` and same-repo `pull_request` are
+  // both correctly write-TRUSTED, and no GitHub-supplied env fact distinguishes a leg
+  // that should publish entries from one that should only consume them (D-02a, D-02b,
+  // RESEARCH Q2). The knob supplies exactly what the runner cannot -- and nothing else.
+  //
+  // This describe is the NARROWING proof; the TRUST-05 describe above it is the
+  // WIDENING proof. They are complementary halves of the same one-way ratchet and are
+  // deliberately adjacent.
+
+  it('narrows the ONE writable outcome to the read-only ACTIONS backend, and leaves the SAME env writable without the knob (TRUST-14)', async () => {
+    // Non-vacuous on two axes, both kept INSIDE one test so neither half can be
+    // deleted without the other. (1) The un-knobbed half is the identical env, so a
+    // passing read-only assertion cannot be satisfied by an env that was never
+    // writable to begin with. (2) Driving get() and asserting restoreCache RAN
+    // distinguishes the read-only Actions backend from the memory-degrade backend,
+    // which never touches @actions/cache -- isWritableBackend alone cannot tell the
+    // two read-only outcomes apart, so a knob wired to the wrong read-only factory
+    // would pass a structural-only assertion.
+    const withoutKnob = selectBackend({ ...trusted });
+    const withKnob = selectBackend({ ...trusted, CACHE_READ_ONLY: '1' });
+
+    expect(isWritableBackend(withoutKnob)).toBe(true);
+    expect(isWritableBackend(withKnob)).toBe(false);
+    expect(await withKnob.get(HASH)).toEqual({ kind: 'miss' });
+    expect(restoreCache).toHaveBeenCalledTimes(1);
+  });
+
+  // The exhaustive narrowing proof. Every row spreads over `trusted` and varies the
+  // axis its label names -- the dangerous-event row varies a second (the guarded host)
+  // for the same reason the dangerous-trio table above does: without a guarded host
+  // present the row would not prove the host failed to rescue it.
+  //
+  // Each row also DECLARES its un-knobbed outcome. That pin is what stops the table
+  // going quietly vacuous: if a row ever stopped reaching the branch it names, the
+  // implication below would still hold trivially and prove nothing.
+  it.each([
+    [
+      'untrusted event',
+      { GITHUB_EVENT_NAME: 'workflow_dispatch' },
+      'read-only',
+    ],
+    [
+      'dangerous event on a guarded host',
+      {
+        GITHUB_EVENT_NAME: 'pull_request_target',
+        GITHUB_SERVER_URL: 'https://github.com',
+      },
+      'read-only',
+    ],
+    [
+      'malformed repository identity',
+      { GITHUB_REPOSITORY: 'not-a-repo' },
+      'throws',
+    ],
+    ['no resolvable token', { GH_TOKEN: '' }, 'read-only'],
+    ['fully write-trusted', {}, 'writable'],
+  ] as const)(
+    'narrowing-only (%s): the knob never turns a non-writable outcome writable (TRUST-14)',
+    (_axis, overrides, expectedWithoutKnob) => {
+      const withoutKnob = outcomeOf({ ...trusted, ...overrides });
+      const withKnob = outcomeOf({
+        ...trusted,
+        ...overrides,
+        CACHE_READ_ONLY: '1',
+      });
+
+      expect(withoutKnob).toBe(expectedWithoutKnob);
+
+      // The implication `writable(withKnob) => writable(withoutKnob)`, asserted by
+      // negating the QUANTIFIER ("no row widened") rather than a predicate. An
+      // `if (withKnob === 'writable')` guard around the assertion would be the vacuous
+      // form -- it skips every row silently and passes; so would a negated matcher
+      // inside a single call assertion, which this repo has shipped before.
+      expect(widened(withoutKnob, withKnob)).toBe(false);
+
+      // Throw parity in BOTH directions, not just the knobbed one. A knob that
+      // swallowed the fail-closed branch would otherwise read as a successful
+      // narrowing (throws -> read-only LOOKS like narrowing and is not: the
+      // misconfiguration must still fail loudly), and a knob that introduced a new
+      // throw would escape too.
+      expect(withKnob === 'throws').toBe(withoutKnob === 'throws');
+    },
+  );
+
+  // BRANCH ORDER, which the table above CANNOT see. T-13-03-E1 registers "the knob
+  // check placed before an existing narrowing branch" at high severity, and
+  // select-backend.ts:33-35 claims the "it is last" guarantee is "checked mechanically
+  // by first-occurrence position". That mechanical check was an ad-hoc `indexOf`
+  // comparison run once during plan 13-03; it never became a clause, so at the time
+  // this test was written NOTHING in the tree enforced it.
+  //
+  // MEASURED, not argued. Hoisting the knob branch above `resolveGitHubToken` --
+  // exactly T-13-03-E1's shape -- left the whole suite GREEN at 42 files / 978 tests.
+  // The table above is blind to it because `outcomeOf` collapses BOTH read-only
+  // outcomes to the single token 'read-only': memory-degrade and read-only-Actions are
+  // indistinguishable to `isWritableBackend`, so `widened()` stays false and the row
+  // passes while the fail-safe branch has been bypassed. (A hoist above the
+  // repository-identity THROW is caught, by the throw-parity assertion above -- which
+  // is why only this one direction needed a new clause.)
+  //
+  // The discriminator is the one the D1 clause above already uses, applied to the
+  // complementary case: only ONE of the two read-only outcomes touches @actions/cache.
+  // Both halves stay INSIDE one test so neither can be deleted without the other --
+  // the positive control is what stops `not.toHaveBeenCalled()` being satisfied by an
+  // inert mock.
+  it('keeps the memory-degrade branch AHEAD of the knob: a token-less write-trusted env still degrades to MEMORY, not to a read-only ACTIONS backend (TRUST-14, T-13-03-E1)', async () => {
+    const degraded = selectBackend({
+      ...trusted,
+      GH_TOKEN: '',
+      CACHE_READ_ONLY: '1',
+    });
+
+    expect(isWritableBackend(degraded)).toBe(false);
+    expect(await degraded.get(HASH)).toEqual({ kind: 'miss' });
+    expect(restoreCache).not.toHaveBeenCalled();
+
+    // Positive control on the SAME mock, in the SAME test: the identical env WITH a
+    // resolvable token does reach @actions/cache. Without this half a permanently
+    // inert `restoreCache` would satisfy the assertion above and prove nothing.
+    const knobbedActions = selectBackend({ ...trusted, CACHE_READ_ONLY: '1' });
+
+    expect(await knobbedActions.get(HASH)).toEqual({ kind: 'miss' });
+    expect(restoreCache).toHaveBeenCalledTimes(1);
+  });
+
+  // Truthiness, never `=== 'true'`, and the DIRECTION is the whole point: on a one-way
+  // ratchet a typo must still NARROW. An exact-string parser would let
+  // CACHE_READ_ONLY=flase silently restore the writable backend, which is the wrong
+  // failure direction. Every value below is one a workflow author might reasonably
+  // expect to mean "off"; all of them still narrow.
+  it.each(['0', 'false', 'no', 'off', 'FALSE', ' '])(
+    'a non-empty %j still NARROWS -- truthiness is the fail-safe direction (TRUST-14)',
+    (value) => {
+      expect(
+        isWritableBackend(
+          selectBackend({ ...trusted, CACHE_READ_ONLY: value }),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it.each([[undefined], ['']])(
+    'an unset or empty knob (%j) leaves the writable outcome intact (TRUST-14)',
+    (value) => {
+      // Non-vacuous: this is the half that stops the knob from being a
+      // permanently-on read-only switch. A branch that tested for the KEY's presence
+      // (`'CACHE_READ_ONLY' in env`) rather than its VALUE passes the narrowing rows
+      // above and fails exactly here on the empty-string row.
+      expect(
+        isWritableBackend(
+          selectBackend({ ...trusted, CACHE_READ_ONLY: value }),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  // THE NARROWING MUST BE OBSERVABLE, and nothing above this clause can tell whether it is.
+  // Every assertion in this describe reads the RETURNED BACKEND, so all of them stay green on
+  // a knob that narrows in total silence -- which is what it did until this line existed:
+  // selectBackend emitted nothing, serve() logs only the listen URL and the token, and a leg
+  // that DECLINED the write was indistinguishable in its own job log from one that never had
+  // it. The case that costs is an adopter writing `CACHE_READ_ONLY: false` on a PRODUCER and
+  // getting a permanently cold cache with exit 0 and no annotation.
+  //
+  // Asserted on the CONSEQUENCE words rather than the whole string, so rewording stays free
+  // while deleting the diagnosis does not: 'will NOT populate' is the sentence an operator
+  // greps for, and '403' ties the line to what a PUT actually receives.
+  //
+  // The unset row is the non-vacuity half and shares the test so neither half can be dropped:
+  // an unconditional core.info at the top of selectBackend would satisfy the narrowed
+  // assertion and prove nothing about the branch.
+  it('SAYS SO in the job log when it narrows, and stays silent when it does not (TRUST-14)', () => {
+    selectBackend({ ...trusted, CACHE_READ_ONLY: '1' });
+
+    expect(core.info).toHaveBeenCalledWith(
+      expect.stringContaining('will NOT populate'),
+    );
+    expect(core.info).toHaveBeenCalledWith(expect.stringContaining('403'));
+
+    vi.mocked(core.info).mockClear();
+
+    selectBackend({ ...trusted });
+
+    expect(core.info).not.toHaveBeenCalledWith(
+      expect.stringContaining('will NOT populate'),
+    );
+  });
+});
+
+/**
+ * `select-backend.ts` as TEXT, comment-stripped, for the two structural clauses below.
+ *
+ * COMMENT-STRIPPED IS THE POINT, not a convenience. Both properties these clauses assert are
+ * about CODE order and CODE form; prose that discusses either must not be able to satisfy or
+ * break them. The stripped read is also what frees the function's own JSDoc to DOCUMENT the
+ * knob -- the previous arrangement forbade naming it up there on the grounds that "a second
+ * mention up here would defeat the check", which was true only of a raw first-occurrence
+ * scan and is no longer a constraint on either the guard or the documentation.
+ *
+ * Read via import.meta.url (the pinned-deps / cleanup-workflow idiom), never process.cwd(),
+ * so the subject resolves from this file's own location rather than the runner's cwd.
+ */
+const selectBackendCode = readFileSync(
+  new URL('./select-backend.ts', import.meta.url),
+  'utf8',
+)
+  .split('\n')
+  .filter((line) => {
+    const trimmed = line.trim();
+
+    return (
+      !trimmed.startsWith('//') &&
+      !trimmed.startsWith('*') &&
+      !trimmed.startsWith('/*')
+    );
+  })
+  .join('\n');
+
+/**
+ * BRANCH ORDER AND KNOB FORM, made mechanical.
+ *
+ * The source comments claimed BOTH of these were already checked -- "the 'it is last'
+ * guarantee is checked mechanically by first-occurrence position" and "a zero-count grep for
+ * it guards this file" -- and NEITHER was. The first was an ad-hoc `indexOf` comparison run
+ * once during plan 13-03 that never became a clause; `git grep "zero-count"` returned only
+ * the comment asserting it. The behavioural table above is blind to the ordering for the
+ * reason its own T-13-03-E1 clause records: `outcomeOf` collapses BOTH read-only outcomes to
+ * one token, so a knob hoisted above `resolveGitHubToken` keeps every row passing.
+ *
+ * A phantom guard is worse than an absent one here, because the claim was the stated REASON
+ * for two other choices -- not documenting the knob in the JSDoc, and not quoting the
+ * rejected equality form. A maintainer told a positional check already exists is free to
+ * delete the one behavioural clause that partially covers it as redundant.
+ */
+describe('select-backend.ts keeps the knob LAST and reads it as bare truthiness (TRUST-14)', () => {
+  it('places the knob branch AFTER every narrowing branch and BEFORE the writable return', () => {
+    const token = selectBackendCode.indexOf('resolveGitHubToken(env)');
+    const knob = selectBackendCode.indexOf('env.CACHE_READ_ONLY');
+    const writable = selectBackendCode.indexOf(
+      'return createActionsCacheBackend()',
+    );
+
+    // POSITIVE CONTROLS: three `indexOf` misses are all -1, and -1 < -1 is false, so a
+    // renamed anchor would fail the ordering rather than pass it -- but it would fail with
+    // an unreadable message. Assert each anchor was FOUND so a rename says which one moved.
+    expect(token, 'the token-resolution anchor is gone').toBeGreaterThan(-1);
+    expect(knob, 'the CACHE_READ_ONLY read is gone').toBeGreaterThan(-1);
+    expect(writable, 'the writable return is gone').toBeGreaterThan(-1);
+
+    expect(
+      knob,
+      'CACHE_READ_ONLY must be read AFTER the token-resolution branch. T-13-03-E1 rates the ' +
+        'knob check placed before an existing narrowing branch HIGH, and MEASURED, hoisting ' +
+        'it above resolveGitHubToken left the whole suite green: the narrowing table cannot ' +
+        'see it, because outcomeOf collapses the memory-degrade and read-only-Actions ' +
+        'outcomes to the same token. Position IS the narrowing guarantee -- every branch ' +
+        'above has already returned read-only or thrown, so the knob is structurally ' +
+        'incapable of widening. Move it up and it can bypass a fail-safe branch instead.',
+    ).toBeGreaterThan(token);
+
+    expect(
+      knob,
+      'CACHE_READ_ONLY must be read BEFORE the writable return, or the knob is dead code ' +
+        'and every declared consumer leg silently becomes a WRITER again.',
+    ).toBeLessThan(writable);
+  });
+
+  it('reads the knob as bare truthiness, never an equality against a literal', () => {
+    expect(
+      selectBackendCode,
+      'The knob must be read as `if (env.CACHE_READ_ONLY)`. On a one-way ratchet truthiness ' +
+        'is the fail-SAFE direction: a value of `flase` still narrows, whereas an ' +
+        'exact-string parser would silently restore the WRITABLE backend on a typo. This is ' +
+        'the clause the source comment claimed ("a zero-count grep for it guards this file") ' +
+        'while nothing did.',
+    ).toContain('if (env.CACHE_READ_ONLY)');
+
+    expect(
+      selectBackendCode,
+      'select-backend.ts compares CACHE_READ_ONLY against a value. Any equality form -- ' +
+        "=== 'true', == '1', a 'true'/'1'/'yes' parser -- fails in the WRONG direction: a " +
+        'typo or an unexpected casing restores the writable backend on a leg that declared ' +
+        'itself a consumer. Only unset or the empty string may leave the writable outcome ' +
+        'intact, which bare truthiness already gives. Restore the truthiness read; do not ' +
+        'relax this clause.',
+    ).not.toMatch(/CACHE_READ_ONLY\s*[!=]==?/);
   });
 });

@@ -14,16 +14,17 @@ consumer contract (see [Versioning](versioning.md)) and are locked by the
 
 ## Environment variables
 
-| Variable                                   | Set by                                    | Purpose                                                                             | Default                       |
-| ------------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
-| `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`       | you, before the background step (adopted) | Loopback URL the Nx client uses to reach the sidecar (`http://localhost:<port>`)    | none (you set it)             |
-| `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` | you, before the background step (adopted) | Bearer token the Nx client presents and the server checks                           | a fresh per-run CSPRNG token  |
-| `PORT`                                     | you (optional)                            | Loopback port to bind (`resolvePort`)                                               | an OS-assigned ephemeral port |
-| `CACHE_MIRROR_MAX_AGE_DAYS`                | you (optional)                            | The one coupled retention knob (`resolveMaxAgeDays`) for the opt-in Releases mirror | `30` (clamped to `365`)       |
-| `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION`  | you (optional)                            | Opt-in that lets `CACHE_MIRROR_MAX_AGE_DAYS` go below the 7-day floor               | unset (floor enforced)        |
-| `GH_TOKEN`                                 | you / the runner                          | GitHub token, first choice (`resolveGitHubToken`)                                   | none                          |
-| `GITHUB_TOKEN`                             | you / the runner                          | GitHub token, fallback when `GH_TOKEN` is unset                                     | none                          |
-| `GITHUB_REPOSITORY`                        | the runner (CI); you, to override locally | `owner/name` identity (`resolveRepoIdentity`)                                       | the `origin` git remote       |
+| Variable                                   | Set by                                    | Purpose                                                                               | Default                       |
+| ------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------- |
+| `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`       | you, before the background step (adopted) | Loopback URL the Nx client uses to reach the sidecar (`http://localhost:<port>`)      | none (you set it)             |
+| `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` | you, before the background step (adopted) | Bearer token the Nx client presents and the server checks                             | a fresh per-run CSPRNG token  |
+| `PORT`                                     | you (optional)                            | Loopback port to bind (`resolvePort`)                                                 | an OS-assigned ephemeral port |
+| `CACHE_MIRROR_MAX_AGE_DAYS`                | you (optional)                            | The one coupled retention knob (`resolveMaxAgeDays`) for the opt-in Releases mirror   | `30` (clamped to `365`)       |
+| `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION`  | you (optional)                            | Opt-in that lets `CACHE_MIRROR_MAX_AGE_DAYS` go below the 7-day floor                 | unset (floor enforced)        |
+| `CACHE_READ_ONLY`                          | you (optional)                            | Narrowing opt-in that makes the sidecar construct the read-only Actions-cache backend | unset (read-write)            |
+| `GH_TOKEN`                                 | you / the runner                          | GitHub token, first choice (`resolveGitHubToken`)                                     | none                          |
+| `GITHUB_TOKEN`                             | you / the runner                          | GitHub token, fallback when `GH_TOKEN` is unset                                       | none                          |
+| `GITHUB_REPOSITORY`                        | the runner (CI); you, to override locally | `owner/name` identity (`resolveRepoIdentity`)                                         | the `origin` git remote       |
 
 `MAX_CACHE_BODY_BYTES` is **not** an environment variable -- see
 [The body-size limit is fixed](#the-body-size-limit-is-fixed) below.
@@ -79,6 +80,47 @@ below the 7-day floor. With it set, `resolveMaxAgeDays` accepts a sub-floor
 aggressively -- the floor exists because a very short window can wipe most of the
 mirror on the next cleanup.
 
+### `CACHE_READ_ONLY`
+
+Set this (to any non-empty value) to declare that a job CONSUMES the cache but must
+never populate it. `selectBackend` reads it LAST -- after every other branch has
+already returned a read-only backend or thrown -- so it can only NARROW the outcome,
+never widen one: it cannot resurrect a backend an earlier branch declined. With it
+set on a context that would otherwise get the writable backend, the server
+constructs the read-only Actions-cache backend instead: reads resolve from the real
+Actions cache, and the server answers every `PUT` with `403`. Unset (or empty) leaves
+the default read-write behaviour untouched.
+
+**Any non-empty value narrows -- including `false`, `0`, `no` and `off`.** The knob is
+read as bare truthiness, never parsed, because on a one-way ratchet that is the
+fail-SAFE direction: a typo like `flase` still declines the write, whereas a
+`'true'`-matching parser would silently restore the WRITABLE backend. The cost is that
+`CACHE_READ_ONLY: false` does NOT mean "read-write" -- it declines the write just as
+firmly as `1`. In YAML, `CACHE_READ_ONLY: ${{ ... }}` rendering to `false` behaves the
+same way. To leave a job read-write, do not set the variable at all (or set it to the
+empty string).
+
+A producer misconfigured this way still goes permanently cold, but it is no longer
+silent about it: whenever the knob narrows, the server logs
+
+```
+github-cache: CACHE_READ_ONLY is set, so this job serves the READ-ONLY Actions-cache
+backend and will NOT populate the cache -- every PUT is answered 403. Any non-empty
+value narrows, including "false" and "0". Unset the variable entirely to let this job
+write.
+```
+
+`info`, not a warning, deliberately: on a declared consumer leg the narrowing is
+CORRECT, and an annotation on every correct run is how a project teaches its operators
+to ignore annotations. Grep a cold producer's job log for `will NOT populate` to tell a
+declined write apart from a context that never had one.
+
+Why you would want it: a leg that should read the cache another job populated, but
+whose own writes are redundant or unwanted -- the same posture GitHub documents for
+the restore-only `actions/cache/restore` operation. It is a ROLE the workflow author
+declares, not a trust decision: the context stays write-trusted and simply declines
+the capability, which is why the knob can be honoured without weakening the gate.
+
 ### `GH_TOKEN` / `GITHUB_TOKEN`
 
 `resolveGitHubToken` returns `GH_TOKEN || GITHUB_TOKEN` (falsy-coalescing: a set
@@ -88,8 +130,8 @@ but empty value falls through to the next source). The resolved token is used to
 - authenticate the opt-in Releases reader (tier 1 of the local-read chain).
 
 On a trusted trigger with **no** resolvable token the server does NOT fail -- it
-degrades to an empty read-only backend that MISSes every read and `403`s every
-write, silently. That is one of the four backend-selection outcomes; see
+degrades to an empty read-only backend that MISSes every read, with every `PUT`
+answered `403`, silently. That is one of the documented backend-selection outcomes; see
 [How the backend is selected](advanced.md#how-the-backend-is-selected) for the
 full table rather than a binary framing.
 
@@ -108,6 +150,31 @@ bytes), a constant in the server -- it is NOT read from the environment and ther
 is no knob to change it. A `PUT` whose body exceeds it is rejected with `413`. The
 limit matches the roughly 2 GiB GitHub Releases asset ceiling, so a single cache
 entry never exceeds what the mirror can store.
+
+## Where the sidecar writes on disk
+
+From v0.0.2 the sidecar stages each cache entry as a transient archive under
+`<workspace>/.nx/cache/`, relative to the process working directory. It used to
+use the system temp directory; the move is what makes the `@actions/cache` cache
+version independent of the OS that computed it, so a Windows job can read what a
+Linux job wrote.
+
+Three consequences worth knowing, none of them configurable:
+
+- **`.nx/cache` must be gitignored.** Nx's own scaffolding does this by default,
+  so most workspaces already comply. If yours does not, a multi-megabyte archive
+  becomes briefly visible to Nx's workspace file map.
+- **Clearing `.nx/cache` mid-job costs you the archives, not the sidecar.** The
+  directory is established when the server starts and re-created on every write,
+  so a step that runs `nx reset` (or otherwise empties `.nx/cache`) between start
+  and teardown no longer breaks the write that follows it. What it does do is
+  delete the archives already written, so each entry it removed comes back as a
+  MISS. Running `nx reset` _before_ starting the sidecar is still the tidier
+  order; it is no longer a correctness requirement.
+- **Archives land on the workspace volume, not the temp volume.** Identical on
+  GitHub-hosted runners, where both are the same disk. On a self-hosted runner
+  with a separate temp mount, size the workspace volume for your largest cache
+  entry (bounded by the 2 GiB body limit above).
 
 ## Two limits to know about
 

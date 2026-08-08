@@ -1,0 +1,1006 @@
+# Phase 7 - Recorded Evidence
+
+Measurements taken during phase 7 execution. Appended to by plans 07-01, 07-02, 07-03 and
+07-04. Every number here is MEASURED on this repo, never predicted; where a prediction from
+`07-RESEARCH.md` exists it is quoted alongside so the divergence (or its absence) is visible.
+
+---
+
+## Plan 07-01
+
+Recorded: 2026-07-27. Host: Windows 11 arm64, node v24.13.0, npm 11.6.2.
+Base commit: `7b451ca`.
+
+### T-07-02 supply-chain pre-check (run BEFORE `npm i`)
+
+`npm view <pkg> scripts.postinstall` for all five packages. A non-empty result on any one is
+a STOP condition. All five returned EMPTY, so no stop condition fired and the install
+proceeded.
+
+| Package | `scripts.postinstall` | Result |
+|---|---|---|
+| `eslint` | (empty) | pass |
+| `@eslint/js` | (empty) | pass |
+| `typescript-eslint` | (empty) | pass |
+| `@eslint-community/eslint-plugin-eslint-comments` | (empty) | pass |
+| `@nx/eslint` | (empty) | pass |
+
+A second pass over the full `scripts` object confirmed none of the five carries a
+`preinstall`, `install` or `postinstall` hook. The comments plugin's `preversion` /
+`version` / `postversion` entries are publish-time hooks in its own repo and never run for a
+consumer install.
+
+**Registry re-confirmation of the one second-hand entry.**
+`07-RESEARCH.md`'s Package Legitimacy Audit approved
+`@eslint-community/eslint-plugin-eslint-comments@4.7.2` from `STACK.md`'s 2026-07-26 pass
+without re-fetching it. Re-fetched here: version `4.7.2` resolves, repository is
+`git+https://github.com/eslint-community/eslint-plugin-eslint-comments.git`, tarball
+`https://registry.npmjs.org/@eslint-community/eslint-plugin-eslint-comments/-/eslint-plugin-eslint-comments-4.7.2.tgz`.
+The other four also re-resolved at their exact requested versions against the expected
+official orgs (`eslint/eslint`, `typescript-eslint/typescript-eslint`, `nrwl/nx`).
+
+### D-05 lockfile regeneration (linux/arm64 `node:24` container)
+
+Invocation, run from the repo root under Git Bash. `MSYS_NO_PATHCONV=1` is required on this
+host: without it Git Bash rewrites the container-side `-w /app` into
+`C:/Program Files/Git/app` and docker rejects it.
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm --platform linux/arm64 \
+  -v "D:/projects/github/op-nx/github-cache:/app" \
+  -v /app/node_modules \
+  -w /app node:24 \
+  sh -c "rm -f package-lock.json && npm install --package-lock-only"
+```
+
+Container: `node:24` at node `v24.18.0`, npm `11.16.0`. `-v /app/node_modules` masks the host
+`node_modules` with an anonymous volume so the Windows tree cannot bias the resolve, which is
+the whole point of the procedure.
+
+**Result:** `package-lock.json` regenerated, +1450 / -104 lines, 621 entries,
+`lockfileVersion 3`.
+
+| Check | Result |
+|---|---|
+| all five packages present at the exact requested versions | yes (`eslint 9.39.5`, `@eslint/js 9.39.5`, `typescript-eslint 8.65.0`, `@eslint-community/eslint-plugin-eslint-comments 4.7.2`, `@nx/eslint 23.1.0`) |
+| Linux-only WASM-fallback optional subtrees survived | yes -- 15 `@emnapi` / `wasm32-wasi` entries, including the nested `@oxc-resolver/binding-wasm32-wasi/node_modules/@emnapi/*` trio that a bare Windows install prunes |
+| entries that appear as removals in the diff | `@typespec/ts-http-runtime`, `get-proto`, `agent-base`, `https-proxy-agent` -- all verified still PRESENT in the regenerated lockfile; the `-` lines are re-ordering, not drops |
+| `npm ci` on the host afterwards | exit 0, 516 packages added |
+
+### Q10 / SC9 -- the action bundle DID drift
+
+`npm run check:action` immediately after `npm ci` on the regenerated lockfile. RESEARCH
+carried this as a contingency, not a prediction. **The contingency fired.**
+
+- **Cause:** `undici` re-resolved `6.27.0` -> `6.28.0`. It is a transitive runtime dependency
+  reached through `@actions/*`, which are themselves exact-pinned but carry ranged
+  dependencies of their own -- exactly the mechanism Q10 named.
+- **Bundle delta:** `start-cache-server/index.js`, +88 / -6 lines. The changed bytes are
+  undici's cookie parser gaining `validateCookieName` / `validateCookieValue` calls.
+- **Action taken:** `npm run build:action` (already invoked by `check:action` itself), and
+  `start-cache-server/index.js` staged IN THIS SAME COMMIT per SC9. Never as a follow-up: a
+  later commit would leave the `action-bundle-drift` gate failing on this commit and every
+  one after it.
+- **Re-verified:** `npm run check:action` exits 0 with the rebuilt bundle staged.
+
+No `serve()`-reachable SOURCE was edited by this plan, which is what RESEARCH verified. The
+drift came from the dependency graph underneath it, which is the residual RESEARCH G7 flagged
+as real.
+
+### D-06 prohibition check
+
+`git diff --exit-code -- packages/github-cache/package.json` -> clean. The package manifest is
+byte-identical; all five ESLint packages are ROOT devDependencies.
+
+### D-12 bounded-cleanup baseline
+
+Measured with `npx eslint . --format json` from `packages/github-cache`, using G4's per-rule
+counter.
+
+**Pre-remediation** -- config carrying the global `ignores` block, `@eslint/js` recommended and
+the `typescript-eslint` recommended spread, and nothing else. Taken BEFORE either remediation
+block was written.
+
+```
+files linted:   64
+total findings: 10
+{
+ "no-undef": 7,
+ "@typescript-eslint/no-require-imports": 2,
+ "@typescript-eslint/no-unused-vars": 1
+}
+```
+
+Per-file, in full:
+
+| File | Line:Col | Rule |
+|---|---|---|
+| `pack-check.cjs` | 32:26 | `@typescript-eslint/no-require-imports` |
+| `pack-check.cjs` | 32:26 | `no-undef` (`require`) |
+| `pack-check.cjs` | 33:14 | `@typescript-eslint/no-require-imports` |
+| `pack-check.cjs` | 33:14 | `no-undef` (`require`) |
+| `pack-check.cjs` | 36:29 | `no-undef` (`__dirname`) |
+| `pack-check.cjs` | 151:5 | `no-undef` (`process`) |
+| `pack-check.cjs` | 160:5 | `no-undef` (`process`) |
+| `pack-check.cjs` | 163:3 | `no-undef` (`process`) |
+| `pack-check.cjs` | 168:3 | `no-undef` (`process`) |
+| `src/serve.spec.ts` | 89:23 | `@typescript-eslint/no-unused-vars` (`_bytes`) |
+
+**Against RESEARCH G4's prediction: an exact match.** Predicted 64 files linted, 10 findings
+(7 `no-undef` + 2 `no-require-imports` from `pack-check.cjs`, 1 `no-unused-vars` at
+`serve.spec.ts:89` for `_bytes`), plus 0-2 uncertain from the low-confidence regex class
+(`no-useless-escape`, `no-control-regex`, `no-irregular-whitespace`,
+`no-misleading-character-class`). The uncertain class produced **zero**. G4's analytic
+baseline reproduced file-for-file and line-for-line.
+
+**Post-remediation residual:**
+
+```
+files linted:   64
+total findings: 0
+```
+
+### The D-12 call, with its number
+
+**Rules turned OFF repo-wide: ZERO. Code edits to fix a finding: ZERO. Configuration blocks
+added: TWO.** That is the outcome RESEARCH G4 predicted, and it is a strong result for the
+bounded-cleanup rule: nothing was swept, nothing was disabled to make a number go away, and no
+working code was edited to satisfy a linter.
+
+The two blocks, and why neither is a "disable":
+
+1. **The `**/*.cjs` override** closes 9 of the 10 findings and is telling ESLint the truth
+   about a CommonJS file rather than suppressing anything. It carries one scoped rule-off,
+   `@typescript-eslint/no-require-imports: 'off'`, limited to that one glob: `pack-check.cjs`
+   is a deliberately dependency-free CommonJS guard CI runs straight after `npm ci`, and
+   rewriting it to ESM to satisfy a TypeScript-oriented rule would be the tail wagging the dog
+   (D-13). Recorded honestly as a scoped rule-off rather than claimed as zero. `no-undef` was
+   deliberately kept LIVE for the glob via a four-name inline globals map, so the one file in
+   the repo where that rule still applies keeps its typo check.
+2. **`@typescript-eslint/no-unused-vars` with the three leading-underscore patterns** closes
+   the tenth. It codifies a convention the repo already follows at six sites. The alternative
+   -- a described disable at `serve.spec.ts:89` -- would need reason prose under LINT-05 and
+   would then be one more thing to keep true.
+
+No deferred-ideas entry was needed: D-12's escape hatch is for a single rule producing a broad
+sweep, and no rule did.
+
+### G5 negative control 2 -- lint scope must not depend on gitignored build output
+
+The only control for the G3 finding. Run from `packages/github-cache`.
+
+| State | `dist/` files | `out-tsc/` files | Linted |
+|---|---|---|---|
+| with build output | 91 | 73 | **64** |
+| after `rm -rf dist out-tsc` | 0 | 0 | **64** |
+
+**Identical.** `lint`'s scope does not depend on whether `build` ran, so the result cannot
+diverge from the Nx hash. Build output restored afterwards with `npm run build` and
+`npm run typecheck`.
+
+### M7 mutation -- proving negative control 2 can fail
+
+A control that reports the same number twice is worth nothing until it is shown capable of
+reporting two. The global `ignores` block was removed, the count re-taken with build output on
+disk, and the block restored.
+
+| Config | Linted |
+|---|---|
+| with the global `ignores` block | **64** |
+| `ignores` block REMOVED (M7) | **155** |
+
+91 extra files -- the generated `dist/` and `out-tsc/` trees -- would be linted without the
+block, at an Nx hash that never moves. That is the stale-cache false PASS G3 predicted, made
+visible. RESEARCH predicted 160 against a 96-file snapshot; the tree now holds 91 generated
+files, so 155 is the same finding at a moved snapshot, not a divergence.
+
+The mutation was applied, observed, and REVERTED before the commit. Post-restore re-measure:
+64 files linted, 0 findings, and the `.cjs` override still ordered after the
+`typescript-eslint` spread.
+
+### TDD: the RED-before-GREEN split for `lint-rules.spec.ts`
+
+`workflow.tdd_mode` is on. The opt-out rules were authored in this plan's task 2, so the RED
+was produced deliberately: the entire `linterOptions` + `rules` config object carrying
+`reportUnusedDisableDirectives`, `require-description`, `ban-ts-comment` and
+`no-unused-vars` was stripped from `eslint.config.mjs`, the spec run, and the object
+restored.
+
+**RED -- 2 failed, 7 passed of 9.**
+
+| Assertion | RED | Why |
+|---|---|---|
+| the non-vacuity control can itself fail | PASS | the control's own self-test; independent of the stripped rules |
+| LINT-05 bare `eslint-disable-next-line` errors | **FAIL** | `require-description` comes ONLY from the stripped object |
+| LINT-05 described disable accepted | PASS | a direction control -- passes on both sides by design |
+| LINT-05 bare `@ts-expect-error` errors | PASS | see the note below |
+| LINT-05 described `@ts-expect-error` accepted | PASS | direction control |
+| LINT-05 `@ts-ignore` errors described or not | PASS | see the note below |
+| LINT-06 stale described disable errors | **FAIL** | with the object stripped, `reportUnusedDisableDirectives` falls back to v9's default `warn` (severity 1), so the assertion on severity 2 fails |
+| CORR-06 non-ban rule errors at the integration path | PASS | **the load-bearing observation -- see below** |
+| CORR-06 same rule errors at the unit path | PASS | same |
+
+**The CORR-06 controls passed on BOTH sides.** That is the distinction the control exists to
+draw, and it is the one that had to be checked: a RED in which the CORR-06 assertions ALSO
+failed would mean the config was not being loaded at all (the `unconfigured` trap), not that
+a rule was missing. They passed, so the RED is attributable to the stripped rules and to
+nothing else.
+
+**Why the three `ban-ts-comment` assertions passed in RED, recorded honestly.**
+`@typescript-eslint/ban-ts-comment` is already enabled by `typescript-eslint`'s recommended
+set, and its plugin DEFAULT options happen to coincide with D-30's requested configuration.
+So those three assertions do not discriminate the presence of D-30's explicit block; they
+would stay green if it were deleted today. The explicit block is still worth its four lines
+-- it pins the behaviour against a future change to the plugin's defaults, and the
+`@ts-ignore`-described-form assertion WOULD fail if someone weakened `'ts-ignore': true` to
+`'allow-with-description'` -- but "these three assertions prove D-30's block is present" would
+be a false claim and is not made.
+
+**GREEN after restore: 9 passed of 9.**
+
+### A vacuity bug in the non-vacuity control, found BY the RED
+
+The first version of the shared control filtered on `severity === 1 && ruleId === null`,
+straight from RESEARCH G1(c). Under RED that filter matched the LINT-06 unused-directive
+report itself -- because with `reportUnusedDisableDirectives` back at v9's default `warn`, an
+unused-directive report is ALSO severity 1 with a null rule id. The control therefore
+reported "this file was not linted" about a file that had just been linted correctly, which
+is precisely the misdiagnosis it exists to prevent, reproduced inside itself. It passed in
+GREEN only because `'error'` moves those reports to severity 2 -- meaning the control's
+correctness depended on the very setting it was supposed to be independent of.
+
+Fixed by adding the position check. Measured message shapes:
+
+| Message | `ruleId` | `severity` | `line` |
+|---|---|---|---|
+| ignored path (`dist/...`) | `null` | 1 | **absent** |
+| unconfigured path (unmatched extension) | `null` | 1 | **absent** |
+| unused directive (at `warn`) | `null` | 1 | `1` |
+| unused directive (at `error`) | `null` | 2 | `1` |
+
+An ignore/unconfigured result describes the whole FILE and carries no position; every rule
+report and every directive report carries one. The control now filters on
+`severity === 1 && ruleId === null && line === undefined`, which separates them cleanly and
+no longer depends on the LINT-06 severity. The spec carries its own self-test asserting the
+control still detects a genuinely ignored path, so the control cannot silently become
+inert -- the lesson quick 260726-gok recorded as "a guard's own non-vacuity control can
+itself be vacuous".
+
+### M5 mutation -- the D-25 input assertion can fail
+
+`{workspaceRoot}/eslint.config.mjs` was removed from `nx.json` `targetDefaults.test.inputs`
+and `nx-target-inputs.spec.ts` re-run.
+
+| State | Result |
+|---|---|
+| input present | 6 passed of 6 |
+| input REMOVED (M5) | **1 failed** (`eslint.config.mjs is a test input, ...`), 5 passed |
+
+Exactly the one expected assertion, and no collateral. Applied, observed, REVERTED before the
+commit.
+
+### Q2 resolved -- fallow auto-credits `eslint.config.mjs`
+
+RESEARCH carried this at MEDIUM confidence off a binary-strings inference (F20), with a
+one-line `entry` contingency ready. `npm run fallow:ci` exits 0 with the new config file and
+its three imports in place, so the contingency was NOT needed and no speculative
+`.fallowrc.jsonc` entry was added. The single fallow change is the `@nx/eslint`
+`ignoreDependencies` line, which was the one certain case (`@nx/eslint` is referenced only
+from `nx.json`, which fallow does not read). The comments plugin's `./configs` subpath
+resolved cleanly and needed no entry either.
+
+### Battery at the commit
+
+Eight commands, all exit 0: `format:check`, `build`, `typecheck`, `typecheck:action`, `test`,
+`fallow:ci`, `check:action`, `pack:check`. There is no `lint` command yet -- it becomes the
+ninth in plan 07-03.
+
+Unit suite: **453 tests across 32 files, all passing.** Baseline before this plan was 438
+(quick 260726-gok); the +15 are 5 `pinned-deps.spec.ts` pins, 9 `lint-rules.spec.ts`
+assertions and 1 `nx-target-inputs.spec.ts` input assertion.
+
+D-06 prohibitions, both verified clean at the commit:
+`git diff --exit-code -- packages/github-cache/package.json` and
+`git diff --exit-code -- packages/github-cache/src/public-surface.spec.ts`.
+
+---
+
+## Plan 07-02
+
+Recorded: 2026-07-27. Host: Windows 11 arm64, node v24.13.0, npm 11.6.2.
+
+### The RED observation (LINT-03), assertion by assertion
+
+The assertions were written and RUN before either ban rule existed, per D-20. This is the
+measured split, not a predicted one -- `npx vitest run src/lint-rules.spec.ts` at the moment
+`eslint.config.mjs` still carried only plan 07-01's rules:
+
+**15 failed, 22 passed of 37.**
+
+| Group | Count | RED verdict | Why |
+|---|---|---|---|
+| plan 07-01's opt-out + CORR-06 assertions | 9 | PASSED | untouched by this plan |
+| D-21 evasion shapes at a unit path | 7 | **FAILED** | the rules did not exist; `banRuleIdsOf` returned `[]` against every expected id |
+| false-positive controls at a unit path | 6 | PASSED | vacuously, by design -- they assert ZERO ban errors and there were no ban rules |
+| CORR-06 direction pair at the integration path | 7 | PASSED | **the critical control** |
+| D-22 four sites, "is CAUGHT once the disable is stripped" | 4 | **FAILED** | no rules, so zero ban errors at each real expression |
+| D-22 four sites, "carries a described disable" | 4 | **FAILED** | the disables did not exist yet |
+
+Representative failure text, site 2:
+
+```
+AssertionError: expected 'const OTHER_PLATFORM: NodeJS.Platform...' to contain
+  'eslint-disable-next-line no-restricte...'
+Expected: "eslint-disable-next-line no-restricted-syntax"
+Received: "const OTHER_PLATFORM: NodeJS.Platform ="
+```
+
+and, for an evasion shape, `expected [] to deeply equal [ 'no-restricted-syntax' ]`.
+
+**The direction controls passing on BOTH sides is what makes this RED interpretable.** Had the
+seven integration-path assertions failed too, the meaning would have been "the config is not
+being loaded at all" (the ignored/unconfigured trap) rather than "the rules are missing" --
+and that trap is the single most likely way this phase could have shipped a vacuous guard.
+The false-positive controls passing vacuously in RED is expected and is not evidence; their
+value is entirely in GREEN, where they discriminate against an over-broad selector.
+
+Intermediate measurement after STEP 2 (rules added, disables not yet): **6 failed, 31 passed**
+-- all seven evasion shapes flipped to CAUGHT, and the six residual failures were the four
+"carries a described disable" assertions plus the two `release-asset-name.spec.ts` position
+assertions, which report TWO ban errors until each site's sibling disable exists to suppress
+the other. After STEP 3: **37 passed of 37.**
+
+### P7 was INCLUDED, not declined
+
+RESEARCH G2 recommends P7
+(`MemberExpression[computed=false][object.property.name='process'][property.name=/^(platform|arch)$/]`)
+and leaves it to the planner. It is IN the shipped selector set. Consequence for D-21:
+`globalThis.process.platform` needs no `// ponytail:` ceiling comment, because it is caught
+rather than accepted.
+
+Two ceilings ARE recorded in `eslint.config.mjs`, both in the three-part form
+(`with-hash-lock.ts:1-3`): P4/P5's hardcoded namespace binding names, whose upgrade path is
+dropping the `object.name` constraint IN FAVOUR OF an allowlist and never without one; and
+the residual T-07-12 ceiling -- a platform read hidden behind a helper in another module --
+whose only upgrade path is type-aware linting, which D-11 excludes for a stated reason and
+which is therefore accepted rather than scheduled.
+
+### Selector-set behaviour, measured against REAL ESLint (Q5 closed)
+
+RESEARCH G2's verdict table was produced with `@babel/parser` + `esquery`, and Q5 asked
+whether babel-estree and `@typescript-eslint/parser` agree on every node shape those
+selectors depend on. Every shape in the table reproduced exactly under real ESLint with the
+real parser, including the two-rule double report on a namespace import. **Q5 is closed
+affirmatively; no selector that measured MATCH under esquery came back clean under ESLint.**
+
+One measured fact worth recording because it shaped a false-positive control:
+`import * as path from 'node:path'` IS an error, because `no-restricted-imports` reports a
+namespace specifier whenever the entry lists `importNames`. The "path.join is legitimate"
+control therefore uses a LOCAL object rather than a namespace import -- the namespace form is
+asserted as an evasion shape instead, which is where it belongs.
+
+### The four disables, and the fifth position that does not exist
+
+Four `eslint-disable-next-line` directives across three files
+(`cache-archive-path.spec.ts` 1, `releases-backend.spec.ts` 1, `release-asset-name.spec.ts`
+2). `npx eslint .` from `packages/github-cache` exits 0 with ZERO findings, which is the
+measurement that proves all four are USED -- an unused one would be an error under
+`reportUnusedDisableDirectives: 'error'`.
+
+RESEARCH C2 confirmed against the live rule set: `cache-archive-path.spec.ts`'s bare
+`tmpdir()` call produces NO ban error, so it correctly carries no disable. A fifth directive
+there would have failed the build through the phase's own opt-out discipline.
+
+### Corrections recorded for the verifier
+
+- **ROADMAP SC3 says "three CORR-05 violations".** REQUIREMENTS, CONTEXT and RESEARCH all say
+  FOUR, and FOUR is what the shipped `CORR_05_SITES` table and the four directives implement.
+  Do not read the extra site as scope creep.
+- **CONTEXT D-22 and REQUIREMENTS CORR-05 both list `cache-archive-path.spec.ts:26` alongside
+  `:1`.** Correct as a SITE (both lines leave together under VER-02 in Phase 9), wrong as an
+  error POSITION. The site table keys on the import only.
+
+### Battery at the commit
+
+Eight commands, all exit 0: `format:check`, `build`, `typecheck`, `typecheck:action`, `test`,
+`fallow:ci`, `check:action`, `pack:check`. Plus `npx eslint .` at exit 0, run directly because
+no `lint` target exists until plan 07-03.
+
+Unit suite: **481 tests across 32 files**, up from 453. The +28 are 7 evasion shapes, 6
+false-positive controls, 7 integration-path direction assertions and 8 site assertions.
+
+D-06 prohibitions verified clean again at this commit:
+`git diff --exit-code -- packages/github-cache/package.json` and
+`git diff --exit-code -- packages/github-cache/src/public-surface.spec.ts`.
+
+### M4 applied early, observed, and reverted (plan 07-02 task 2)
+
+M4 is formally plan 07-04's, but the D-19 guard is worthless unless it can fail, so it was
+run against the guard as it was written. Three variants, each producing exactly ONE failing
+assertion and no collateral:
+
+| Variant | Mutation to `eslint.config.mjs` | Assertion that went RED | Failure text |
+|---|---|---|---|
+| M4a (the VALIDATION.md form) | `ignores` -> `['**/*.integration.spec.ts']` | "applies the ban to exactly the extension set it exempts" | the parser's own non-vacuity guard fires first: `expected the glob "**/*.integration.spec.ts" to END in a {ext,ext} group` |
+| M4b | `ignores` -> `['**/*.integration.spec.{ts,mts}']` | same | `expected [ 'mts', 'ts' ] to deeply equal [ 'cts', 'mts', 'ts' ]` |
+| M4c | BOTH globs -> `{ts,mts}` | "covers every extension the integration vitest config includes" | `an *.integration.spec.cts would be linted as a UNIT spec: the ESLint scope covers mts, ts and the integration vitest config includes cts` |
+
+M4c is the variant that matters most and is NOT in the VALIDATION.md table: it narrows both
+globs together, so IDENTITY still holds and only the SUPERSET invariant can catch it. Both
+D-19 invariants are therefore independently load-bearing -- the guard is not asserting one
+thing twice. `eslint.config.mjs` was restored byte-identical
+(`git diff --exit-code` clean) before the commit; no mutation is committed.
+
+The ESLint side is read by IMPORTING `eslint.config.mjs` through a non-literal specifier
+(Q6's recommended route). It worked on the first attempt under both `vitest` and `typecheck`,
+so the disk-read-plus-comment-strip fallback was NOT needed there. Q6 is closed
+affirmatively. The vitest side still uses the disk-read idiom, per Q7, which was not retested.
+
+### Post-merge flake: the toolchain boot was inside the per-test budget
+
+The post-merge gate caught `lint-scope-drift.spec.ts` failing intermittently under
+`nx run-many -t typecheck,test --skip-nx-cache` (exit 0, 1, 0 over three runs; Nx's flaky-task
+detector fired on one hash with two outcomes). Both new guard files were affected. Measured
+costs on an IDLE workstation, against vitest's DEFAULT 5000 ms per-test budget:
+
+| What | Measured |
+|---|---|
+| bare `import('eslint.config.mjs')` in a cold node | **981 ms** |
+| first test in `lint-scope-drift.spec.ts` (pays the resolve) | 731-883 ms |
+| every subsequent test in that file | 0-1 ms |
+| first test in `lint-rules.spec.ts` (first `lintText` boots config + TS parser) | 592-913 ms |
+
+~5.7x headroom on an idle box, and the cost falls on whichever test runs FIRST -- so the
+failure location is arbitrary and the symptom is flakiness rather than "the import is slow".
+
+Fixed by hoisting the one-time cost into `beforeAll(fn, 30_000)` in each file, NOT by raising
+`testTimeout` (which would mask the class for all 486 tests). Controlled experiment, pinning
+the per-test budget just above the observed cost, because repeat-running until green proves
+nothing when the broken version already produced three green runs:
+
+| Version | `--testTimeout=500` | `--testTimeout=50` |
+|---|---|---|
+| pre-fix | **2 failed** / 40 passed, `Test timed out in 500ms` on the exact reported test AND on `lint-rules.spec.ts`'s first test | not run |
+| post-fix | 42 passed | **42 passed** |
+
+Post-fix passes at a budget 100x TIGHTER than the default, where pre-fix already failed.
+First-test duration 731/883 ms -> 2/3 ms; headroom ~5.7x -> >2500x. Structural, not
+statistical.
+
+Note the pre-fix run reproduced the timeout in `lint-rules.spec.ts` too, which had NOT failed
+in the gate's three runs -- so treating that file was closing a measured exposure rather than
+a speculative one.
+
+Final state: `npm exec -- nx run-many -t typecheck,test --skip-nx-cache` run 8 times, exit 0
+every time, zero `Test timed out` in any log. M4b re-run against the refactored guard still
+fails on exactly the right assertion.
+
+---
+
+## Plan 07-03
+
+Recorded: 2026-07-27. Host: Windows 11 arm64, node v24.13.0, npm 11.6.2.
+
+### C8 satisfied, and PROVEN rather than assumed
+
+`@nx/eslint@23.1.0`'s `createNodes` short-circuits with
+`if (eslintConfigFiles.length === 0) { return []; }` and produces NO target, silently. So the
+registration was verified by asking the graph, not by reading the config back:
+
+```
+npm exec -- nx show project @op-nx/github-cache --json
+targets: typecheck, build, build-deps, watch-deps, test, lint, integration, nx-release-publish
+```
+
+`lint` is present, so the config-existence gate was satisfied by plan 07-01's
+`eslint.config.mjs`. Exactly ONE new target appeared.
+
+### D-35 -- the inferred `lint` target's HASHED node values (the Phase 8 CORR-03 baseline)
+
+Read from `nx show project @op-nx/github-cache --json` on Windows, AFTER `targetDefaults.lint`
+was applied, so this is the effective node Nx folds into `hash_project_config`. `metadata` is
+NOT hashed and is therefore omitted -- the `${pmc.exec}` it contains (`npx eslint --help` on
+this host) is a non-issue for the hash.
+
+| Hashed field | Value on Windows |
+|---|---|
+| `targetName` | `lint` |
+| `executor` | `nx:run-commands` |
+| `outputs` | `[]` |
+| `options.cwd` | `packages/github-cache` |
+| `options.command` | `eslint .` |
+| `configurations` | `{}` |
+| `parallelism` | `true` |
+
+`cache` is `true`, inferred; it is deliberately NOT restated in `targetDefaults` (D-24).
+
+**This is a BASELINE, not a closure.** Whether `@nx/eslint` infers the same node on Linux is
+UNVERIFIED BY DESIGN (D-35, T-07-17): the existence gate runs
+`eslint.isPathIgnored(join(workspaceRoot, file))` with a POSIX `join` over an absolute Windows
+root, and F18 confirms that gate genuinely runs for this project layout. Phase 8's CORR-03
+two-leg measurement treats `lint` as a FOURTH target and settles it empirically. The
+`options.cwd` row is the one most likely to diverge, and it is hashed.
+
+### C7 -- the real inferred input list, checked against the replacement rather than assumed
+
+D-24's premise is "the block must restate everything it keeps", so the inferred list was read
+from the installed plugin (`node_modules/@nx/eslint/dist/src/plugins/plugin.js:288-302`,
+`buildEslintTargets`) rather than from `STACK.md`'s quote, which is one entry short.
+
+| # | Inferred entry | Resolves to, here | Restated? |
+|---|---|---|---|
+| 1 | `default` | -- | yes |
+| 2 | `^default` | -- | yes |
+| 3 | `{workspaceRoot}/<each eslint config>` | `{workspaceRoot}/eslint.config.mjs` | yes |
+| 4 | `<projectRoot>/.eslintignore`, only `existsSync` | ABSENT -- no such file | n/a, not emitted |
+| 5 | `...tsconfigChainOutsideProjectRoot` | `{workspaceRoot}/tsconfig.base.json` | **no, deliberately** |
+| 6 | `{workspaceRoot}/tools/eslint-rules/**/*` | -- | yes |
+| 7 | `{ externalDependencies: ['eslint'] }` | -- | **widened to four** |
+
+Entry 5 is the one STACK.md omits. All three of `tsconfig.json`, `tsconfig.lib.json` and
+`tsconfig.spec.json` extend `../../tsconfig.base.json` and nothing else, so the chain resolves
+to exactly that one file -- which `sharedGlobals` already folds into `default`, entry 1. The
+replacement list therefore needs no extra entry, and that is a checked conclusion rather than
+an inherited one.
+
+Entry 7 is the LINT-04 hole. `outputs` also changed, from the inferred `['{options.outputFile}']`
+to `[]`, which removes that token from `hash_project_config` entirely (D-24).
+
+### TDD: the RED, assertion by assertion
+
+Probes written and run BEFORE `targetDefaults.lint` existed. The helper indexes
+`nxJson.targetDefaults['lint']`, so every new assertion throws
+`TypeError: Cannot read properties of undefined (reading 'inputs')` -- loud and unambiguous.
+
+**7 failed, 7 passed of 14.**
+
+| Assertion | RED | Why |
+|---|---|---|
+| the four pre-existing `typecheck` / `build` probes | PASS | untouched; confirms the fourth `PROBE_FILES` entry broke nothing |
+| `lint` hashes the lib sources | **FAIL** | no `lint` target default |
+| `lint` hashes the spec sources | **FAIL** | same |
+| `lint` does NOT hash a path outside the project root | **FAIL** | same |
+| `lint` lists all four ESLint external dependencies | **FAIL** | same |
+| `lint` declares no outputs | **FAIL** | same |
+| CORR-04: `integration` is the only runtime input | PASS | **a direction control -- passes on BOTH sides by design** |
+| the two pre-existing `test.inputs` literal pins | PASS | untouched |
+| `eslint.config.mjs` is a `lint` input | **FAIL** | no `lint` target default |
+| the custom rule directory is a `lint` input | **FAIL** | same |
+
+**GREEN after step 2: 14 passed of 14.** The CORR-04 control passing on both sides is the same
+device plan 07-02 used for its integration-path pair: had it failed in RED, the failure would
+have meant the spec could not read `nx.json` at all rather than that `lint` was missing.
+
+### The negative control, and the mutation proving it is the ONLY one that catches vacuity
+
+`build` is the discriminator the `typecheck` probes use, and it is UNUSABLE for `lint`:
+`lint`'s inputs start from `default` (`{projectRoot}/**/*`), so hashing a spec is exactly what
+`lint` is supposed to do. The chosen negative is a probe path OUTSIDE `{projectRoot}` --
+`start-cache-server/entry.ts`, a real file, genuinely not linted, and already present in
+`test.inputs` as a `{workspaceRoot}` string so both frames are visible side by side. It is a
+fourth entry in `PROBE_FILES`; every pre-existing assertion is a `toContain` / `not.toContain`
+on a named path and none is a whole-array comparison, which the RED run confirmed empirically
+(all four pre-existing probes still passed).
+
+Two mutations, each applied, observed and REVERTED before the commit.
+
+| # | Mutation to `nx.json` | Result |
+|---|---|---|
+| M6a | remove `{workspaceRoot}/eslint.config.mjs` from `targetDefaults.lint.inputs` | **1 failed / 13 passed** -- exactly the expected assertion, zero collateral |
+| MV | reduce `lint.inputs` to `^default` + the `externalDependencies` object, so the SELF pattern list resolves EMPTY | **3 failed / 11 passed** |
+
+MV is the one that matters. With an empty pattern list `filterUsingGlobPatterns` returns the
+WHOLE probe list untouched, so **both positive `toContain` assertions still PASSED** -- a
+resolver that resolved nothing looked exactly like a working one. The out-of-project negative
+was the only glob-resolution assertion that caught it. (The two literal-pinning assertions also
+fired, but they pin strings the same mutation deleted; they are not evidence about the filter.)
+That is the vacuity trap this control exists for, reproduced rather than argued.
+
+M6's second half -- the stale-cache HIT differential -- is plan 07-04's, and is not claimed
+here.
+
+`nx.json` restored byte-identical after each mutation, re-verified at 14 passed of 14.
+
+### The battery is NINE commands from this plan's second commit
+
+`npm run lint` was added as `nx run-many -t lint` and joins the battery between `test` and
+`fallow:ci`. First run, cold by construction (the plugin registration rotated every hash):
+
+```
+Successfully ran target lint for project @op-nx/github-cache
+Run duration: 1.7s
+Cache: 0/1 hit (0%)
+```
+
+1.7 s is the number behind D-33's "lint runs in seconds, a fifth cache producer buys nothing".
+
+| Commit | Battery | Result |
+|---|---|---|
+| `b3fdf6d` (plugin + inputs + probes) | EIGHT: `format:check`, `build`, `typecheck`, `typecheck:action`, `test`, `fallow:ci`, `check:action`, `pack:check` | all exit 0 |
+| this plan's second commit (script + CI job) | **NINE** -- the above plus `lint` | all exit 0 |
+
+Unit suite at both commits: **494 tests across 33 files**. The delta is +8, all of them this
+plan's, and all in `nx-target-inputs.spec.ts` (6 assertions -> 14).
+
+### The CI job, verified structurally rather than by eye
+
+`.github/workflows/ci.yml` parsed with the `yaml` package after the edit:
+
+```
+jobs: format-check, lint, fallow, action-bundle-drift, pack-check, ppe, build, typecheck,
+      test, integration, dogfood-seed, dogfood-verify, consumer-smoke, publish, publish-verify
+
+lint steps: [{"uses":"actions/checkout@v7"},
+             {"uses":"actions/setup-node@v6","with":{"node-version-file":".node-version","cache":"npm"}},
+             {"run":"npm ci"},
+             {"run":"npm run lint"}]
+```
+
+Exactly the four steps of the `fallow` boilerplate: no background sidecar, no `cancel:`, no
+build step. `git grep 'needs:' -- .github/workflows/ci.yml` returns no job depending on `lint`,
+and no spec asserts on `ci.yml` -- it is not an Nx input yet, and PARITY-06 registers it in
+Phase 9.
+
+### Verification items from the plan, all checked at the final commit
+
+| Check | Result |
+|---|---|
+| `nx show project` lists exactly ONE new target, `lint` | yes |
+| `packages/github-cache/project.json` untouched (D-01/D-02) | `git diff --exit-code` clean |
+| `packages/github-cache/package.json` untouched (D-06) | `git diff --exit-code` clean |
+| `integration` is still the only target with a platform input (CORR-04) | asserted in the guard, passing |
+
+---
+
+## Plan 07-04
+
+Recorded: 2026-07-27. Host: Windows 11 arm64, node v24.13.0, npm 11.6.2.
+Base commit for every measurement below: **`81048ca`** (the plan 07-03 tree). Every command was
+run from the REPO ROOT in Git Bash unless a `cd` is shown.
+
+### G5 -- the LINT-04 differential, closed BY MEASUREMENT (D-27, ROADMAP SC4)
+
+SC4 requires LINT-04 be "proven by differential rather than by reading the config", so
+`nx-target-inputs.spec.ts`'s declaration probes are necessary and explicitly NOT sufficient.
+These are the behavioural measurements. **A single cache reading carries no information** --
+PITFALLS D1 -- so every row below is one side of a recorded PAIR.
+
+**Q8 closed affirmatively.** `nx run-many -t lint` prints the cache summary line in exactly the
+same form `test` and `typecheck` do (`Cache: n/m hit (p%)`). The `nx run <project>:lint --verbose`
+fallback RESEARCH held in reserve was NOT needed, and no substitution was made.
+
+#### Measurement A -- editing a RULE re-runs `lint`
+
+Perturbation: the **P7 selector object deleted** from `no-restricted-syntax` -- a real rule-set
+change, not a comment edit. A comment-only edit moves the file hash and so proves the file is an
+input, but it says nothing about whether the command reads the rule SET.
+
+| Step | Command | `Cache:` line | Verdict |
+|---|---|---|---|
+| A0 warm 1 | `npm run lint` | `Cache: 1/1 hit (100%)` | already warm from plan 07-03 |
+| A0 warm 2 (baseline) | `npm run lint` | `Cache: 1/1 hit (100%)` | replay, as expected |
+| **A1 P7 deleted** | `npm run lint` | **`Cache: 0/1 hit (0%)`** | **EXECUTED** -- 1.7 s critical path |
+| A2 restored | `git checkout -- eslint.config.mjs; npm run lint` | `Cache: 1/1 hit (100%)` | pre-edit hash still cached |
+
+A `1/1 hit` at A1 would have been the LINT-04 defect. It was `0/1`.
+
+#### Measurement B -- editing a linted SOURCE file re-runs `lint`
+
+Perturbation: one trailing comment appended to `packages/github-cache/src/index.ts` -- a linted,
+tracked, NON-spec file, so the ban rules stay out of the measurement.
+
+| Step | `Cache:` line | Verdict |
+|---|---|---|
+| B0 baseline | `Cache: 1/1 hit (100%)` | replay |
+| **B1 source edited** | **`Cache: 0/1 hit (0%)`** | **EXECUTED** |
+| B2 restored | `Cache: 1/1 hit (100%)` | pre-edit hash still cached |
+
+**A methodological trap hit and recorded, because it produces a false LINT-04 defect reading.**
+The first attempt at B was CONFOUNDED and discarded. The perturbed side was run TWICE with the
+same edit text; the second run legitimately replayed the *perturbed* hash, so re-applying that
+identical edit later read `Cache: 1/1 hit (100%)` -- indistinguishable, at a glance, from the
+stale-cache bug the measurement exists to exclude. The rule this yields: **a differential's
+perturbed side must be run exactly ONCE, and any repeat needs perturbation text that has never
+been hashed before.** The table above uses a novel string for that reason. This is the same class
+as PITFALLS D1 -- a `Cache:` reading is a statement about a HASH, not about correctness.
+
+#### Measurement C -- the D-25 second-order hole: `test` re-runs after a rule edit
+
+The guard specs run under `test` and load `eslint.config.mjs` through the ESLint Node API, so a
+`test` target that replayed across a rule edit would make every LINT-03 verdict untrustworthy.
+Same P7 perturbation.
+
+| Step | `Cache:` line | Verdict |
+|---|---|---|
+| C0 warm 1 | `Cache: 1/1 hit (100%)` | |
+| C0 warm 2 (baseline) | `Cache: 1/1 hit (100%)` | replay |
+| **C1 P7 deleted** | **`Cache: 0/1 hit (0%)`** | **EXECUTED**, and still `Successfully ran target test` |
+
+`{workspaceRoot}/eslint.config.mjs` is doing its job in `targetDefaults.test.inputs`. **This was
+measured BEFORE any mutation in task 2 was trusted**, which is the ordering D-25 requires: every
+M1-M9 result below is read off a `test` target proven to re-run when the rule set moves.
+
+C1 also settles what Measurement A alone cannot. A cache miss proves the FILE is an input; C1's
+executed `test` run additionally exercises the rule set through `lintText`, and task 2's M1/M2/M3
+show that same suite going red when individual selectors are deleted. Together those are the
+proof that the rule set -- not merely the file's bytes -- is what the toolchain reads.
+
+#### Negative control 1 -- the declared input block is LOAD-BEARING
+
+**A and B pass even on a `lint` target with no declared input block at all**, because
+`@nx/eslint`'s INFERRED inputs already contain `default` and `{workspaceRoot}/<eslint config>`
+(F17). Stated plainly: **measurements A and B alone would NOT have proven that D-24's block did
+anything.** This control is what does.
+
+`{workspaceRoot}/eslint.config.mjs` was temporarily deleted from `targetDefaults.lint.inputs`,
+leaving the rest of the block in place -- `targetDefaults` REPLACES the inferred list, so removing
+that one entry genuinely removes it rather than falling back to the inferred one.
+
+| Step | `Cache:` line | Verdict |
+|---|---|---|
+| C1 re-warm 1 (after the `nx.json` edit) | `Cache: 0/1 hit (0%)` | expected: the `targetDefaults` change rotates `hash_project_config` |
+| C1 re-warm 2 (baseline) | `Cache: 1/1 hit (100%)` | replay |
+| **C2 same P7 deletion applied** | **`Cache: 1/1 hit (100%)`** | **THE BUG, REPRODUCED** |
+
+A real rule change served a cached PASS. That is the stale-cache false PASS LINT-04 exists to
+prevent, made visible on this repo rather than argued. A MISS at C2 would have meant something
+ELSE was invalidating the hash and the measurement was confounded -- the plan's explicit stop
+condition. It did not fire.
+
+Both files restored with `git checkout -- nx.json eslint.config.mjs`; `git diff --exit-code`
+clean on both.
+
+This is also the behavioural half of mutation **M6**; the assertion half (M6a) was measured in
+plan 07-03 and is cross-referenced rather than re-run.
+
+#### Negative control 2 -- `lint`'s scope must not depend on gitignored build output (G3)
+
+Re-run now that the `lint` target exists. Command, from `packages/github-cache`:
+`npx eslint . --format json | node -e "...console.log('linted:', JSON.parse(s).length)"`.
+
+| State | `dist/` files | `out-tsc/` files | Linted |
+|---|---|---|---|
+| with build output | 88 | 71 | **66** |
+| after `rm -rf dist out-tsc` | 0 | 0 | **66** |
+
+**IDENTICAL.** `lint`'s result does not depend on whether `build` ran, so it cannot diverge from
+its Nx hash. Two different numbers would have been a stale-cache false PASS by construction.
+
+The absolute count moved 64 -> 66 since plan 07-01: `lint-scope-drift.spec.ts` (plan 07-02) and
+`nx-target-inputs.spec.ts`'s growth are tracked files ESLint now walks. The count that matters is
+that the PAIR agrees, not its absolute value. Build output restored afterwards with
+`npm run build` and `npm run typecheck` (both replayed from cache: 88 and 71 files back).
+
+### D-23 -- M1 through M9, applied, OBSERVED, and reverted
+
+Every row below was re-run first-hand in this plan against the plan 07-03 tree, including the
+five that earlier waves had already measured -- so this table is one executor's direct
+observation rather than a stitched-together citation. Each mutation was applied, the detecting
+command run, the failure set recorded, and the file restored with `git checkout --` plus a
+`git diff --exit-code` confirmation before the next mutation. **No mutation was ever committed.**
+
+Baseline for the three guard specs before any mutation: **56 passed of 56** across
+`lint-rules.spec.ts` (37), `nx-target-inputs.spec.ts` (14) and `lint-scope-drift.spec.ts` (5).
+
+| # | Mutation | Command | OBSERVED failure set | Verdict |
+|---|---|---|---|---|
+| M1 | delete the P1 member-expression selector | `npx vitest run src/lint-rules.spec.ts` | **4 failed / 33 passed.** `catches process.platform, the primary member-expression form (P1)`; and the `is CAUGHT ...` assertion at all THREE `no-restricted-syntax` sites -- `releases-backend.spec.ts`, and both `release-asset-name.spec.ts` rows. Every import-shape assertion GREEN. | **MATCH** |
+| M2 | delete the `node:os` entry from `no-restricted-imports.paths` | same | **3 failed / 34 passed.** `catches a named import of a banned accessor from the os module`; `catches a namespace import of the os module, caught by BOTH rules`; and the `is CAUGHT ...` assertion at site 1, `cache-archive-path.spec.ts`. Every `process.*` assertion GREEN. | **MATCH** |
+| M3 | delete the P6 `ImportExpression` selector | same | **1 failed / 36 passed.** `catches a dynamic import of the os module and of the path module (P6 only)`, failing `expected [] to deeply equal [ 'no-restricted-syntax', 'no-restricted-syntax' ]`. Nothing else moved. | **MATCH** (see the note below on granularity) |
+| M4 | narrow `ignores` to `['**/*.integration.spec.ts']` | `npx vitest run src/lint-scope-drift.spec.ts` | **1 failed / 4 passed.** `applies the ban to exactly the extension set it exempts`, failing through the parser's OWN non-vacuity guard: `expected the glob "**/*.integration.spec.ts" to END in a {ext,ext} group`. | **MATCH** |
+| M5 | remove `{workspaceRoot}/eslint.config.mjs` from `targetDefaults.test.inputs` | `npx vitest run src/nx-target-inputs.spec.ts` | **1 failed / 13 passed.** `eslint.config.mjs is a test input, so editing a rule re-runs the lint guard`. Zero collateral. | **MATCH** |
+| M6 | remove `{workspaceRoot}/eslint.config.mjs` from `targetDefaults.lint.inputs` | same, **plus** the G5 negative-control-1 differential above | **1 failed / 13 passed** -- `eslint.config.mjs is a lint input, so editing a rule re-runs lint`, zero collateral. The BEHAVIOURAL half is negative control 1 above: `Cache: 1/1 hit (100%)` across a real rule edit. | **MATCH, both halves** |
+| M7 | remove the global `ignores` block | the negative-control-2 file count, with build output ON disk | **66 -> 159 linted files.** The two counts DIFFER by 93 -- the generated `dist/` (88) and `out-tsc/` (71) trees minus overlap, all at an Nx hash that never moves. | **MATCH** |
+| M8 | replace the site-1 described disable with a bare `// eslint-disable-next-line no-restricted-imports` | `npx eslint .` from `packages/github-cache` | **1 error.** `cache-archive-path.spec.ts:6:0` severity 2, `@eslint-community/eslint-comments/require-description`, "Unexpected undescribed directive comment." Guard-spec collateral, also observed: `carries a described disable stating why the assertion cannot move to integration` went RED (1 failed / 36 passed). | **MATCH -- LINT-05 is LIVE** |
+| M9 | move the site-1 described disable one line PAST its violation | same | **2 errors, both expected.** `cache-archive-path.spec.ts:6:10` severity 2 `no-restricted-imports` (the ban itself, now unsuppressed) AND `:7:1` severity 2 `ruleId: null` -- "Unused eslint-disable directive (no problems were reported from 'no-restricted-imports')". | **MATCH -- LINT-06 is LIVE** |
+
+Post-restore re-measure: `npx eslint .` from `packages/github-cache` reports **66 files linted, 0
+findings, exit 0**, and `git diff` against the task-1 commit shows no source, config or spec file
+touched.
+
+#### M3 is NOT a silent gap -- but its granularity diverges from VALIDATION.md
+
+The plan flagged M3 as the mutation most likely to pass vacuously, in which case P6 would be
+untested and D-21's dynamic-import shape a silent hole. **It went red.** P6 is genuinely load-
+bearing and genuinely covered.
+
+One divergence from VALIDATION.md's prediction, recorded because it is a real difference and not
+a rounding of the same thing. The table predicts "ONLY the two dynamic-import assertions RED".
+The shipped spec folds BOTH dynamic shapes -- `await import('node:os')` and
+`await import('node:path')` -- into a SINGLE `it()` row whose expected value is the two-element
+list `['no-restricted-syntax', 'no-restricted-syntax']`. So the observed count is **one** failing
+assertion covering two shapes, not two failing assertions. Coverage is identical; the granularity
+is not. A reader checking "2 red" against this table would otherwise conclude the mutation had
+under-fired.
+
+#### What M1 and M2 prove jointly, and why D-15 needed both rules
+
+M1 leaves every import-shape assertion GREEN and M2 leaves every `process.*` assertion GREEN. The
+failure sets are DISJOINT. That is the measured form of D-15's claim that neither rule is
+sufficient alone: `no-restricted-syntax` cannot see a destructured named import and
+`no-restricted-imports` cannot ban a member of a namespace object or reach a dynamic import.
+Two mutations, two disjoint red sets, no overlap -- the guard is not asserting one thing twice.
+
+M2's namespace row is the one partial: `import * as os from 'node:os'` is caught by BOTH rules,
+so with the `node:os` path entry gone it still reports `['no-restricted-syntax']` from P4 and
+fails only on the missing `no-restricted-imports` half. That is the defence-in-depth the spec
+comment claims, observed rather than asserted.
+
+#### Mutations that produce a FALSE reading if run carelessly
+
+Recorded so a later reader does not repeat them:
+
+- **M6 through the `lint` cache.** The behavioural half must be measured with a re-warm between
+  the `nx.json` edit and the rule edit. Removing the entry rotates `hash_project_config`, so the
+  FIRST post-mutation `lint` run misses for a reason that has nothing to do with the input list.
+  Reading that first miss as "the entry was not load-bearing after all" is the trap; the
+  measurement above re-warms twice before perturbing.
+- **M8 and M9 mutate a REAL spec file**, not a fixture, so both also perturb
+  `lint-rules.spec.ts`'s site table. The guard-spec collateral is expected and is recorded above
+  rather than treated as a second finding.
+
+---
+
+## Phase 7 hand-offs and the consolidated phase record (plan 07-04 task 3)
+
+### D-35 -- the Phase 8 CORR-03 baseline: PRESENT, re-verified, not duplicated
+
+The inferred `lint` target's HASHED node values were recorded in the **Plan 07-03** section
+above. They were re-read from `npm exec -- nx show project @op-nx/github-cache --json` at this
+plan's task 3 and are **byte-for-byte unchanged**: `targetName: lint`, `executor:
+nx:run-commands`, `outputs: []`, `options.cwd: packages/github-cache`, `options.command:
+eslint .`, `configurations: {}`, `parallelism: true`. All six `hash_project_config` fields are
+present, including the RESOLVED working directory.
+
+`metadata` is **NOT hashed** and is deliberately omitted from the baseline. It carries
+`help.command: "npx eslint --help"` -- a package-manager-exec token that WOULD differ if the
+resolved package manager ever changed -- and a future reader will otherwise re-derive whether
+that matters. It does not: `hash_project_config` never sees it. `cache: true` is inferred and is
+deliberately NOT restated in `targetDefaults` (D-24).
+
+**The OS-inference question is UNVERIFIED BY DESIGN and is NOT closed here.** Whether
+`@nx/eslint` infers this same node on Linux is an open question transferred to Phase 8's CORR-03,
+which treats `lint` as a FOURTH target and settles it empirically against this baseline. The risk
+is live rather than hypothetical: the plugin's existence gate genuinely runs for this project
+layout, because the config directory (the workspace root) differs from the project root, and that
+gate evaluates `eslint.isPathIgnored(join(workspaceRoot, file))` -- a POSIX-style `join` over an
+absolute Windows root, producing mixed separators. It reads clean at source and Windows tolerates
+it, but "should" is exactly what a two-leg measurement is for. `options.cwd` is the row most
+likely to diverge, and it is hashed.
+
+This record is the accepted-risk mitigation for D-01 (T-07-17, T-07-22). Do not reason it closed.
+
+### D-36 -- the legitimate all-MISS push, pre-recorded and NOT a gate
+
+Registering an inference plugin changes `hash_project_config`, which is folded into EVERY task
+hash. `test` rotates twice over, because `{workspaceRoot}/nx.json` is already an explicit `test`
+input. **Phase 7's first default-branch push is therefore a legitimate all-MISS push, and it is
+correct work rather than a regression.**
+
+There are **three legitimate rotation windows in this milestone**:
+
+1. **Phase 7** -- this one. `@nx/eslint` registration rotates every hash; the rotation is
+   isolated in `b3fdf6d` so it stays attributable.
+2. **Phase 8's PARITY root-cause fix** -- any change that makes the hash OS-invariant necessarily
+   moves it on at least one leg.
+3. **Phase 9's VER-01** -- produces the second consecutive all-miss push.
+
+**Consequence for Phase 9's OBS-04 tripwire, stated now so it is authored correctly the first
+time:** the tripwire condition must be *"two consecutive all-miss pushes with NO version-affecting
+change in between"*. A tripwire that fires on correct work gets disabled, and a disabled tripwire
+is worse than none.
+
+**What a rotation does NOT prove, from the pre-flight probe record**
+(`.planning/research/v0.0.2/PROBE-RESULTS.md`). A hash difference is attributable to the OS only
+once graph freshness is controlled on BOTH sides. The probe established two independent axes: a
+real OS axis (cold-ubuntu differs from cold-windows for every target) and a FRESHNESS axis that
+perfectly masquerades as it (a stale `.nx/workspace-data` on Windows reproduces the Linux result
+exactly). **Every prior cross-OS measurement in this repo read a confounded variable**, including
+the pair `STATE.md` once attributed to "ubuntu CI" versus "windows CI". An all-MISS push after
+this phase is an expected consequence of a config rotation and is evidence about NOTHING else.
+
+### The D-12 call, restated in one place with its numbers
+
+Full per-file breakdown is in the **Plan 07-01** section above. The call itself, consolidated:
+
+| Quantity | Predicted (RESEARCH G4) | MEASURED |
+|---|---|---|
+| files linted at baseline | 64 | **64** |
+| total findings at baseline | 10 | **10** |
+| `no-undef` | 7 | **7** |
+| `@typescript-eslint/no-require-imports` | 2 | **2** |
+| `@typescript-eslint/no-unused-vars` | 1 | **1** |
+| low-confidence regex class | 0-2 uncertain | **0** |
+| post-remediation residual | 0 | **0** |
+| **rules turned OFF repo-wide** | zero | **ZERO** |
+| **code edits made to satisfy a linter** | zero | **ZERO** |
+| configuration blocks added | two | **TWO** |
+
+G4's analytic baseline reproduced file-for-file and line-for-line. The two configuration blocks,
+named: (1) the **`**/*.cjs` override** -- `sourceType: 'commonjs'` plus a four-name inline globals
+map, closing 9 of the 10 findings by telling ESLint the truth about a CommonJS file, and carrying
+exactly one SCOPED rule-off (`@typescript-eslint/no-require-imports: 'off'`, limited to that one
+glob, recorded honestly rather than claimed as zero); and (2)
+**`@typescript-eslint/no-unused-vars` with the three leading-underscore patterns**, closing the
+tenth by codifying a convention the repo already followed at six sites. `no-undef` was kept LIVE
+for the `.cjs` glob, so the one file in the repo where that rule still applies keeps its typo
+check. No deferred-ideas entry was needed: D-12's escape hatch is for a single rule producing a
+broad sweep, and no rule did.
+
+### D-07 -- the recorded scope deviation, flagged FOR the verifier
+
+`lint` is **project-scoped**: `eslint .` with `cwd = packages/github-cache`. The workspace root
+gets NO lint target, because `@nx/eslint`'s `getProjectUsingESLintConfig` returns `null` for `.`
+when the root has neither a `src/` nor a `lib/` directory.
+
+**Not linted by this phase:** `esbuild.action.mjs`, `start-cache-server/entry.ts`,
+`vitest.workspace.ts`, and the `.planning/spikes/*.mjs` scripts.
+
+This narrows ROADMAP SC1 / LINT-01's literal "across the workspace" to "across the project that
+has specs". **It is an INTENTIONAL, RECORDED DEVIATION, not a gap.** All 32 spec files and all
+four CORR-05 sites are inside the scope, so LINT-02, LINT-03, LINT-05, LINT-06 and CORR-06 are
+fully covered. It also keeps the LINT-04 input set matched to the real lint scope rather than
+widened past it, which is the direction that CLOSES the stale-PASS class. Linting the root-level
+files needs a second scope and is carried as a deferred idea. The same note is comment-locked at
+the head of `eslint.config.mjs`, where an editor will meet it.
+
+### D-01 -- the one-line dismissal of the explicit-target alternative
+
+REQUIREMENTS and RESEARCH both require this appear in the phase record: an explicitly declared
+`command: 'eslint .'` target beside the existing `integration` target in
+`packages/github-cache/project.json` would need no inference plugin at all -- `@nx/eslint`'s value
+is target inference plus the `@nx/eslint:lint` executor, and LINT-01 through LINT-06 require
+neither. It was presented in full at discuss time, the user selected `@nx/eslint` (ecosystem norm,
+generator does the wiring, and ROADMAP/REQUIREMENTS already cite inference as the
+LINT-01 -> PARITY-01 ordering mechanism), and the alternative is CLOSED -- do not re-open it. The
+ordering constraint holds either way, since ANY declared target mutates `hash_project_config`, so
+nothing in the roadmap shape depended on the choice. The accepted cost is carried by D-35 above.
+
+### Three received-wording corrections that must NOT propagate
+
+| # | Where | The received wording | What is actually true |
+|---|---|---|---|
+| 1 | ROADMAP SC3 (and lines 310, 498, 623) | "the **three** CORR-05 violations" | **FOUR.** REQUIREMENTS, 07-CONTEXT D-22 and 07-RESEARCH all say four, across three files -- `release-asset-name.spec.ts` carries two. Four error POSITIONS, four described disables, four rows in `CORR_05_SITES`. Do not read the extra site as scope creep. (ROADMAP already carries this correction inline at its line 134.) |
+| 2 | REQUIREMENTS CORR-06 | its example uses the **two-argument** asset-name form | CORR-02 DELETES that parameter in Phase 10. `BAN_MESSAGE` in `eslint.config.mjs` deliberately uses `cachePlatform('win32')` instead (D-18), which OBS-03 keeps -- so the ban's own prose does not become a `fallow` finding three phases from now. |
+| 3 | REQUIREMENTS LINT-05 | the legacy bare `eslint-comments/require-description` prefix | The flat-config registration is SCOPED: `@eslint-community/eslint-comments/require-description`. Same rule, different prefix. Copying the requirement text verbatim into `eslint.config.mjs` would not resolve (D-29). |
+
+A fourth, recorded in plan 07-02 and repeated here because it is the same class: **CONTEXT D-22
+and REQUIREMENTS CORR-05 both list `cache-archive-path.spec.ts:26` alongside `:1`.** Correct as a
+SITE -- both lines leave together under VER-02 in Phase 9 -- but wrong as an error POSITION. In
+strict ESM the `tmpdir` binding cannot exist without the import, the import is already the error,
+and a disable over the bare call would FAIL the build through this phase's own opt-out
+discipline. The site table keys on the import only. **There is no fifth position.**
+
+### The stale codebase map, so the verifier does not read it as a contradiction
+
+`.planning/codebase/CONVENTIONS.md:316` still states **"ESLint is NOT configured in this
+repository -- there is no `eslint.config.*`"**. Plan 07-01 falsified that sentence.
+
+Regenerating `.planning/codebase/*` is a **deferred idea, not a Phase 7 deliverable**. The map is
+a generated snapshot of the tree at map time; editing one sentence by hand would leave the rest of
+the snapshot equally stale while looking current, which is worse. The verifier should read the
+sentence as a dated artefact, not as a contradiction of this phase's work.
+
+### The requirement ledger, and which ticks this plan owed
+
+Plans 07-01 and 07-02 deliberately LEFT LINT-05 and LINT-06 unticked rather than write a
+falsehood into the ledger the milestone audit reads: at the time, both were configured but their
+liveness was unproven, and the proof was M8/M9 -- this plan's work. Both are ticked here, each
+against the measurement that makes its text true:
+
+| Requirement | The clause that had to be TRUE | The measurement that makes it true |
+|---|---|---|
+| LINT-05 | "a bare disable is itself a lint error", and the same for `@ts-expect-error` / `@ts-ignore` | **M8**: a bare directive at a real site produces `@eslint-community/eslint-comments/require-description` at severity 2. The `ban-ts-comment` half is pinned by five `lintText` assertions in `lint-rules.spec.ts`, including `@ts-ignore` erroring in BOTH the bare and the described form. |
+| LINT-06 | "a disable left behind after its violation is removed must FAIL, not linger", and the reason must say why the assertion cannot move to integration | **M9**: displacing a directive one line produces BOTH the unsuppressed ban error AND a severity-2 unused-directive report. The reason-text clause is asserted per site (`reason` non-empty AND contains `integration`) across all four rows of `CORR_05_SITES`. |
+
+LINT-01, LINT-02, LINT-03 and LINT-04 were already ticked by earlier plans in this phase.
+LINT-01's tick was correct only from plan 07-03, because its text requires "a `lint` target wired
+into the CI battery" and that is when the target, the root script and the CI job landed.
+LINT-04's tick is now backed by the differential above rather than by the declaration probes
+alone, which is what D-27 and ROADMAP SC4 demand.
+
+**Ledger hygiene note.** `gsd-tools query requirements.mark-complete` has corrupted this file in
+both prior waves of this phase by inserting spurious blank lines before unrelated bullets, and
+both executors reverted and hand-applied the intended edits. This plan skipped the tool and
+edited by hand for that reason; the resulting `git diff` on `REQUIREMENTS.md` is exactly four
+lines -- two checkbox flips and two traceability rows -- and nothing else.

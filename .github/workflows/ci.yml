@@ -9,9 +9,36 @@ on:
 permissions:
   contents: read
 
+# Supersede an in-flight run only when a NEWER commit lands on the SAME pull request.
+# This workflow fans out to twenty-two jobs, three of which are multi-minute Windows-arm
+# legs, so a rapid re-push otherwise pays for the whole matrix twice with the first copy
+# already obsolete.
+#
+# `cancel-in-progress` IS CONDITIONAL, and the condition is the load-bearing part. On a
+# `push` to main this workflow WRITES: `publish` uploads Release assets and `dogfood-seed`
+# PUTs a cache entry. Cancelling one of those mid-upload is how a shard acquires a
+# zero-byte asset under a name a reader will resolve and a publisher will never overwrite
+# -- first-write-wins arbitration is keyed on the FILENAME, so a torn asset is permanent
+# until the retention window rolls it off. Push runs therefore queue rather than cancel;
+# only pull-request runs, which write nothing outside their own merge-ref cache scope,
+# are superseded.
+#
+# READ THAT ENUMERATION PRECISELY: since CR-18, `dogfood-seed` PUTs on same-repo PR runs
+# too, so the cancellable runs are exactly the ones that now perform that PUT. It is safe,
+# and the reason is recorded here rather than left to be re-derived: the seed key is
+# nx-cache-<GITHUB_RUN_ID>, so a torn PR-side upload leaves at most an absent entry under
+# a run id that is never reused. There is no first-write-wins filename arbitration to
+# poison -- that hazard belongs to the Release-asset uploads, which stay push-only.
+#
+# The group is keyed on `github.ref` so the two event kinds cannot share a group either.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   format-check:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -23,6 +50,55 @@ jobs:
       # default git-diff base, so diff-based format:check always fails here.
       - run: npx nx format:check --all
 
+  # `nx run-many -t lint` gates every project against the root flat ESLint
+  # config -- the two recommended sets plus the ambient-platform-read ban that
+  # keeps unit specs from branching on process.platform, which is what makes a
+  # unit spec's result the same on both runners (LINT-01, LINT-02, CORR-06).
+  # Kept a distinct named job like format-check and fallow so a lint regression
+  # surfaces as a red `lint` leg instead of inside the build/test battery, and
+  # so it still runs when an earlier gate fails. No background sidecar block: it
+  # runs in seconds, and a fifth cache producer would add a fifth mirrored hash
+  # family to the cross-OS investigation this milestone exists for (D-33). No
+  # build step either -- lint has no dependsOn, and the config's global ignores
+  # block exists precisely so lint output does not depend on whether build ran.
+  lint:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Exit 0 is NOT sufficient here, and that is the whole reason this is a
+      # scripted step rather than `- run: npm run lint`. `npm run lint` is
+      # `nx run-many -t lint`, and run-many with no matching target ANYWHERE
+      # prints "NX No tasks were run" and exits 0 (measured). The `lint` target
+      # is INFERRED by @nx/eslint/plugin (D-01) rather than declared, and D-35
+      # leaves "does @nx/eslint infer lint identically on both OSes?" UNVERIFIED
+      # BY DESIGN -- so "the target exists on this runner" is a live accepted
+      # risk, and a bare exit-code check converts it into a GREEN leg instead of
+      # a red one. Demanding the success LINE is RESEARCH's named discriminator
+      # for LINT-01: it prints only when a task actually ran.
+      #
+      # NO_COLOR is load-bearing, not tidiness. With colour on, Nx bolds the
+      # target name mid-phrase -- "ran target <esc>[1mlint<esc>[22m for project"
+      # -- so the plain-text match never fires and the check fails on every run
+      # including the good ones. A gate that always fails gets deleted just as
+      # fast as one that never fires.
+      #
+      # The other half of CR-01 (nx.json silently losing the plugins[] entry) is
+      # guarded locally by nx-target-inputs.spec.ts; this leg is what catches the
+      # target failing to materialise on a RUNNER rather than in the config.
+      - name: Lint, and prove the lint target actually ran
+        env:
+          NO_COLOR: '1'
+        run: |
+          set -euo pipefail
+          npm run lint 2>&1 | tee lint.log
+          grep -q 'Successfully ran target lint' lint.log
+
   # `fallow dead-code --fail-on-issues` gates the whole repo against dead code
   # (unused files/exports/deps + reachability). It is config-declared-clean via
   # .fallowrc.jsonc and base-independent, so it works identically on push and on
@@ -32,6 +108,7 @@ jobs:
   # diff-scoped gating once the repo grows large enough to want it.
   fallow:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -50,6 +127,7 @@ jobs:
   # named job so a drift surfaces as a red action-bundle-drift job.
   action-bundle-drift:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -72,6 +150,7 @@ jobs:
   # runs npm run build before the guard. Dependency-free node guard; distinct job.
   pack-check:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -95,6 +174,7 @@ jobs:
   # (expect a human_needed/live confirm on the CI run).
   ppe:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: ./ppe
@@ -117,11 +197,26 @@ jobs:
   #     backend there as well (pull_request is host-gated-trusted on github.com).
   #     Read-only on PRs is enforced by GitHub's PLATFORM -- cache scope isolation
   #     (a PR write lands in the PR ref's scope, invisible to the default branch)
-  #     plus the read-only-cache token for untrusted triggers, whose saveCache
-  #     no-ops through the backend's benign 409 path -- NOT by this code.
-  #   * NOT push-gated, unlike the proof jobs: push runs WRITE the entries, PR runs
-  #     READ the default-branch ones. `if: github.event_name == 'push'` here would
-  #     throw away the whole PR read benefit.
+  #     -- NOT by this code. The restriction is on the DEFAULT BRANCH'S SCOPE and
+  #     never on a run's own writes: GitHub documents that only high-trust triggers
+  #     can create or overwrite caches IN THE DEFAULT BRANCH'S SCOPE, while a
+  #     pull_request run -- fork included -- still CREATES its cache, in the merge
+  #     ref (refs/pull/.../merge).
+  #       CORRECTED. This clause used to end "plus the read-only-cache token for
+  #     untrusted triggers, whose saveCache no-ops through the backend's benign 409
+  #     path", which dropped the scope qualifier and turned CONTAINMENT into DENIAL
+  #     -- contradicting the scope-isolation half of its own sentence, and implying
+  #     the integration job's 200-only positive control must redden on every fork
+  #     PR. It does not: that probe reads the same merge-ref scope its own run
+  #     RESTORED OR WROTE. Dropping the qualifier is an easy misreading, which is
+  #     why the qualifier is now spelled in capitals rather than assumed.
+  #       CITED from GitHub's docs, not reproduced here -- this repo has had no fork
+  #     PR on record. Same standing, and the same caveat, as the !cancelled()-past-a-
+  #     FAILED-needs citation on the publish job.
+  #   * NOT push-gated -- like the dogfood proof pair since CR-18, and unlike the
+  #     publish pair: push runs WRITE the entries, PR runs READ the default-branch
+  #     ones. `if: github.event_name == 'push'` here would throw away the whole PR
+  #     read benefit.
   #   * The NX_* vars stay strictly per-job. Hoisting them to workflow `env:` would
   #     point every sidecar-less proof job at a dead server, so each of their Nx
   #     invocations would try (and fail) to reach 127.0.0.1:3000.
@@ -243,14 +338,29 @@ jobs:
       - run: npm ci
       # Sidecar dogfood block. Rationale, and the traps it avoids, are documented
       # once above the build job (whose copy also carries the inline trap notes).
-      # The EXECUTABLE shell must stay identical across all four wired jobs -- only
-      # the final `npm run <target>` line may differ, and only build's copy carries
-      # extra comments. Keep it that way, so the windows-11-arm integration leg
-      # never drifts from the others. This is an unguarded invariant: nothing fails
-      # if it drifts. cleanup-workflow.spec.ts is the precedent for asserting on a
-      # workflow from a spec if that ever becomes worth enforcing -- note ci.yml is
-      # NOT in nx.json's test inputs (only cleanup.yml is), so such a guard would
-      # need ci.yml added there or it goes stale behind a cache hit.
+      # The EXECUTABLE shell must stay identical across all seven wired jobs --
+      # build, typecheck, test, integration, build-windows, typecheck-windows and
+      # test-windows -- only the final `npm run <target>` line may differ, and only
+      # build's copy carries extra comments. Keep it that way, so the windows-11-arm
+      # legs never drift from the ubuntu producers they exist to reuse.
+      #
+      # SEVEN WIRED JOBS, EIGHT COPIES, and those are two different sets on purpose.
+      # The step occurs EIGHT times in this file; the eighth copy is in
+      # `consumer-smoke`, which drives a scripted PUT/GET rather than an Nx target and
+      # is deliberately OUTSIDE this invariant. (MEASURED before Phase 12: five copies,
+      # four wired. XOS-04 added three legs, so both counts moved by three.) A note
+      # saying "five become eight" without that distinction is describing a different
+      # set than the invariant governs. Do not weaken the invariant to accommodate the
+      # three new copies.
+      #
+      # This is an unguarded invariant: nothing fails
+      # if it drifts. CORRECTED, and the replacement fact rather than a bare deletion:
+      # this note used to say ci.yml was NOT in nx.json's test inputs, so such a guard
+      # would first need it registered there. PARITY-08 registered it in
+      # targetDefaults.test.inputs, and
+      # dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts now both assert on this
+      # file, so the precondition is already met -- only the drift guard itself would be
+      # new work. cleanup-workflow.spec.ts remains the precedent for the shape.
       - name: Pre-set the Nx cache client vars for the sidecar
         shell: bash
         run: |
@@ -333,12 +443,400 @@ jobs:
       - run: npm run test
       - cancel: cache-server
 
+  # THE THREE windows-11-arm REUSE LEGS (XOS-04), and they are the CONSUMER half of
+  # this milestone. Each runs the SAME Nx target as its ubuntu counterpart above, and
+  # build/typecheck/test carry NO platform discriminator (only `integration` does --
+  # see its comment below), so each Windows leg computes the SAME task hash its ubuntu
+  # producer just wrote and can restore that entry. That restore IS the XOS-05
+  # observation; without these jobs there is nothing on Windows to observe.
+  #
+  # THE `needs:` EDGE IS A PRODUCER-TO-CONSUMER DEPENDENCY FOR HIT-ABILITY, NEVER AN
+  # ORDERING-CORRECTNESS CONTROL. PROJECT.md locks that cross-OS sharing rests on target
+  # platform-agnosticism and NEVER on leg ordering, and XOS-06 forbids ordering from
+  # becoming a correctness control: no result computed here changes if the order
+  # changes, and a leg that ran first would MISS and execute, which is slow rather than
+  # wrong. What the edge buys is that the producer has finished before the consumer
+  # starts. WITHOUT it the two legs compute the same hash at the same time, so both
+  # MISS, both execute, and both call saveCache(nx-cache-H) -- the race TRUST-11
+  # predicted in advance (.planning/phases/10-os-invariant-releases-mirror/
+  # 10-SECURITY.md, the Q1 section). The edge removes the RACE. It does NOT remove the
+  # SECOND PRODUCER: from these jobs onward a windows-11-arm runner writes
+  # build/typecheck/test entries too, and that half is recorded in the same Q1 section
+  # rather than left implicit.
+  #
+  # `integration` IS NOT THE WIRING PRECEDENT, and that is worth writing down because it
+  # is the only existing two-OS Nx-target job, so it is the first thing a reader reaches
+  # for. Two independent reasons its matrix cannot serve here:
+  #   (a) `needs:` is per-JOB and never per-LEG, so a matrix leg cannot depend on its
+  #       sibling -- a matrix cannot express XOS-08 at all; and
+  #   (b) `integration`'s two legs compute DIFFERENT hashes, because of the
+  #       `{ runtime: "node --no-warnings -p process.platform" }` discriminator in
+  #       its own target inputs, so parallelism is harmless there and lethal here,
+  #       where the two legs computing the SAME hash is the entire point.
+  #
+  # And do NOT "fix the asymmetry" by giving `dogfood-seed` a Windows leg while in this
+  # file. It is ubuntu-ONLY BY DESIGN and its own VACUITY CONDITION comment says why:
+  # its key is one per RUN, so a Windows seed leg would make the Windows verify leg
+  # restore a Windows-written entry. These legs key on the task HASH, so that reasoning
+  # does not transfer.
+  build-windows:
+    # Consumer of the ubuntu `build` job's entry: a bare scalar naming exactly ONE
+    # producer (XOS-08). See the block above for why this is a HIT-ability edge.
+    needs: build
+    runs-on: windows-11-arm
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Sidecar dogfood block -- see the build job above, plus one line the ubuntu
+      # producers deliberately do not carry: CACHE_READ_ONLY.
+      #
+      # That knob is ROLE, not TRUST (TRUST-14, D-02a). This leg is a CONSUMER of the
+      # ubuntu producer's entry, and producer-versus-consumer role is not derivable
+      # from any GitHub-supplied env fact: `push` and same-repo `pull_request` are both
+      # correctly write-TRUSTED, and GitHub exposes no per-job read-only lever. The
+      # workflow author supplies the one thing the runner cannot. Declining the write
+      # is what makes the count gate at the end of this job SOUND -- see that step.
+      #
+      # It goes in THIS step rather than in the sidecar's own `env:` because a REGULAR
+      # step's $GITHUB_ENV writes reach later steps while a BACKGROUND step's do not,
+      # which start-cache-server/action.yml's own comment records. And it can only
+      # NARROW: select-backend.ts reads it as the LAST branch, after every branch that
+      # has already returned a read-only backend or thrown, so it cannot resurrect an
+      # outcome control never reaches it from (TRUST-05, D-02b).
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+          echo "CACHE_READ_ONLY=1" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
+      # Tee'd, and named, for the reason the integration job's copy states: the bare
+      # `- run:` form leaves this leg with NO runtime cache observation at all. A leg
+      # that MISSED and executed locally exits 0 identically to one that HIT, so these
+      # three -- which exist for NOTHING BUT the HIT observation -- could not report the
+      # one thing they are for. An @actions/cache bump that broke cross-OS restore would
+      # leave all three GREEN and hash-parity green (it compares hashes, not storage).
+      # The dogfood canary DOES catch that bump -- that is its stated job as the
+      # ROBUST-03 upgrade canary, its verify leg MISSes and reddens, and since CR-18 it
+      # does so on same-repo PRs too. But it catches a DIFFERENT thing from these
+      # records: it drives a DIRECT scripted PUT/GET on a run-scoped key, so it never
+      # observes whether a REAL Nx build/typecheck/test task got a remote HIT. These
+      # per-target records are the only runtime observation of THAT -- and on a fork
+      # pull request, where the dogfood pair is skipped, the only cross-OS signal at all.
+      # Under set -euo pipefail the tee preserves a failing Nx exit code.
+      - name: Run the build target and tee its output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee build-nx.log
+      # GATED at a floor of 1, and the floor is sound ONLY because the step above made
+      # this leg unable to write. The silent failure that ungated it until XOS-09: a
+      # leg that can save launders its own failure, because a broken cross-OS restore
+      # makes it MISS, execute the target and SAVE its own entry -- and a re-run of the
+      # same commit then HITs that self-produced entry, taking a floor check green with
+      # cross-OS reuse still dead. A gate a re-run can launder is worse than no gate,
+      # because it reads as coverage.
+      # CACHE_READ_ONLY removes the premise rather than mitigating it. With no write
+      # path, no windows-produced entry for these hashes can ever exist, so a
+      # `[remote cache]` label here is NECESSARILY a restore of the ubuntu producer's
+      # entry. That property is INDUCTIVE: it holds of every run, and rests on nothing
+      # about job ordering, about this being a first run, or about anything else being
+      # true right now.
+      # Keep LIVENESS separate from correctness, because they are two arguments and
+      # only one of them is this step's. XOS-08's `needs:` edge is why the entry is
+      # PRESENT at all -- the ubuntu producer repopulates it earlier in the SAME run.
+      # Read-only-ness is why a green MEANS something. Neither substitutes for the
+      # other, and a rationale resting this gate on the `needs:` edge has confused them.
+      # Second-order effect, and it is the intended one: a MISS is now PERMANENT for
+      # that hash, because no self-produced entry ever backfills it. A red gate here
+      # stays red until the producer side is fixed rather than going green on a re-run.
+      # What this gate still does NOT cover: these three legs run the COMMITTED public
+      # `./start-cache-server` bundle, while the dogfood pair runs
+      # `uses: ./packages/github-cache` built in-job. Nothing here ties the bundle to
+      # the source it was built from -- `action-bundle-drift` is the control that does.
+      # Over-reading a green here as evidence about uncommitted source is the mistake
+      # CR-18 caught the first time.
+      # The `|| true` keeps a legitimate zero REACHING the comparison: under pipefail a
+      # zero-match grep exits 1 and would abort the step before the gate ran, turning a
+      # clear failure carrying an annotation into an opaque one carrying none.
+      # `-a` FORCES TEXT, and its absence was a fail-OPEN route rather than a tidiness
+      # lapse. A single NUL byte anywhere in the tee'd log -- routine for
+      # PowerShell-invoked tooling on windows-11-arm -- makes grep classify the file as
+      # BINARY and print one summary line instead of the matches, so `wc -l` returns 1 on
+      # ZERO real labels and clears a floor of 1. The same byte on a grep that routes that
+      # notice to stderr yields 0 instead, reddening this leg and blaming cross-OS restore
+      # for an encoding artefact. `-a` removes both directions at once.
+      # THE SHAPE CHECK IS WHAT MAKES THE COMPARISON A GATE, and it closes a fail-OPEN
+      # hole rather than hardening a working one. MEASURED: `[ "${count}" -lt 1 ]` sits in
+      # an `if` CONDITION, where `set -e` is SUSPENDED -- so a non-integer `count` prints
+      # `[: ...: integer expected` to stderr, the test reports FALSE, control takes the
+      # else branch, and THE STEP EXITS 0. The identical test outside a condition exits 2
+      # and aborts. So every non-decimal value -- empty, a grep notice, a truncated read --
+      # silently PASSED the leg's only gate while printing "GATED at a floor of 1". A gate
+      # a malformed count can launder is the same defect XOS-09 removed from the re-run
+      # direction, arriving through the comparison instead. Nx renders no count as anything
+      # but decimal digits, so `''|*[!0-9]*` rejects exactly the values that cannot be
+      # compared -- the same all-decimal idiom the o3-witness applies to its own hash
+      # record, for the same reason: never compose a verdict from an unvalidated value.
+      - name: Gate on the cross-OS remote-cache label count for this leg
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$({ grep -a -o -F '[remote cache]' build-nx.log || true; } | wc -l | tr -d '[:space:]')
+          echo "remote-cache label occurrences on windows-11-arm (build): ${count} -- GATED at a floor of 1"
+          case "${count}" in
+            ''|*[!0-9]*)
+              echo "::error::build-windows could not COUNT the [remote cache] labels: '${count}' is not a decimal number, so the floor below was never evaluated. This is a FAILURE and never a pass -- an unevaluated gate must not read as coverage. Check the tee'd log for a binary-file notice (a NUL byte in build-nx.log) or a truncated read."
+              exit 1
+              ;;
+          esac
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::build-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu build job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), the ubuntu producer never populated the entry this run, or Nx stopped printing the literal '[remote cache]' label this grep counts (an Nx upgrade renames it and fails all three legs at once on a HEALTHY cache). Check the producer job's own log: a HIT there points at cross-OS restore, a save without a HIT at the producer, and no label at all on a green producer at the Nx rename."
+            exit 1
+          fi
+      - cancel: cache-server
+
+  typecheck-windows:
+    # Consumer of the ubuntu `typecheck` job's entry -- same edge, same reasons as
+    # build-windows above. One producer, bare scalar, HIT-ability not ordering.
+    needs: typecheck
+    runs-on: windows-11-arm
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Sidecar dogfood block -- see the build job above; the CACHE_READ_ONLY role
+      # knob carries the build-windows leg's rationale.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+          echo "CACHE_READ_ONLY=1" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
+      # Tee'd, and named, for the reason the integration job's copy states: the bare
+      # `- run:` form leaves this leg with NO runtime cache observation at all. A leg
+      # that MISSED and executed locally exits 0 identically to one that HIT, so these
+      # three -- which exist for NOTHING BUT the HIT observation -- could not report the
+      # one thing they are for. An @actions/cache bump that broke cross-OS restore would
+      # leave all three GREEN and hash-parity green (it compares hashes, not storage).
+      # The dogfood canary DOES catch that bump -- that is its stated job as the
+      # ROBUST-03 upgrade canary, its verify leg MISSes and reddens, and since CR-18 it
+      # does so on same-repo PRs too. But it catches a DIFFERENT thing from these
+      # records: it drives a DIRECT scripted PUT/GET on a run-scoped key, so it never
+      # observes whether a REAL Nx build/typecheck/test task got a remote HIT. These
+      # per-target records are the only runtime observation of THAT -- and on a fork
+      # pull request, where the dogfood pair is skipped, the only cross-OS signal at all.
+      # Under set -euo pipefail the tee preserves a failing Nx exit code.
+      - name: Run the typecheck target and tee its output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run typecheck 2>&1 | tee typecheck-nx.log
+      # GATED at a floor of 1 -- the build-windows leg above carries the full rationale;
+      # this is the one-line form. The floor is sound because CACHE_READ_ONLY makes this
+      # leg a pure CONSUMER: with no write path it cannot save an entry of its own, so a
+      # `[remote cache]` label is NECESSARILY a restore of the ubuntu producer's entry
+      # and a re-run cannot launder a zero into a green.
+      #
+      # Stated ONCE rather than three times over: the argument was 13 lines verbatim on
+      # each of the three legs, which triples the blast radius of the next correction --
+      # and this file is the evidence that N-copy prose drifts PARTIALLY. The same commit
+      # that widened the dogfood trigger had to fix eight sites making one stale claim,
+      # several of them copies that a previous edit had missed. Don't re-expand this.
+      # The `|| true` keeps a legitimate zero reaching the comparison instead of
+      # aborting the step under pipefail. `-a` and the all-decimal `case` are the
+      # fail-CLOSED half -- build-windows carries the measurement and the full rationale.
+      - name: Gate on the cross-OS remote-cache label count for this leg
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$({ grep -a -o -F '[remote cache]' typecheck-nx.log || true; } | wc -l | tr -d '[:space:]')
+          echo "remote-cache label occurrences on windows-11-arm (typecheck): ${count} -- GATED at a floor of 1"
+          case "${count}" in
+            ''|*[!0-9]*)
+              echo "::error::typecheck-windows could not COUNT the [remote cache] labels: '${count}' is not a decimal number, so the floor below was never evaluated. This is a FAILURE and never a pass -- an unevaluated gate must not read as coverage. Check the tee'd log for a binary-file notice (a NUL byte in typecheck-nx.log) or a truncated read."
+              exit 1
+              ;;
+          esac
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::typecheck-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu typecheck job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), the ubuntu producer never populated the entry this run, or Nx stopped printing the literal '[remote cache]' label this grep counts (an Nx upgrade renames it and fails all three legs at once on a HEALTHY cache). Check the producer job's own log: a HIT there points at cross-OS restore, a save without a HIT at the producer, and no label at all on a green producer at the Nx rename."
+            exit 1
+          fi
+      - cancel: cache-server
+
+  test-windows:
+    # Consumer of the ubuntu `test` job's entry -- same edge, same reasons as
+    # build-windows above. One producer, bare scalar, HIT-ability not ordering.
+    needs: test
+    runs-on: windows-11-arm
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Sidecar dogfood block -- see the build job above; the CACHE_READ_ONLY role
+      # knob carries the build-windows leg's rationale.
+      - name: Pre-set the Nx cache client vars for the sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+          echo "CACHE_READ_ONLY=1" >> "$GITHUB_ENV"
+      - uses: ./start-cache-server
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for the loopback sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
+            exit 1
+          fi
+      # Tee'd, and named, for the reason the integration job's copy states: the bare
+      # `- run:` form leaves this leg with NO runtime cache observation at all. A leg
+      # that MISSED and executed locally exits 0 identically to one that HIT, so these
+      # three -- which exist for NOTHING BUT the HIT observation -- could not report the
+      # one thing they are for. An @actions/cache bump that broke cross-OS restore would
+      # leave all three GREEN and hash-parity green (it compares hashes, not storage).
+      # The dogfood canary DOES catch that bump -- that is its stated job as the
+      # ROBUST-03 upgrade canary, its verify leg MISSes and reddens, and since CR-18 it
+      # does so on same-repo PRs too. But it catches a DIFFERENT thing from these
+      # records: it drives a DIRECT scripted PUT/GET on a run-scoped key, so it never
+      # observes whether a REAL Nx build/typecheck/test task got a remote HIT. These
+      # per-target records are the only runtime observation of THAT -- and on a fork
+      # pull request, where the dogfood pair is skipped, the only cross-OS signal at all.
+      # Under set -euo pipefail the tee preserves a failing Nx exit code.
+      - name: Run the test target and tee its output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test 2>&1 | tee test-nx.log
+      # GATED at a floor of 1 -- the build-windows leg above carries the full rationale;
+      # this is the one-line form. The floor is sound because CACHE_READ_ONLY makes this
+      # leg a pure CONSUMER: with no write path it cannot save an entry of its own, so a
+      # `[remote cache]` label is NECESSARILY a restore of the ubuntu producer's entry
+      # and a re-run cannot launder a zero into a green.
+      #
+      # Stated ONCE rather than three times over: the argument was 13 lines verbatim on
+      # each of the three legs, which triples the blast radius of the next correction --
+      # and this file is the evidence that N-copy prose drifts PARTIALLY. The same commit
+      # that widened the dogfood trigger had to fix eight sites making one stale claim,
+      # several of them copies that a previous edit had missed. Don't re-expand this.
+      # The `|| true` keeps a legitimate zero reaching the comparison instead of
+      # aborting the step under pipefail. `-a` and the all-decimal `case` are the
+      # fail-CLOSED half -- build-windows carries the measurement and the full rationale.
+      - name: Gate on the cross-OS remote-cache label count for this leg
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$({ grep -a -o -F '[remote cache]' test-nx.log || true; } | wc -l | tr -d '[:space:]')
+          echo "remote-cache label occurrences on windows-11-arm (test): ${count} -- GATED at a floor of 1"
+          case "${count}" in
+            ''|*[!0-9]*)
+              echo "::error::test-windows could not COUNT the [remote cache] labels: '${count}' is not a decimal number, so the floor below was never evaluated. This is a FAILURE and never a pass -- an unevaluated gate must not read as coverage. Check the tee'd log for a binary-file notice (a NUL byte in test-nx.log) or a truncated read."
+              exit 1
+              ;;
+          esac
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::test-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu test job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), the ubuntu producer never populated the entry this run, or Nx stopped printing the literal '[remote cache]' label this grep counts (an Nx upgrade renames it and fails all three legs at once on a HEALTHY cache). Check the producer job's own log: a HIT there points at cross-OS restore, a save without a HIT at the producer, and no label at all on a green producer at the Nx rename."
+            exit 1
+          fi
+      - cancel: cache-server
+
   # Integration tests hit real OS surface (real sockets, real filesystem/tmpdir),
-  # so their Nx hash carries a `{ runtime: "node -p process.platform" }`
-  # discriminator (see nx.json's integration inputs): the Linux and Windows hashes
+  # so their Nx hash carries a
+  # `{ runtime: "node --no-warnings -p process.platform" }` discriminator (see
+  # nx.json's integration inputs): the Linux and Windows hashes
   # differ, so both matrix legs run and a Linux cache never satisfies a Windows
-  # run, while a local Windows `nx integration` computes the same "win32" hash and
-  # hits that cache. process.platform is compiled into node, so it is stable across
+  # run -- and from VER-01/VER-03 that Nx hash is the ONLY thing separating them,
+  # because the cache STORAGE no longer partitions by OS. A local Windows
+  # `nx integration` computes the same "win32" hash and hits that cache.
+  # process.platform is compiled into node, so it is stable across
   # shell (PowerShell/Git-Bash/cmd) and across x64-vs-arm64 or arm64 emulation --
   # unlike `env:RUNNER_OS` (unset off-CI) or a plain `env` var (whose key MSYS
   # uppercases while Nx's env hasher is case-sensitive). fail-fast off so a
@@ -356,7 +854,10 @@ jobs:
   # and Git Bash themselves are both present on the Windows runner). Cross-OS is
   # safe as-is: the OS discriminator above means the Linux and Windows legs compute
   # DIFFERENT Nx task hashes, so neither leg can ever restore the other's entry --
-  # exactly the CORR-01 namespacing the store already relies on. port 3000 on both
+  # and from VER-01/VER-03 that hash is the SOLE separation, because the STORE no
+  # longer partitions by OS. XOS-03 is explicit that this divergence is a statement
+  # about Nx HASHES and not about cache storage: a storage-level probe for the Linux
+  # key from a Windows runner would now HIT. port 3000 on both
   # legs is fine; each matrix leg is its own isolated runner.
   integration:
     strategy:
@@ -367,6 +868,31 @@ jobs:
     # Generic hang insurance -- see the build job.
     timeout-minutes: 20
     steps:
+      # D-21's in-run observation of step debug logging, and it is ECHO-ONLY BY
+      # DECISION rather than the fatal gate 11-RESEARCH.md recommended. A step that
+      # exits 1 when runner.debug is not 1 becomes a PERMANENT tripwire the moment the
+      # ACTIONS_STEP_DEBUG repository variable is unset after the proving run, and this
+      # file already records the rule on the publish job: a tripwire that fires on
+      # correct work gets disabled, with OBS-04 as this repo's own record of it
+      # happening. The reason RESEARCH wanted a gate -- failing DURING the run, so a run
+      # is not wasted -- is recovered instead by plan 11-07's two read-only pre-flight
+      # commands, which run BEFORE the push and so verify the configuration before a run
+      # is spent. The echo keeps RESEARCH's other two reasons in full: it prints a line
+      # that goes straight into 11-EVIDENCE.md as a recorded fact, and it observes the
+      # EFFECT rather than the configuration, so it is immune to the documented trap
+      # that an ACTIONS_STEP_DEBUG SECRET takes precedence over the variable.
+      #
+      # First step in the job, before the checkout, because it needs no repo content and
+      # the recorded fact belongs at the top of each leg's log. The context value
+      # reaches the script through env: rather than being interpolated into the run:
+      # body -- the same rule the hash-parity capture step records for its matrix value.
+      - name: Record whether step debug logging is active
+        shell: bash
+        env:
+          RUNNER_DEBUG_OBSERVED: ${{ runner.debug }}
+        run: |
+          set -euo pipefail
+          echo "runner.debug=${RUNNER_DEBUG_OBSERVED:-<unset>} -- RECORDED, never gated"
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
@@ -405,8 +931,994 @@ jobs:
             echo "sidecar not ready on ${NX_SELF_HOSTED_REMOTE_CACHE_SERVER} after 30 attempts (last status ${code}, wanted 404 or 200)" >&2
             exit 1
           fi
-      - run: npm run integration
+      # Explicit `name:`, and the name is a CONTRACT rather than decoration: the
+      # o3-witness job selects this step out of the runs/{id}/jobs REST payload by its
+      # RENDERED name, and the bare `- run: npm run integration` form renders as
+      # `Run npm run integration`, which adding a tee would silently change. If this
+      # name is ever edited, the witness's jq selector must be edited in the SAME
+      # commit. Under set -euo pipefail the tee preserves a failing Nx exit code, so the
+      # step still fails loud; the log exists so the steps below can count a literal in
+      # it instead of re-running Nx to observe the same run twice.
+      - name: Run the integration target and tee its output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run integration 2>&1 | tee integration-nx.log
+      # THE IMMEDIATELY NEXT STEP, with no step of any kind in between, and that
+      # immediacy is load-bearing: every nx invocation OVERWRITES .nx/cache/run.json, so
+      # one convenience nx call here would upload the wrong hash with nothing going red.
+      # read-integration-hash.mjs's own run.command guard is the second line of defence,
+      # never the first. It also THROWS rather than writing an empty hash, because
+      # if-no-files-found: error below only checks that a file EXISTS. Invoked with no
+      # arguments so it uses its two defaults (.nx/cache/run.json, integration-hash.txt),
+      # and it prints the structured per-task cacheStatus on the same line.
+      - name: Read this leg's integration hash from run.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          node read-integration-hash.mjs
+      # ONE step in a matrix job, so both legs get byte-identical treatment by
+      # construction rather than by two conditioned copies staying in step -- the reason
+      # this file already states on the hash-parity build step, and the reason nothing
+      # added to this job carries an `if: matrix.os` expression. The artifact NAME must
+      # be unique per leg: v4-onward names are immutable, so two legs uploading to one
+      # name is an error rather than a merge, and the matrix OS value is the natural
+      # discriminator. if-no-files-found: error is not tidiness -- the default is warn,
+      # so without it a leg whose instrument produced nothing uploads an EMPTY artifact
+      # and the failure surfaces inside o3-witness, one job further from its cause.
+      # upload-artifact@v7 pairs with download-artifact@v8 throughout this repo.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: integration-hash-${{ matrix.os }}
+          path: integration-hash.txt
+          if-no-files-found: error
+      # D-17 step (a), and D-17 sub-lock 2 governs what may be done with the number: it
+      # is RECORDED and never GATED (the o3-witness block carries the full reason). A
+      # zero is the EXPECTED windows outcome, and it is equally correct on a re-run at
+      # the same commit, where a LOCAL hit precedes any remote read -- so a gate here
+      # would fire on correct work, and a tripwire that fires on correct work gets
+      # disabled. The reader above prints the structured cacheStatus value, which is the
+      # remote-vs-local discrimination this count cannot make (D-24).
+      #
+      # Four mechanics. The matrix value reaches the script through env: and is never
+      # interpolated into the run: body, so it never lands on a command line the shell
+      # re-parses. The label is matched as a FIXED string, because square brackets are a
+      # regex character class. OCCURRENCES are counted with an -o match piped into
+      # wc -l, never with a line-count flag, because two labels can share one line. And
+      # grep exits 1 on no match, which under pipefail would abort the leg on the very
+      # outcome that is expected here -- hence the tolerant brace group INSIDE the
+      # pipeline, so a legitimate zero prints 0 instead of reddening the leg.
+      - name: Record the remote-cache label occurrence count for this leg
+        shell: bash
+        env:
+          LEG_OS: ${{ matrix.os }}
+        run: |
+          set -euo pipefail
+          count=$({ grep -o -F '[remote cache]' integration-nx.log || true; } | wc -l | tr -d '[:space:]')
+          echo "remote-cache label occurrences on ${LEG_OS}: ${count} -- RECORDED, never gated"
+      # D-16's positive control, and it asks a DIFFERENT question from the readiness poll
+      # above, with a DIFFERENT acceptance set:
+      # the acceptance set is 200 ALONE -- a 404 here is a control FAILURE
+      # the readiness poll accepts 404 or 200 on purpose; do not collapse them
+      # The poll proves REACHABILITY against a hash nothing creates; this probe proves the
+      # service really round-tripped an entry THIS RUN'S OWN SCOPE HOLDS -- the leg either
+      # RESTORED it from that scope or WROTE it into that scope, and both routes end in the
+      # same place, because the GET resolves through an UNCONDITIONAL cache.restoreCache in
+      # actions-cache-backend.ts that is not conditioned on this run having written first.
+      #   THE DISJUNCTION IS MEASURED, not defensive: on runs 30907575624 and 30910935382
+      # every integration leg took a remote-cache HIT and wrote NOTHING -- four
+      # leg-observations across those two runs -- and every control still returned 200. This
+      # comment used to attribute the key's presence to the leg's task having written it,
+      # which those runs falsify.
+      #   A NON-200 SAYS DIFFERENT THINGS AT ITS TWO CODES. 000 is the sidecar not answering
+      # at all, and the `|| true` paragraph below carries that mechanism in full. But a
+      # 404 means the sidecar DID answer -- 404 is the readiness poll's own proof-of-life
+      # signature, and this file must not read one status code as proof of life at the poll
+      # above and as proof of death in this block. The fault is DOWNSTREAM of the HTTP layer:
+      # handleGet's catch in server.ts degrades EVERY backend fault to a 404 MISS (SRV-05),
+      # which is what makes a broken read path indistinguishable from a genuine absence at
+      # this boundary. That degradation, not a dead sidecar, is the masquerade agent this
+      # control exists to catch.
+      #   THE CONSEQUENCE DEPENDS ON THE LEG'S OUTCOME, and both branches are stated because
+      # which one applies is a property of the run, not of this file.
+      #   * On a MISS-then-write leg -- the load-bearing case -- a read path that cannot
+      #     produce a key this run itself wrote could equally have MANUFACTURED the MISS: a
+      #     token-less sidecar falls to createReadOnlyMemoryBackend in select-backend.ts and
+      #     404s everything. The MISS observation is INADMISSIBLE.
+      #   * On a HIT leg the leg's own remote-cache-hit already proved the round trip through
+      #     this same sidecar process, and the backend is chosen ONCE at sidecar startup, so
+      #     a HIT excludes the degraded one. A 404 retracts nothing already observed; it
+      #     reports read-path NON-DETERMINISM inside one job. That leaves the step
+      #     REDUNDANT AS A LIVENESS PROOF and nothing weaker: its ENFORCEMENT is not
+      #     redundant at all, because cacheStatus is RECORDED and never GATED, so on such a
+      #     leg this step is the only thing in the job that hard-fails on a broken read path.
+      #   THE FAILURE DIRECTION IS NEVER OBSERVED. No 404 has ever come back from this step,
+      # so every claim above about what a non-200 would MEAN is derived from the code rather
+      # than measured; only the presence disjunction is measured. Two probes, two acceptance
+      # sets, two questions -- collapsing them into one helper with the looser set would
+      # leave both steps green while destroying the control, so do not reuse the poll's
+      # deadbeef hash here either.
+      #
+      # THE FORK-PR CASE, RESOLVED -- the premise HOLDS on a fork, so this control needs
+      # no trigger gate and keeps its 200-only acceptance set. It was briefly recorded
+      # here as an open contradiction: the `build` job's comment claimed untrusted
+      # triggers get a token "whose saveCache no-ops", which would mean a fork PR saves
+      # nothing, this probe 404s, and BOTH legs go red blaming a dead sidecar that was
+      # alive.
+      #   THAT CLAIM WAS THE WRONG ONE, and it is corrected at its own site. GitHub's
+      # read-only restriction is SCOPED: only high-trust triggers can create or overwrite
+      # caches in the DEFAULT BRANCH'S SCOPE, while a pull_request run -- fork included --
+      # still CREATES its cache, in the merge ref (refs/pull/.../merge). This step's GET
+      # runs inside that same run and therefore reads that same scope, so the key is
+      # known-present in this run's own scope on a fork exactly as it is on the same-repo
+      # branch PRs every run to date has exercised.
+      #   AND THE DISJUNCTION ADDS A SECOND, INDEPENDENT LEG here. The restore disjunct
+      # needs NO WRITE PERMISSION at all -- a fork PR that HITS restored the entry from a
+      # scope it only had to READ, and GitHub's restriction is on WRITING -- so that
+      # disjunct carries a HIT run with zero reliance on the fork-write citation below,
+      # while the merge-ref argument above still carries a MISS run. Two independent legs
+      # where there was one. That is NOT the fork question closed: see the escape hatch.
+      #   The misreading is named because it is an easy one to repeat: drop the "in the
+      # default branch's scope" qualifier and containment reads as denial. CITED from
+      # GitHub's docs, not reproduced -- no fork PR on record -- with the same standing as
+      # the !cancelled() citation on the publish job.
+      #   IF A FORK PR EVER DOES REDDEN HERE, that is new evidence about the platform, and
+      # the fix is to gate this step on the trigger. Never admit 404 into the acceptance
+      # set: a set that ADMITS THE DEGRADATION cannot detect it, and that degradation is
+      # the one failure this control exists to detect -- handleGet's catch in server.ts
+      # turning any backend read fault into a 404 MISS (SRV-05), which is indistinguishable
+      # at this boundary from the genuine absence the leg is trying to report. Not a dead
+      # sidecar: that yields 000, as the paragraph below records.
+      #
+      # No retry loop, deliberately: the key is known-present in this run's own scope,
+      # restored or written, so a retry could only paper over a real failure. The naive
+      # objection INVERTS -- a transient fault that a retry would HIDE IS exactly the
+      # read-path NON-DETERMINISM this control exists to surface on a HIT leg, so adding
+      # the retry would delete the finding rather than stabilise the step. And a 200 can
+      # only have come from a real cache-service hit -- the backend calls restoreCache
+      # BEFORE any local read and returns a miss when the service does not match, and
+      # server.ts degrades any backend fault to a 404 -- so this control is strictly
+      # conservative: it can false-negative, never false-positive.
+      #
+      # Placement: AFTER the Nx run, and the leading reason is premise-INDEPENDENT -- this
+      # step's own INPUT DOES NOT EXIST before the Nx run. own_hash is read from
+      # integration-hash.txt, which the run.json reader step writes, and that reader needs
+      # .nx/cache/run.json, which only the Nx run produces. Secondary, and Case-A specific:
+      # on a MISS-then-write leg the write is what makes the key present, so an earlier
+      # placement would 404 every time, breaking the control exactly where it is
+      # load-bearing. On a HIT leg an earlier placement would merely be harmless, which is
+      # why the mechanical reason leads. And BEFORE `cancel: cache-server`, because the
+      # probe goes through the sidecar. The bearer token is built in a shell variable from
+      # the env var the pre-set step already ::add-mask::ed, never interpolated, and only
+      # the HTTP code is echoed.
+      #
+      # THE `|| true` IS LOAD-BEARING, and its absence defeated this control on the ONE
+      # case it exists to detect. On connection-refused -- a DEAD SIDECAR -- curl exits 7,
+      # the command substitution INHERITS that status, and `set -e` aborts the step
+      # immediately: before the echo, and before the explanatory failure message below.
+      # The step still went red, but with a bare curl exit and nothing in the log saying
+      # the MISS observation had been invalidated, which is the opposite of this block's
+      # stated intent. Swallowing the exit lets curl's own `-w` report `000`, the
+      # `!= "200"` branch fires, and the explanation reaches the log. The readiness poll
+      # above already carries this for the same reason; this step did not inherit it.
+      # Note `|| echo 000` is still WRONG here, for the reason recorded on that poll.
+      - name: Positive control on this leg's own key, which must return 200
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}"
+          own_hash="$(cat integration-hash.txt)"
+          code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/${own_hash}" || true)
+          echo "positive control: GET /v1/cache/${own_hash} -> ${code} (wanted 200)"
+          if [ "${code}" != "200" ]; then
+            echo "positive control FAILED on ${own_hash}: observed ${code}, wanted 200 -- the sidecar and backend were not proven alive, so this leg's MISS observation is not evidence" >&2
+            exit 1
+          fi
       - cancel: cache-server
+
+  # The O3 EXISTENCE WITNESS (XOS-03, TEST-09, D-17). It asserts, post hoc and from the
+  # cache service's OWN metadata, that the `nx-cache-<H_linux>` entry already existed a
+  # stated margin BEFORE the Windows `integration` step started. That is what makes the
+  # Windows leg's remote-cache MISS attributable to the Nx hash divergence rather than to
+  # an entry that simply had not been written yet. Two authed read-only REST GETs, `curl`
+  # plus `jq`, both runner-provided on ubuntu. No `gh`, of which this file contains zero
+  # invocations (D-17 sub-lock 4), and keeping every REST call on this ubuntu job removes
+  # the windows-11-arm availability question entirely.
+  #
+  # THIS IS NOT AN ORDERING DEPENDENCY, and that distinction is the whole design. The
+  # proof is an ASSERTION evaluated on recorded metadata, so if the margin ever collapses
+  # the witness fails LOUD and no O3 proof is recorded for that run -- which is the
+  # correct failure mode. An ordering dependency would instead let a reordered run
+  # produce a WRONG verdict silently. Leg order is therefore NOT a correctness control,
+  # and XOS-06 and PROJECT.md's platform-agnosticism row are untouched by this job.
+  # MEASURED ubuntu-first 11 of 11 runs, 182 s max on run 30471772954
+  # -- floor 109 s, and the cause is structural rather than lucky: `npm ci` costs about
+  # 19 s on ubuntu against about 180 s on windows-11-arm, so the ubuntu leg's whole job
+  # finishes before the Windows leg's install is halfway done. A measurement is not a
+  # documented guarantee, which is exactly why the comparison below demands a STATED
+  # 30-second minimum margin -- roughly four times headroom against that floor -- rather
+  # than a bare `<` that a timestamp-truncation artefact could satisfy.
+  #
+  # WHAT THIS JOB DELIBERATELY DOES NOT ASSERT: the absence of the remote-cache label.
+  # RECORDED and never GATED: a zero count is CORRECT on the windows leg
+  # and equally correct on any re-run at the same commit, where a LOCAL hit precedes any
+  # remote read -- so gating on it would redden the workflow for being right, and a
+  # tripwire that fires on correct work gets disabled (OBS-04 is this repo's own record
+  # of that happening). The integration job RECORDS that count; nothing anywhere gates on
+  # it. The structured cacheStatus value read-integration-hash.mjs prints is the
+  # remote-vs-local discrimination the count cannot make (D-24).
+  #
+  # needs: integration and NOT hash-parity, which is D-17 sub-lock 1. On a pull_request
+  # event hash-parity pins the pull request's HEAD sha while integration takes
+  # actions/checkout's default MERGE commit, so those two jobs measure DIFFERENT TREES and
+  # their task hashes are not commensurable. H_linux must come from the integration leg's
+  # own record. For the same reason inverted, this job does NOT copy
+  # hash-parity-compare's `ref:` checkout pin.
+  #
+  # EXACT KEY EQUALITY, never a count, and this is the clause whose loss would be least
+  # visible:
+  # ?key= is a PREFIX match, so total_count > 0 is NOT an existence test
+  # -- measured: `?key=nx-cache-1` returns 40 entries, and a full key minus its last
+  # character still returns 2, so a shorter hash that happens to be a prefix of a longer
+  # one satisfies any count-based test. Therefore
+  # the witness compares .key for EXACT string equality, never a count
+  # and it filters on `ref` as well, because ONE hash holds TWO entries on TWO DIFFERENT
+  # refs (measured: the same key under refs/heads/main and under refs/pull/N/merge), so a
+  # key-only match can return an entry from the wrong ref. The extraction is also
+  # TERMINATED with `// empty`, so an absent match yields a definitively EMPTY string
+  # rather than the literal four-character null a raw jq output would print -- an
+  # emptiness test against `null` is false, so without the terminator the guard would PASS
+  # on absence. Both omissions ship the same way: a count-based or null-blind check passes
+  # on the happy path and is wrong only in the case this job exists to detect, so nothing
+  # about a green run would reveal the regression.
+  #
+  # NO continue-on-error AND NO ADVISORY PERIOD. This job is build-gating from its first
+  # commit. Nothing in its `if:` may govern whether it PASSES: the verdict comes from the
+  # recorded cache-service and run metadata only, and there is deliberately no
+  # needs.*.result reference anywhere below. It is also ungated by event -- integration is
+  # not push-gated either, so the witness runs on pull requests too, which is useful
+  # rehearsal signal because it is read-only and fails loud. The O3 proof itself is
+  # recorded ONLY from the push run (D-20, plan 11-07).
+  o3-witness:
+    needs: integration
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job. Matches the non-matrix siblings at 15
+    # rather than the matrix jobs' 20: this job downloads one small text file and issues
+    # two authed REST GETs. No npm ci, no build, no checkout.
+    timeout-minutes: 15
+    # A job-level permissions block REPLACES the workflow grant (contents: read)
+    # WHOLESALE -- it does NOT merge -- so every scope this job still needs has to be
+    # named here or it is silently dropped rather than reported. Hence:
+    # o3-witness restates contents: read because a job-level block REPLACES
+    # the workflow-level grant, and actions/download-artifact loses its grant without it.
+    # And:
+    # o3-witness does NOT request actions: write, the cache DELETE verb
+    # -- both REST endpoints this job reads are satisfied by actions: read, and a reader
+    # who "fixed" a 404 by widening to write would hand a read-only witness the ability to
+    # delete cache entries. Least privilege: exactly these two, nothing more.
+    #
+    # THE JOB DOES NOT CHECK OUT THE REPOSITORY, and contents: read is restated anyway.
+    # It needs no repo file -- it is curl plus jq against two endpoints, with no
+    # comparator to build, unlike hash-parity-compare whose comparator is TypeScript in
+    # dist/. The restatement is what keeps this block from silently narrowing the
+    # workflow's grant, and actions/download-artifact does need it.
+    permissions:
+      contents: read # RESTATED, not redundant -- see the block comment above
+      actions: read # /actions/caches and /actions/runs/{id}/jobs
+    steps:
+      # mkdir -p BEFORE the download, following hash-parity-compare's precedent, so the
+      # reader below never ENOENTs even when nothing arrived.
+      - name: Create the record directory before the download
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p integration-hash-records
+      # THE ARTIFACT NAME IS A CONTRACT, on the same footing as the integration STEP name
+      # above and previously undocumented. THREE literals must move together: the
+      # integration job's `matrix.os` value, its upload name `integration-hash-${{
+      # matrix.os }}`, and this hardcoded download name. A matrix bump that edits only the
+      # first two leaves this job requesting an artifact nobody produced, and the symptom
+      # is a download-artifact error HERE -- one job away from the cause, with no message
+      # about why. The witness's own `runs-on:` assertion does not cover this: that pins
+      # this job's runner, not the integration matrix's label. `dogfood-cross-os.spec.ts`
+      # now reads the label out of this line and asserts it still appears in the
+      # integration job, so the two fail loud when they drift APART while staying green on
+      # a legitimate coordinated bump.
+      - uses: actions/download-artifact@v8
+        with:
+          name: integration-hash-ubuntu-24.04-arm
+          path: integration-hash-records
+      # GITHUB_TOKEN through the step env:. No PAT and no new secret, so the THREAT-MODEL
+      # ledger is unchanged.
+      #
+      # H_linux IS READ IN ITS ONE CONSUMING STEP AND NEVER ROUTED THROUGH $GITHUB_ENV, and
+      # that deletion is the fix rather than a filter on the old sink. The previous shape
+      # exported the value with a `-z` emptiness check as its only guard. Command
+      # substitution strips only TRAILING newlines, $GITHUB_ENV is parsed LINE BY LINE, and
+      # GitHub runs `run:` steps as `bash -e {0}` -- which sources BASH_ENV. So a record
+      # holding `123\nBASH_ENV=/tmp/evil.sh` would have defined a second variable for every
+      # later step in this job and executed arbitrary code. The value is ARTIFACT-CONTROLLED:
+      # it is produced by read-integration-hash.mjs in the integration job, which executes
+      # PR-authored code, and this job is ungated by event so it runs on pull_request from
+      # forks. This block already anchors the verification grep at `^` BECAUSE the record
+      # controls interpolated values; the same record must not reach a documented Actions
+      # injection sink.
+      #
+      # THE SHAPE CHECK IS THE SECOND HALF, and it subsumes the old emptiness check. Nx
+      # renders a task hash as an ALL-DECIMAL string, so `''|*[!0-9]*` rejects both an empty
+      # record and any value that is not a hash -- a cache key must never be composed from
+      # one. if-no-files-found: error on the upload side proves only that a file EXISTS, and
+      # read-integration-hash.mjs's own GUARD 3 is the upstream half of the same check.
+      #
+      # THE GREP IS REQUIRED ON TOP OF THE EXIT CODE, the same double signal
+      # hash-parity-compare records: the exit code is the first verdict, and the anchored
+      # content assertion is the second, proving the verdict was actually PRINTED rather
+      # than the step succeeding through an early exit. The `^` anchor is load-bearing
+      # rather than tidy, because both streams merge into the one log this grep reads and
+      # the failure detail interpolates values the downloaded record controls, so an
+      # unanchored match could hit a mid-line substring of a failure line.
+      - name: Assert the H_linux cache entry existed before the Windows integration step started
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The repository's own default branch, read from the event payload rather than
+          # hardcoded: both triggers (`push` and `pull_request`) carry `repository`, and a
+          # literal `main` here would silently stop matching the day the branch is renamed --
+          # failing OPEN, since a ref that matches nothing simply drops out of the allowlist.
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          {
+            h_linux="$(cat integration-hash-records/integration-hash.txt)"
+            case "${h_linux}" in
+              ''|*[!0-9]*)
+                echo "o3-witness: FAIL -- the downloaded integration-hash record is empty or is not an Nx task hash (got '${h_linux}') -- refusing to compose a cache key from it" >&2
+                exit 1
+                ;;
+            esac
+            echo "o3-witness: H_linux=${h_linux}"
+            auth="Authorization: Bearer ${GITHUB_TOKEN}"
+            accept='Accept: application/vnd.github+json'
+            api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+            key="nx-cache-${h_linux}"
+            # The allowed BASE ref, empty on every event except pull_request (which is the
+            # only event that sets GITHUB_BASE_REF). The `:-` default form is required, not
+            # tidy: this step runs under `set -euo pipefail`, so reading an unset variable
+            # bare would abort the step on a push.
+            base_ref=''
+            if [ -n "${GITHUB_BASE_REF:-}" ]; then
+              base_ref="refs/heads/${GITHUB_BASE_REF}"
+            fi
+            # THE DEFAULT BRANCH IS THE THIRD READABLE SCOPE, and omitting it made the
+            # allowlist NARROWER than the scope this run can genuinely read -- while the
+            # paragraph below names that very scope as the reason the server-side filter was
+            # dropped. `on.pull_request` carries no `branches:` filter, so a STACKED pull
+            # request (base != the default branch) triggers this job, and on the exact shape
+            # the widening was built for -- Case B, every ubuntu producer HITs so nothing is
+            # written to this run's own ref -- the row proving prior existence lives on the
+            # DEFAULT branch. With only own-ref and base-ref allowed, the jq below discards a
+            # row the request already returned and the witness reports "no cache entry on any
+            # ref this run can read" about a ref it demonstrably CAN read: the misattributing
+            # wrong-cause report this block was rewritten to eliminate, reproduced one scope
+            # over. On a push to the default branch, and on a PR whose base IS the default
+            # branch, this arg duplicates one of the other two -- harmless, and the reason the
+            # gap stayed invisible.
+            default_ref=''
+            if [ -n "${DEFAULT_BRANCH:-}" ]; then
+              default_ref="refs/heads/${DEFAULT_BRANCH}"
+            fi
+            # NO SERVER-SIDE ref NARROW ON THE REQUEST, and dropping it is the fix rather
+            # than a simplification. A `&ref=` parameter can only ever return rows on the
+            # ref being asked about. On a Case-B run -- every producer HITs, so nothing is
+            # written to this run's own ref, and the entry the Windows legs actually read
+            # lives in the DEFAULT-branch scope -- the one row that proves prior existence
+            # is filtered out AT THE SERVER and never reaches jq at all, and the witness
+            # then reports "the entry may never have existed" about an entry that does
+            # exist. MEASURED on run 30768540898. Widening the jq while leaving the URL
+            # narrowed would therefore fix nothing.
+            #
+            # THE REF CONSTRAINT MOVES CLIENT-SIDE AND BECOMES AN ALLOWLIST over the scope
+            # a run can genuinely read: its own ref, plus the base branch when there is
+            # one. It is never DROPPED -- one hash holds entries on two refs, so a key-only
+            # match is not an existence proof and an unrelated ref's entry must not be
+            # allowed to satisfy the witness.
+            #
+            # Two things keep the widened response bounded: `key=` is still a prefix filter
+            # on a full all-decimal hash, so the returned rows differ essentially only by
+            # ref; and if the response ever DID truncate at 100 the witness fails LOUD
+            # rather than passing.
+            #
+            # `key` needs no encoding: CR-01's shape check upstream has already proven
+            # ${h_linux} is all-decimal, so the key is URL-safe by construction. Neither
+            # ref is interpolated into the URL any more, so the percent-encoding this block
+            # used to describe has no remaining subject.
+            #
+            # THE MATCHING ENTRY IS SELECTED AS AN OBJECT, not as a bare timestamp, so the
+            # ref it matched on can be printed below. EARLIEST rather than arbitrary-first:
+            # the assertion is a LOWER BOUND on prior existence, and the earliest match is
+            # the strongest form of it. ISO-8601 sorts lexicographically, so a plain sort
+            # is correct here.
+            #
+            # A TIMELESS ROW IS EXCLUDED BEFORE THE SORT, and that guard is not decoration.
+            # MEASURED with jq 1.8.1: sort_by places a null created_at FIRST, so a matching
+            # row carrying no timestamp wins `first` DETERMINISTICALLY even when a perfectly
+            # good row is in the same array -- `created` then comes out empty and the message
+            # below reports "the entry never existed" about an entry jq had in hand. That is
+            # the misattributing wrong-cause report this whole block was corrected for,
+            # reached one field over. `created_at` carries no `required` marker in the
+            # cache-list schema, so this is unlikely, not impossible. Excluding rather than
+            # coalescing is deliberate: a row with no timestamp cannot supply the LOWER BOUND
+            # this witness asserts, so it is not evidence and must not be selected as such.
+            # A response of ONLY timeless rows still fails loud, which is the honest verdict.
+            #
+            # READ `matched_ref` AS THE PROVENANCE OF THE LOWER BOUND, not as a claim about
+            # which run created the entry. Because the EARLIEST readable copy is selected, a
+            # run that also wrote its own copy still reports the base-branch ref when an
+            # older one exists there. That is correct -- the older copy is the stronger
+            # evidence -- but a reader who takes the printed ref for "this run did not
+            # produce it" would draw the wrong conclusion.
+            #
+            # THE RESPONSE IS PROVEN TO BE AN `actions_caches` ARRAY BEFORE ANYTHING IS READ
+            # OUT OF IT, mirroring the jobs-API guard thirty lines below rather than
+            # inventing a second shape. MEASURED under `set -euo pipefail`: an error payload
+            # (`{"message":"Not Found"}` on a permissions fault, `{"message":"API rate limit
+            # exceeded"}`, or any non-JSON body) makes `.actions_caches[]` fail with
+            # `jq: error (at <stdin>:0): Cannot iterate over null (null)`, the subshell exits
+            # 5, and the step dies with NO `o3-witness:` message at all. Without the guard
+            # the best case is worse than silence: the empty result reaches the absent-entry
+            # message below and reports "the entry never existed" about an API fault, which
+            # is the same wrong-cause report the sibling block was corrected for. jq's own
+            # parse error still reaches stderr alongside the verdict -- that is extra
+            # evidence, not noise, so it is deliberately not suppressed.
+            #
+            # THE GUARD READS THE CONTAINER, SO THE SELECT READS THE ELEMENTS, and the two
+            # halves are not redundant. MEASURED with jq 1.8.1: `{"actions_caches":["scalar",
+            # 3]}` returns `ok` from the guard -- the type IS array -- and then the entry
+            # expression below exits 5 with `Cannot index string with string "key"`. Because
+            # `entry=$(...)` is a plain assignment under `set -euo pipefail`, that kills the
+            # whole brace group: nothing reaches o3-witness.log, the trailing grep fails on an
+            # empty log, and the step reports only jq's stderr with NO `o3-witness:` verdict --
+            # verbatim the failure the guard above claims to have eliminated, one nesting
+            # level down. `select(type == "object")` is measured to turn the same payload into
+            # a clean empty result, which reaches the absent-entry message and its
+            # explanation. The guard above still earns its place: it is what distinguishes an
+            # API/permissions fault from an empty result, which this select cannot.
+            # THE `|| true` IS LOAD-BEARING HERE FOR THE REASON THE INTEGRATION JOB'S
+            # POSITIVE CONTROL ALREADY RECORDS, and this call did not inherit it either.
+            # curl exits non-zero for TRANSPORT faults that never produce a body -- 7
+            # connection refused, 28 on the `--max-time 30` ceiling, 6 DNS, 35 TLS -- and the
+            # command substitution INHERITS that status, so `set -e` aborts the step BEFORE
+            # the array guard below can run. `-s` has already suppressed curl's own message,
+            # so the o3 proof would read as a bare non-zero exit naming no subsystem: exactly
+            # what the guard below exists to prevent, defeated from one line above it.
+            # Swallowing the exit lets the EMPTY body reach that guard, which is measured to
+            # handle it -- jq returns nothing, the capture is empty, `!= "ok"` fires and the
+            # explanatory message reaches the log. This job's own `if: !cancelled()` condition
+            # guarantees it runs even on a failed integration leg, which is the run where an
+            # operator most needs a verdict rather than a bare exit code.
+            #
+            # NEVER write a workflow EXPRESSION in its brace-template form anywhere inside a
+            # `run:` body, not even in a shell comment. GitHub templates the whole body before
+            # the shell ever sees it, so a commented expression is still EVALUATED -- and
+            # status functions like `cancelled()` do not exist outside an `if:`, so it rejects
+            # the entire file with "Unrecognized function: 'cancelled'" and NOT ONE job starts.
+            # Measured the hard way: this very comment did exactly that. Name such conditions
+            # in prose, as the line above now does. A spec clause counts these to zero.
+            caches_body=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
+              "${api}/actions/caches?key=${key}&per_page=100" || true)
+            if [ "$(printf '%s' "${caches_body}" | jq -r 'if (.actions_caches | type) == "array" then "ok" else "bad" end')" != "ok" ]; then
+              echo "o3-witness: FAIL -- the caches API returned no \`actions_caches\` array, so nothing was read about the entry at all. This is an API, rate-limit or permissions fault, NOT evidence about the entry and NOT attributable to the Windows MISS." >&2
+              exit 1
+            fi
+            entry=$(printf '%s' "${caches_body}" \
+              | jq -c --arg key "${key}" --arg ref "${GITHUB_REF}" --arg baseref "${base_ref}" --arg defaultref "${default_ref}" \
+                '[.actions_caches[] | select(type == "object") | select(.key == $key and (.ref == $ref or ($baseref != "" and .ref == $baseref) or ($defaultref != "" and .ref == $defaultref)) and (.created_at | type) == "string")] | sort_by(.created_at) | first // empty')
+            created=$(printf '%s' "${entry}" | jq -r '.created_at // empty')
+            matched_ref=$(printf '%s' "${entry}" | jq -r '.ref // empty')
+            if [ -z "${created}" ]; then
+              echo "o3-witness: FAIL -- no cache entry whose key is EXACTLY ${key} on any ref this run can read (own ref ${GITHUB_REF}, base ref '${base_ref}', default ref '${default_ref}'). Two causes, and this message cannot tell them apart: the entry never existed, or it exists only OUTSIDE this run's readable scope. Either way the Windows MISS is NOT attributable." >&2
+              exit 1
+            fi
+            # Both selectors are literals that must match the integration job's step name
+            # and the rendered matrix job name character for character. Asserting the
+            # result is NON-EMPTY is what makes a rename fail loud instead of comparing
+            # against an empty string.
+            #
+            # THE STEP OBJECT IS EXTRACTED, NEVER `.started_at` ALONE, because those are
+            # THREE outcomes and not two. Selecting the timestamp directly collapses "the
+            # step is ABSENT" and "the step EXISTS but never STARTED" into the same empty
+            # string, and the single message then blamed a RENAME for both. MEASURED
+            # against a fixture: a step reported `status: queued, started_at: null` -- what
+            # the jobs API returns when the Windows leg dies before reaching its run step,
+            # a wedged `npm ci` being the obvious way -- yields exactly the empty string a
+            # rename yields. So a correct witness printed "a rename in the integration job
+            # must land in the SAME commit", naming an edit nobody made and hiding the
+            # upstream failure that actually happened. Splitting the extraction is what
+            # lets each cause carry its own message.
+            # PAGED EXPLICITLY, because per_page=100 is the endpoint's MAXIMUM and not a
+            # guarantee of completeness. This workflow already runs ~25 job legs; crossing
+            # 100 (a wider matrix, more jobs) would silently TRUNCATE the response, drop the
+            # Windows leg off the page, and make a CORRECT run fail with the absent-step
+            # message below -- the same misattribution one layer up. MEASURED against a
+            # fixture whose first page is 100 filler jobs: the single-page form returns the
+            # empty string and blames a rename, the walk finds the step on page 2. The
+            # sibling caches query is UNPAGED, and is safe by a DIFFERENT and WEAKER
+            # mechanism since the Case-B widening: it is server-filtered by KEY ONLY -- a
+            # full all-decimal hash, so the rows returned differ essentially only by ref (1-3
+            # in practice). It is NOT ref-filtered any more; the `&ref=` parameter was
+            # removed because it could not return the base-scope row the witness needs. If
+            # that key ever stops being a full hash, page it like this one. The two calls DO
+            # now share the array guard below, which is the only protection they have in
+            # common. This paragraph asserted the opposite for one commit -- planting a false
+            # comment is the CRITICAL this project has already shipped once, and `codeLines`
+            # strips `#` lines so no guard in dogfood-cross-os.spec.ts can ever catch the
+            # drift. A reader is the only thing protecting it.
+            #
+            # `gh` is deliberately unavailable here (D-17
+            # sub-lock 4), so this is a plain page walk: stop on the first match, or when a
+            # SHORT page proves there is no next one. The 20-page ceiling is a runaway guard
+            # at 2000 job legs, not a limit any real run approaches.
+            #
+            # The `jobs`-is-an-array check is not defensive noise: without it an error
+            # payload (`{"message":"Not Found"}`) yields `length` 0, breaks the loop, and
+            # arrives at the absent-step message -- reintroducing exactly the wrong-cause
+            # report this block was just corrected for.
+            step=''
+            page=1
+            while [ "${page}" -le 20 ]; do
+              # `|| true` for the same transport reason as the caches query above -- and it
+              # matters MORE inside this loop, where an abort also discards the pages already
+              # walked, so a mid-walk timeout reports nothing about the pages that did return.
+              body=$(curl -s --max-time 30 -H "${auth}" -H "${accept}" \
+                "${api}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100&page=${page}" || true)
+              if [ "$(printf '%s' "${body}" | jq -r 'if (.jobs | type) == "array" then "ok" else "bad" end')" != "ok" ]; then
+                echo "o3-witness: FAIL -- the jobs API returned no \`jobs\` array on page ${page}, so the run's job list was never read. This is an API or permissions fault, not a rename and not a missing step." >&2
+                exit 1
+              fi
+              step=$(printf '%s' "${body}" | jq -c 'first(.jobs[] | select(.name == "integration (windows-11-arm)") | .steps[] | select(.name == "Run the integration target and tee its output")) // empty')
+              if [ -n "${step}" ]; then
+                break
+              fi
+              if [ "$(printf '%s' "${body}" | jq -r '.jobs | length')" -lt 100 ]; then
+                break
+              fi
+              page=$(( page + 1 ))
+            done
+            if [ -z "${step}" ]; then
+              echo "o3-witness: FAIL -- no step 'Run the integration target and tee its output' in job 'integration (windows-11-arm)'. Both are literal selectors; a rename in the integration job must land in the SAME commit as the change here." >&2
+              exit 1
+            fi
+            started=$(printf '%s' "${step}" | jq -r '.started_at // empty')
+            if [ -z "${started}" ]; then
+              step_status=$(printf '%s' "${step}" | jq -r '.status // "<absent>"')
+              step_conclusion=$(printf '%s' "${step}" | jq -r '.conclusion // "<absent>"')
+              echo "o3-witness: FAIL -- the step EXISTS but never started (status=${step_status} conclusion=${step_conclusion}), so there is no start time to compare against. The Windows integration leg failed or was skipped UPSTREAM of its run step; this is NOT a rename and no O3 proof is recorded for this run." >&2
+              exit 1
+            fi
+            # The cache side carries sub-second precision and the step side is
+            # whole-second, so parsing both to epoch SECONDS is itself the floor.
+            created_epoch=$(date -u -d "${created}" +%s)
+            started_epoch=$(date -u -d "${started}" +%s)
+            delta=$(( started_epoch - created_epoch ))
+            echo "o3-witness: key=${key} created_at=${created} started_at=${started} delta=${delta}s margin=30s matched_ref=${matched_ref}"
+            # ON A CASE-B RUN THE DELTA IS HOURS OR DAYS rather than minutes, because the
+            # matched entry was written by an earlier run on the base branch. That is
+            # CORRECT and needs no allowance: the assertion is a lower bound on prior
+            # existence, so a LARGER delta is STRONGER evidence, not weaker. Do not "fix"
+            # it with an upper bound.
+            if [ "${delta}" -lt 30 ]; then
+              echo "o3-witness: FAIL -- observed delta ${delta}s, wanted at least 30s. The H_linux entry was not demonstrably present before the Windows integration step started, so no O3 proof is recorded for this run." >&2
+              exit 1
+            fi
+            echo "o3-witness: EXISTENCE OK key=${key} created_at=${created} started_at=${started} delta=${delta}s margin=30s matched_ref=${matched_ref}"
+          } 2>&1 | tee o3-witness.log
+          grep -q '^o3-witness: EXISTENCE OK' o3-witness.log
+
+  # The two-leg hash-parity CAPTURE job (PARITY-03, PARITY-06; the capture half of
+  # D-17). It runs capture-hashes.mjs on both runner OSes and uploads one record per
+  # leg, so 08-ROOT-CAUSE.md can hold FOUR observation points -- two hand-captured on
+  # a developer workstation, these two from real runners -- all taken at ONE commit.
+  #
+  # CAPTURE ONLY. The build-gating comparison is a separate job, deferred to plan
+  # 08-06 (D-15 + D-18): pre-fix, the roadmap's own success criterion 1 says cold
+  # ubuntu differs from cold windows for EVERY target, so a gate wired now would be
+  # red for a reason the record has not established yet -- and D-18 forbids softening
+  # that with continue-on-error.
+  #
+  # NOT push-gated -- like the dogfood proof pair since CR-18, and unlike the publish
+  # pair. Every job in this file that STILL carries that gate does so because it WRITES
+  # (publishes a release asset, round-trips through a write-trusted sidecar) or because
+  # it reads back something only the push path produces (publish-verify, which is itself
+  # read-only). This one only measures. Same rule the read-side jobs state at :170-172.
+  #
+  # fail-fast: false carries a SECOND reason here on top of the one at :392-393 ("so
+  # a Windows-only failure never hides the Ubuntu result"): with fail-fast ON, a
+  # Windows leg failure CANCELS the Ubuntu leg, and 08-06's compare job then reports
+  # "fewer than two records" for a reason that has nothing to do with hash parity.
+  #
+  # shell: bash on the capture step, for the reason recorded at :399-404 -- GitHub's
+  # DEFAULT shell on windows-11-arm is pwsh, which fails on the constructs this
+  # file's scripted steps use. A bare `- run:` with no shell key inherits pwsh there.
+  #
+  # NO SIDECAR BLOCK, deliberately rather than by oversight. build, typecheck, test
+  # and integration each carry a ~35-line pre-set / background start-cache-server /
+  # readiness-poll / cancel: block because they run CACHED Nx tasks. This job runs
+  # none -- it computes hashes -- so it needs no cache client at all, and leaving the
+  # block out removes an entire class of flake from a measurement that has to be
+  # trusted.
+  #
+  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full at :943-946: such a
+  # block REPLACES the workflow grant WHOLESALE rather than merging it, so adding one
+  # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
+  # covers checkout plus an artifact upload, and this job requests no secret.
+  #
+  # BUILD STEP, added by plan 08-05 and REPLACING a documented no-build design. The
+  # original rationale is re-stated here rather than quietly reversed, because it was
+  # half right and the half that was right still constrains this job.
+  #
+  # It read: typecheck declares a dependentTasksOutputFiles input (nx.json:137) which
+  # hashes the CONTENT of packages/github-cache/dist/, so a leg that built hashes a
+  # populated directory while a leg that did not hashes an empty one; both legs must
+  # be IDENTICAL in that respect, and "neither builds" is the identical option that
+  # is also the fastest.
+  #
+  # The symmetry requirement is CORRECT and is preserved -- see the note on the step
+  # itself. The resolution was wrong: "both build" is equally symmetric, and it is
+  # the only one of the two that measures a number any machine actually computes.
+  #
+  # What the original missed: typecheck carries an INFERRED dependsOn of
+  # ["build", "^typecheck"], produced by @nx/js/typescript and absent from nx.json,
+  # so Nx defers typecheck's hash until build has produced its outputs. A real
+  # `nx typecheck` therefore computes the SAME hash whether or not dist/ was
+  # populated beforehand -- measured both ways at 8949082127832201885 on the
+  # maintainer's workstation, recorded in 08-ROOT-CAUSE.md under "CORRECTION: D-11's
+  # consequence is FALSIFIED". Without a build step this job hashed typecheck OUTSIDE
+  # that dependency chain and recorded 1284533355439392975 on both legs: internally
+  # consistent, cross-OS identical, and computed by nothing. The cross-OS COMPARISON
+  # was still valid (both legs were wrong the same way); the absolute value was not,
+  # and 08-06 gates on these records.
+  #
+  # A reader comparing against pack-check and publish-verify (both of which also
+  # build first) should read this paragraph rather than going looking: those jobs RUN
+  # a dist/ bin, they do not measure a hash, so they build for an unrelated reason.
+  #
+  # CHECKOUT REF -- the one deliberate deviation from every other job in this file.
+  # On a pull_request event actions/checkout resolves the MERGE commit by default: a
+  # SHA no developer can reproduce locally, over a TREE that differs from the
+  # branch's whenever the default branch has moved. Either one silently breaks
+  # PARITY-03's "four values per target at ONE commit". Pinning to the PR head SHA
+  # and falling back to github.sha on push makes the same step measure the branch
+  # tree on both events. The instrument records BOTH the checked-out HEAD
+  # (meta.commit) and the runner-provided event SHA (meta.githubSha) so the pin is
+  # inspectable rather than assumed.
+  #
+  # WHAT CHECKS THAT PIN, AND IN WHICH DIRECTION -- corrected here, because an
+  # earlier wording of this block had it backwards and implied a check no code
+  # performs. GITHUB_SHA on a pull_request event IS the merge commit, set by the
+  # runner from the event payload; it does not follow what the job checked out. So
+  # AGREEMENT between the two fields on a pull_request is the pin FAILING (the
+  # checkout landed on the merge commit), and disagreement in the specific direction
+  # "commit == PR head, githubSha == merge commit" is the pin WORKING. On a push
+  # they agree, and that is also correct. The right reading is therefore
+  # "meta.commit must equal the anchor", never "the two fields must agree".
+  #
+  # The comparator deliberately does NOT assert on githubSha, and that is not an
+  # oversight: the correct direction is EVENT-dependent and the comparator has no
+  # event context, githubSha is null off a runner by design, and HashParityRecord
+  # does not model a field this module would neither check nor use. What IS enforced
+  # is the failure this pin actually produces -- the two legs measuring different
+  # trees -- via the cross-leg `meta.commit` equality clause (`not-like-for-like` in
+  # compare.ts), added because meta.os had been the only one of the seven meta keys
+  # compared across the pair. 08-ROOT-CAUSE.md carries the one-off API cross-check
+  # (gh api .../pulls/9) that confirmed the pin held on both legs at the anchor.
+  #
+  # THE REPO HAD NO PRIOR ARTIFACT USAGE. The complete third-party action inventory
+  # across both workflows was actions/checkout and actions/setup-node, so there is no
+  # in-repo major to match and no precedent to copy -- upload-artifact@v7 here and
+  # download-artifact@v8 in 08-06 are asymmetric ON PURPOSE (v8 of the download
+  # action pairs itself with v7 of the upload action throughout its own README).
+  # The artifact NAME must be unique per leg: v4 onward made names immutable, so two
+  # legs uploading to one name is an error rather than a merge, and the matrix OS
+  # value is the natural discriminator. if-no-files-found: error is not tidiness --
+  # the default is `warn`, so without it a leg whose instrument produced nothing
+  # uploads an EMPTY artifact, the download merges it into nothing, and the
+  # comparator reports "fewer than two records": the correct verdict with the wrong
+  # blame, one job further from the cause than necessary. A leg that measured nothing
+  # must fail ITS OWN leg.
+  #
+  # CORRECTED, and supplying the REPLACEMENT FACT is the point rather than retracting the
+  # old one. This block used to claim it was the ONLY place that rationale could live, on
+  # the ground that ci.yml was not an nx.json `test` input, so a spec asserting on this
+  # file's content would serve a stale cached PASS. Both halves are now false. A bare
+  # DELETION would have left a future reader holding a documented case for REMOVING the
+  # registration -- and removing it would turn every ci.yml content guard into a replay of
+  # a pass computed before its subject existed, which is exactly how Phase 9 shipped a
+  # regression. So, read from the config rather than from a comment:
+  # ci.yml IS in nx.json's targetDefaults.test.inputs (PARITY-08, Phase 9)
+  # -- so an edit to this file rotates the `test` hash and no ci.yml guard can go stale
+  # behind a cache hit. This file's job shape and its comment prose are now
+  # asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts
+  # respectively: the first reads it comment-STRIPPED, so it sees the YAML but
+  # structurally cannot see a comment, and the second reads it RAW, so it is the only
+  # guard in the repo that can. Two harnesses, one question each. This block is therefore
+  # no longer the only place the rationale CAN live -- it is simply where a reader looks
+  # first, so it keeps carrying it.
+  hash-parity:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      # Hash typecheck INSIDE its dependency chain. typecheck's inferred dependsOn
+      # is ["build", "^typecheck"], and the instrument calls hashTask directly, so
+      # without this step the recorded typecheck value is one no real run produces
+      # -- see the BUILD STEP paragraph above.
+      #
+      # This is ONE step in a matrix job, so both legs get byte-identical treatment
+      # by construction rather than by two copies staying in step. That symmetry is
+      # the half of the original no-build rationale that survives: whatever this job
+      # does about dist/, it must do the same on ubuntu-24.04-arm and on
+      # windows-11-arm, or the leg-to-leg comparison stops comparing like with like.
+      #
+      # Still no sidecar block: `npm run build` here resolves through Nx's LOCAL
+      # cache only, because the cache client is env-driven and this job sets none of
+      # those variables. A fresh runner therefore always really builds.
+      - run: npm run build
+      # The instrument is invoked as a plain node script, never through `nx run`
+      # (D-01b): an Nx-CACHED instrument would REPLAY a stale record instead of
+      # measuring. --install-mode is REQUIRED and has no default, and `ci` is the
+      # honest value because the step above ran a clean install.
+      - name: Capture the Nx task hashes on this runner
+        shell: bash
+        env:
+          # Disabling the daemon is the CALLER's job BY DESIGN: the instrument
+          # MEASURES daemonEnabled rather than forcing it, so a leg that forgot is
+          # visible in the record instead of being silently reclassified.
+          NX_DAEMON: 'false'
+          # Passed in through env rather than interpolated into the script body, so
+          # the matrix value never lands on a command line the shell re-parses.
+          RECORD: hash-parity-${{ matrix.os }}.json
+        run: |
+          set -euo pipefail
+          node capture-hashes.mjs --install-mode ci --out "$RECORD"
+      # TEST-08's MECHANICAL PREMISE ASSERTION, and it is wired HERE because an
+      # assertion nothing executes is documentation. The mode landed with no CI step, no
+      # npm script and no test behind it, so its own stated purpose -- "an Nx upgrade that
+      # changes the inferred dependsOn must fail loud instead of quietly weakening the
+      # control" -- was unreachable: an Nx upgrade that changed it would have changed
+      # nothing, because nothing ran the assertion.
+      #
+      # THIS JOB rather than a new one: the mode resolves a task graph and measures no
+      # hash, so it needs no sidecar and no build, and this job has already installed. It
+      # runs on BOTH matrix legs, which is the point -- the premise is about the WINDOWS
+      # leg's resolved graph, so a ubuntu-only check would assert it on the wrong runner.
+      # Under set -euo pipefail a failed assertion reddens the leg, and the --out record
+      # is the evidence TEST-08 asks for rather than a discarded pre-flight check.
+      #
+      # CORRECTED BY XOS-04, with the replacement reason rather than a bare deletion,
+      # because a comment carrying a false reason is a documented argument for undoing
+      # the work. This block used to read the assertion as establishing PRODUCER
+      # ATTRIBUTION -- "any build/typecheck/test hash in the store is Linux-produced"
+      # (D-12, D-14 row 1). Three things, and the order matters:
+      #   (a) WHAT IT STILL GUARDS, unchanged and still a real gate: the GRAPH PROPERTY
+      #       that `nx run-many -t integration` resolves no build/typecheck/test task.
+      #       An Nx upgrade that changed the inferred dependsOn must fail loud here
+      #       instead of quietly weakening the control. XOS-04 does not touch that: the
+      #       new windows-11-arm legs run different commands and declare no new target
+      #       and no new dependsOn, so `integration`'s resolved set is untouched and this
+      #       assertion keeps passing.
+      #   (b) WHAT IT NO LONGER ESTABLISHES: producer attribution. That inference rested
+      #       on a CONJUNCTION -- the graph premise AND the fact that Windows CI ran only
+      #       `integration`. The build-windows / typecheck-windows / test-windows legs
+      #       falsify the second conjunct PERMANENTLY, so the premise alone can no longer
+      #       carry it. The second-producer consequence is priced in
+      #       .planning/phases/10-os-invariant-releases-mirror/10-SECURITY.md's Q1.
+      #   (c) WHERE THE ATTRIBUTION RECORD IS FROZEN:
+      #       .planning/phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md's O1 section,
+      #       captured at proof time precisely because no future session can re-derive
+      #       it. Read that record; do not try to reconstruct the attribution from this
+      #       assertion.
+      #
+      # --install-mode is deliberately absent and the script REJECTS it here: the mode
+      # measures no hash, so recording an install mode against it would make the record
+      # claim a provenance it never measured.
+      - name: Assert the TEST-08 graph premise on this runner
+        shell: bash
+        env:
+          NX_DAEMON: 'false'
+          PREMISE: graph-premise-${{ matrix.os }}.json
+        run: |
+          set -euo pipefail
+          node capture-hashes.mjs --assert-graph-premise --out "$PREMISE"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hash-parity-${{ matrix.os }}
+          path: hash-parity-${{ matrix.os }}.json
+          if-no-files-found: error
+      # A SEPARATE ARTIFACT, and the name deliberately does NOT match `hash-parity-*`.
+      # hash-parity-compare downloads that pattern with merge-multiple: true and its
+      # loader reads EVERY `.json` in the merged directory, so folding the premise record
+      # into the capture artifact would hand the comparator four records where it demands
+      # exactly two and redden `wrong-record-count` on a CORRECT run -- a tripwire firing
+      # on correct work, which this file already records as the thing that gets guards
+      # disabled.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: graph-premise-${{ matrix.os }}
+          path: graph-premise-${{ matrix.os }}.json
+          if-no-files-found: error
+
+  # The BUILD-GATING hash-parity comparison (CORR-03, D-15's fourth and last step,
+  # D-17's compare half, D-18, D-20, D-21, D-23). It downloads both capture legs'
+  # records and runs the unit-proven comparator over them, so PARITY-03 is ENFORCED
+  # on every run rather than measured once in 08-ROOT-CAUSE.md and then trusted.
+  #
+  # WHAT IT ASSERTS, via packages/github-cache/src/hash-parity/compare.ts: exactly
+  # two platform records with a non-empty hash and a non-empty node map for all five
+  # targets; DIFFERENT meta.os on the two; `integration` DIVERGENT between them; and
+  # `build`, `typecheck`, `test` and `lint` IDENTICAL between them. Note the sign on
+  # `integration`: a MATCHING integration hash is a discriminator FAILURE, not a
+  # parity success, because that target is the only one declaring a platform runtime
+  # input (nx.json:101, D-14). `lint` is the FOURTH invariant target rather than a
+  # recorded observation -- D-21's PRIMARY branch, taken because plan 08-05 measured
+  # `lint` byte-identical across both legs (6930879416208693542 on each). D-21's
+  # named fallback (downgrade the clause to a recorded finding) therefore does NOT
+  # apply, and either way the clause is never DELETED: a deleted clause is
+  # indistinguishable from one that never existed.
+  #
+  # NO continue-on-error AND NO ADVISORY PERIOD (D-18). This job is build-gating from
+  # its first commit. A later addition of continue-on-error would be invisible in a
+  # green run, which is why the observed-RED record in 08-ROOT-CAUSE.md's
+  # "The gate can fail" section carries run references as the reference point.
+  #
+  # if: !cancelled() -- CHOSEN DELIBERATELY, not by reflex. D-17 names `always()`,
+  # and what D-17 actually REQUIRES is that a FAILED or SKIPPED capture leg still
+  # arrives at the assertion: "fewer than two records is a FAILURE, not a skip" is
+  # unreachable if the compare job simply skips alongside its dead upstream. The two
+  # forms differ on exactly one case -- cancellation -- and a cancelled run producing
+  # a red gate is noise, not signal. `!cancelled()` covers failure and skip, and it
+  # is ALREADY this file's house form for a dependent job (`publish` at :926 uses
+  # exactly it). So the narrower expression satisfies D-17's intent and matches
+  # precedent at the same time.
+  #
+  # The if: expression governs whether this job RUNS. NOTHING in it may govern
+  # whether this job PASSES (D-23): the verdict comes from record CONTENT only, never
+  # from needs.*.result. A leg can succeed and still have uploaded a truncated
+  # record, and a leg can fail AFTER a valid upload -- deriving the verdict from job
+  # status inverts both cases. There is deliberately no needs.*.result reference
+  # anywhere below.
+  #
+  # A SINGLE ubuntu runner, not a matrix. This job compares two records; it is not
+  # per-OS. It is also the FIRST job in this file that collapses a matrix's legs into
+  # ONE downstream job that sees both -- every other `needs` here either fans in from
+  # a single job (`dogfood-verify` needs `dogfood-seed`, `consumer-smoke` needs
+  # `action-bundle-drift`) or is itself a matrix pairing up leg-by-leg
+  # (`publish-verify` needs `publish`). A reader looking for an in-repo precedent for
+  # the fan-in shape should read this sentence rather than go looking: there is none.
+  #
+  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full at :943-946: such a
+  # block REPLACES the workflow grant WHOLESALE rather than merging it, so adding one
+  # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
+  # covers checkout plus an artifact download, and this job requests no secret.
+  #
+  # NO EVENT GATE. Every job in this file STILL carrying `if: github.event_name ==
+  # 'push'` does so because it WRITES (publishes a release asset, round-trips through a
+  # write-trusted sidecar) or because it reads back something only the push path
+  # produces (publish-verify, which is itself read-only). This one only reads and
+  # asserts -- same rule the read-side jobs state at :170-172. A gate that only runs on
+  # the default branch is not a gate on a pull request.
+  #
+  # CHECKOUT REF pinned to the PR head SHA, as in the capture job (see its CHECKOUT
+  # REF paragraph at :525-535 for the full reasoning). The narrower reason HERE: the
+  # records were captured from the branch tree, so the comparator that judges them
+  # must be the branch's comparator. On a default merge-commit checkout, a clause
+  # WEAKENED on the default branch would silently judge this branch's records -- a
+  # false-green channel, since the merge tree can carry a removal the branch never
+  # made.
+  #
+  # THE BUILD STEP IS MANDATORY and easy to forget: the comparator is TypeScript, so
+  # dist/hash-parity/assert-parity.js does not exist until `npm run build` has run,
+  # and without it the step fails for the wrong reason. pack-check (:121-131, reason
+  # spelled out at :119-120) and publish-verify (:1043-1050) carry the same
+  # build-then-run ordering.
+  #
+  # RECORDS DIRECTORY CREATED BEFORE THE DOWNLOAD, so the loader always has a
+  # directory to read rather than an ENOENT, even when nothing arrived. RESIDUAL
+  # LIMITATION, accepted and recorded rather than papered over: if the download
+  # action ITSELF errors on a zero-match pattern, this job is still RED but the blame
+  # lands one step earlier than the comparator's named `wrong-record-count` reason.
+  # The fixture case for that clause is unit-proven regardless (08-02: a one-record
+  # directory exits 1 naming `wrong-record-count` plus its three suspects), so the
+  # clause is covered; only the blame location shifts.
+  #
+  # THE GREP IS REQUIRED ON TOP OF THE EXIT CODE (D-23), and it is not optional. The
+  # pipeline's failure mode is the FIRST half -- a non-zero exit from the bin fails
+  # the step under pipefail. The grep is the SECOND: it asserts the comparison
+  # actually RAN and PRINTED its verdict, rather than the step succeeding because the
+  # bin was absent, the directory was empty in a way the loader tolerated, or a future
+  # refactor turned the assertion into a no-op. The `lint` job at :66-72 is the exact
+  # precedent and its comment is this file's statement of the rule; Phase 7's
+  # measurement that `nx run-many -t <missing>` prints "No tasks were run" and exits 0
+  # is why the precedent exists. Unlike that job this one needs NO NO_COLOR: the
+  # asserted prefix is the comparator's own literal (`SUCCESS_PREFIX` in
+  # assert-parity.ts), deliberately colour-free and not Nx-formatted, so no reporter
+  # change can break the match.
+  #
+  # THE `^` ANCHOR IS LOAD-BEARING, not tidiness, and calling this signal
+  # INDEPENDENT is only true WITH it. Every failure detail the comparator prints
+  # interpolates values the DOWNLOADED RECORD controls (a target key, meta.os, a
+  # hash), and both streams are piped into the one log this grep reads. So a record
+  # could carry the success prefix as record CONTENT and have the FAILURE path print
+  # it: unanchored, it matches as a mid-line substring of the `PARITY FAILED` line,
+  # and with a line break in the injected value it matches as a whole line. The
+  # anchor closes the substring half -- the failure line begins `hash-parity: PARITY
+  # FAILED`, so `^hash-parity: PARITY OK` cannot match it. The line-break half is
+  # closed in code, at the single choke point `compare.ts:fail` documents, and pinned
+  # by `compare.spec.ts`. NEITHER HALF SUFFICES ALONE; do not "simplify" either away.
+  # Until both landed this signal was not independent at all -- the step was red only
+  # because a non-zero exit under pipefail aborts before the grep runs, which is
+  # exactly the exit-code-alone verdict D-23 forbids relying on.
+  #
+  # CORRECTED. This block used to open NO SPEC ASSERTS ON THIS FILE and gave that as the
+  # reason it carries so much rationale, on the further ground that ci.yml was not an
+  # nx.json `test` input, so a content guard would serve a stale cached PASS. Two specs
+  # assert on this file now, and the inputs claim was already false when it was written
+  # here. The replacement fact rather than a bare deletion, because a deletion would leave
+  # the case for REMOVING the registration standing unopposed -- which is how Phase 9
+  # shipped a regression:
+  # ci.yml IS in nx.json's targetDefaults.test.inputs (PARITY-08, Phase 9)
+  # -- so an edit here rotates the `test` hash, and this job's own shape and the prose
+  # below are
+  # asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts
+  # -- the comment-STRIPPED reader for the YAML, the RAW reader for the comments. The
+  # rationale still lives here because this is where a reader looks, not because nothing
+  # else can see it.
+  hash-parity-compare:
+    needs: hash-parity
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job. Matches the non-matrix siblings at
+    # 15 rather than the capture matrix's 20: this job installs, builds, downloads two
+    # small JSON files and runs one node script.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - name: Create the records directory before the download
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p hash-parity-records
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: hash-parity-*
+          merge-multiple: true
+          path: hash-parity-records
+      - name: Compare the two records, and prove the comparison actually ran
+        shell: bash
+        run: |
+          set -euo pipefail
+          node packages/github-cache/dist/hash-parity/assert-parity.js hash-parity-records 2>&1 | tee hash-parity.log
+          grep -q '^hash-parity: PARITY OK' hash-parity.log
 
   # The dogfood-seed / dogfood-verify pair is this phase's LIVE proof that the
   # cache really works (ROADMAP SC5) and doubles as the upgrade canary for the
@@ -421,15 +1933,39 @@ jobs:
   # server inert behind a green result (Pitfall 6). NO job-level permission block is
   # added on purpose: the runtime cache credentials (injected only into a JS action)
   # are independent of the workflow token grant, and a job-level block would REPLACE
-  # the workflow-level grant wholesale rather than extend it. Both jobs run ONLY on
-  # the default-branch push trigger, because the write gate trusts no other trigger
-  # (push/schedule only) and the read-only path is exhaustively unit-tested instead.
+  # the workflow-level grant wholesale rather than extend it. Both jobs run on the
+  # default-branch push trigger AND on SAME-REPO pull requests, so the cross-OS proof
+  # is available BEFORE a merge rather than only after one. A `pull_request` run is
+  # write-trusted here -- HOST_GATED_EVENTS in lib/trust.ts admits it, and
+  # isWriteTrusted returns trusted for it on github.com -- and the entry it writes
+  # lands in the PR's own merge-ref scope, invisible to main's cache, ageing out under
+  # the standard 7-day-unaccessed policy. FORK pull requests are DELIBERATELY excluded
+  # rather than overlooked: fork `pull_request` cache behaviour is CITED from GitHub's
+  # docs and has never been reproduced in this repo, so a gating check is not bet on
+  # it, and merged code still gets this proof through the push path.
   # action.yml's main points into the build output, so each job builds first.
   dogfood-seed:
     # run id as the cache hash: unique per run and already all-decimal, so it
     # satisfies the server's ^[a-f0-9]{1,512}$ hash validator with no massaging.
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04-arm
+    # Generic hang insurance -- see the build job. A hung step otherwise holds a runner
+    # for the 360-minute account default.
+    #
+    # WHY THIS JOB AND THE TWO PUBLISH JOBS, and not every job in the file: the publish
+    # pair is push-only background work, and nobody watches that the way a PR author
+    # watches a check, so a hang there is invisible rather than merely slow -- the job is
+    # not RED, it is simply never done, and the next push starts a fresh one. This job
+    # inherited the same cap when it was push-only too. Since CR-18 it is PR-visible, and
+    # the cap is strictly correct either way: a capped PR check fails loud, an uncapped
+    # one just hangs.
+    #
+    # The short PR gates (format-check, lint, fallow, action-bundle-drift, pack-check,
+    # ppe) are still uncapped and are deliberately left so. A hang there blocks a visible
+    # required check on somebody's open PR, which is self-reporting. Named rather than
+    # left as an apparent oversight, so a reader does not have to re-derive whether the
+    # omission was considered.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -450,10 +1986,51 @@ jobs:
 
   dogfood-verify:
     # Reads back exactly what dogfood-seed wrote, keyed on the same run id, so a real
-    # cross-job HIT is the only way this job passes; a MISS fails the job loudly.
-    if: github.event_name == 'push'
+    # cross-job HIT is the only way this job passes; a MISS fails the job loudly. TWO
+    # LEGS, and the Windows one is VER-06's whole proof: it restores a body a LINUX
+    # runner produced, so a green windows-11-arm leg is the live evidence that an
+    # Actions-cache entry saved on Linux is readable on Windows. The action compares
+    # against the LITERAL 'linux' producer stamp folded into the payload bytes, so this
+    # is a PROVENANCE check, not a presence check -- see action/index.ts's verify branch.
+    # fail-fast off so a Windows-only failure never hides the ubuntu result.
+    #
+    # THE VACUITY CONDITION -- read this before adding a Windows dogfood-seed leg.
+    # dogfood-seed is ubuntu-ONLY BY DESIGN and must stay that way. The seed key is
+    # nx-cache-<GITHUB_RUN_ID>: ONE key per RUN, not per OS. So a Windows seed leg would
+    # make the Windows verify leg restore a WINDOWS-written entry and pass even with
+    # cross-OS restore completely dead -- the proof would go green while proving nothing.
+    # If a Windows seed leg is ever genuinely wanted, the expected-producer literal in
+    # action/index.ts's verify branch has to change in the same commit.
+    # dogfood-cross-os.spec.ts asserts BOTH halves of this shape from disk (this job has
+    # the two-leg matrix; dogfood-seed has no matrix) so neither can drift unnoticed.
+    #
+    # The ubuntu verify leg is KEPT rather than traded for the Windows one: it preserves
+    # the v0.0.1 same-OS round-trip close instead of swapping one proof for another. Both
+    # legs assert a LINUX-produced body -- trivially true for the ubuntu leg, and the
+    # entire point for the Windows one.
+    #
+    # A GREEN dogfood-verify IS NOT ROBUST-04 EVIDENCE. Both dogfood jobs run
+    # `uses: ./packages/github-cache`, whose dist/action/index.js is built from source
+    # in-job, so they never execute the COMMITTED start-cache-server/index.js -- which is
+    # what four of the five bundle sites actually run. action-bundle-drift (no `if:`, so
+    # it runs on PRs too) is the only control tying the two together. The misreading is
+    # natural, so it is recorded here where a reader will look.
+    #
+    # SAME CONDITION AS dogfood-seed, belt-and-braces. `needs: dogfood-seed` plus the
+    # default success() status check would already SKIP this job when the seed skips
+    # (a skipped need skips its dependents; it is never left queued and never fails),
+    # so the restated condition is redundant by construction -- and kept anyway,
+    # matching the publish / publish-verify pairing this file already uses.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     needs: dogfood-seed
-    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job. Matches the `integration` job's value;
+    # this job had none before it grew a matrix.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -576,22 +2153,59 @@ jobs:
 
   # The per-OS publish matrix is this phase's LIVE mirror path (D-03, TRUST-02): on a
   # default-branch push each leg enumerates the default-branch Actions-cache entries via
-  # getActionsCacheList, restores the nx-cache-* ones IT CAN restore on ITS OWN OS, and
-  # uploads them to the current month-shard GitHub Release. The matrix is LOAD-BEARING and
-  # self-enforcing: @actions/cache folds the per-OS tmpdir path + a windows-only salt + the
-  # compression method into the cache version hash, so an ubuntu leg can NEVER restore a
-  # Windows-saved entry (restoreCache returns undefined and the engine skips it). Collapsing
-  # this to one OS SILENTLY drops the other OS's entries (D-03) -- keep BOTH legs; fail-fast
+  # getActionsCacheList, restores the nx-cache-* ones, and uploads them to the current
+  # month-shard GitHub Release. The matrix is LOAD-BEARING but it
+  # is no longer SELF-ENFORCING at the storage layer: @actions/cache still folds the
+  # compression method into the cache version hash unconditionally (cacheUtils.js:162-163),
+  # but from VER-01/VER-03 the archive path is workspace-relative and enableCrossOsArchive
+  # suppresses the windows-only salt, so an ubuntu leg CAN now restore a Windows-saved entry.
+  # The reason to keep both legs is now the Nx HASH, not the store: the Windows leg is still
+  # the ONLY leg that produces Windows-hash entries at all, because the integration and
+  # hash-parity platform discriminator keeps those task hashes distinct. So collapsing this to
+  # one OS STILL SILENTLY drops the other OS's entries (D-03) -- now because those tasks never
+  # RUN there, rather than because the store partitions -- keep BOTH legs; fail-fast
   # off so a Windows-only failure never hides the ubuntu result. It runs as `operation: publish`
   # on the node24 JS action, NOT a `run: node` step, because @actions/cache restoreCache needs
   # the JS-action-only ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL runtime (a plain run: step
-  # silently MISSes -- verified Phase 2). needs: build (NOT test): a failing test leg must never
-  # skip the mirror and drop already-built entries (RESEARCH Anti-Patterns). if: !cancelled() &&
-  # push -- the mirror runs only on the trusted push trigger, and isSyncTrusted re-checks the
-  # default branch in-process as the load-bearing gate (D-01), not the workflow if: alone.
+  # silently MISSes -- verified Phase 2). if: !cancelled() && push -- the mirror runs only on the
+  # trusted push trigger, and isSyncTrusted re-checks the default branch in-process as the
+  # load-bearing gate (D-01), not the workflow if: alone.
+  #
+  # WHY needs: [build, typecheck, test, integration] and not the needs: build it replaced
+  # (XOS-07). The comment that stood here argued for `needs: build (NOT test)` so that a failing
+  # test leg could never skip the mirror and drop already-built entries. That concern is STILL
+  # REAL -- it is stated here rather than deleted, so nobody reconstructs it from scratch and
+  # narrows needs: straight back. It is simply no longer what needs: has to carry, because a
+  # different mechanism already covers it:
+  #   MECHANISM: !cancelled() runs this job even when a needs: dependency FAILED.
+  # GitHub documents that a job whose if: expression causes it to continue is NOT skipped when a
+  # needs: dependency fails -- the FAILED case, not merely the skipped one -- so a red test leg
+  # does not skip the mirror under the wide list.
+  #   BOUNDED FAILURE MODE: a skipped mirror, never a wrong artifact.
+  # Named because that !cancelled()-past-a-FAILED-needs: behaviour is CITED from GitHub's docs
+  # and has never been reproduced in this repo (no run on record has a failed publish ancestor).
+  # If the citation is wrong or the semantics change, publish is SKIPPED on a red-test push and
+  # that push's entries simply stay in the Actions cache until the next green push mirrors them.
+  # A recoverable GAP, never a wrong artifact reaching the world-readable mirror. That is the
+  # whole trade, and an operator diagnosing a missing mirror should find the cause written here.
+  #   MEASURED on run 30400231720, which is why this widening is a fix and not a precaution:
+  #   publish (ubuntu-24.04-arm) enumerated the Actions cache about 122 seconds BEFORE
+  #   integration (windows-11-arm) finished, so the Windows integration entry did not exist yet
+  #   when the enumeration snapshot was taken -- and the shard carries the fingerprint, task
+  #   hash 8059758544828235640 present ONLY under a -windows suffix. Each leg's view of the
+  #   Actions-cache key set is ONE listCacheEntries() call taken at that leg's publish step
+  #   start and is never re-read (the `const entries` line in publish-mirror.ts), so what a leg
+  #   can mirror is a function of its START TIME. Waiting on every producer is what makes one
+  #   default-branch push mirror that push's full task set instead of racing job completion.
+  #   WALL CLOCK: publish used to start ~40s into the run; it now waits for integration
+  #   (windows-11-arm), roughly 3 minutes. Acceptable for a push-only background mirror job.
+  #   DOWNSTREAM, and it changes which pushes sample OBS-05: publish-verify carries
+  #   if: github.event_name == 'push' with NO !cancelled(), so it is skipped whenever publish
+  #   FAILS. The wide list makes publish run on a red-test push, so publish-verify now runs
+  #   there too. Desirable, and named here rather than discovered.
   publish:
     if: ${{ !cancelled() && github.event_name == 'push' }}
-    needs: build
+    needs: [build, typecheck, test, integration]
     strategy:
       fail-fast: false
       # max-parallel 1 serializes the OS legs (WR-01). Run concurrently, each leg
@@ -603,10 +2217,50 @@ jobs:
       # mirrors only the entries IT can restore); the only cost is a little wall-clock on
       # this push-only background mirror job. fail-fast stays off so a Windows-only
       # failure never hides the ubuntu result.
+      #
+      # THIS KNOB IS NOT a correctness control (XOS-06). No requirement may depend on
+      # which OS leg wins the first-write-wins race, and the reason is mechanical rather
+      # than a policy preference: for a given hash both legs restore the SAME single
+      # Actions-cache entry and upload it VERBATIM without re-executing the task
+      # (TRUST-11), so whichever leg wins, every reader receives identical bytes. What a
+      # served artifact's correctness DOES rest on is CORR-05's target platform-agnosticism.
+      #
+      # REJECTED ARGUMENT: ubuntu-first ordering makes the stricter Linux verdict win.
+      # Named so a future reader does not reconstruct it and quietly promote this knob into
+      # a correctness control. It is rejected because it would rest a WRONG-RESULT
+      # guarantee on CI job scheduling -- read PROJECT.md's Key Decisions row (cross-OS
+      # sharing rests on target platform-agnosticism, NEVER on publish-leg ordering) and
+      # XOS-06 in REQUIREMENTS.md rather than this loose restatement of them.
+      #
+      # THE ONE THING THAT DOES DEPEND ON THIS KNOB is publish-verify's ability to DETECT a
+      # dead publish leg -- see read-back.ts, which reads the mirrored-by label of the
+      # asset its own leg seeded. That check needs the two legs NOT TO OVERLAP: run them
+      # concurrently and the other leg can win the upload race for this leg's seed asset,
+      # so removing max-parallel: 1 would redden publish-verify on a CORRECT
+      # implementation. That is guard sensitivity, not a wrong-result guarantee, and the
+      # two must never be conflated -- a lost guard means a real defect goes unnoticed, not
+      # that a wrong artifact reaches a developer. Naming the coupling is deliberate: a
+      # tripwire that fires on correct work gets disabled, and OBS-04 is this repo's own
+      # record of that. The distinction is written in BOTH places so neither comment reads
+      # as contradicting the other.
+      #   The leg ORDER, by contrast, is relied on NOWHERE, and that is the point of the
+      #   label assertion. It was MEASURED 5/5 across the default-branch push runs on
+      #   record, margins 150-190 seconds (run 30401077417: publish (ubuntu-24.04-arm)
+      #   step 7 ends 2026-07-28T21:33:39Z, publish (windows-11-arm) step 6 starts
+      #   21:36:32Z). A measurement is not a documented guarantee: GitHub documents matrix
+      #   CREATION order only, names runner availability as a scheduling input, and these
+      #   two legs draw from DIFFERENT hosted runner pools, so per-leg availability is an
+      #   independent variable. read-back.ts's label assertion is what replaced that
+      #   ordering dependency with the non-overlap one above.
       max-parallel: 1
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job. 20 rather than 15, matching the other
+    # matrix jobs, and it must accommodate max-parallel: 1 above: the two legs are
+    # SERIALIZED, but timeout-minutes is per-LEG, not per-job, so the serialization does
+    # not eat into this bound.
+    timeout-minutes: 20
     # A job-level permissions block REPLACES the workflow grant (contents: read) WHOLESALE --
     # it does NOT merge. So this block MUST restate BOTH scopes: contents: write (create the
     # month-shard release + upload assets) AND actions: read (getActionsCacheList; omitting it
@@ -622,12 +2276,27 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
-      # Seed a known entry keyed on the run id (all-decimal, satisfies the
-      # ^[a-f0-9]{1,512}$ hash validator) so each OS leg has a DETERMINISTIC entry to
-      # mirror -- and so the live cross-OS round-trip has a producer: publish-verify
-      # reads <run_id> back through the real Releases reader below (the leg deferred
-      # from Phase 3). Seed runs as a JS-action operation for the same reason publish
-      # does (the Actions-cache runtime is JS-action-only).
+      # Seed a known entry keyed on a seed only THIS leg can produce, so each OS leg has
+      # a DETERMINISTIC entry to mirror -- and so the live cross-OS round-trip has a
+      # producer: publish-verify reads that same derived seed back through the real
+      # Releases reader below (the leg deferred from Phase 3). Seed runs as a JS-action
+      # operation for the same reason publish does (the Actions-cache runtime is
+      # JS-action-only).
+      #
+      # `operation: mirror-seed`, NOT `seed`, and the two are deliberately separate verbs
+      # (OBS-05, D-13). `seed` writes ONE key per RUN, which dogfood-seed/dogfood-verify
+      # REQUIRE -- seeding that shared key per OS is exactly the vacuity trap VER-06
+      # closed. This job needs the opposite: a key only this leg can produce, so a
+      # publish-verify leg that finds its own seed proves its OWN publish path ran.
+      #
+      # `hash:` STAYS `${{ github.run_id }}` and that is load-bearing (D-14). The per-leg
+      # derivation happens in TypeScript, at BOTH call sites, from the ONE helper
+      # mirrorSeedHash in packages/github-cache/src/lib/mirror-seed.ts -- the mirror-seed
+      # operation writes it and roundtrip/read-back.ts reads it back. A per-leg
+      # `${{ matrix.os == 'windows-11-arm' && 'x' || 'y' }}` expression here would put the
+      # OS mapping in TWO languages, which is the drift class this repo guards against
+      # everywhere else: YAML cannot import the tuple, so the two mappings would be free
+      # to disagree and the symptom would be a SILENT publish-verify MISS.
       #
       # The seeds are NO LONGER the only nx-cache-* entries in play. build, typecheck,
       # test and integration now route their real Nx tasks through the sidecar, so a
@@ -637,14 +2306,53 @@ jobs:
       # outcome and is deliberately ACCEPTED here (the Releases mirror now holds real
       # task outputs, which is the whole point of a remote cache), with two consequences:
       #
-      #   (a) Shard growth. On top of the ~3 run_id-keyed assets a push already added,
-      #       expect ~5 real ones per input-changing push: 4 from the ubuntu leg (build,
-      #       typecheck, test, integration-linux) and 1 from the windows leg
-      #       (integration-win32, which only the Windows leg can restore). So roughly
-      #       125 default-branch pushes inside ONE calendar month before that month's
-      #       shard reaches RELEASE_ASSET_CAP -- and the cap already degrades to
-      #       skip-and-warn (D-11), never a hard failure, while retention prunes shards
-      #       past the window. Not a concern at this repo's push rate.
+      #   (a) Shard growth, and CORR-02 has now corrected this estimate for the THIRD
+      #       time -- the first DOWNWARD one. There are ~5 distinct real task hashes per
+      #       input-changing push (build, typecheck, test, integration-linux,
+      #       integration-win32).
+      #         CORRECTION HISTORY, recorded so a fourth reader does not re-derive it.
+      #         (1) It first read ~5 real assets per push: 4 from the ubuntu leg plus 1
+      #             from the windows leg, because each leg could restore ONLY its own OS's
+      #             saves. (2) Phase 9 raised it UPWARD to ~10: VER-01 + VER-03 removed
+      #             that partition, so each leg restored all ~5 and uploaded them under
+      #             its OWN `<hash>-<os>` suffix -- a duplicate pair per hash. (3) CORR-02
+      #             brings it back DOWN, because the suffix is GONE. One asset name per
+      #             hash means the second leg to publish finds the name already present
+      #             and skips it as a first-write-wins no-op, so a hash is mirrored ONCE
+      #             no matter how many legs restore it.
+      #         THE ARITHMETIC, from this estimate's own stated inputs. ~5 real assets per
+      #         push (back to roughly the distinct-task-hash count, not double it) plus the
+      #         ~3 run_id-keyed seeds = ~8 per push. RELEASE_ASSET_CAP is 1000, so
+      #         1000 / 8 = ~125 default-branch pushes inside ONE calendar month before that
+      #         month's shard reaches the cap -- roughly DOUBLE the ~75 Phase 9's figure
+      #         implied, and back to the pre-Phase-9 number by the same arithmetic. The cap
+      #         degrades to skip-and-warn (D-11), never a hard failure, and retention prunes
+      #         shards past the window, so this was never a concern at this repo's push rate
+      #         and is now half as much of one.
+      #         THE WINDOWS LEG STILL MIRRORS EXACTLY ONE ASSET -- ITS OWN PUBLISH SEED --
+      #         and that carve-out is why the per-leg counts are still NOT equal. Zero REAL
+      #         TASK assets, one asset in total. `max-parallel: 1` runs ubuntu first, so
+      #         ubuntu mirrors every name it can restore and windows finds them all present.
+      #         So `publish (windows)` reports `mirrored: 1`, NOT 0 -- the all-restore-MISS
+      #         warning requires `mirrored === 0` and will not fire -- and that seed is
+      #         precisely the asset OBS-05 reads back, which is why "the windows leg mirrors
+      #         zero assets" is the wrong summary of this change and "zero REAL TASK assets,
+      #         one seed" is the right one.
+      #         ZERO REAL TASK ASSETS DEPENDS ON XOS-07's WIDENED `needs:`, NOT ON THE RENAME
+      #         ALONE, and the distinction is measurable rather than pedantic. Before the
+      #         widening, ubuntu's enumeration snapshot PREDATED the windows `integration`
+      #         job, so windows was the sole mirrorer of that one hash -- i.e. one real task
+      #         asset, not zero (MEASURED on run 30400231720: ubuntu enumerated at
+      #         ~21:21:11Z while windows integration did not finish until ~21:23:13Z, and the
+      #         shard carries the fingerprint -- task hash 8059758544828235640 exists ONLY
+      #         under a `-windows` suffix, never under `-linux`). `needs:` above now includes
+      #         `integration`, so ubuntu's snapshot contains that hash and windows skips it.
+      #         Reverting that `needs:` list silently restores the one-real-asset case.
+      #         CONSEQUENCE FOR THE DEFERRED SINGLE-LEG COLLAPSE, recorded here because this
+      #         is where a reader arrives with the idea: the windows leg's ONE asset is the
+      #         only thing OBS-05 has to read back, so collapsing the matrix to one leg would
+      #         DESTROY OBS-05's dead-publish detection. The full both-halves record is
+      #         .planning/phases/10-os-invariant-releases-mirror/10-SC6-NOTES.md.
       #   (b) Wall clock. Uploads are throttled to ~1/sec, so publish gains a few
       #       seconds per push.
       #
@@ -673,7 +2381,7 @@ jobs:
       - uses: ./packages/github-cache
         with:
           hash: ${{ github.run_id }}
-          operation: seed
+          operation: mirror-seed
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: ./packages/github-cache
@@ -685,19 +2393,37 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # The live cross-OS publish/read-back round-trip (the leg deferred from Phase 3). It
-  # runs after the WHOLE publish matrix and, per OS, resolves the run-id entry that
-  # matrix mirrored THROUGH THE REAL GitHub Releases reader -- invoked DIRECTLY
+  # runs after the WHOLE publish matrix and, per OS, resolves the entry that leg itself
+  # seeded THROUGH THE REAL GitHub Releases reader -- invoked DIRECTLY
   # (createReleasesReadBackend(createReleasesReadClient(process.env)) in read-back.ts),
   # NOT selectBackend, which in a push (write-trusted) context returns the writable
-  # Actions-cache backend rather than the reader (TRUST-05). Each OS leg reads back ONLY
-  # its own-OS asset (<run_id>-<os> via releaseAssetName), so this proves the same-OS
-  # publisher->reader contract against REAL published assets and exercises the 04-02
-  # shard-window walk live; the wrong-OS MISS stays unit-proven. The reader is native
-  # fetch (no ACTIONS_RUNTIME_TOKEN), so this is a plain `node` step, not a JS action.
-  # It needs only the workflow-default contents: read to fetch a release asset, so it
-  # adds NO job-level permissions block and never touches the write gate. Mirrors the
-  # dogfood-verify shape: push-gated, needs the producer, a MISS fails the job loud
-  # (the reader swallows faults to a MISS, so any MISS is a round-trip failure).
+  # Actions-cache backend rather than the reader (TRUST-05).
+  #   WHAT IT PROVES, AND WHY THE OLD REASON IS GONE (D-21). Each OS leg still reads back
+  #   ONLY the asset its own leg seeded -- but the mechanism is a per-leg SEED derivation,
+  #   NOT a per-leg asset name. The key is mirrorSeedHash(github.run_id, that leg's OS) and
+  #   the asset is releaseAssetName(mirrorSeedHash(...)), so the separation lives in the KEY
+  #   and survives CORR-02 collapsing the OS out of the name. The old justification was the
+  #   name's own -os suffix, which that rename deletes outright.
+  #   IT DOES NOT PROVE A SAME-OS PUBLISHER-TO-READER CONTRACT. That claim stood here until
+  #   Phase 10 and was flatly false by then: VER-01 + VER-03 made cross-OS restore work, so
+  #   a leg can mirror bytes produced on another OS entirely. What this job proves instead
+  #   is that each leg's OWN publish path uploaded the asset that leg reads back, evidenced
+  #   by the mirrored-by label read-back.ts asserts -- a PUBLISHER identity, never a
+  #   producer identity. Different axes; only the label carries the second, which is why
+  #   the byte comparison alone cannot detect a dead publish leg.
+  #   WHY THE STALE CLAIM SURVIVED: Phase 9's same-OS sweep was scoped to DOCUMENTATION and
+  #   missed read-back.ts's own comment plus a ci.yml capacity comment, both found only
+  #   after that sweep had declared itself complete. A same-OS-invariant sweep must
+  #   enumerate EXECUTABLE CODE and CI PROSE, not only docs.
+  # It exercises the 04-02 shard-window walk live. The reader is native fetch (no
+  # ACTIONS_RUNTIME_TOKEN), so this is a plain `node` step, not a JS action. It needs only
+  # the workflow-default contents: read -- for the asset download and for the release and
+  # asset-listing reads the label check makes -- so it adds NO job-level permissions block
+  # and never touches the write gate. Mirrors dogfood-verify's shape in the two respects
+  # that matter here: it needs the producer, and a MISS fails the job loud (the reader
+  # swallows faults to a MISS, so any MISS is a round-trip failure). NOT in its trigger --
+  # dogfood-verify now also runs on same-repo pull requests, whereas this job stays
+  # push-only, because the mirrored asset it reads back is written by the push path alone.
   publish-verify:
     if: github.event_name == 'push'
     needs: publish
@@ -706,6 +2432,9 @@ jobs:
       matrix:
         os: [ubuntu-24.04-arm, windows-11-arm]
     runs-on: ${{ matrix.os }}
+    # Generic hang insurance -- see the build job. 20 rather than 15, matching the
+    # other matrix jobs: the windows-11-arm leg is consistently the slow one.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

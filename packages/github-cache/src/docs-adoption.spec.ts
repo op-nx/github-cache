@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { EXPECTED_ENV_KNOBS } from './test/consumer-contract.js';
+import {
+  EXPECTED_ENV_KNOBS,
+  EXPECTED_TYPE_EXPORTS,
+  EXPECTED_VALUE_EXPORTS,
+} from './test/consumer-contract.js';
 
 /**
  * DOCS-01/02/04/06 adoption-docs content guard.
@@ -82,6 +86,25 @@ describe('versioning.md documents every consumer env knob (DOCS-02/DOCS-05)', ()
   it.each(EXPECTED_ENV_KNOBS)('lists env knob %s', (knob) => {
     expect(versioning).toContain(knob);
   });
+
+  // GROUP (c), ON THE SAME FOOTING, and this is the generalization the comment above
+  // never got. public-surface.spec.ts pinned the exports against the CODE and this
+  // describe pinned only the knobs against the PROSE, so the exports had no prose pin
+  // at all -- and versioning.md named four of the six for as long as ReadableBackend
+  // and WritableBackend had existed.
+  //
+  // Two accepted limits, both cheaper than engineering around:
+  // - `toContain` is a substring match, so `CacheBackend` is also satisfied by
+  //   `createCacheBackend`. The env-knob clause above already accepts that weakness;
+  //   a presence guard is the right rung for prose.
+  // - Scoped to versioning.md ALONE -- the doc that CLAIMS to define the contract.
+  //   Widening to README.md or configuration.md would churn on ordinary prose edits.
+  it.each([...EXPECTED_VALUE_EXPORTS, ...EXPECTED_TYPE_EXPORTS])(
+    'lists package export %s',
+    (exportName) => {
+      expect(versioning).toContain(exportName);
+    },
+  );
 });
 
 describe('documented snippets mask the bearer token before writing $GITHUB_ENV (F17)', () => {
@@ -113,12 +136,18 @@ describe('documented snippets mask the bearer token before writing $GITHUB_ENV (
   );
 });
 
-describe('advanced.md documents all four selectBackend outcomes (F11)', () => {
-  // selectBackend has FOUR outcomes, two of which were invisible in the old binary
-  // read-write-versus-reader prose: the fail-closed THROW on a malformed identity,
-  // and the empty-memory permanent-MISS degrade on a trusted-but-tokenless context
-  // (the one adopters actually hit). A future selectBackend change not reflected
-  // here is caught by this guard.
+// The count lives in ONE place -- advanced.md's prose sentence, pinned by the last clause in
+// this describe -- and deliberately nowhere else. It was previously restated at five sites of
+// which only that one was guarded, so the four -> five correction had to find the others by
+// hand and MISSED memory-backend.ts until a review caught it. This title, configuration.md
+// and memory-backend.ts now all say "documented" instead of a number.
+describe('advanced.md documents every selectBackend outcome (F11)', () => {
+  // selectBackend is not the binary read-write-versus-reader switch the old prose
+  // implied. Two outcomes were invisible in it -- the fail-closed THROW on a
+  // malformed identity, and the empty-memory permanent-MISS degrade on a
+  // trusted-but-tokenless context (the one adopters actually hit) -- and TRUST-14
+  // added the CACHE_READ_ONLY narrowing outcome on top. A future selectBackend
+  // change not reflected here is caught by this guard.
   const advanced = read('docs/advanced.md');
 
   it('names the untrusted read-only Releases reader outcome', () => {
@@ -137,6 +166,37 @@ describe('advanced.md documents all four selectBackend outcomes (F11)', () => {
 
   it('names the writable Actions-cache backend outcome', () => {
     expect(advanced).toMatch(/Actions-cache backend/i);
+  });
+
+  // Line-scoped, and it names the KNOB, because the clause above already matches
+  // /Actions-cache backend/i -- which the read-only row also contains. A clause both
+  // rows satisfy is not coverage of the fifth outcome, it is a second reading of the
+  // fourth. Requiring the knob and the read-only backend on the SAME line pins the
+  // row itself, without pinning column widths that prettier reflows.
+  //
+  // MEASURED, not argued: deleting the read-only row from the selection table reddens
+  // THIS clause and nothing else in the file (1 failed | 42 passed) -- in particular
+  // the writable-Actions clause above stays GREEN under that same mutation, which is
+  // exactly the false pass this clause exists to prevent.
+  it('names the CACHE_READ_ONLY read-only Actions-cache outcome (TRUST-14)', () => {
+    expect(advanced).toMatch(
+      /CACHE_READ_ONLY[^\n]*read-only[^\n]*Actions-cache backend/,
+    );
+  });
+
+  // The COUNT, not just the outcomes. Every clause above asserts CONTENT, so nothing
+  // held the number honest: a six-outcome selector could stay documented as five
+  // indefinitely -- the same defect class as a rationale comment that outlives the
+  // code it describes. Asserted against the PROSE sentence a reader actually reads,
+  // deliberately NOT a tally of table rows: a row tally re-derives the number from
+  // the same table it is checking, so it would agree with itself while the sentence
+  // above it lied.
+  //
+  // MEASURED, not argued: reverting that sentence to the previous count reddens THIS
+  // clause and nothing else in the file (1 failed | 42 passed); every content clause
+  // above stays GREEN, because the outcomes are all still described.
+  it('states the outcome count in prose, so a stale count cannot survive', () => {
+    expect(advanced).toMatch(/`selectBackend` has FIVE outcomes/i);
   });
 });
 

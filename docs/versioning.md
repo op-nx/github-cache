@@ -12,14 +12,15 @@ The versioned contract is the CONSUMER surface only -- exactly three groups
 
 1. **Package exports.** The value and type exports re-exported from the package
    entry (`index.ts`): `createCacheServer` and the `CacheBackend`, `GetHit`,
-   `GetResult`, and `PutResult` port types.
+   `GetResult`, `PutResult`, `ReadableBackend`, and `WritableBackend` port
+   types.
 2. **Consumer action inputs.** The inputs of the `uses:`-consumable
    `start-cache-server` JS action.
 3. **Consumer env knobs.** The environment variables an adopter sets:
    `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`,
    `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN`, `PORT`,
    `CACHE_MIRROR_MAX_AGE_DAYS`, `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION`,
-   `GH_TOKEN` / `GITHUB_TOKEN`, and `GITHUB_REPOSITORY`.
+   `CACHE_READ_ONLY`, `GH_TOKEN` / `GITHUB_TOKEN`, and `GITHUB_REPOSITORY`.
 
 `MAX_CACHE_BODY_BYTES` is a FIXED 2 GiB contract limit, not a tunable knob.
 

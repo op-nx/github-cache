@@ -76,3 +76,27 @@ cache automatically.
 `node_modules`) and are gitignored, so each worktree already gets its own - let each
 regenerate its Nx cache rather than sharing it (shared Nx cache state across parallel
 worktrees is riskier than sharing `node_modules`).
+
+# Capturing test-battery output
+
+When running the acceptance-command battery, or any repeat/loop of a single target,
+pipe through `tee` to a log and propagate the REAL exit code, not `tee`'s:
+
+```bash
+npm run test 2>&1 | tee "test-$(date +%s).log"; exit ${PIPESTATUS[0]}
+```
+
+WHY, because a rule without its reason gets deleted: Nx caches terminal output for
+SUCCESSFUL runs only, so a failing run's output never reaches
+`.nx/cache/terminalOutputs` and THE RE-RUN DESTROYS THE EVIDENCE. This exists for one
+occurrence: an unattributed `test` failure at `69bd1b7`, not reproducible in seven
+attempts, with nothing recoverable afterwards. Nx classified it flaky (a FAILURE and a
+SUCCESS at the same task hash), and the commit itself was docs-only, so no diagnosis
+was ever possible - only capture would have helped.
+
+The second habit, so the operator has it: run the failing target once with
+`--skip-nx-cache --output-style=stream` BEFORE any re-run.
+
+Nothing larger than this. No retry harness, no flaky-test dashboard, no
+`--reporter=json` pipeline - the event has occurred once in five phases and has never
+recurred.

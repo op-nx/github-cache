@@ -786,6 +786,12 @@ DOCS-09, DOCS-10), registered in 13-01 BEFORE any code claims to satisfy them. C
 "43/43 mapped" sentence above the traceability table is left as written: it is a dated statement
 about roadmap creation, not the live count. Note the two files assert DIFFERENT totals and both are
 correct -- this file counts the full DEFINED set (57), `ROADMAP.md` counts the ROADMAPPED subset
-(51). The difference is exactly SIX IDs that predate Phase 13 and have a row here but none there:
-`PARITY-06`, `PARITY-07`, `PARITY-08`, `VER-07`, `ROBUST-04`, `RETAIN-05`. If a future edit makes
-that difference anything other than those six, one of the two tables has drifted.*
+(53). The difference is exactly FOUR IDs that predate Phase 13 and have a row here but none there:
+`PARITY-08`, `VER-07`, `ROBUST-04`, `RETAIN-05`. If a future edit makes
+that difference anything other than those four, one of the two tables has drifted.*
+
+*Roadmapped subset corrected 2026-08-08 (quick task `260808-lpt`), 51 -> 53. `ROADMAP.md`'s Phase 8
+traceability block carried seven rows against the nine this file assigns, with four of the seven
+labels shifted; PARITY-02 and PARITY-04 had no row there at all. Adding them moves the roadmapped
+subset 51 -> 53 and the difference above SIX -> FOUR. This is the shift closure, NOT a scope change:
+no requirement was added, removed or rescoped, and the DEFINED set is unchanged at 57.*

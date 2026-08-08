@@ -91,7 +91,7 @@ Full phase detail, success criteria, traceability, and coverage validation archi
 - [x] **Phase 9: OS-Invariant Actions-Cache Version** - Make the `@actions/cache` version stop depending on the OS: one hardcoded forward-slash path plus `enableCrossOsArchive` at every call site, closed behaviourally by a Windows runner reading back a Linux-written entry. (completed 2026-07-28)
 - [x] **Phase 10: OS-Invariant Releases Mirror** - One `nx-cache-<hash>` asset name with no OS component -- still prunable, still attributable, with the trust consequences classified rather than assumed. (completed 2026-07-29)
 - [x] **Phase 11: Live Proofs -- O1, O2, O3** - Record the three live proofs in the mandated order, including the producer attribution that enabling O4 destroys forever. (completed 2026-07-30)
-- [ ] **Phase 12: Windows CI Reuse (O4) + Consumer Recipe** - Add the Windows `build`/`typecheck`/`test` legs, prove they HIT on Linux-produced entries, and ship the safe-by-default adoption recipe.
+- [x] **Phase 12: Windows CI Reuse (O4) + Consumer Recipe** - Add the Windows `build`/`typecheck`/`test` legs, prove they HIT on Linux-produced entries, and ship the safe-by-default adoption recipe. (completed 2026-07-31)
 - [x] **Phase 13: Read-Only Actions-Cache Backend** - Make "read the Actions cache, never write it" representable, so the three Windows reuse legs can be GATED on a genuine cross-OS HIT rather than recording a launderable one -- without giving the cache-version computation a second place to drift. (completed 2026-08-02)
 
 ## Phase Details
@@ -432,13 +432,13 @@ must be proven to CATCH the three CORR-05 violations before this phase removes t
 - [x] 10-08-PLAN.md
 
 - [x] `10-01-PLAN.md` - capture the two perishable pre-rename measurements (D-25 XOS-02 baseline, D-08 census)
-- [ ] `10-02-PLAN.md` - the `mirrored-by` label seam, engine through real Octokit adapter (OBS-03)
-- [ ] `10-03-PLAN.md` - widen `publish`'s `needs:`, add the repo's first `needs:` value guard (XOS-07)
-- [ ] `10-04-PLAN.md` - the per-leg seed helper and the `mirror-seed` operation branch (OBS-05)
-- [ ] `10-05-PLAN.md` - flip the seed and reader atomically, add the `mirrored-by` read-back control, lock `max-parallel: 1` (OBS-05, XOS-06)
-- [ ] `10-06-PLAN.md` - the ADD-only assertion-level RED for the rename wave (CORR-02, CORR-05, RETAIN-04/05)
-- [ ] `10-07-PLAN.md` - THE ONE COMMIT: OS-free name, two-branch filter, prose sweep, rebuilt bundle (CORR-02, CORR-05, RETAIN-04/05)
-- [ ] `10-08-PLAN.md` - pin the `ref` scoping, hand TRUST-11/12 to the auditor, record SC6 (TRUST-10..13)
+- [x] `10-02-PLAN.md` - the `mirrored-by` label seam, engine through real Octokit adapter (OBS-03)
+- [x] `10-03-PLAN.md` - widen `publish`'s `needs:`, add the repo's first `needs:` value guard (XOS-07)
+- [x] `10-04-PLAN.md` - the per-leg seed helper and the `mirror-seed` operation branch (OBS-05)
+- [x] `10-05-PLAN.md` - flip the seed and reader atomically, add the `mirrored-by` read-back control, lock `max-parallel: 1` (OBS-05, XOS-06)
+- [x] `10-06-PLAN.md` - the ADD-only assertion-level RED for the rename wave (CORR-02, CORR-05, RETAIN-04/05)
+- [x] `10-07-PLAN.md` - THE ONE COMMIT: OS-free name, two-branch filter, prose sweep, rebuilt bundle (CORR-02, CORR-05, RETAIN-04/05)
+- [x] `10-08-PLAN.md` - pin the `ref` scoping, hand TRUST-11/12 to the auditor, record SC6 (TRUST-10..13)
 
 **Live-CI close**: a default-branch push must republish the mirror under the new name before the
 Phase 11 proofs can run. Expect the first such push to publish nothing if it coincides with
@@ -505,13 +505,13 @@ discriminator).
 - [x] 11-06-PLAN.md
 - [x] 11-07-PLAN.md
 
-- [ ] `11-01-PLAN.md` - hash-neutral instruments: the `capture-hashes.mjs` graph-premise mode and the `run.json` reader (TEST-08)
-- [ ] `11-02-PLAN.md` - D-06 pre-flight: warm capture, the authorised `nx reset`, cold capture (XOS-01, XOS-02, TEST-10)
-- [ ] `11-03-PLAN.md` - the O1/O2 local proof: soundness probe, the cold run, the per-target counts, `11-EVIDENCE.md` (XOS-01, XOS-02, TEST-10, OBS-02)
-- [ ] `11-04-PLAN.md` - producer attribution per hit hash, and the pre-rotation sign-off (TEST-08)
-- [ ] `11-05-PLAN.md` - RED: the `o3-witness` presence guard and the `ci.yml` comment lock (XOS-03, TEST-09)
-- [ ] `11-06-PLAN.md` - GREEN: the `integration` probe steps and the `o3-witness` job (XOS-03, TEST-09)
-- [ ] `11-07-PLAN.md` - the O3 proving run and the O3 evidence (XOS-03, TEST-09, TEST-08, OBS-02)
+- [x] `11-01-PLAN.md` - hash-neutral instruments: the `capture-hashes.mjs` graph-premise mode and the `run.json` reader (TEST-08)
+- [x] `11-02-PLAN.md` - D-06 pre-flight: warm capture, the authorised `nx reset`, cold capture (XOS-01, XOS-02, TEST-10)
+- [x] `11-03-PLAN.md` - the O1/O2 local proof: soundness probe, the cold run, the per-target counts, `11-EVIDENCE.md` (XOS-01, XOS-02, TEST-10, OBS-02)
+- [x] `11-04-PLAN.md` - producer attribution per hit hash, and the pre-rotation sign-off (TEST-08)
+- [x] `11-05-PLAN.md` - RED: the `o3-witness` presence guard and the `ci.yml` comment lock (XOS-03, TEST-09)
+- [x] `11-06-PLAN.md` - GREEN: the `integration` probe steps and the `o3-witness` job (XOS-03, TEST-09)
+- [x] `11-07-PLAN.md` - the O3 proving run and the O3 evidence (XOS-03, TEST-09, TEST-08, OBS-02)
 
 **Live-CI close**: the whole phase. Nothing here closes locally except the `nx reset`
 precondition; O1/O2 need a warm mirror and a real workstation, O3 needs a real Windows runner.
@@ -636,12 +636,12 @@ Plans:
 - [x] 13-05-PLAN.md
 - [x] 13-06-PLAN.md
 
-- [ ] `13-01-PLAN.md` - register the seven requirement IDs in both traceability files, plus the THREAT-MODEL residual note and the Case-B live-CI item (VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10)
-- [ ] `13-02-PLAN.md` - the composed read-only Actions-cache factory, and the package-scope `@actions/cache` importer scan (VER-08, VER-09)
-- [ ] `13-03-PLAN.md` - the strictly-narrowing `CACHE_READ_ONLY` knob, read as `selectBackend`'s LAST branch (TRUST-14)
-- [ ] `13-04-PLAN.md` - the ninth consumer knob enumerated and documented, and the fifth backend-selection outcome (DOCS-10)
-- [ ] `13-05-PLAN.md` - three read-only Windows legs, their counts gated at the floor, and every stale rationale corrected in the same commit (XOS-09, TEST-11, DOCS-09)
-- [ ] `13-06-PLAN.md` - the pre-registered counts, the proving run, and `13-EVIDENCE.md` (XOS-09, TEST-11)
+- [x] `13-01-PLAN.md` - register the seven requirement IDs in both traceability files, plus the THREAT-MODEL residual note and the Case-B live-CI item (VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10)
+- [x] `13-02-PLAN.md` - the composed read-only Actions-cache factory, and the package-scope `@actions/cache` importer scan (VER-08, VER-09)
+- [x] `13-03-PLAN.md` - the strictly-narrowing `CACHE_READ_ONLY` knob, read as `selectBackend`'s LAST branch (TRUST-14)
+- [x] `13-04-PLAN.md` - the ninth consumer knob enumerated and documented, and the fifth backend-selection outcome (DOCS-10)
+- [x] `13-05-PLAN.md` - three read-only Windows legs, their counts gated at the floor, and every stale rationale corrected in the same commit (XOS-09, TEST-11, DOCS-09)
+- [x] `13-06-PLAN.md` - the pre-registered counts, the proving run, and `13-EVIDENCE.md` (XOS-09, TEST-11)
 
 **Live-CI close**: two items. **BOTH CLOSED as of 2026-08-03** -- see the status block after
 item 2. The original text of both is kept for the reasoning it records.
@@ -751,10 +751,12 @@ Every v0.0.2 requirement maps to exactly one phase.
 | LINT-06 | Phase 7 | `reportUnusedDisableDirectives: error`; a stale disable fails rather than pre-authorising a future violation. |
 | CORR-06 | Phase 7 | The strategy is MECHANICALLY enforced, not documented -- the guard IS the LINT-02 rule set. |
 | PARITY-01 | Phase 8 | Node-by-node root-cause record, capture command named, dated before any fix. |
-| PARITY-02 | Phase 8 | Byte-identical `build`/`typecheck`/`test` hash at all THREE observation points. |
-| PARITY-03 | Phase 8 | Byte-identical `integration` hash between native Windows and windows-11-arm (O2's precondition). |
-| PARITY-04 | Phase 8 | Every measurement records Nx version, Node version and install mode. |
-| PARITY-05 | Phase 8 | Public-surface guard passes unchanged (D2-02: no new knob, input or export). |
+| PARITY-02 | Phase 8 | The capture instrument emits the per-NODE hash `details` map; `nx show target inputs` is recorded as INSUFFICIENT and its "no difference" is not evidence (SC2). |
+| PARITY-03 | Phase 8 | Byte-identical `build`/`typecheck`/`test` hash at all THREE observation points. |
+| PARITY-04 | Phase 8 | "Does a warm local box compute the hash cold CI published" answered as a SEPARATE named question, not absorbed by an `nx reset` in the proof recipe (SC4). |
+| PARITY-05 | Phase 8 | Byte-identical `integration` hash between native Windows and windows-11-arm (O2's precondition). |
+| PARITY-06 | Phase 8 | Every measurement records Nx version, Node version and install mode. |
+| PARITY-07 | Phase 8 | Public-surface guard passes unchanged (D2-02: no new knob, input or export). |
 | CORR-03 | Phase 8 | Build-gating two-leg cross-OS measurement job; clause (c) is (b)'s non-vacuity control. |
 | CORR-04 | Phase 8 | `integration` declares the discriminator and is the ONLY target that does. |
 | VER-01 | Phase 9 | Hardcoded forward-slash workspace-relative archive-path literal under `.nx/cache/`. |
@@ -795,9 +797,26 @@ Every v0.0.2 requirement maps to exactly one phase.
 | DOCS-09 | Phase 13 | All SEVEN sites justifying the ungated counts corrected in the SAME commit that gates them -- including the three `echo` strings an operator reads in the job log. |
 | DOCS-10 | Phase 13 | The ninth knob documented and enumerated; `selectBackend`'s outcome count goes four -> five at all FIVE sites that write it down. |
 
+**Phase 8 ID shift FIXED 2026-08-08** (quick task `260808-lpt`). This block carried SEVEN Phase 8
+rows while `REQUIREMENTS.md` assigns NINE, and four of the seven labels were shifted: the rows
+labelled PARITY-02, PARITY-03, PARITY-04 and PARITY-05 carried the note text of PARITY-03,
+PARITY-05, PARITY-06 and PARITY-07 respectively, while REQUIREMENTS' PARITY-02 (the per-NODE
+`details` instrument) and PARITY-04 (warm-local-vs-cold-CI as a separate named question) had no row
+here at all. `REQUIREMENTS.md` is authoritative; the four labels have been corrected against the
+REQUIREMENTS body each note text actually describes, and the two missing rows added from this file's
+own Phase 8 Success Criteria 2 and 4. The block now holds nine rows and matches the Phase 8
+`**Requirements**` line at `:168`, which already named all nine correctly.
+
+The defect was surfaced but deliberately not fixed in Phase 8: `08-ROOT-CAUSE.md` item 5 of "Where
+the requirements' own words disagree with a paraphrase or with the measurement", carried forward as
+residue (d) in `08-VERIFICATION.md`, which also recorded that an audit reading this table would
+have mis-reported PARITY-02. Both of those Phase 8 records cite the pre-fix line numbers and state
+the defect is still open; they are sealed and have NOT been back-edited. This note is what closes
+the loop.
+
 ## Coverage Validation
 
-**Assertion: 51/51 v0.0.2 requirements map to exactly one phase. No orphans, no duplicates.**
+**Assertion: 53/53 v0.0.2 requirements map to exactly one phase. No orphans, no duplicates.**
 (Was stated as 43/43, then 44/44; see the two dated notes under the per-phase counts. XOS-08 was
 named in Phase 12's `**Requirements**` line and in its SC1, but had no traceability row and was not
 counted; Phase 13's seven were added 2026-08-02.)
@@ -805,15 +824,15 @@ counted; Phase 13's seven were added 2026-08-02.)
 Per-phase counts:
 
 - Phase 7: 7 (LINT-01..06, CORR-06)
-- Phase 8: 7 (PARITY-01..05, CORR-03, CORR-04)
+- Phase 8: 9 (PARITY-01..07, CORR-03, CORR-04)
 - Phase 9: 8 (VER-01..06, OBS-04, DOCS-08)
 - Phase 10: 11 (CORR-02, CORR-05, RETAIN-04, OBS-03, OBS-05, XOS-06, XOS-07, TRUST-10..13)
 - Phase 11: 7 (XOS-01, XOS-02, XOS-03, TEST-08, TEST-09, TEST-10, OBS-02)
 - Phase 12: 4 (XOS-04, XOS-05, XOS-08, DOCS-07)
 - Phase 13: 7 (VER-08, VER-09, TRUST-14, XOS-09, TEST-11, DOCS-09, DOCS-10)
 
-Total mapped: 7 + 7 + 8 + 11 + 7 + 4 + 7 = 51. Source categories: CORR 5, LINT 6, PARITY 5, VER 8,
-XOS 9, RETAIN 1, TRUST 5, DOCS 4, TEST 4, OBS 4 = 51.
+Total mapped: 7 + 9 + 8 + 11 + 7 + 4 + 7 = 53. Source categories: CORR 5, LINT 6, PARITY 7, VER 8,
+XOS 9, RETAIN 1, TRUST 5, DOCS 4, TEST 4, OBS 4 = 53.
 
 **Count corrected 2026-07-30.** The Phase 12 tally read 3 and the total read 43 while this file's own
 Phase 12 `**Requirements**` line and SC1 both named XOS-08, and while `REQUIREMENTS.md` (`:658-665`)
@@ -825,11 +844,18 @@ had a Phase 13 row, so all seven IDs were orphaned while this assertion still sa
 in plan 13-01, BEFORE any code claims to satisfy them. Total 44 -> 51; VER 6 -> 8, XOS 8 -> 9,
 TRUST 4 -> 5, DOCS 2 -> 4, TEST 3 -> 4. Read the three dated notes as one history.
 
-**Why this file says 51 and `REQUIREMENTS.md` says 57.** Both are correct and neither is drifting:
+**Why this file says 53 and `REQUIREMENTS.md` says 57.** Both are correct and neither is drifting:
 this table counts the ROADMAPPED subset, `REQUIREMENTS.md` counts the full DEFINED set. The
-difference is exactly SIX IDs that predate Phase 13 and have a row there but none here --
-`PARITY-06`, `PARITY-07`, `PARITY-08`, `VER-07`, `ROBUST-04`, `RETAIN-05`. 57 - 51 = 6. If a future
-edit makes that difference anything other than those six, one of the two tables HAS drifted.
+difference is exactly FOUR IDs that predate Phase 13 and have a row there but none here --
+`PARITY-08`, `VER-07`, `ROBUST-04`, `RETAIN-05`. 57 - 53 = 4. If a future
+edit makes that difference anything other than those four, one of the two tables HAS drifted.
+
+**Phase 8 shift closure 2026-08-08** (quick task `260808-lpt`). The roadmapped subset moved 51 -> 53
+and the documented difference SIX -> FOUR because the Phase 8 traceability block gained the two rows
+it was always assigned (PARITY-02 and PARITY-04, see the dated note under the traceability table).
+No requirement was added, removed or rescoped: this is bookkeeping catching up with
+`REQUIREMENTS.md`, which has assigned nine IDs to Phase 8 throughout. PARITY-06 and PARITY-07 left
+the difference list because they now have a row here.
 
 ### Every sequencing-constraint row, and where it is honoured
 

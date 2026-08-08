@@ -2195,8 +2195,14 @@ jobs:
   #   POST /repos/op-nx/github-cache/releases and got 422 -- a real production write ATTEMPTED
   #   under this job's `contents: write` grant, not a dry run. The 422 itself is the separate,
   #   already-documented burned-shard defect in
-  #   .planning/debug/publish-verify-422-empty-shard.md; do not conflate the two. Five of the
-  #   restore-shaped runs concluded `success` and completed their uploads.
+  #   .planning/debug/publish-verify-422-empty-shard.md; do not conflate the two. FOUR of the
+  #   restore-shaped runs concluded `success` and completed their uploads. NOT five: there are
+  #   12 push runs at headSha fe25a3f and 5 concluded `success`, but one of those 12 is the
+  #   PR #7 MERGE push that CREATED fe25a3f (mergedAt 11:49:27Z, push 11:49:28Z, run
+  #   30200859202 at 11:49:29Z) -- fe25a3f did not exist before that moment, so no restore can
+  #   predate it. That fifth success is the merge push this same comment says SHOULD have
+  #   published. Counting it as an incident counts a CORRECT publish as a defect, which is
+  #   what the raw 12-and-5 query does if you do not subtract the creating push.
   #   SKIP DIRECTION: a wrongly-skipped publish means no production write at all -- that push's
   #   entries stay in the Actions cache and the next default-branch push mirrors them. This is
   #   not a new failure mode: it is verbatim the trade the needs: paragraph below already

@@ -18,12 +18,22 @@ only be computing `forced` server-side from non-fast-forwardness. That mechanica
 what makes the discriminator safe: an operator typing `--force-with-lease` on a
 fast-forward window-open push still gets `forced: false`.
 
-The 22 pushes to `main` in the `fe25a3f` era separate 22/22 with zero misclassifications:
-11 restores (all rewinds, `forced: true`), 11 window-opens (all fast-forwards,
-`forced: false`), plus the one genuine PR #7 merge push that CREATED `fe25a3f`
-(fast-forward, `forced: false`, and it SHOULD have published). Every historical window tip
-descends from `fe25a3f` -- verified with `git merge-base --is-ancestor` on all nine tips
-still resolvable locally, including the current `f9be637`.
+CORRECTED 2026-08-08, twice, by the code review and the verifier independently. This block
+originally read "22 pushes ... 22/22" while its own table summed 11 + 11 + 1 = 23, and it
+labelled each shape with a `forced` value that was never observed.
+
+The 23 pushes to `main` in the `fe25a3f` era separate 23/23 with zero misclassifications:
+11 restores (all rewinds), 11 window-opens (all fast-forwards), plus the one genuine PR #7
+merge push that CREATED `fe25a3f` (a fast-forward, and it SHOULD have published). Every
+historical window tip descends from `fe25a3f` -- verified with `git merge-base --is-ancestor`
+on all nine tips still resolvable locally, including the current `f9be637`.
+
+**The classification is by ANCESTRY, not by an observed `forced` field.** The Events API
+payload does not carry `forced`, so this measurement has no truth column: it establishes
+that rewinds and fast-forwards separate cleanly into restores and window-opens, and the
+claim that GitHub sets `forced` from that same non-fast-forwardness rests on the protocol
+argument below, not on these 23 observations. Labelling each row `forced: true` /
+`forced: false` implied a field reading that never happened.
 
 The occurrence count in the handoff is an UNDERCOUNT. Five `refs/backups/*` on origin
 implied five occurrences; the actual figure is **11 restore pushes**, each firing a full
@@ -93,17 +103,29 @@ The measurement, from `gh api repos/op-nx/github-cache/events --paginate` (292 e
 70 `PushEvent`s on `refs/heads/main`, range 2026-07-15 to 2026-08-04) classified by
 `before` / `head` and cross-checked with `git merge-base --is-ancestor`:
 
-| Shape | Count | Ancestry verdict | `forced` | Should publish? |
-|-------|-------|------------------|----------|-----------------|
+The `forced` column is INFERRED from the ancestry verdict, not read from the payload -- the
+Events API does not expose the field. It is what the protocol argument predicts, and it is
+what item 3's window run will observe for the first time.
+
+| Shape | Count | Ancestry verdict | `forced` (inferred) | Should publish? |
+|-------|-------|------------------|---------------------|-----------------|
 | `fe25a3f` -> tip (window open) | 11 | tip descends from `fe25a3f` | false | YES |
 | tip -> `fe25a3f` (restore) | 11 | rewind to an ancestor | true | NO |
 | `e56e5d2` -> `fe25a3f` (PR #7 merge) | 1 | fast-forward | false | YES (and it did) |
 
-22/22 clean separation, zero misclassification. Every restore's `before` was verified a
+23/23 clean separation, zero misclassification (CORRECTED from 22/22; the table sums 11 + 11 + 1). Every restore's `before` was verified a
 DESCENDANT of `fe25a3f`; the single creating merge push's `before` (`e56e5d2`) was verified
 an ANCESTOR. Corroborated independently by `gh run list --branch main --workflow ci.yml
 --limit 200`: 12 push runs with `headSha == fe25a3f` (11 restores + the merge), 7 of them
 `failure`, 5 `success`.
+
+**Do NOT read that 5 as "five restore runs published".** CORRECTED by the code review: one
+of those 12 is the PR #7 MERGE push that created `fe25a3f` (mergedAt 11:49:27Z, push
+11:49:28Z, run 30200859202 at 11:49:29Z, `success`), and `fe25a3f` did not exist before that
+moment, so no restore can predate it. The merge push is the one this table says SHOULD have
+published. **FOUR restore-shaped runs concluded `success` and completed their uploads**, not
+five -- taking the raw 12-and-5 without subtracting the creating push counts a CORRECT
+publish as an incident.
 
 **What would make a window-open push forced (and silently skip publishing):**
 
@@ -161,7 +183,7 @@ surrounding prose rather than guessed:
 2. **ALL-CAPS section labels for the load-bearing turns**, and measurements cited with a
    run id. The file's own precedents: "MECHANISM:", "BOUNDED FAILURE MODE:", "MEASURED on
    run 30400231720", "REJECTED ARGUMENT:", "recorded here rather than left to be re-derived".
-   The new text should carry `MEASURED: 22 pushes to main in the fe25a3f era separate
+   The new text should carry `MEASURED: 23 pushes to main in the fe25a3f era separate
    11/11/1`, and name run `30825636788`.
 3. **State the failure direction explicitly.** `publish`'s existing comment already
    establishes the vocabulary: "A recoverable GAP, never a wrong artifact reaching the
@@ -338,7 +360,7 @@ in five phases and has never recurred. Do not build it.
 
 Plus an extension to the existing rationale paragraph at `ci.yml:2170-2172`, in the file's
 own idiom, carrying: the mechanism (`--force` is not on the wire; GitHub computes `forced`
-from non-fast-forwardness), the measurement (22 pushes, 11/11/1, zero misclassification),
+from non-fast-forwardness), the measurement (23 pushes, 11/11/1, zero misclassification),
 the incident (run `30825636788`, `POST /releases` 422), the failure direction (skipped
 publish is a recoverable gap, never a wrong artifact), and the one exception (a deliberate
 `main` history rewrite skips publish; push an empty forward commit if the mirror is wanted

@@ -83,8 +83,22 @@ When running the acceptance-command battery, or any repeat/loop of a single targ
 pipe through `tee` to a log and propagate the REAL exit code, not `tee`'s:
 
 ```bash
-npm run test 2>&1 | tee "test-$(date +%s).log"; exit ${PIPESTATUS[0]}
+i=0
+while [ $i -lt 10 ]; do
+  i=$((i + 1))
+  npm run test 2>&1 | tee "test-$(date +%s)-$i.log"
+  status=${PIPESTATUS[0]}
+  echo "run $i exit=$status"
+  [ $status -eq 0 ] || break
+done
 ```
+
+Two details that look like fussiness and are not. **Capture the status into a variable, never
+`exit ${PIPESTATUS[0]}` inline** -- `exit` terminates the shell, so in the very loop this
+section is about it runs ONE iteration and returns 0, which reads as a clean pass over a
+battery that never ran. **Keep the `-$i` suffix**: `date +%s` has one-second resolution, and
+three fast iterations were measured collapsing into a single log holding only the last run.
+Both mistakes silently destroy the evidence this section exists to preserve.
 
 WHY, because a rule without its reason gets deleted: Nx caches terminal output for
 SUCCESSFUL runs only, so a failing run's output never reaches

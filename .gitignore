@@ -80,6 +80,16 @@ Thumbs.db
 /hash-parity.log
 /detector.log
 
+# The OPERATOR-side counterpart to the list above, for the identical reason. AGENTS.md's
+# "Capturing test-battery output" section tells a human (or an agent) to tee each battery
+# iteration to `test-<epoch>-<i>.log` at the workspace root so a failing run's output
+# survives -- Nx caches terminal output for SUCCESSFUL runs only, so the re-run destroys the
+# evidence. Those logs are untracked by construction and would peg `workingTreeClean` to
+# false in exactly the way the paragraph above describes. A glob rather than an enumeration
+# because the iteration suffix is unbounded; it subsumes `/test-nx.log`, which is kept above
+# so the CI-teed set stays readable as a complete list.
+/test-*.log
+
 # op-nx/github-cache act test harness (test-only, never a runtime dep)
 .act-cache
 .act-artifacts

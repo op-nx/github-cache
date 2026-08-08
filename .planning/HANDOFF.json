@@ -1,0 +1,142 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-08T16:50:00.000Z",
+  "phase": null,
+  "phase_name": "quick task 260808-lpt (no active phase -- all 7 v0.0.2 phases complete, milestone audited)",
+  "phase_dir": ".planning/quick/260808-lpt-fix-the-v0-0-2-milestone-audit-bookkeepi",
+  "context": "default",
+  "context_ambiguity": "Quick-task work, which the pause-work detector does not enumerate, so this handoff lands at the default path. This is ITEM 1 of a three-item operator plan; items 2 and 3 are queued and not started.",
+  "plan": 1,
+  "task": 0,
+  "total_tasks": 3,
+  "status": "paused",
+  "paused_deliberately_at": "Mid revision-3 of the lpt plan, by operator request ('Pause as soon as possible'). The planner agent was stopped by TaskStop, not by failure.",
+  "operator_plan": [
+    {
+      "item": 1,
+      "name": "Fix bookkeeping -- the v0.0.2 milestone audit's stale-artifact debt",
+      "status": "in_progress",
+      "detail": "Quick task 260808-lpt. Plan authored and hardened through 2 plan-check iterations; revision 3 is ~90% applied. NOT executed -- no repo file outside .planning/quick/ has been touched."
+    },
+    {
+      "item": 2,
+      "name": "Resolve the two genuine follow-ups",
+      "status": "not_started",
+      "detail": "(a) The temporary-main-window restore force-push fires a full production ci.yml run (both publish legs writing for real) because [skip ci] is structurally unavailable to a re-push of an existing commit; five stale refs/backups/* on origin suggest five prior undisclosed occurrences. (b) One unattributed test failure at 69bd1b7, not reproducible in 7 attempts, no output captured -- actionable only on a second occurrence WITH output. Operator directed: run via /gsd-core:quick --full with discuss-phase --auto semantics."
+    },
+    {
+      "item": 3,
+      "name": "Close the two open-by-design observations",
+      "status": "not_started",
+      "detail": "Phase 9's first post-merge publish-verify (windows-11-arm) leg, and Phase 10's OBS-01 summary + shard census. Both require a real push to main that RUNS the publish legs -- they are gated off pull_request events and were skipped on run 30947535877. Operator APPROVED a temporary main window (backup before, restore after) as the instrument, and PROHIBITED using a merge. Run via /gsd-core:quick --full with discuss-phase --auto semantics. MUST be done AFTER item 2, because item 2 fixes the defect in the very procedure item 3 uses."
+    }
+  ],
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Session resume + quick task 260804-lc3 carried to completion",
+      "status": "done",
+      "commit": "abb722d,c84ebd5",
+      "detail": "Resumed from the prior HANDOFF.json at a372b96. Plan-check iteration 2 returned BLOCKERS FOUND and its central finding justified the operator's pause: the SRV-05 count gate could not localize, so the escape hatch could have been satisfied by DELETING its false clause with all 23 gates green -- the task's own headline defect class shipping inside the commit meant to close it. Three gates added, one <done> overclaim rewritten, one measurably false execution-HALTING instruction corrected. Executed on the MAIN TREE: abb722d, exactly 2 files, 26/26 gates exit 0. Verified 24/24, 0 gaps, by tracing every shipped claim to source and re-pulling both runs' job logs. Artifacts committed at c84ebd5; HANDOFF.json and .continue-here.md consumed."
+    },
+    {
+      "id": 2,
+      "name": "Item 1 planning: quick task 260808-lpt authored and hardened",
+      "status": "in_progress",
+      "detail": "PLAN.md is UNTRACKED at .planning/quick/260808-lpt-fix-the-v0-0-2-milestone-audit-bookkeepi/260808-lpt-PLAN.md, 1152 lines, ~95 gate assertions. Two full plan-check iterations complete (4 blockers then 1 blocker + 4 warnings, all measured). Revision 3 is ~90% applied -- see remaining_tasks[0] for the exact residue."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 3,
+      "name": "Finish revision 3 of the lpt plan -- TWO aggregate numbers only",
+      "status": "in_progress",
+      "detail": "MEASURED at pause. DONE: the G8 blocker fix (all THREE region gates now bound at the next '^## ' via `| awk 'NR==1{print;next} /^## /{exit} {print}'` at plan lines 394, 959, 1015) and its new <gate_design_rules> entry at ~:169; W-i1 (the false blanket 'every gate literal was executed at c84ebd5' claim is DELETED -- `rg -F -e 'executed at'` now returns zero); and the first W-i2 aggregate (plan :649 now reads 'NINE gates' for G5). OUTSTANDING: the G6 aggregate (was 'nine' for TEN G6 gates) and the REQUIREMENTS table-row aggregate (was 'four in REQUIREMENTS' against THREE table rows). Then re-derive every OTHER aggregate count in the plan rather than trusting unchecked ones."
+    },
+    {
+      "id": 4,
+      "name": "Re-validate the plan after the edits",
+      "status": "not_started",
+      "detail": "Re-run `verify.plan-structure` and `frontmatter.validate --schema plan` (both returned valid: true / 0 errors before revision 3). Re-run the planner's 32-gate dry-run against the unedited tree and confirm the split is STILL exactly PASS=8 / fail=24 -- 8 survival gates passing, 24 reconciliation gates failing. Revision-3 edits touch gate text, so the split must be re-proven, not assumed."
+    },
+    {
+      "id": 5,
+      "name": "Plan-check iteration 3 -- NARROW, operator-authorized",
+      "status": "not_started",
+      "detail": "The operator explicitly approved a third iteration. Scope it ONLY to what revision 3 touched: the G8 region bound and the other two region gates it generalized to, the deleted global claims, the corrected aggregates, and the dry-run split. Do NOT re-review what iterations 1 and 2 already confirmed sound (see blockers[] for that list). Resume the existing checker agent rather than spawning fresh."
+    },
+    {
+      "id": 6,
+      "name": "Execute lpt on the MAIN TREE, then verify",
+      "status": "not_started",
+      "detail": "gsd-executor, NO worktree isolation (single sequential plan; AGENTS.md's own decision rule says sequential-on-main). Then gsd-verifier. Then STATE.md's Quick Tasks Completed table and the artifacts commit. Brief the executor with the handler tax: never call requirements.mark-complete or roadmap.update-plan-progress; state.add-decision writes a U+2014 em dash (pass only --summary); state.record-metric needs NAMED flags and mutates STATE.md."
+    }
+  ],
+  "blockers": [
+    {
+      "description": "NONE BLOCKING. Recorded so the next session does not re-litigate settled ground. CONFIRMED SOUND by two independent plan-check iterations, verified by measurement, DO NOT RE-REVIEW: the item-4 arithmetic (51 -> 53, six -> four, and the four difference IDs are exactly PARITY-08, VER-07, ROBUST-04, RETAIN-05); the Phase 8 shift mapping in all five rows and both omissions; every checkbox count (Phase 10 EIGHT rows with 10-01 pre-ticked, Phase 11 seven, Phase 13 six, 22 = 1+1+7+7+6); ROADMAP.md:26 as the ONLY legitimate unticked survivor, with G11a blocking both ticking and deletion; all 13 invariant absence literals matching exactly one line at exactly the claimed line; no unsatisfiable G6/G7-vs-G13 pair, so the HISTORICAL 51 at ROADMAP.md:825 ('Total 44 -> 51') survives a correct edit; G7m non-vacuous; and no action/gate contradiction for any cell.",
+      "type": "informational",
+      "workaround": "Not applicable."
+    },
+    {
+      "description": "OPEN RESIDUE, admitted in the plan rather than hidden: gate G8 proves a per-ID evidence section exists, is anchored to 08-VERIFICATION.md's Requirements Coverage row, names all nine IDs, and does NOT cite MILESTONE-AUDIT. It CANNOT prove the quoted text is a faithful transcription rather than a plausible paraphrase, and no grep can. Bounded only by per-ID diffability and the forbidden-source clause.",
+      "type": "technical",
+      "workaround": "Do NOT report G8 green as evidence the readings happened. The plan states this explicitly and instructs the verifier accordingly."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "NONE blocking. The next session can resume straight into remaining_tasks[0].",
+      "context": "All three operator decisions needed for items 1-3 are already given and recorded in decisions[].",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "NEVER merge v0.0.2, any other milestone, PR #16, or any other PR until the operator explicitly says so",
+      "rationale": "Stated once and then restated twice after an initial narrower reading ('until items 2 and 3 are confirmed') proved wrong. No condition satisfies this implicitly -- not a green CI run, not a passed verification, not a clean audit, not a MERGEABLE PR. Saved as the memory never-merge-milestone-without-explicit-approval.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Temporary pushes to main ARE approved as the instrument for anything a PR cannot verify, with backup-before and restore-after; pushing any branch and opening/closing any PR are also approved",
+      "rationale": "This is the counterpart to the merge prohibition and exists so a merge is never needed as a measurement device. It is what makes item 3 possible without merging.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Items 2 and 3 run via /gsd-core:quick --full with discuss-phase --auto semantics",
+      "rationale": "Operator directive: single pass, auto-pick the recommended option for every gray area, no human checkpoint. NOTE: --auto is NOT a flag quick parses (measured: quick.md parses only --full/--validate/--discuss/--research/--text), so passing it literally would land the string in the task DESCRIPTION and pollute the slug. Apply the semantics, not the flag. The documented exception still holds: a gray area that is BOTH high-impact and not-high-confidence is written into CONTEXT.md as an explicit UNRESOLVED with competing options, never auto-locked, and surfaced in the end-of-task report rather than as a blocking question.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Item 2 before item 3, and this ordering is load-bearing rather than cosmetic",
+      "rationale": "Item 2 fixes the defect in the very procedure item 3 uses -- the main-window restore force-push fires the production publish legs. Fixing it first means item 3's window inherits a decided procedure instead of improvising against a known-defective one.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Fold the Phase 10 and Phase 11 stale plan checkboxes into item 1's scope; leave the ~93 elsewhere",
+      "rationale": "Auto-locked as LOW-IMPACT (bookkeeping, no contract or downstream inheritance) and HIGH-CONFIDENCE (STATE.md records 7/7 phases complete; the audit verifies phases 7-13 all passed). Fixing 6 of 20 identical stale checkboxes does not serve the goal, which is that stale markers must not freeze into the milestone archive. The ~93 unticked boxes elsewhere are a DIFFERENT class -- pre-execution planning scratch in *-RESEARCH.md 'tests to write' checklists, PROJECT.md, and .planning/research/ -- and are documented, not fixed.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "The out-of-scope checkbox count is recorded QUALITATIVELY in the sealed audit, with no precise number",
+      "rationale": "A count in an archived artifact rots the moment anyone adds a checklist item, and a rotted count is what produced these eight debt items in the first place. Gate G7m requires the literal 'No count is recorded here deliberately' so the omission reads as a choice. The precise figure, its command, and the date go in the SUMMARY instead.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Run item 1 on the MAIN TREE with no worktree isolation",
+      "rationale": "Single sequential plan means no parallelism to gain, and AGENTS.md's own decision rule says sequential-on-main for that shape. Also avoids the recorded junctioned-node_modules false-drift hazard.",
+      "phase": "260808-lpt"
+    },
+    {
+      "decision": "Do NOT backfill the absent requirements_completed SUMMARY frontmatter for 30 of the 51 REQ-IDs",
+      "rationale": "The milestone audit itself classified this as a house-style convention that makes its third cross-reference source structurally non-discriminating on this project -- not a defect -- and backfilling would edit sealed phase records. Documented as a convention instead.",
+      "phase": "260808-lpt"
+    }
+  ],
+  "uncommitted_files": [
+    ".planning/quick/260808-lpt-fix-the-v0-0-2-milestone-audit-bookkeepi/260808-lpt-PLAN.md"
+  ],
+  "next_action": "Resume the EXISTING planner agent (SendMessage, do not respawn -- it holds the full revision context) to finish revision 3's two outstanding aggregate numbers: the G6 count (says 'nine', there are TEN G6 gates) and the REQUIREMENTS table-row count (says 'four in REQUIREMENTS', there are THREE table rows), then re-derive every other aggregate in the plan. Then re-run verify.plan-structure, frontmatter.validate --schema plan, and the 32-gate dry-run (must still be exactly PASS=8 / fail=24). Then resume the EXISTING checker agent for a NARROW plan-check iteration 3 scoped only to revision 3's changes. Then execute with gsd-executor on the MAIN TREE, verify with gsd-verifier, update STATE.md's Quick Tasks Completed table, and commit. Then item 2, then item 3.",
+  "context_notes": "The through-line of BOTH tasks this session is that a gate which LOOKS like coverage and asserts NOTHING is caught only by an independent pass, never by its author -- and that fixes need reviewing as hard as originals. Five instances: lc3's SRV-05 cardinality gate (satisfiable by deletion); lpt's six vacuous presence gates, found by the author applying 'would writing NOTHING pass?' to the ADDITIVE direction; lpt's dead G7b, whose literal spanned a line wrap so it could never match while being the only guard on a stale value; lpt's false 'twenty boxes' claim headed INTO the sealed audit the task exists to make accurate; and lpt's G8, added to close a prose-only hole, which both under-enforced (passed on a section with zero quotes) and false-failed (tripped on legitimate downstream text). The last one is the sharpest lesson: the unbounded-region rule was SAFE where iteration 1 checked it because those sections append at EOF, and was carried to a MID-FILE section without adapting the bound. Same rule, different position, opposite outcome. Also carry forward three measured false-zero shapes, all of which read as confident absence: (1) a literal spanning a line wrap; (2) `rg -U` with `\\s+` cannot bridge a wrap whose continuation carries a '#' -- use `[\\s#]+`; (3) a SHAPE-anchored regex like `^\\| (CORR-05|RETAIN-05) ` returns exit 1 because the target file records verdicts as headings rather than table rows. And `git grep` needs `-e` when the pattern starts with `-`: `git grep -n -F '- [ ]' -- f` fails with 'error: unknown switch'. Finally: the audit's own item-7 list caught 6 of 20 instances of one defect -- it undercounted Phase 13 (six, not five), omitted Phases 10 and 11 entirely, and miscounted Phase 10 as seven rows when it has eight. An item list that finds 30 percent of one defect class is the interesting result, and it is recorded in the plan as a finding about the AUDIT's completeness."
+}

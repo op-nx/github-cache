@@ -7,15 +7,15 @@ behavior_unverified: 2
 overrides_applied: 0
 behavior_unverified_items:
   - truth: "A restore force-push to main (a rewind to fe25a3f) does NOT run the publish job, so it attempts no production Release write."
-    test: "During operator-plan item 3's temporary main window, perform the RESTORE force-push (rewind main back to fe25a3f) and read the resulting workflow run."
-    expected: "The `publish` job shows `skipped`, and `publish-verify` shows `skipped` by cascade. No POST to /repos/op-nx/github-cache/releases appears in any leg."
+    test: "CORRECTED post-verification. During operator-plan item 3's window, perform a REWIND PUSH WHOSE TIP CARRIES THE CLAUSE (rewind main from the feature tip to 43f3612) and read the resulting run. NOT the final restore to fe25a3f: a push event runs the workflow at the PUSHED TIP, fe25a3f predates the clause, so that hop runs the ungated workflow and cannot test this truth."
+    expected: "The `publish` job shows `skipped`, and `publish-verify` shows `skipped` by cascade. No POST to /repos/op-nx/github-cache/releases appears in any leg. 43f3612's ci.yml is byte-identical to the feature tip's, so `forced` is the ONLY variable between this observation and the open-push one."
     why_human: "The gate is a job-level `if:` evaluated by GitHub against a push webhook payload. The `forced` field does not exist on a workstation, so no local check can distinguish forced:true from forced:false. The spec asserts the clause as TEXT only. actionlint does not resolve locally and is CI-advisory-only in this repo."
   - truth: "A window-open push (a fast-forward from fe25a3f to the feature tip) DOES still run publish and publish-verify, so item 3's measurement is preserved."
     test: "During the same window, perform the OPEN push (`git push origin HEAD:main`, a fast-forward) and read the resulting run."
     expected: "`publish` RUNS and `publish-verify` RUNS. This is the direction the window exists to measure; if it skips, the gate is over-broad and item 3 loses its instrument."
     why_human: "Same reason. The negative direction alone is not proof -- a clause that skips everything would satisfy the restore direction and silently destroy the measurement. Only the two-direction observation discriminates."
 human_verification:
-  - test: "Operator-plan item 3 window, RESTORE push (rewind to fe25a3f)"
+  - test: "Operator-plan item 3 window, REWIND push to a tip carrying the clause (main from the feature tip to 43f3612). NOT the final restore to fe25a3f, which runs the ungated workflow."
     expected: "publish SKIPPED, publish-verify SKIPPED, no production Release write attempted"
     why_human: "Requires a real push webhook; forced is server-computed and cannot be simulated locally"
   - test: "Operator-plan item 3 window, OPEN push (fast-forward to the feature tip)"

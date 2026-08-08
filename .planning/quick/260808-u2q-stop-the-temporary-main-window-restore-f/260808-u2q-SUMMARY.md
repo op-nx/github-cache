@@ -66,9 +66,21 @@ Everything gated by this task is STATIC:
 3.** That window is the run that will carry it, in two directions:
 
 - (a) the window-OPEN push (fast-forward) MUST show `publish` and `publish-verify` RUNNING;
-- (b) the RESTORE push (rewind) MUST show `publish` and `publish-verify` SKIPPED.
+- (b) a REWIND push WHOSE TIP CARRIES THIS CLAUSE MUST show both SKIPPED.
 
-Item 3's operator records both. Until then this change is **CORRECT-BY-ARGUMENT AND
+**CORRECTED after this task shipped. (b) originally read "the RESTORE push (rewind)", which is
+WRONG and would have failed on a correct gate.** A `push` event runs the workflow at the PUSHED
+TIP, and the restore lands on `fe25a3f`, which PREDATES this clause -- so the final restore hop
+runs the UNGATED workflow and publishes exactly as before. The clause is dormant for restores
+until `main` itself contains it, which is at merge, which is last.
+
+The skip direction is still provable without merging, by rewinding to a tip that DOES carry the
+clause. Item 3's window therefore runs THREE hops: open to the feature tip (fast-forward,
+publishes), rewind to `43f3612` (forced, gated, must SKIP -- and its `ci.yml` is byte-identical
+to the tip's, so `forced` is the only variable between the two observations), then the final
+restore to `fe25a3f` with this workflow disabled for that one push.
+
+Item 3's operator records both directions. Until then this change is **CORRECT-BY-ARGUMENT AND
 STATICALLY-GATED**. It is not proven, not verified in CI, and not confirmed working.
 
 This task also did NOT open a window, did NOT push to `main` (`origin/main` is still

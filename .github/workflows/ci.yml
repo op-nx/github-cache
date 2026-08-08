@@ -2178,6 +2178,18 @@ jobs:
   # production mirror path a SECOND time, over a tree that was already mirrored. Suppressing it
   # from the commit message is structurally unavailable -- the restore re-pushes an EXISTING
   # commit and cannot alter its message without changing the very SHA it is restoring.
+  #   EFFECTIVE DATE -- READ THIS BEFORE TRUSTING THE CLAUSE. This clause is DORMANT for a
+  #   restore until `main` itself contains it. A `push` event runs the workflow file at the
+  #   PUSHED TIP (GITHUB_SHA is documented as "Tip commit pushed to the ref", and the push
+  #   trigger explicitly "includes workflows that are not merged into the default branch" --
+  #   which is only possible if the workflow is read from the pushed commit). A restore pushes
+  #   the pre-window commit, so it runs THAT commit's workflow. While the restore point predates
+  #   this clause, the restore still fires the production mirror path exactly as before, and the
+  #   window's final hop needs out-of-band suppression (disable this workflow for that one push).
+  #   Every audit of this change missed that, in the same way, because all of them read the
+  #   workflow in the working tree and none asked WHICH COMMIT'S COPY EXECUTES.
+  #   A forced push CAN still be proven gated without merging: rewind to a tip that DOES carry
+  #   the clause, and the gate applies because that tip's workflow is the one that runs.
   #   FORCE-PUSH MECHANISM: the git push wire protocol carries no force bit -- the update command
   #   on the wire is `<old-oid> <new-oid> <refname>`, and --force is a CLIENT-side policy that
   #   send-pack applies locally and never transmits. So GitHub can only be computing `forced`
@@ -2191,6 +2203,12 @@ jobs:
   #   pushes predating that restore point. 23 in the fe25a3f era, separating 23/23 with zero
   #   misclassification. ANCHORED on purpose: the events feed is a rolling window and this record
   #   is meaningless once `main` moves, so re-measure it rather than carry the numbers forward.
+  #   THAT SEPARATION IS BY ANCESTRY, NOT BY AN OBSERVED `forced`. The Events API does not expose
+  #   the field, so these 23 have no truth column: they establish that rewinds and fast-forwards
+  #   sort cleanly into restores and window-opens, NOT that GitHub sets `forced` from the same
+  #   distinction. That second step rests on the FORCE-PUSH MECHANISM argument above and nothing
+  #   else. The field has never been read in either direction; the first window whose rewind lands
+  #   on a tip carrying this clause is the first observation of it.
   #   THE INCIDENT, run 30825636788: a restore-shaped run that reached
   #   POST /repos/op-nx/github-cache/releases and got 422 -- a real production write ATTEMPTED
   #   under this job's `contents: write` grant, not a dry run. The 422 itself is the separate,

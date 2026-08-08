@@ -2,8 +2,22 @@
 phase: 12-windows-ci-reuse-o4-consumer-recipe
 verified: 2026-07-30T21:10:00Z
 status: passed
-score: 9/13 must-haves verified
-behavior_unverified: 4
+score: 9/13 must-haves verified at verification time; 13/13 after the four human-verification items were CLOSED downstream
+human_verification_closed: 2026-08-08
+human_verification_closed_by: >-
+  Quick task 260808-lpt, by re-deriving each closure from its own named downstream
+  artifact rather than from any summary of them. Item 1 (the per-leg `[remote cache]`
+  counts on a first same-repo PR run) by 12-UAT.md test 1 -- run 30586177358, PR #12,
+  FIRST run, event=pull_request, headSha=e757d4c, measured 1/2/1 total 4 with every
+  ubuntu leg MISS-and-saved in the same run -- against the counts 11-EVIDENCE.md's O4
+  section pre-registered before any observation existed. Item 2 (the
+  `windows-regression-detector.yml` dispatch) by quick 260803-mew, per this file's own
+  `superseded:` key and 260803-mew-EVIDENCE.md's PASS and FAIL directions. Item 3
+  (RESEARCH assumption A1) by 12-VALIDATION.md, which records A1 as CLOSED BY
+  MEASUREMENT, not by inference. Item 4 (the `docs/cross-os.md` prose review) by
+  12-UAT.md test 4, result pass, no inaccuracy found. See
+  `## Human Verification Closed` at the end of this file.
+behavior_unverified: 0
 overrides_applied: 0
 human_verification:
 
@@ -31,8 +45,19 @@ human_verification:
 recipe without inheriting a wrong-result risk.
 
 **Verified:** 2026-07-30T21:10:00Z
-**Status:** human_needed
+**Status:** passed
 **Re-verification:** No -- initial verification
+
+**On that Status line, stated plainly so the edit is not mistaken for a quiet upgrade.** It read
+`human_needed` at the moment of verification, and that was the correct value for the tree this
+report audited. It was updated on 2026-08-08 because the four human-verification items were
+CLOSED downstream and each closure was re-derived from its own named artifact --
+**not when it was waived**, and not by re-running the verification.
+Nothing below this line has been re-judged: the
+13-truth findings table, the per-item verdicts, the at-verification score and the
+`## Central Question` section are the record of what was true on 2026-07-30 and are left exactly as
+written. The closures are appended under `## Human Verification Closed` at the end of this file,
+which is now the status of record.
 
 ## Goal Achievement
 
@@ -159,3 +184,40 @@ No gaps. Every artifact this phase claims to ship exists, is substantive, and is
 
 _Verified: 2026-07-30T21:10:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+## Human Verification Closed
+
+**Closed:** 2026-08-08 by quick task `260808-lpt`. All four items were CLOSED downstream --
+**not when it was waived**.
+Modelled on `08-VERIFICATION.md`'s section of the same name, including its honesty clause.
+
+Each closure below was re-derived from its own named artifact. The v0.0.2 milestone audit's
+"Phase 12's contradiction, resolved" table is a POINTER to these artifacts and was not used as the
+source for any row.
+
+| # | Item | Closed by | Evidence |
+|---|---|---|---|
+| 1 | Per-leg `[remote cache]` counts on a FIRST same-repo PR run (XOS-05's core O4 claim; truth 5) | Phase 12's own landing, observed | `12-UAT.md` test 1, result pass: run `30586177358`, PR #12, FIRST run, `event=pull_request`, `headSha=e757d4c`. Counted per leg from each leg's own log: `build-windows` 1, `typecheck-windows` 2, `test-windows` 1, total **4**, against the 1/2/1 total 4 that `11-EVIDENCE.md`'s `## O4 (XOS-04, XOS-05)` section pre-registered at `12-06-PLAN.md` before any observation existed. The producer half is the exact mirror in the same run -- every ubuntu leg MISSed, executed and saved. `REQUIREMENTS.md`'s XOS-05 traceability row carries the same observation |
+| 2 | The `windows-regression-detector.yml` dispatch on a real runner (truth 11) | Quick `260803-mew` | This file's own `superseded:` key on human_verification item 2, confirmed against `260803-mew-EVIDENCE.md`: both directions observed on real `windows-11-arm` runners via an operator-authorised temporary main window, on the FOUR-target needle that `9e79009` introduced -- run `30825110047` PASS at `headSha 41f65e1`, and run `30825602626` FAIL at the needle's grep with `nx` at exit 0 in the same step |
+| 3 | RESEARCH assumption A1 -- `--no-warnings` leaves stderr empty on `linux/arm64` (truth 12) | Measurement in `12-VALIDATION.md` | `12-VALIDATION.md:113` and its `### A1 -- OPEN at verification time, CLOSED by measurement at audit time` section: both leg artifacts from run `30586177358` downloaded and read, both recording the HARDENED command, `stderr` length **0** on both legs, `stdout` `linux\n` vs `win32\n`. Recorded there as CLOSED BY MEASUREMENT, not by inference |
+| 4 | The `docs/cross-os.md` prose review (truth 13) | `12-UAT.md` test 4 | `12-UAT.md` test 4, result pass: every independently checkable doc claim verified against the repository (discriminator byte-identical to `nx.json`'s, exactly one `runtime` input and it is on `integration`, 28 `test` input entries, `* text=auto eol=lf` present, Nx 23.1.0, the `hash-parity-compare` job present, and the `nx show project` reproduction actually run). The two Nx-internals claims are sourced to `12-RESEARCH.md` rather than asserted. "No inaccuracy found" |
+
+**The status of record for this phase is now this section**, read together with the frontmatter's
+`human_verification_closed` / `human_verification_closed_by` keys. The `human_verification:` block
+above is retained unchanged as the record of what was open at verification time.
+
+**What this does NOT close, and one thing it corrects.**
+
+- The four `human_verification:` entries above are kept verbatim, including item 2's existing
+  `superseded:` forward pointer. Nothing in them has been rewritten.
+- The 13-truth findings table, the per-item verdicts, the `**Score:** 9/13` line and the
+  `## Central Question` section are preserved as written. Truths 5, 11, 12 and 13 still carry their
+  at-verification verdicts (`PRESENT_BEHAVIOR_UNVERIFIED`, `PRESENT_BEHAVIOR_UNVERIFIED`,
+  `UNCERTAIN`, `UNCERTAIN`). This section supersedes them in place; it does not re-verify them.
+- **`11-EVIDENCE.md`'s O4 `### VERDICT` slot still reads `PENDING -- live-CI, first run of the
+  proving PR`, and its "The observation attempt, and its honest result" subsection still records
+  that no proving run existed at `f5d03b0`.** The observation that later closed item 1 was written
+  into `12-UAT.md` and into `REQUIREMENTS.md`'s XOS-05 row, but was never written back into the
+  slot that section reserved for it. That is a separate, still-open bookkeeping item in a Phase 11
+  artifact, outside this task's scope; it is named here so a future reader does not read the
+  PENDING verdict as contradicting this closure.

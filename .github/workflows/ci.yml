@@ -2171,6 +2171,54 @@ jobs:
   # trusted push trigger, and isSyncTrusted re-checks the default branch in-process as the
   # load-bearing gate (D-01), not the workflow if: alone.
   #
+  # WHY the if: also carries `&& !github.event.forced` (D-U2Q). The temporary `main` window is
+  # this project's only sanctioned instrument for observing a push-only job: push the feature tip
+  # to `main`, let the push jobs run, then force-push `main` back to its restore point. That
+  # RESTORE push is itself a push to the default branch, so before this clause it fired the whole
+  # production mirror path a SECOND time, over a tree that was already mirrored. Suppressing it
+  # from the commit message is structurally unavailable -- the restore re-pushes an EXISTING
+  # commit and cannot alter its message without changing the very SHA it is restoring.
+  #   FORCE-PUSH MECHANISM: the git push wire protocol carries no force bit -- the update command
+  #   on the wire is `<old-oid> <new-oid> <refname>`, and --force is a CLIENT-side policy that
+  #   send-pack applies locally and never transmits. So GitHub can only be computing `forced`
+  #   server-side from non-fast-forwardness. Consequence worth having: an operator who types
+  #   --force-with-lease on a fast-forward window-OPEN push still gets `forced: false`, and that
+  #   push still publishes. The discriminator is robust against operator habit, not against it.
+  #   MEASURED PUSH SHAPES: 70 pushes to refs/heads/main, observed 2026-08-08 while
+  #   origin/main == fe25a3f -- 11 restores (tip -> fe25a3f, every one a rewind), 11 window-opens
+  #   (fe25a3f -> tip, every one a fast-forward), the single PR #7 merge push that CREATED
+  #   fe25a3f (e56e5d2 -> fe25a3f, a fast-forward, and it SHOULD have published), and 47 older
+  #   pushes predating that restore point. 23 in the fe25a3f era, separating 23/23 with zero
+  #   misclassification. ANCHORED on purpose: the events feed is a rolling window and this record
+  #   is meaningless once `main` moves, so re-measure it rather than carry the numbers forward.
+  #   THE INCIDENT, run 30825636788: a restore-shaped run that reached
+  #   POST /repos/op-nx/github-cache/releases and got 422 -- a real production write ATTEMPTED
+  #   under this job's `contents: write` grant, not a dry run. The 422 itself is the separate,
+  #   already-documented burned-shard defect in
+  #   .planning/debug/publish-verify-422-empty-shard.md; do not conflate the two. Five of the
+  #   restore-shaped runs concluded `success` and completed their uploads.
+  #   SKIP DIRECTION: a wrongly-skipped publish means no production write at all -- that push's
+  #   entries stay in the Actions cache and the next default-branch push mirrors them. This is
+  #   not a new failure mode: it is verbatim the trade the needs: paragraph below already
+  #   accepts, one recoverable gap rather than a wrong artifact on the world-readable mirror.
+  #   HISTORY-REWRITE EXCEPTION: push one empty forward commit -- a fast-forward, so it publishes
+  #   -- if the mirror is wanted immediately. A deliberate shared-history rewrite of `main` is
+  #   the one legitimate force-push here and it skips publish; otherwise the rewritten tree
+  #   simply mirrors on the next ordinary push.
+  #   RESTATEMENT DECLINED: publish-verify is NOT separately gated. It inherits the skip through
+  #   `needs: publish` plus the implicit success(), observed on run 30825636788 where publish
+  #   FAILED and publish-verify shows `skipped`. Restating the condition there -- this file's
+  #   usual pairing habit -- was CONSIDERED and declined for the minimal diff. Recorded so a
+  #   reader does not re-derive the choice and assume it was an oversight.
+  #   NO TRIPWIRE: a wrongly-skipped publish is silent in the general case, and that was WEIGHED
+  #   rather than overlooked. It fails CLOSED and the gap is recoverable by construction, so a
+  #   tripwire asserting "the mirror received this commit" would fire on correct behaviour in
+  #   exactly the way this repo's OBS-04 record warns about. Deliberately not built.
+  #   WINDOW PROCEDURE: open the window with a plain `git push origin HEAD:main`, never --force.
+  #   And never open a second window while a previous window is still open: a tip that does not
+  #   descend from the tip already on `main` is a REWIND, so it would silently skip publish and
+  #   lose the very measurement the window exists to take.
+  #
   # WHY needs: [build, typecheck, test, integration] and not the needs: build it replaced
   # (XOS-07). The comment that stood here argued for `needs: build (NOT test)` so that a failing
   # test leg could never skip the mirror and drop already-built entries. That concern is STILL
@@ -2204,7 +2252,7 @@ jobs:
   #   FAILS. The wide list makes publish run on a red-test push, so publish-verify now runs
   #   there too. Desirable, and named here rather than discovered.
   publish:
-    if: ${{ !cancelled() && github.event_name == 'push' }}
+    if: ${{ !cancelled() && github.event_name == 'push' && !github.event.forced }}
     needs: [build, typecheck, test, integration]
     strategy:
       fail-fast: false

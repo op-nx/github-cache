@@ -279,8 +279,27 @@ describe('ci.yml publish waits on every job that produces a NEW mirrored key (XO
   // is real YAML, so it survives the comment strip.
   it('scopes to a real publish job block', () => {
     expect(jobBlock('publish')).toMatch(
-      /^ {4}if:\s*\$\{\{\s*!cancelled\(\)\s*&&\s*github\.event_name == 'push'\s*\}\}$/m,
+      /^ {4}if:\s*\$\{\{\s*!cancelled\(\)\s*&&\s*github\.event_name == 'push'\s*&&\s*!github\.event\.forced\s*\}\}$/m,
     );
+  });
+
+  // The FORCED clause gets its OWN assertion rather than riding on the control above,
+  // because that control's title claims only that the block was extracted -- it is not a
+  // claim about the gate, and a guard whose title reads as false coverage is the exact
+  // defect class this file already spends comments correcting. Deleting the clause from
+  // ci.yml must redden a test whose NAME says what was lost.
+  it('skips publish on a FORCED push, so a temporary-main-window restore writes nothing (D-U2Q)', () => {
+    expect(
+      jobBlock('publish'),
+      'The publish job must keep `&& !github.event.forced`. Without it, ' +
+        'a rewind push to main would resume real production Release writes' +
+        ' -- measured on run 30825636788, which reached POST /repos/op-nx/github-cache/' +
+        "releases under the job's contents: write grant. `forced` is server-computed " +
+        'from non-fast-forwardness (the git push wire protocol carries no force bit), so ' +
+        'the window-OPEN push -- a fast-forward -- still publishes and item 3 keeps its ' +
+        'measurement. The rationale, the measurement and the window procedure are in the ' +
+        "publish block's comment in ci.yml; read it before changing this line.",
+    ).toMatch(/^ {4}if:.*&&\s*!github\.event\.forced\s*\}\}$/m);
   });
 
   it('waits on build -- the SURVIVES clause, which a superset check cannot express', () => {

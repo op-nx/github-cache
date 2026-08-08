@@ -6,10 +6,10 @@
   "phase_dir": ".planning/quick/260808-lpt-fix-the-v0-0-2-milestone-audit-bookkeepi",
   "context": "default",
   "context_ambiguity": "Quick-task work, which the pause-work detector does not enumerate, so this handoff lands at the default path. ITEM 1 of the three-item operator plan is now COMPLETE and verified. Items 2 and 3 are queued and not started.",
-  "plan": 2,
-  "task": 1,
+  "plan": 3,
+  "task": 2,
   "total_tasks": 3,
-  "status": "item_1_complete",
+  "status": "item_2_complete",
   "operator_plan": [
     {
       "item": 1,
@@ -20,8 +20,8 @@
     {
       "item": 2,
       "name": "Resolve the two genuine follow-ups",
-      "status": "not_started",
-      "detail": "(a) The temporary-main-window restore force-push fires a full production ci.yml run (both publish legs writing for real) because [skip ci] is structurally unavailable to a re-push of an existing commit; five stale refs/backups/* on origin suggest five prior undisclosed occurrences. (b) One unattributed test failure at 69bd1b7, not reproducible in 7 attempts, no output captured -- actionable only on a second occurrence WITH output. Operator directed: run via /gsd-core:quick --full with discuss-phase --auto semantics."
+      "status": "complete",
+      "detail": "Quick task 260808-u2q, commits 71773ee (plan) and 92998de..5d60ea4. (a) CLOSED by mechanism: publish now carries `&& !github.event.forced`, so a restore (a rewind, therefore forced) skips it while a window-open push (a fast-forward) still publishes. publish-verify follows via needs. Research corrected the premise: ELEVEN prior restore pushes, not five -- backup refs are reused by name so they cannot count events -- and FOUR of those runs published for real (not five; the fifth success is the merge push that CREATED fe25a3f and SHOULD have published). (b) CLOSED as a triage rather than a fix: 69bd1b7 is docs-only, no CI run ever existed, output was discarded by a redirect. Unactionable until it recurs WITH output, so the work was capture -- the tee idiom now lives in AGENTS.md with its status captured to a variable rather than `exit` (which would end the battery loop after one iteration) and an iteration suffix on the log name (one-second timestamps collapse fast iterations). Verifier human_needed 4/6: the two RUNTIME directions are item 3's to observe."
     },
     {
       "item": 3,
@@ -48,16 +48,10 @@
   ],
   "remaining_tasks": [
     {
-      "id": 3,
-      "name": "Item 2 -- resolve the two genuine follow-ups",
-      "status": "not_started",
-      "detail": "Start here. The main-window restore force-push defect is the load-bearing half, because item 3 uses that exact procedure. The test-failure half is likely UNACTIONABLE until a second occurrence with captured output -- say so rather than manufacturing an investigation."
-    },
-    {
       "id": 4,
       "name": "Item 3 -- close the two open-by-design observations",
       "status": "not_started",
-      "detail": "Only after item 2. Temporary main window, backup before and restore after. Never a merge."
+      "detail": "START HERE. Item 2 is done, so the window procedure it uses is now fixed rather than known-defective. Phase 9's first post-merge publish-verify (windows-11-arm) leg, and Phase 10's OBS-01 summary + shard census. Both need a real push to main that RUNS the publish legs. Temporary window, backup before and restore after, never a merge. THIS RUN IS ALSO THE FIRST BEHAVIOURAL PROOF OF ITEM 2'S GATE, in both directions -- record the open push showing publish + publish-verify RUNNING and the restore push showing them SKIPPED. Recording only the skip direction would leave an over-broad gate undetected. It is also the first time `github.event.forced` is OBSERVED at all: the Events API does not expose it, so every prior classification was ancestry-based inference."
     }
   ],
   "blockers": [

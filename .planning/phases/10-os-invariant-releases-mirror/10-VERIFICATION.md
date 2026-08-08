@@ -2,19 +2,25 @@
 phase: 10-os-invariant-releases-mirror
 verified: 2026-07-29T00:00:00Z
 status: passed
-score: 13/13 code-level must-haves verified; 3 Live-CI-only items outstanding by design (not gaps)
+score: 13/13 code-level must-haves verified; all 3 Live-CI-only items SAMPLED 2026-08-08 (2 closed, 1 closed-with-one-clause-falsified)
 behavior_unverified: 0
 overrides_applied: 0
+live_ci_sampled_by: "quick 260808-wxg, run 31281406708 (head b276bdc, event push, conclusion success), under a temporary main window opened 22:19:01Z and closed 23:24:26Z"
+live_ci_evidence: ".planning/quick/260808-wxg-close-the-two-open-by-design-observation/260808-wxg-EVIDENCE.md"
 live_ci_only_items:
   - test: "Push to main, then read the ubuntu publish leg's OBS-01 summary and the shard census for cache-mirror-<YYYYMM>."
     expected: "Nonzero mirrored count, readMisses 0, no all-restore-MISS warning; nx-cache-* names present; legacy <hash>-<os> names stop growing (CORR-02 warm-mirror precondition owed to Phase 11)."
     why_not_pre_merge: "publish / publish-verify are push-gated to main; no PR run samples them at any rate (by design)."
+    status: "SAMPLED -- 4 of 5 clauses MET, 1 FALSIFIED. Job 93163556127 summary: scanned 149 / mirrored 8 / skipped 141 / restore-MISS 63 / failed 0. MET: mirrored nonzero (8); no all-restore-MISS warning (rg exit 1, positive control passes); 87/87 asset names match ^nx-cache-; zero legacy <hash>-<os> names, unchanged from the 78/78-and-zero baseline taken before the push. FALSIFIED: readMisses is 63, not 0."
+    open_sub_item: "readMisses 63. NOT novel and NOT a regression from this window -- 09-VALIDATION.md's OBS-04 section already recorded 41/41 on run 30400231720 (2026-07-28), so this expectation contradicted a measured number in the same milestone when it was written. The symmetry (63 == 63, as 41 == 41) still matches that section's pre-registered VER-01 PATH fingerprint. What is unexplained is that the count grew rather than draining to the predicted all-HIT steady state. Needs its own triage against the publishMirror scan/restore path; both runs are permanent."
   - test: "Read both publish-verify leg logs after the same push."
     expected: "publish-verify (windows-11-arm) logs a windows-produced payload and label mirrored-by: windows; publish-verify (ubuntu-24.04-arm) logs linux for both; publish (windows) summary reports mirrored: 1, not 0 (OBS-05)."
     why_not_pre_merge: "Same push-gate; OBS-05's live half cannot run pre-merge."
+    status: "CLOSED -- all three clauses met. Windows job 93164047226 (success): 'cache HIT for feed031281406708 on windows with bytes matching the windows-produced payload this leg seeded, published by this same leg (label mirrored-by: windows)'. Ubuntu job 93164047233 (success): the same line with linux for both reader and producer. OBS-05 confirmed twice over -- publish (windows) summary reports mirrored 1, and independently exactly one of the nine new assets carries the label mirrored-by: windows."
   - test: "Confirm publish in the same push only starts after integration (windows-11-arm) completes, and the resulting census contains no task hash mirrored under only one OS's production (XOS-07 full-task-set mirror)."
     expected: "publish starts after integration (windows-11-arm); census shows the Windows integration hash mirrored by the ubuntu leg too."
     why_not_pre_merge: "Same push-gate; this is the requirement's own designed proof shape."
+    status: "CLOSED -- both clauses met, by measurement rather than by the needs: declaration. Ordering: integration (windows-11-arm) completed 22:22:07Z, publish (ubuntu-24.04-arm) started 22:22:09Z. XOS-07: the Windows integration job named its own hash in-log ('integration hash=14313827470950829191 cacheStatus=cache-miss'), and nx-cache-14313827470950829191 is in the shard labelled mirrored-by: linux, created 22:22:41Z by the ubuntu leg -- a Windows-produced hash mirrored under one OS-free name by the other OS's leg. Specific, not coincidental: the other four real task hashes in the delta do not appear in the Windows integration log (each rg exit 1, positive control passes)."
 ---
 
 # Phase 10: OS-Invariant Releases Mirror -- Verification Report
@@ -26,8 +32,10 @@ into one classified by an auditor rather than assumed away.
 **Status:** passed. All 13 code-level must-haves this session set out to check are VERIFIED
 against the actual code (not against SUMMARY.md prose), including two independently-run
 end-to-end mutation tests that prove two different guards genuinely bite. The only items
-still outstanding are the 3 Live-CI-only observations that this phase's own design makes
-unclosable pre-merge (push-gated to `main`) -- they are recorded below, not treated as gaps.
+still outstanding at THAT audit were the 3 Live-CI-only observations that this phase's own
+design makes unclosable pre-merge (push-gated to `main`) -- they are recorded below, not
+treated as gaps. **All three were subsequently SAMPLED on 2026-08-08 by quick `260808-wxg`
+under a temporary `main` window; see the addendum in the Live-CI-only section.**
 
 ## Round 2: closing the three `## Uncertain` rows from the first pass
 
@@ -131,6 +139,25 @@ claims. No FAILED items. No new defects found while closing the Uncertain rows.
 All three are `push`-gated to `main` by this phase's own design; no PR run samples them at
 any rate, so no pre-merge check could close them without passing for the wrong reason. This
 is the correct, expected shape for this phase -- not a verification gap.
+
+> **ADDENDUM 2026-08-08 (quick `260808-wxg`) -- all three SAMPLED under a temporary `main`
+> window, run `31281406708`.** L1 CLOSED (both legs' self round-trip lines verbatim; OBS-05's
+> `mirrored: 1` confirmed both by the job summary and independently by the census, where
+> exactly one new asset carries `mirrored-by: windows`). L2 CLOSED (ordering measured at
+> 22:22:07Z -> 22:22:09Z; the Windows `integration` hash `14313827470950829191`, named in
+> that job's own log, present in the shard labelled `mirrored-by: linux`). L3 needs care:
+>
+> **L3 PASSES ITS OWN FALSIFIER BUT FAILS ONE CLAUSE OF ITS EXPECTATION, because the two
+> did not agree with each other.** The falsifier -- `mirrored: 0` with `readMisses` equal to
+> `scanned` -- was NOT triggered: measured `mirrored 8`, `readMisses 63`, `scanned 149`. The
+> "what a real runner must show" column, however, asks for `readMisses` 0, and it is 63.
+> One row carried a strict all-or-nothing falsifier next to a prose expectation of a perfect
+> zero, and a real run landed between them. The falsifier is the better-drafted half: a
+> nonzero symmetric `readMisses` was ALREADY measured at 41/41 on run `30400231720`
+> (2026-07-28) and documented in `09-VALIDATION.md`'s OBS-04 section, so the zero was
+> contradicted by this milestone's own evidence before it was written. Carried forward as an
+> open sub-item in the frontmatter, not silently closed. Full record:
+> `.planning/quick/260808-wxg-close-the-two-open-by-design-observation/260808-wxg-EVIDENCE.md`.
 
 ## Requirements checkbox sanity (REQUIREMENTS.md)
 

@@ -279,7 +279,7 @@ tag taken first) SAMPLED both. A third item has since appeared. Current state:
 | The resolved compression method on each real runner image | VER-05 | **[OK] OBSERVED** | Both `publish` legs printed `compression method (@actions/cache): zstd-without-long`. The re-derived probe agrees with the library on real runners, which is the claim it existed to support. **Surfaced, never gated** -- no branch reads this value. |
 | The one-time all-MISS rotation signal | OBS-04 | **[WARN] SAMPLED; mechanism and attribution CONFIRMED; the exact predicted rows NOT met; the window is SPENT** | See the reading below. Full record: the ADDENDUM at the end of `09-EVIDENCE.md`. |
 | The cwd / `GITHUB_WORKSPACE` identity on a real Windows runner | VER-04 | **[OK] MEASURED** (2026-07-26, `PROBE-RESULTS.md` Q2) | This phase makes it ENFORCED rather than assumed. Available pre-merge via `integration`'s Windows leg. |
-| Plan 09-08's live `publish-verify (windows-11-arm)` green | (gap closure, outside the eleven) | **[ ] OPEN** | Push-gated to `main` (`ci.yml:3-7` plus the job's `if: github.event_name == 'push'`), so not observable pre-merge. The closing observation is a `'linux'` producer named on the Windows leg: `github-cache round-trip read-back: cache HIT for <run_id> on win32 with bytes matching a 'linux'-produced payload`. Same category VER-06 and OBS-04 already carried; unlike OBS-04's signal it is re-samplable on every push. |
+| Plan 09-08's live `publish-verify (windows-11-arm)` green | (gap closure, outside the eleven) | **[OK] CLOSED LIVE** (2026-08-08, quick `260808-wxg`) | `publish-verify (windows-11-arm)` job `93164047226`, conclusion SUCCESS, in run `31281406708` (head `b276bdc`, event `push`), sampled under a temporary `main` window. Log line verbatim: `github-cache round-trip read-back: cache HIT for feed031281406708 on windows with bytes matching the 'windows'-produced payload this leg seeded, published by this same leg (label 'mirrored-by: windows'); the real publisher/reader round-trip is closed.` **This row's ORIGINAL expectation was impossible by construction and is SUPERSEDED IN PLACE, not met:** it asked for a `'linux'` producer named on the Windows leg with the token `win32`. `publish-verify` is a per-leg SELF round-trip under D-15/OBS-05 -- `read-back.ts:373` sets `const readerOs = cachePlatform()` and interpolates it as BOTH reader and producer, and `assertPublishedByThisLeg` exists to REJECT any other producer -- so a `'linux'` producer on the Windows leg is the exact condition the assertion refuses. The OS token is `windows`, not `win32` (`CACHE_OS_VALUES = ['windows','macos','linux']`). The cross-OS `'linux'`-producer signal belongs to `dogfood-verify`, which THIS TABLE already records as VER-06 CLOSED LIVE. Executed as originally written, the window would have been spent and this row left open for a reason that is not true. Full record: `.planning/quick/260808-wxg-close-the-two-open-by-design-observation/260808-wxg-EVIDENCE.md`. |
 
 ### OBS-04's live reading, stated precisely
 
@@ -304,6 +304,22 @@ run `30400231720` and the `09-EVIDENCE.md` ADDENDUM, and nothing else. Recording
 non-match honestly is worth more than a claimed pass, and it is only legible as a non-match
 because the prediction was committed (`e7018d0`) before the version-rotating commit
 (`47597a6`).
+
+> **ADDENDUM 2026-08-08 (quick `260808-wxg`) -- a SECOND sample exists, and the all-HIT
+> prediction in the paragraph above has NOT held.** The text above is preserved as written;
+> this note supersedes forward rather than back-editing it. Run `31281406708`, 11 days
+> later under a fresh temporary `main` window, measured ubuntu `scanned 149 / mirrored 8 /
+> skipped 141 / restore-MISS 63 / failed 0` and windows `scanned 150 / mirrored 1 / skipped
+> 149 / restore-MISS 63 / failed 0`, again with **no `restored as a MISS` warning on either
+> leg**. Two consequences. (1) The SYMMETRY fingerprint this section pre-registered still
+> holds -- 63 == 63, as 41 == 41 did -- so the VER-01 PATH attribution is now supported by
+> two independent samples rather than one, and the "one observation, permanently
+> unrepeatable" residual below is too strong for the symmetry claim specifically.
+> (2) The restore-MISS population did NOT flush through to a "normal all-HIT `publish`": it
+> GREW, 41 -> 63, while `scanned` grew 47 -> 149. A steady unrestorable population is a
+> different situation from a one-time rotation draining, and only the second was predicted.
+> Not diagnosed there; flagged for triage. Both runs are permanent. Full record:
+> `.planning/quick/260808-wxg-close-the-two-open-by-design-observation/260808-wxg-EVIDENCE.md`.
 
 ### The trap that must be preserved VERBATIM
 

@@ -116,6 +116,42 @@ describe('createActionsCacheBackend get (ROBUST-03)', () => {
 
     expect(result).toEqual({ kind: 'miss' });
   });
+
+  // THE OTHER TWO EXITS. The cleanup assertion above covers the HIT branch only, which is
+  // exactly the coverage the source says it moved the `try` ABOVE the restore to escape:
+  // "it previously opened after the miss check, so the cleanup covered ONLY the hit
+  // branch". Moving it back therefore left the whole suite green, and this PR made the
+  // exposure WORSE by the source's own argument -- a CACHE_READ_ONLY leg issues zero puts,
+  // so put's finally no longer incidentally sweeps the leftover for the rest of the job.
+  //
+  // The archive is pre-written in both cases because the mocked restoreCache does not
+  // create it. A real one does, and on the MISS branch a partial extract can leave one
+  // behind, which is why the miss exit needs the sweep at all.
+  it('removes a leftover archive on a MISS, not only on a hit (WR-01, T-2-11)', async () => {
+    await writeFile(cacheArchivePath(HASH), Buffer.from('tar-bytes'));
+    restoreCache.mockResolvedValue(undefined);
+    const backend = createActionsCacheBackend();
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(true);
+
+    await backend.get(HASH);
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(false);
+  });
+
+  it('removes a leftover archive when restoreCache THROWS mid-extract (WR-01, T-2-11)', async () => {
+    await writeFile(cacheArchivePath(HASH), Buffer.from('tar-bytes'));
+    restoreCache.mockRejectedValue(new Error('extract failed'));
+    const backend = createActionsCacheBackend();
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(true);
+
+    // The throw propagates through withHashLock to handleGet, which degrades it to a
+    // silent 404 MISS -- so nothing about a leftover would ever surface at runtime.
+    await expect(backend.get(HASH)).rejects.toThrow('extract failed');
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(false);
+  });
 });
 
 describe('createActionsCacheBackend put (ROBUST-03)', () => {
@@ -861,6 +897,26 @@ describe('createActionsCacheBackend asserts the cwd/GITHUB_WORKSPACE conjunction
     process.chdir(fixtureAbsolute);
 
     expect(() => createActionsCacheBackend()).toThrow(/GITHUB_WORKSPACE/);
+  });
+
+  // THE CASE-FOLD ITSELF, which is the ONLY reason `.toLowerCase()` exists on either side
+  // of that comparison. The three cases above exercise unset, no nx.json, and a genuinely
+  // different sibling -- every one of them stays green with the fold deleted. The fold
+  // would then throw at CONSTRUCTION on Windows CI, where the runner's own GITHUB_WORKSPACE
+  // and the process cwd routinely differ only in drive-letter or path casing, taking out
+  // all three cross-OS legs at once.
+  //
+  // Upper-casing the whole path is the portable way to say "same directory, different
+  // case": `resolve` is pure string normalisation and never touches the filesystem, so it
+  // is the FOLD and nothing else that makes these two compare equal. On a case-sensitive
+  // filesystem the upper-cased path is a genuinely different directory and this case then
+  // asserts the fold's recorded ceiling rather than its benefit -- which is the same
+  // assertion either way: the comparison is case-insensitive by design.
+  it('does NOT throw when GITHUB_WORKSPACE differs from the cwd only in case (VER-04 case fold)', () => {
+    vi.stubEnv('GITHUB_WORKSPACE', fixtureAbsolute.toUpperCase());
+    process.chdir(fixtureAbsolute);
+
+    expect(() => createActionsCacheBackend()).not.toThrow();
   });
 
   // BOTH conjuncts from the READ-ONLY factory, in this describe rather than a second

@@ -136,6 +136,26 @@ export function faultReason(error: unknown): FaultReason {
 }
 
 /**
+ * GitHub's `errors[].code` enum, exactly the six members this module's header enumerates.
+ *
+ * A UNION on the PREDICATE's parameter, and nowhere else. A bare `string` there accepted a
+ * misspelling -- `'already_exist'` compiles, always returns false, and silently converts a
+ * genuine duplicate-upload race into a counted failure. Fail-closed, so not a Core-Value
+ * risk, but a green run turns red for a benign cause with the cause invisible.
+ *
+ * DELIBERATELY NOT applied to `faultMessageForField`'s `field`, whose names are
+ * endpoint-specific and open-ended, nor to `faultReason().code`, which renders whatever
+ * GitHub actually sent and is not necessarily in the enum.
+ */
+export type GitHubErrorCode =
+  | 'missing'
+  | 'missing_field'
+  | 'invalid'
+  | 'already_exists'
+  | 'unprocessable'
+  | 'custom';
+
+/**
  * Does ANY `errors[]` entry carry exactly this code?
  *
  * WHY THIS EXISTS AND `faultReason().code` DOES NOT COVER IT. That lookup returns the FIRST
@@ -158,7 +178,10 @@ export function faultReason(error: unknown): FaultReason {
  * this -- which keeps the module's rule intact: only an explicit code earns a benign branch,
  * and an unreadable body still earns none.
  */
-export function hasFaultCode(error: unknown, code: string): boolean {
+export function hasFaultCode(
+  error: unknown,
+  code: GitHubErrorCode,
+): boolean {
   return faultErrors(error).some((entry) => entryField(entry, 'code') === code);
 }
 

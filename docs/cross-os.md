@@ -108,12 +108,19 @@ move on:
 #     warning's text carries the process PID, so a warning would not rotate the
 #     hash once -- it would vary it on EVERY invocation, giving a permanent
 #     100% MISS that presents as a portability failure rather than as a warning.
-# (c) What you must VERIFY rather than assume: that the command prints a
-#     NON-EMPTY token, and that the token DIFFERS on each operating system you
-#     cache across. This repository catches a collapsed discriminator with a
-#     build-gating two-leg comparison. You have no such gate, so a discriminator
-#     that quietly collapsed to one value would make the target OS-invariant
-#     again with no signal at all.
+# (c) What you must VERIFY rather than assume, on every operating system you
+#     cache across, and all THREE items matter:
+#       1. the command prints a NON-EMPTY token;
+#       2. the token DIFFERS on each operating system you cache across;
+#       3. it leaves stderr EMPTY -- see (b). This one is easy to skip because
+#          `--no-warnings` is already pinned below, but the moment you SUBSTITUTE
+#          your own command that pin stops covering you, and a single warning
+#          line gives a permanent 100% MISS that reads as a portability failure
+#          rather than as a warning.
+#     This repository catches a collapsed discriminator with a build-gating
+#     two-leg comparison. You have no such gate, so a discriminator that quietly
+#     collapsed to one value -- or that started writing to stderr -- would break
+#     cross-OS caching with no signal at all.
 node --no-warnings -p process.platform
 ```
 

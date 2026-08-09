@@ -18,9 +18,12 @@ workspace root -- the directory that holds `nx.json`.
 
 That last one is a hard precondition, checked at startup on the path that can
 write: when the sidecar resolves the Actions cache backend it refuses to start
-unless `nx.json` sits in the process working directory and that directory matches
-`GITHUB_WORKSPACE`. Both are startup checks rather than read faults, so they fail
-the step loudly instead of degrading to a MISS. **A pull request -- fork included
+unless `nx.json` sits in the process working directory, and -- **when
+`GITHUB_WORKSPACE` is set** -- unless that directory matches it. An unset or
+blank `GITHUB_WORKSPACE` passes naturally, because the check resolves an absent
+value against the working directory, so on a non-Actions runner only the
+`nx.json` half is doing any work. Both are startup checks rather than read
+faults, so they fail the step loudly instead of degrading to a MISS. **A pull request -- fork included
 -- reaches this check**: on `github.com` a `pull_request` run is write-trusted, so
 it resolves the Actions cache backend like any other. What makes a PR read-only in
 practice is GitHub's own cache scope isolation -- its writes land in the PR's merge

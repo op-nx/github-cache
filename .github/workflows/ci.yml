@@ -1281,6 +1281,13 @@ jobs:
             auth="Authorization: Bearer ${GITHUB_TOKEN}"
             accept='Accept: application/vnd.github+json'
             api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+            # THE SHELL COPY of the cache-key prefix, named here because nothing else can
+            # see it. A shell step cannot import cacheKeyFor, so this literal is authored
+            # rather than derived, and it sits outside the tree walk in cache-key.spec.ts
+            # that pins every OTHER authored copy. cache-key.ts records the consequence of
+            # editing that prefix -- it ORPHANS THE ENTIRE MIRROR -- so if it ever changes,
+            # this line changes in the SAME commit or this job silently probes a namespace
+            # nothing writes to and reports a FAIL that has nothing to do with O3.
             key="nx-cache-${h_linux}"
             # The allowed BASE ref, empty on every event except pull_request (which is the
             # only event that sets GITHUB_BASE_REF). The `:-` default form is required, not

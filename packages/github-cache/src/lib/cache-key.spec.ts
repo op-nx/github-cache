@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   cacheKeyFor,
@@ -11,8 +11,9 @@ import {
 /**
  * Count authored occurrences of `needle` in a source file, ignoring comment
  * lines (a trimmed line starting with `*`, `//`, or `/*`). Used for the
- * single-source count assertions: the authored prefix literal must live in
- * exactly one production place (TRUST-08 / T-05-08-02).
+ * single-source count assertions: the authored prefix literal must live only in
+ * the production modules the tree-walk clause below allowlists by name, and in
+ * no others (TRUST-08 / T-05-08-02).
  */
 function countAuthored(source: string, needle: string): number {
   const code = source
@@ -83,6 +84,33 @@ describe('HASH_PATTERN bounds (SRV-03, shared home)', () => {
   });
 });
 
+/** The package source root, resolved from this file rather than from the cwd. */
+const SOURCE_ROOT_URL = new URL('../', import.meta.url);
+
+/** The same root spelled workspace-relative, for readable allowlist keys and messages. */
+const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
+
+/**
+ * Every non-spec TypeScript module under the package source root, as paths relative to
+ * that root.
+ *
+ * The walk shape is `actions-cache-backend.spec.ts`'s VER-09 clause, separator
+ * normalisation included -- `readdirSync(recursive: true)` yields backslashes on Windows,
+ * so an unnormalised path would make the allowlist keys below match on one OS and miss on
+ * the other. It is rooted at `import.meta.url` rather than at a cwd-relative literal
+ * because this spec has no workspace-root chdir hook: vitest runs it with the PROJECT root
+ * as the cwd, so the workspace-relative spelling would scan
+ * `packages/github-cache/packages/github-cache/src` and throw ENOENT.
+ */
+function nonSpecModules(): string[] {
+  return readdirSync(SOURCE_ROOT_URL, {
+    encoding: 'utf8',
+    recursive: true,
+  })
+    .map((entry) => entry.replaceAll('\\', '/'))
+    .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'));
+}
+
 describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
   it('authors the prefix literal exactly once within cache-key.ts (comment-stripped)', () => {
     const source = readFileSync(
@@ -105,55 +133,57 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
     expect(source).not.toMatch(/from '\.\/select-backend/);
   });
 
-  it('authors the prefix literal exactly ONCE across the leaf + its consumers (strict cross-file single source)', () => {
-    // Now that the backend and publish path route through the leaf, the authored
-    // prefix literal must exist in exactly one production place -- cache-key.ts --
-    // and nowhere else. A second authored copy re-opens the drift T-05-08-02 guards.
+  it('authors the prefix literal in exactly the TWO allowlisted production modules (strict cross-file single source)', () => {
+    // A TREE WALK, not a hand-maintained file map, and the swap is the point. The map
+    // this replaced named four files, so it could see neither the copy that already
+    // existed outside it nor a FIFTH module inlining the literal tomorrow -- and a
+    // single-source guard that cannot see a new source is not a single-source guard.
+    // The walk is the same `nonSpecModules()` shape `actions-cache-backend.spec.ts`
+    // uses for its VER-09 clause; the allowlist below is what the map used to be, but
+    // now it constrains a complete enumeration instead of standing in for one.
     //
-    // `release-asset-name.ts` joins the map at an expected count of ZERO (D-05). It is
-    // green TODAY because that module authors no prefix at all, and it must STAY zero
-    // after CORR-02 gives the Release asset name the same prefix -- because the rename
-    // IMPORTS the literal from this leaf rather than re-authoring it, which is the
-    // property this entry pins. A NONZERO count there means two authored copies of one
-    // literal that governs FOUR distinct consumers (the Actions-cache key, the
+    // TWO SITES, NOT ONE. The wording this replaced claimed a single production home
+    // for the literal, and that was already FALSE when it was written.
+    // `retention.ts` authors a byte-identical
+    // `nx-cache-` as SHARD_TAG_PREFIX, deliberately and argued at its own site: the
+    // Actions-cache KEY namespace and the Release month-shard TAG namespace are two
+    // different GitHub APIs and two disjoint keyspaces, `isServerProducedKey` is never
+    // asked about a tag and `isShardTag` never about a key, and the two should stay
+    // independently changeable. That is a deliberate second copy, not drift -- so it is
+    // allowlisted BY NAME with its count pinned, rather than papered over by widening
+    // the total.
+    //
+    // The prefix governs FOUR distinct consumers (the Actions-cache key, the
     // Actions-cache enumeration filter, the Release asset name, and the cleanup accept
-    // filter's new branch -- RETAIN-05c), so a change applied to one copy would orphan
-    // the entire mirror silently.
+    // filter's current-shape branch -- RETAIN-05c). An unallowlisted third authored
+    // copy means a change applied to one of them orphans the entire mirror silently.
     //
-    // Spec files are deliberately ABSENT from this map, and must stay absent. The
-    // post-rename pinned expectation in `release-asset-name.spec.ts` MUST author the
-    // literal -- that is the pinned-literal discipline, and spelling it out is what
-    // catches a separator change -- so counting a spec here would push the total off
-    // its pinned value for entirely the wrong reason.
-    const files = {
-      'cache-key.ts': new URL('./cache-key.ts', import.meta.url),
-      'actions-cache-backend.ts': new URL(
-        '../backend/actions-cache-backend.ts',
-        import.meta.url,
-      ),
-      'publish-mirror.ts': new URL(
-        '../publish/publish-mirror.ts',
-        import.meta.url,
-      ),
-      'release-asset-name.ts': new URL(
-        './release-asset-name.ts',
-        import.meta.url,
-      ),
+    // Spec files are deliberately EXCLUDED by the walk, and must stay excluded. The
+    // pinned expectation in `release-asset-name.spec.ts` MUST author the literal --
+    // that is the pinned-literal discipline, and spelling it out is what catches a
+    // separator change -- so counting a spec here would redden this for entirely the
+    // wrong reason.
+    const ALLOWED = {
+      [`${PACKAGE_SOURCE_ROOT}/lib/cache-key.ts`]: 1,
+      [`${PACKAGE_SOURCE_ROOT}/lib/retention.ts`]: 1,
     };
 
-    const perFile: Record<string, number> = {};
-    let total = 0;
+    const authored: Record<string, number> = {};
 
-    for (const [name, url] of Object.entries(files)) {
-      const count = countAuthored(readFileSync(url, 'utf8'), CACHE_KEY_PREFIX);
-      perFile[name] = count;
-      total += count;
+    for (const file of nonSpecModules()) {
+      const count = countAuthored(
+        readFileSync(new URL(file, SOURCE_ROOT_URL), 'utf8'),
+        CACHE_KEY_PREFIX,
+      );
+
+      if (count > 0) {
+        authored[`${PACKAGE_SOURCE_ROOT}/${file}`] = count;
+      }
     }
 
-    expect(total).toBe(1);
-    expect(perFile['cache-key.ts']).toBe(1);
-    expect(perFile['actions-cache-backend.ts']).toBe(0);
-    expect(perFile['publish-mirror.ts']).toBe(0);
-    expect(perFile['release-asset-name.ts']).toBe(0);
+    expect(
+      authored,
+      `Exactly two production modules may author the \`${CACHE_KEY_PREFIX}\` literal: lib/cache-key.ts (the Actions-cache KEY namespace) and lib/retention.ts (the Release month-shard TAG namespace, a deliberate second copy argued at its own site). Any other module inlining it is the drift T-05-08-02 guards -- editing the literal in one place then ORPHANS THE ENTIRE MIRROR. Import CACHE_KEY_PREFIX from lib/cache-key.ts instead. If a third home is genuinely earned, allowlist it HERE in the SAME commit and record why at its site. A shell copy in a workflow cannot import the leaf and is annotated in ci.yml instead; it is outside this walk by construction.`,
+    ).toEqual(ALLOWED);
   });
 });

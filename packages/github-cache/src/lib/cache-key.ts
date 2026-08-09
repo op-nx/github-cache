@@ -9,6 +9,17 @@
  * lacked, D-08). Never inline a second copy of the prefix or the pattern: a
  * duplicate authored literal is exactly the drift T-05-08-02 guards against.
  *
+ * ONE DELIBERATE SECOND COPY EXISTS, and this file now says so rather than leaving
+ * the acknowledgement one-sided. `retention.ts` authors a byte-identical `nx-cache-`
+ * as `SHARD_TAG_PREFIX`, and argues the disjointness at its own site: that literal
+ * prefixes Release month-shard TAGS, this one prefixes Actions-cache KEYS, two
+ * different GitHub APIs and two disjoint keyspaces, and neither predicate is ever
+ * asked about the other's strings. They are NOT aliased on purpose -- they should
+ * stay independently changeable. `cache-key.spec.ts` allowlists exactly those two
+ * modules by name; any THIRD authored copy is the drift this block warns about. A
+ * shell step cannot import this leaf, so `ci.yml`'s witness-job key is a further
+ * copy that lives outside the walk and is annotated at its own site instead.
+ *
  * THE PREFIX NOW GOVERNS FOUR DISTINCT CONSUMERS (RETAIN-05c), not one. Since
  * CORR-02 collapsed the Release asset namespace onto it, all four derive from this
  * single literal:

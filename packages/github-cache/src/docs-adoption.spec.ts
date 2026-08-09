@@ -121,17 +121,37 @@ describe('documented snippets mask the bearer token before writing $GITHUB_ENV (
     'docs/examples/minimal-ci.yml',
   ];
 
+  // The mask directive must be matched in its EXECUTABLE form. A bare
+  // toContain('::add-mask::') is satisfied by the explanatory `#` YAML comment that
+  // sits directly above the echo in all three docs, so deleting the ONE executable
+  // line left this clause green while the documented snippet went on writing an
+  // unmasked bearer token to $GITHUB_ENV. Presence is not enough; the directive has
+  // to be emitted, and it has to be emitted BEFORE the append that carries the value.
+  const EXECUTABLE_MASK = /echo "::add-mask::/;
+  // The append itself, not merely the token name: advanced.md also `export`s the
+  // token into the shell earlier (`TOKEN="$(node ...)"`), which is not a
+  // $GITHUB_ENV write and legitimately precedes the mask. Only the interpolating
+  // `TOKEN=${...}` form is the write this guard orders the mask against.
+  const ENV_TOKEN_WRITE = new RegExp(`${TOKEN}=\\$\\{`);
+
   it.each(DOCS_WITH_ENV_WRITE)(
     '%s masks the token before appending it to $GITHUB_ENV',
     (path) => {
       const doc = read(path);
 
-      // Only assert on docs that actually write the token to $GITHUB_ENV.
-      if (!(doc.includes(TOKEN) && doc.includes('GITHUB_ENV'))) {
-        return;
-      }
+      // The precondition is ASSERTED, not silently skipped. As an early `return`
+      // it made all three cases self-disabling: a doc that stopped naming the token
+      // literally -- a rename, a refactor into an `env:` block, a reflow -- reported
+      // PASS while asserting nothing at all. If a doc genuinely stops writing the
+      // token to $GITHUB_ENV, this clause is what has to be revisited deliberately.
+      expect(doc).toContain(TOKEN);
+      expect(doc).toContain('GITHUB_ENV');
 
-      expect(doc).toContain('::add-mask::');
+      expect(doc).toMatch(EXECUTABLE_MASK);
+      expect(doc).toMatch(ENV_TOKEN_WRITE);
+      expect(doc.search(EXECUTABLE_MASK)).toBeLessThan(
+        doc.search(ENV_TOKEN_WRITE),
+      );
     },
   );
 });

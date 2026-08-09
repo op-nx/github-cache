@@ -195,17 +195,33 @@ describe('windows-regression-detector.yml workflow config -- the XOS-05 detector
     expect(codeLines, reason).not.toMatch(/NX_SELF_HOSTED_REMOTE_CACHE/);
   });
 
-  it('requests no write permission and no Actions-cache scope', () => {
+  // BOTH DIRECTIONS, because either alone is defeated by a different edit.
+  //
+  // Nothing here asserted the block EXISTS, so DELETING it outright satisfied two
+  // absence clauses -- and a workflow with no `permissions:` key inherits the
+  // repository or workflow default scopes, which is the opposite of what the clause
+  // title claims. The positive pin below closes that.
+  //
+  // The write-scope negative was ALSO bounded at 60 characters from the
+  // `permissions:` key, so three added scope lines simply pushed a `contents: write`
+  // out of the window. It is now line-anchored and unbounded over the scope names
+  // that grant writes, so position in the block is irrelevant.
+  //
+  // The positive alone would not catch an ADDED scope; the negative alone would not
+  // catch DELETION. Keep both.
+  it('requests exactly contents: read -- no write permission, no Actions-cache scope', () => {
     const reason =
-      'The detector reads nothing privileged and writes nothing at all, so it must not ' +
-      'request contents: write and must not request an actions: scope. cleanup.yml needs ' +
-      'contents: write because it DELETES release assets; copying that block across would ' +
-      'hand a scheduled job a write credential it has no use for. Least privilege here is ' +
-      `free. ${RESTORE_NOTE}`;
+      'The detector reads nothing privileged and writes nothing at all, so it must ' +
+      'declare exactly `permissions:\\n  contents: read` -- present, so no default ' +
+      'scope is inherited, and read-only, so no write credential is handed to a ' +
+      'scheduled job. cleanup.yml needs contents: write because it DELETES release ' +
+      'assets; copying that block across, or deleting this one, both regress the ' +
+      `same property. Least privilege here is free. ${RESTORE_NOTE}`;
 
-    expect(codeLines, reason).not.toMatch(
-      /permissions:[\s\S]{0,60}contents:\s*write/,
-    );
+    expect(codeLines, reason).toMatch(/^permissions:\n {2}contents: read$/m);
+    // Any scope name, not an enumeration: the scope vocabulary is GitHub's and
+    // grows, so a list would silently miss whichever member gets added next.
+    expect(codeLines, reason).not.toMatch(/^\s*[a-z-]+:\s*write$/m);
     expect(codeLines, reason).not.toMatch(/actions:\s*(read|write)/);
   });
 });

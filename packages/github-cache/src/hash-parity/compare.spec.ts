@@ -24,6 +24,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  readRepoFile,
+  stripYamlComments,
+} from '../test/repo-file.js';
+import {
   collapseToOneLine,
   compareHashParity,
   DIVERGENT_TARGET,
@@ -753,7 +757,6 @@ describe('the comparator constants are content-pinned, never snapshotted', () =>
  * the two left unguarded.
  */
 describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)', () => {
-  const workspaceRoot = new URL('../../../../', import.meta.url);
   const assertParitySource = readFileSync(
     new URL('assert-parity.ts', import.meta.url),
     'utf8',
@@ -765,13 +768,7 @@ describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)'
   // described in a comment would keep this clause green. It is non-vacuous today only
   // because the needle happens to occur exactly once, which is an accident of the
   // current file rather than a property of it.
-  const ciYml = readFileSync(
-    new URL('.github/workflows/ci.yml', workspaceRoot),
-    'utf8',
-  )
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('#'))
-    .join('\n');
+  const ciYml = stripYamlComments(readRepoFile('.github/workflows/ci.yml'));
 
   // The extraction is its own test, and it comes FIRST: every assertion below is
   // built from this value, so a regex that silently stopped matching would make the

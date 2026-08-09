@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readRepoFile, stripYamlComments } from './test/repo-file.js';
 
 /**
  * VER-06's SAMPLING-RATE guard. A spec runs in one process on one OS and cannot
@@ -46,12 +46,9 @@ import { describe, expect, it } from 'vitest';
  * Without it, `ci.yml` is not a hashed input and this spec replays a cached PASS
  * computed before its subject existed.
  */
-const codeLines = readFileSync(
-  new URL('../../../.github/workflows/ci.yml', import.meta.url),
-  'utf8',
-)
-  .split('\n')
-  .filter((line) => !line.trim().startsWith('#'));
+const codeLines = stripYamlComments(
+  readRepoFile('.github/workflows/ci.yml'),
+).split('\n');
 
 /**
  * One job's own block: from the `  <name>:` key (jobs are keyed at two spaces) up to
@@ -1981,10 +1978,7 @@ function runBodyLines(): { job: string; line: string }[] {
   // with `#`, which is precisely what a shell comment inside a run body looks like -- so
   // reading the stripped view here would make this clause blind to the exact defect it
   // exists to catch, and it would pass on the file that took CI down.
-  const rawLines = readFileSync(
-    new URL('../../../.github/workflows/ci.yml', import.meta.url),
-    'utf8',
-  ).split('\n');
+  const rawLines = readRepoFile('.github/workflows/ci.yml').split('\n');
   const collected: { job: string; line: string }[] = [];
   let job = '<before any job>';
 

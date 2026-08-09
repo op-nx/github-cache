@@ -1,5 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import {
+  readRepoFile,
+  repoFileUrl,
+  stripYamlComments,
+} from './test/repo-file.js';
 
 /**
  * XOS-05's SHAPE guard for the scheduled Windows regression detector, authored RED -- it lands
@@ -41,17 +46,12 @@ import { describe, expect, it } from 'vitest';
  * existence `it` below -- rather than a crash that takes the whole file's other clauses with it
  * and reports nothing about what is missing.
  */
-const detectorUrl = new URL(
-  '../../../.github/workflows/windows-regression-detector.yml',
-  import.meta.url,
-);
+const DETECTOR_PATH = '.github/workflows/windows-regression-detector.yml';
+const detectorUrl = repoFileUrl(DETECTOR_PATH);
 
-const codeLines = (
-  existsSync(detectorUrl) ? readFileSync(detectorUrl, 'utf8') : ''
-)
-  .split('\n')
-  .filter((line) => !line.trim().startsWith('#'))
-  .join('\n');
+const codeLines = stripYamlComments(
+  existsSync(detectorUrl) ? readRepoFile(DETECTOR_PATH) : '',
+);
 
 /**
  * The success line Nx prints for a FOUR-target run, naming all four in `-t` argument order.

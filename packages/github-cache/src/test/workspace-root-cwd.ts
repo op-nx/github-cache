@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { CACHE_ARCHIVE_DIR } from '../lib/cache-archive-path.js';
+import { WORKSPACE_ROOT_URL } from './repo-file.js';
 
 /**
  * VER-04's spec accommodation: enter the Nx workspace root as the process cwd and
@@ -106,9 +107,9 @@ export function enterWorkspaceRootCwd(): () => void {
   // Captured FIRST, before anything can throw -- see LOCK 1.
   const originalCwd = process.cwd();
   const originalGithubWorkspace = process.env.GITHUB_WORKSPACE;
-  // Four levels up from src/test/: src/ -> github-cache/ -> packages/ -> workspace root.
-  // The same idiom cleanup-workflow.spec.ts uses from src/cleanup/.
-  const workspaceRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+  // The walk itself is authored once, in repo-file.ts next door; this is the only
+  // consumer that needs it as a PATH rather than as a URL base.
+  const workspaceRoot = fileURLToPath(WORKSPACE_ROOT_URL);
 
   process.chdir(workspaceRoot);
   // LOCK 5. Pinned to the SAME resolved directory the chdir just entered, so VER-04's

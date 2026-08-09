@@ -1,7 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-
-const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
+import { readRepoFile } from './test/repo-file.js';
 
 /**
  * DOCS-08 / OBS-04: every location that asserted same-OS restore as a load-bearing
@@ -719,9 +717,7 @@ const EDITED_FILES = [
   'packages/github-cache/src/cleanup/cleanup.ts',
 ] as const;
 
-function read(file: string): string {
-  return readFileSync(new URL(file, WORKSPACE_ROOT_URL), 'utf8');
-}
+const read = readRepoFile;
 
 describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS-04, XOS-07, D-31, D-32)', () => {
   for (const { file, bucket, required, forbidden } of DOCS_08_SITES) {

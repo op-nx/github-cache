@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readRepoFile, repoFileUrl } from './test/repo-file.js';
 import {
   EXPECTED_ENV_KNOBS,
   EXPECTED_TYPE_EXPORTS,
@@ -23,15 +24,8 @@ import {
  * any of them busts the Nx cache and re-runs this guard instead of replaying a
  * stale pass.
  */
-const repoRoot = new URL('../../../', import.meta.url);
-
-function docUrl(relativePath: string): URL {
-  return new URL(relativePath, repoRoot);
-}
-
-function read(relativePath: string): string {
-  return readFileSync(docUrl(relativePath), 'utf8');
-}
+/** Local name for the shared helper, so the existence clause below reads unchanged. */
+const docUrl = repoFileUrl;
 
 const REQUIRED_DOCS = [
   'README.md',
@@ -61,7 +55,7 @@ describe('adoption docs exist (DOCS-01/02/04)', () => {
 });
 
 describe('configuration.md documents the consumer contract (DOCS-02)', () => {
-  const config = read('docs/configuration.md');
+  const config = readRepoFile('docs/configuration.md');
 
   it.each(EXPECTED_ENV_KNOBS)('documents env knob %s', (knob) => {
     expect(config).toMatch(wholeWord(knob));
@@ -91,7 +85,7 @@ describe('versioning.md documents every consumer env knob (DOCS-02/DOCS-05)', ()
   // docs-trust.spec.ts never checked versioning.md, so a knob could be present in
   // the consumer-contract constant and configuration.md yet missing from the
   // versioning surface -- exactly what happened to GITHUB_REPOSITORY.
-  const versioning = read('docs/versioning.md');
+  const versioning = readRepoFile('docs/versioning.md');
 
   it.each(EXPECTED_ENV_KNOBS)('lists env knob %s', (knob) => {
     expect(versioning).toMatch(wholeWord(knob));
@@ -147,7 +141,7 @@ describe('documented snippets mask the bearer token before writing $GITHUB_ENV (
   it.each(DOCS_WITH_ENV_WRITE)(
     '%s masks the token before appending it to $GITHUB_ENV',
     (path) => {
-      const doc = read(path);
+      const doc = readRepoFile(path);
 
       // The precondition is ASSERTED, not silently skipped. As an early `return`
       // it made all three cases self-disabling: a doc that stopped naming the token
@@ -178,7 +172,7 @@ describe('advanced.md documents every selectBackend outcome (F11)', () => {
   // trusted-but-tokenless context (the one adopters actually hit) -- and TRUST-14
   // added the CACHE_READ_ONLY narrowing outcome on top. A future selectBackend
   // change not reflected here is caught by this guard.
-  const advanced = read('docs/advanced.md');
+  const advanced = readRepoFile('docs/advanced.md');
 
   it('names the untrusted read-only Releases reader outcome', () => {
     expect(advanced).toMatch(/Releases \*\*reader\*\*|Releases reader/);
@@ -239,8 +233,8 @@ describe('advanced.md documents every selectBackend outcome (F11)', () => {
 });
 
 describe('README + minimal example show the background-step lifecycle (DOCS-06)', () => {
-  const readme = read('README.md');
-  const example = read('docs/examples/minimal-ci.yml');
+  const readme = readRepoFile('README.md');
+  const example = readRepoFile('docs/examples/minimal-ci.yml');
 
   it.each(LIFECYCLE_TOKENS)('README references %s', (token) => {
     expect(readme).toContain(token);
@@ -252,7 +246,7 @@ describe('README + minimal example show the background-step lifecycle (DOCS-06)'
 });
 
 describe('minimal example is distinct from the dogfood config (DOCS-04)', () => {
-  const example = read('docs/examples/minimal-ci.yml');
+  const example = readRepoFile('docs/examples/minimal-ci.yml');
 
   it('does not include dogfood-only action operations', () => {
     expect(example).not.toContain('operation:');

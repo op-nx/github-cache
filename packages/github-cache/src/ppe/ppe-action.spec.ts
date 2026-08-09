@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readRepoFile, stripYamlComments } from '../test/repo-file.js';
 
 /**
  * TRUST-06 config-assertion for the shipped PPE-hygiene COMPOSITE action.
@@ -24,15 +24,9 @@ import { describe, expect, it } from 'vitest';
  * lines first makes every assertion below non-vacuous against the actual config
  * (changing 1.27.0 -> any other version, or dropping --no-exit-codes, fails).
  */
-const actionSource = readFileSync(
-  new URL('../../../../ppe/action.yml', import.meta.url),
-  'utf8',
-);
+const actionSource = readRepoFile('ppe/action.yml');
 
-const codeLines = actionSource
-  .split('\n')
-  .filter((line) => !line.trim().startsWith('#'))
-  .join('\n');
+const codeLines = stripYamlComments(actionSource);
 
 describe('ppe/action.yml composite PPE-hygiene gate (TRUST-06)', () => {
   it('is a composite action an adopter consumes as a step (D-10)', () => {

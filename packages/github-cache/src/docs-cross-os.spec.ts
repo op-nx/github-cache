@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readRepoFile, repoFileUrl } from './test/repo-file.js';
 
 /**
  * DOCS-07 cross-OS adoption-recipe drift guard (D-11, D-12, D-13, D-15).
@@ -44,18 +45,11 @@ import { describe, expect, it } from 'vitest';
  * single-character character-class contortion in `docs-same-os-claims.spec.ts` exists
  * only because spelling a forbidden phrase plants it in the file that proves it gone.
  */
-const docUrl = new URL('../../../docs/cross-os.md', import.meta.url);
-const repoRoot = new URL('../../../', import.meta.url);
+const docUrl = repoFileUrl('docs/cross-os.md');
 
-const doc = existsSync(docUrl) ? readFileSync(docUrl, 'utf8') : '';
+const doc = existsSync(docUrl) ? readRepoFile('docs/cross-os.md') : '';
 
-function read(relativePath: string): string {
-  return readFileSync(new URL(relativePath, repoRoot), 'utf8');
-}
-
-const nxJson = JSON.parse(
-  readFileSync(new URL('nx.json', repoRoot), 'utf8'),
-) as {
+const nxJson = JSON.parse(readRepoFile('nx.json')) as {
   targetDefaults: Record<string, { inputs?: readonly unknown[] }>;
 };
 
@@ -260,7 +254,7 @@ describe('docs/cross-os.md carries the five inherited checklist items (D-12)', (
 describe('docs/cross-os.md is reachable (cross-os nav)', () => {
   it('README.md links it from the Documentation list', () => {
     expect(
-      read('README.md'),
+      readRepoFile('README.md'),
       "README.md's ## Documentation list no longer carries a `- [Title](docs/cross-os.md) -- <what it covers>` bullet. An unreachable recipe is not a consumer deliverable.",
     ).toMatch(/^- \[.+\]\(docs\/cross-os\.md\) -- /m);
   });
@@ -278,7 +272,7 @@ describe('docs/cross-os.md is reachable (cross-os nav)', () => {
   // which is not worth the regex; the three realistic drift modes are closed.
   it('docs/advanced.md cross-links it as an actual markdown link', () => {
     expect(
-      read('docs/advanced.md'),
+      readRepoFile('docs/advanced.md'),
       'docs/advanced.md no longer carries a markdown LINK to cross-os.md. A bare mention is not a cross-link: an unreachable recipe is not a consumer deliverable, and this doc is the one place a reader hits the cross-OS question. By convention the link sits in the publish / sync section -- that placement is not asserted here, only the link itself.',
     ).toMatch(/\[[^\]]+\]\(cross-os\.md\)/);
   });

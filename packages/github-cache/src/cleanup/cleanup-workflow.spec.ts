@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readRepoFile, stripYamlComments } from '../test/repo-file.js';
 
 /**
  * RETAIN-03 is a workflow-config requirement, not runtime logic: there is no
@@ -19,15 +19,9 @@ import { describe, expect, it } from 'vitest';
  * the REAL YAML directive had drifted. Stripping '#'-prefixed lines first makes
  * every assertion below non-vacuous against the actual config.
  */
-const workflowSource = readFileSync(
-  new URL('../../../../.github/workflows/cleanup.yml', import.meta.url),
-  'utf8',
-);
+const workflowSource = readRepoFile('.github/workflows/cleanup.yml');
 
-const codeLines = workflowSource
-  .split('\n')
-  .filter((line) => !line.trim().startsWith('#'))
-  .join('\n');
+const codeLines = stripYamlComments(workflowSource);
 
 describe('cleanup.yml workflow config (RETAIN-03)', () => {
   it('grants ONLY contents: write -- no actions:read, no packages scope', () => {

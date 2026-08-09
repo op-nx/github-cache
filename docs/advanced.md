@@ -81,16 +81,31 @@ a per-target exception.
   either leg may reach a given entry first and the totals also include seed
   assets, so an asymmetry is not by itself a bug.
 
-  **Bumping this action can cost you one all-MISS publish.** Anything that
-  changes the `@actions/cache` cache version -- the archive path literal above
-  all -- rotates it for every entry already sitting in the Actions cache, so the
-  first publish run after such a bump restores everything as a MISS and mirrors
-  nothing. That is expected **once per version-affecting change**, and the
-  warning it emits names the axis (the `@actions/cache` cache version, which is
-  a separate mechanism from the Nx task hash and from the Release asset name)
-  along with the two causes worth checking. Two consecutive all-miss runs with no
+  **Bumping this action rotates the cache version, and which warning you get
+  depends on the run.** Anything that changes the `@actions/cache` cache version
+  -- the archive path literal above all -- rotates it for every entry already
+  sitting in the Actions cache, so every entry that predates the bump restores
+  as a MISS. That is expected **once per version-affecting change**. Which
+  warning that produces depends on whether the publish run also wrote entries of
+  its own at the new cache version. A run that did -- this repository's CI, and
+  any workflow where the sidecar and publish share a run -- restores and mirrors
+  those, so the all-MISS warning cannot fire. Expect instead a spike in
+  restore-MISS counts, and a warning once that cohort dominates the enumeration.
+  That one is proportional rather than a promise: it is weighed against a lower
+  bound on the miss proportion and not the raw ratio, so a short enumeration
+  needs a larger majority than a long one -- around 90% of ten entries against
+  around 60% of a hundred. It reports the miss count, the enumeration size,
+  which denominator that proportion is over, and two candidate causes.
+
+  A publish-only or scheduled run that wrote nothing of its own has an entirely
+  historical enumeration, and that is the shape the all-MISS warning is reserved
+  for -- alongside a runtime token whose Actions-cache read scope regressed. It
+  names the axis as well (the `@actions/cache` cache version, which is a
+  separate mechanism from the Nx task hash and from the Release asset name) and
+  the same two causes worth checking. Two consecutive all-miss runs with no
   version-affecting change in between is the signal that something else is wrong
-  -- most likely the runtime token's Actions-cache read scope.
+  -- most likely the runtime token's Actions-cache read scope. The two warnings
+  are siblings at one branch pair in `publish/publish-mirror.ts`.
 
   **Upgrading to v0.0.2 rotates the Release asset name too, on top of the cache
   version.** The name dropped its OS component: an asset that was
@@ -101,7 +116,7 @@ a per-target exception.
   the old assets remain prunable -- cleanup accepts both shapes -- and age out
   through the normal retention window. This is a one-time cost at the upgrade,
   and it is a second axis from the cache-version rotation above; the two land in
-  the same run, so expect one all-MISS publish, not two.
+  the same run, so expect one disrupted publish run, not two.
 
   It is gated by a **separate** sync allowlist (`isSyncTrusted`: `push` /
   `schedule` on the default branch), never by the write gate -- widening

@@ -109,6 +109,52 @@ const DOCS_08_SITES = [
   },
   {
     /**
+     * CORRECTION, OBS-04 -- the version-bump paragraph, which promised a consumer a
+     * warning that cannot fire on the path it describes. It said the first publish after
+     * a bump "restores everything as a MISS and mirrors nothing" and that "the warning it
+     * emits names the axis". The total gate needs `readMisses === hashes.length &&
+     * mirrored === 0`; a deliberate bump moves the sidecar and publish together, so the
+     * entries written during that same RUN restore and mirror, `mirrored` is non-zero and
+     * the total gate stays silent. The partial branch is the live rotation signal instead.
+     *
+     * A SEPARATE ROW FROM THE DOCS-08 ONE ABOVE, deliberately: that row records a DOCS-08
+     * same-OS site, this one records an OBS-04 warning-selection correction. Keeping them
+     * apart is what lets a failure report say WHICH claim broke.
+     *
+     * The three `required` phrases pin the three load-bearing claims: the CONDITION that
+     * selects between the two warnings (and it carries the word `run` on purpose -- this
+     * document states in bold twenty lines below that publish must not share a JOB with a
+     * running sidecar, so a draft that slips to "share a job" would make the document
+     * contradict itself); the PROPORTIONAL framing of the partial warning, which fires
+     * against a lower bound on the miss proportion and is therefore never a promise; and
+     * what the all-MISS warning is RESERVED for. Each is clipped to a single line of the
+     * corrected file per this table's one-line rule, which is why phrase 1 stops at `of`
+     * and phrase 3 stops at `reserved` -- the sentences wrap immediately after.
+     *
+     * THE THIRD FORBIDDEN PATTERN STOPS AT `publish`, and the omitted tail is the point.
+     * Measured on the pre-edit file, that phrase occurred TWICE: once in the sentence the
+     * asset-name paragraph closes with, and once as the bolded lead sentence of this
+     * paragraph -- the most-read statement of the false promise. A pattern carrying the
+     * first sentence's tail would match only the lesser instance and leave the lead
+     * sentence free to return with the suite green. The first pattern likewise stops at
+     * `mirrors`, because the pre-edit sentence wrapped between `mirrors` and `nothing` and
+     * a phrase spanning that wrap would have matched nothing at all.
+     */
+    file: 'docs/advanced.md',
+    bucket: 'correction',
+    required: [
+      'depends on whether the publish run also wrote entries of',
+      'a warning once that cohort dominates the enumeration',
+      'that is the shape the all-MISS warning is reserved',
+    ],
+    forbidden: [
+      /restores everything as a M[I]SS and mirrors/,
+      /warning it emits names the axis/,
+      /one all-M[I]SS publish/,
+    ],
+  },
+  {
+    /**
      * CORRECTION, DOCS-08 site 1b -- the one the Phase 9 sweep MISSED, found only by a
      * later review. `publish-mirror.ts` was in `EDITED_FILES` and therefore scanned,
      * but `EDITED_FILES` feeds the producer-ATTRIBUTION guard alone; no row here read
@@ -656,7 +702,7 @@ describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS
       }
 
       for (const pattern of forbidden) {
-        it(`no longer asserts same-OS restore (${String(pattern)})`, () => {
+        it(`no longer matches ${String(pattern)}`, () => {
           // The single-character character class in each pattern is load-bearing,
           // not style: this assertion claims a phrase is ABSENT, so spelling it here
           // would plant it in the very file that proves it is gone, and a repo-wide
@@ -664,7 +710,7 @@ describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS
           // bracket splits the token without changing what the regex matches.
           expect(
             read(file),
-            `${file} has drifted BACK to a same-OS-restore claim matching ${String(pattern)}. VER-01 made the archive path OS-invariant and VER-03 set enableCrossOsArchive, so the claim is false. If this text is genuinely needed again, update its ROW here in the SAME commit and say why.`,
+            `${file} matches ${String(pattern)}, which its ROW in DOCS_08_SITES proves absent. The rows carry different claims -- read the row's own docstring for why this text was retracted. If it is genuinely needed again, update that ROW here in the SAME commit and say why.`,
           ).not.toMatch(pattern);
         });
       }

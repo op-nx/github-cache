@@ -1424,9 +1424,26 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
     // and the one a future reader is most likely to "fix" (see the engine comment: the
     // attempted-only reading fires on both legs of a healthy run).
     expect(warned).toContain('not of the restores attempted');
-    // The two candidate causes, in the sibling gate's own words.
+    // The causes worth checking, in the sibling gate's own words.
     expect(warned).toContain('cache-version rotation in this commit range');
     expect(warned).toContain("runtime token's Actions-cache read scope");
+    const recorded = vi.mocked(core.warning).mock.calls.flat();
+    // Catches the return of a CLOSED enumeration. A fixed count asserted a completeness
+    // the message could not keep, and this same message already shed a true cause once
+    // with nothing reddening. Split phrase, and absence over every recorded argument
+    // rather than a negated matcher -- both for the reasons the W3 case below spells out
+    // at length; they are not restated here.
+    expect(recorded).not.toContainEqual(
+      expect.stringMatching(/Two candidate cause[s]/),
+    );
+    // Catches the loss of the skew cause: under a sidecar/publish version skew this is
+    // the cause that actually occurred, and the message named none of it before.
+    expect(warned).toContain('different versions of this action');
+    // THE ASYMMETRY, POSITIVE HALF -- catches the rollover cause being dropped from the
+    // branch that CAN have it. The needle is the discriminating long form on purpose: a
+    // bare `month shard` already occurs three times in this engine (the asset-cap warning
+    // and the shard machinery), so a pin on that bigram is green before any edit.
+    expect(warned).toContain('the first publish run against a new month shard');
     // A warning, never a failure -- setFailed is reserved for per-item upload faults.
     expect(core.setFailed).not.toHaveBeenCalled();
   });
@@ -1459,6 +1476,15 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
     );
     expect(recorded).not.toContainEqual(
       expect.stringMatching(/post-fi[x] baseline/),
+    );
+    // Catches this repository's own build artifacts and incident record entering a
+    // stranger's job log -- the same distribution constraint as the three rows above,
+    // applied to the artifact names a version-skew cause invites. Source COMMENTS may
+    // name them freely; the MESSAGE may not.
+    expect(recorded).not.toContainEqual(
+      expect.stringMatching(
+        /action-bundle drif[t]|start-cache-server\/inde[x]\.js|dist\/action\/inde[x]\.js|\.plannin[g]\//,
+      ),
     );
   });
 
@@ -1526,9 +1552,36 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
         'because a call count of one cannot tell which of the two branches fired.',
     ).toContain('nothing mirrored');
     // The partial branch's own denominator clause, which the total message does not carry.
-    // The two messages share both candidate causes by design, so this is the discriminator
+    // The two messages share most of their causes by design, so this is the discriminator
     // -- a needle taken from the shared half would pass whichever branch fired.
     expect(warned).not.toContain('not of the restores attempted');
+    // This branch's cause list carried NO positive pin at all, so it could be emptied
+    // without reddening anything. These three are what it must keep.
+    expect(warned).toContain('cache-version rotation in this commit range');
+    expect(warned).toContain("runtime token's Actions-cache read scope");
+    expect(warned).toContain('different versions of this action');
+    const recorded = vi.mocked(core.warning).mock.calls.flat();
+    // The same closed-enumeration retraction as the partial case above. It has to be
+    // asserted on BOTH fixtures because the phrase lived in both messages and only one
+    // branch can fire per run.
+    expect(recorded).not.toContainEqual(
+      expect.stringMatching(/Two candidate cause[s]/),
+    );
+    // THE ASYMMETRY, NEGATIVE HALF -- catches the rollover cause being added to the
+    // branch that CANNOT have it. This gate needs `mirrored === 0`, so the shard never
+    // resolves, the pre-restore membership skip never runs, and rollover cannot move
+    // this number. Paired with the positive pin on the partial fixture: alone, either
+    // half is satisfied by putting the clause on neither branch.
+    expect(recorded).not.toContainEqual(
+      expect.stringMatching(/new month shar[d]/),
+    );
+    // Same distribution constraint the W3 case pins on the partial branch; without this
+    // row the total gate ships with no such guard at all.
+    expect(recorded).not.toContainEqual(
+      expect.stringMatching(
+        /action-bundle drif[t]|start-cache-server\/inde[x]\.js|dist\/action\/inde[x]\.js|\.plannin[g]\//,
+      ),
+    );
   });
 });
 

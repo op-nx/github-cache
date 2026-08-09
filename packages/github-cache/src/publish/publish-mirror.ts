@@ -232,6 +232,33 @@ export interface PublishOptions {
 const SEED_MARKER_WORDS = ['cafe', 'bead', 'feed'] as const;
 
 /**
+ * The three cache-version causes both read-miss warnings list, authored ONCE.
+ *
+ * Contrast SEED_MARKER_WORDS directly above, which RECORDS its own duplication as
+ * accepted and names the drift direction. This span had no such note: it was simply
+ * authored twice, byte for byte, and SPLIT ACROSS STRING CONCATENATION at DIFFERENT wrap
+ * boundaries in the two literals -- so a contiguous grep could not find the pair, and two
+ * commits on this branch exist solely to repair it in lockstep after an edit reached one
+ * copy and not the other.
+ *
+ * NO TRAILING PUNCTUATION, and this is the one detail that must survive a reformat: the
+ * total-case site supplies a period after it and the partial-case site supplies a
+ * semicolon before its fourth cause. Ending this string at "read scope" is what lets one
+ * constant serve both.
+ *
+ * EMITTED BYTES ARE UNCHANGED by the extraction -- that was the acceptance criterion, and
+ * every pinned substring in publish-mirror.spec.ts lies wholly inside this span or inside
+ * an untouched head or tail. If a pin ever needs editing to accommodate a change here, the
+ * change is what is wrong.
+ */
+const READ_MISS_CAUSES =
+  'Causes worth checking, and this list is not exhaustive: (1) a cache-version ' +
+  'rotation in this commit range -- the archive path literal or the cross-OS ' +
+  'flag changed; (2) the sidecar that wrote these entries and this publish ' +
+  'step running at different versions of this action, so two cache versions ' +
+  "exist in one repository; (3) the runtime token's Actions-cache read scope";
+
+/**
  * "Is this a single-use CI seed belonging to some OTHER run?" -- D1, and the whole point
  * of this task. A seed that misses on restore can never be mirrored, so it is never in the
  * shard, so it is enumerated and re-restored on EVERY subsequent run and can never
@@ -807,15 +834,10 @@ export async function publishMirror(
         `entr${hashes.length === 1 ? 'y' : 'ies'} restored as a MISS; nothing ` +
         'mirrored. The axis here is the @actions/cache cache VERSION -- a SEPARATE ' +
         'mechanism from the Nx TASK hash and from the Release ASSET NAME, each of ' +
-        'which produces a look-alike all-MISS through unrelated machinery. Causes ' +
-        'worth checking, and this list is not exhaustive: (1) a cache-version ' +
-        'rotation in this commit range -- the archive path literal or the cross-OS ' +
-        'flag changed; (2) the sidecar that wrote these entries and this publish ' +
-        'step running at different versions of this action, so two cache versions ' +
-        "exist in one repository; (3) the runtime token's Actions-cache " +
-        'read scope. This is expected ONCE per version-affecting change. Two ' +
-        'consecutive all-miss pushes with NO version-affecting change in between ' +
-        'is the signal to act.',
+        'which produces a look-alike all-MISS through unrelated machinery. ' +
+        `${READ_MISS_CAUSES}. This is expected ONCE per version-affecting ` +
+        'change. Two consecutive all-miss pushes with NO version-affecting change ' +
+        'in between is the signal to act.',
     );
   } else if (
     readMisses > 0 &&
@@ -957,16 +979,11 @@ export async function publishMirror(
     core.warning(
       `github-cache publish: ${readMisses} of ${hashes.length} server-produced ` +
         `cache entries (${percent}%) restored as a MISS. That is a proportion of ` +
-        'the entries ENUMERATED on this leg, not of the restores attempted. Causes ' +
-        'worth checking, and this list is not exhaustive: (1) a cache-version ' +
-        'rotation in this commit range -- the archive path literal or the cross-OS ' +
-        'flag changed; (2) the sidecar that wrote these entries and this publish ' +
-        'step running at different versions of this action, so two cache versions ' +
-        "exist in one repository; (3) the runtime token's Actions-cache read " +
-        'scope; (4) the first publish run against a new month shard, where entries ' +
-        'previously skipped as already mirrored are re-attempted, so any of them ' +
-        'that can no longer restore become visible at once and stay counted until ' +
-        'they evict.',
+        'the entries ENUMERATED on this leg, not of the restores attempted. ' +
+        `${READ_MISS_CAUSES}; (4) the first publish run against a new month ` +
+        'shard, where entries previously skipped as already mirrored are ' +
+        're-attempted, so any of them that can no longer restore become visible ' +
+        'at once and stay counted until they evict.',
     );
   }
 

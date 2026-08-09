@@ -2157,9 +2157,9 @@ jobs:
             echo "sidecar never accepted connections on ${server} after 30s" >&2
             exit 1
           fi
-          # PUT a payload keyed on the run id (all-decimal -> valid ^[a-f0-9]+$),
-          # then read it back and byte-compare: a real round-trip through the
-          # write-trusted Actions-cache backend.
+          # PUT a payload keyed on the marker-prefixed run id (hex letters keep it
+          # inside ^[a-f0-9]+$), then read it back and byte-compare: a real
+          # round-trip through the write-trusted Actions-cache backend.
           printf 'consumer-smoke-%s' "${RUN_HASH}" > payload.bin
           put=$(curl -s -o /dev/null -w '%{http_code}' -X PUT --data-binary @payload.bin -H "${auth}" "${server}/v1/cache/${RUN_HASH}")
           test "${put}" = "200"

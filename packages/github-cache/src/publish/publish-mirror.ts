@@ -36,8 +36,15 @@ export const RELEASE_ASSET_CAP = 1000;
  * D5's PARTIAL-case threshold: the fraction of enumerated entries that must restore as a
  * MISS before the second warning below fires. See that branch for the arithmetic behind
  * the value, the intermediate band that was considered and rejected, and the gap this
- * choice accepts against D5's own motivating case. Exported so a spec can drive the
- * boundary from the constant rather than from a literal that would drift from it.
+ * choice accepts against D5's own motivating case.
+ *
+ * EXPORTED SO A SPEC CAN PIN THE VALUE -- not so it can derive a boundary from it, and
+ * the distinction matters because the weaker of those two is what actually shipped. The
+ * boundary fixtures in `publish-mirror.spec.ts` are hand-built for ONE HALF specifically:
+ * a 4-entry enumeration with 2 misses (at the threshold) and 1 (below it), chosen because
+ * 4 * 0.5 is a whole number of entries. Changing this constant INVALIDATES those fixtures
+ * rather than merely moving them, so it must be changed here and in them together -- which
+ * is exactly what the pin makes loud.
  */
 export const PARTIAL_READ_MISS_WARN_RATIO = 0.5;
 
@@ -97,7 +104,14 @@ export interface PublishResult {
   /**
    * DISTINCT server-produced hashes enumerated (listCacheEntries returns one row per
    * (key, version) and the rows are deduped below, so a key saved under two archive
-   * versions counts once). The denominator the other counts are read against.
+   * versions counts once), MINUS any single-use CI seed belonging to another run (D1, see
+   * `isOtherRunsSeed`). The denominator the other counts are read against.
+   *
+   * That subtraction SHRINKS this number, so figures recorded before the D1 filter are not
+   * comparable to these -- the 149 ubuntu / 150 windows readings taken on run 31281406708
+   * are pre-filter. Stated here rather than only at the filter site because this field doc
+   * is where a reader of the OBS-01 summary arrives, and a reported number whose definition
+   * lives somewhere other than where it is read is the exact defect D4 was raised to fix.
    */
   readonly scanned: number;
   readonly mirrored: number;
@@ -345,6 +359,15 @@ async function ensureShardRelease(
  *   suffix) are mirrored, the prefix sliced to the hash; a foreign key OR a
  *   `nx-cache-<non-hex>` key is filtered out BEFORE restore, never mirrored as a public
  *   asset (the hardening the Phase 4 startsWith-only subset lacked).
+ * - Seed filter (D1): a SECOND, narrowing enumeration filter drops any single-use CI seed
+ *   carrying some OTHER run's id, so a prior run's seed is no longer restored on every
+ *   push forever (48 of the 63 restore MISSes on run 31281406708 were exactly that). It
+ *   changes what this function is handed, and it SHRINKS `scanned` -- see `isOtherRunsSeed`
+ *   and the `scanned` field doc for why pre-filter figures are not comparable to post-.
+ * - Membership-before-restore (D3): an entry whose asset name is already in the resolved
+ *   shard is skipped with NO Actions-cache round-trip, since the name is a function of the
+ *   hash alone. It changes WHEN -- and whether -- the Actions cache is touched at all; the
+ *   guard's own comment carries the three aggregate outcomes that shifts.
  * - Restore (D-03): an entry this leg cannot restore -- evicted, or written under a
  *   different cache version -- MISSes and is skipped, never an error.
  *   Restore is NOT same-OS. VER-01 made the archive path OS-invariant and VER-03 set
@@ -384,8 +407,8 @@ async function ensureShardRelease(
  *   sustained upload-phase outage) fails the job instead of reporting CI green -- mirroring
  *   cleanupMirror's aggregate check. Only the count is logged, never a token.
  *
- * Returns the scanned/mirrored/skipped/readMisses/failed counts; the bin emits the
- * OBS-01 summary from them.
+ * Returns the scanned/mirrored/skipped/readMisses/alreadyPresent/failed counts; the bin
+ * emits the OBS-01 summary from them.
  */
 export async function publishMirror(
   client: PublishClient,
@@ -424,13 +447,19 @@ export async function publishMirror(
         // defensive if the two ever drift.
         .map((entry) => parseHash(entry.key.slice(CACHE_KEY_PREFIX.length)))
         .filter((hash): hash is Hash => hash !== undefined)
-        // D1, and its POSITION inside this pipeline is load-bearing: BEFORE the Set, so a
-        // filtered seed can never inflate the distinct-hash count that the all-MISS gate
-        // below reads. A SECOND, narrowing filter rather than an edit to
-        // isServerProducedKey or HASH_PATTERN -- those predicates are shared with the
-        // server's SRV-03 route and both cleanup branches, their literal count is
+        // D1. Placed inside this pipeline as a SECOND, narrowing filter rather than as an
+        // edit to isServerProducedKey or HASH_PATTERN -- those predicates are shared with
+        // the server's SRV-03 route and both cleanup branches, their literal count is
         // comment-locked, and `cache-key.ts` is a leaf with no notion of a run (it is also
         // in the action bundle, which this file is not).
+        //
+        // ITS POSITION RELATIVE TO THE `Set` IS A READABILITY CHOICE, NOT AN INVARIANT, and
+        // this clause replaces one that claimed the opposite. `isOtherRunsSeed` is a PURE
+        // predicate over the element value and `Set` dedups by value, so
+        // `new Set(xs.filter(p))` and `[...new Set(xs)].filter(p)` yield an identical array
+        // in identical first-occurrence order. A filtered seed is removed either way and can
+        // inflate the distinct-hash count the all-MISS gate reads in neither. Reorder it
+        // freely -- for instance to filter on the entry KEY rather than on the parsed hash.
         //
         // IT SHRINKS `scanned`, deliberately, and a reader WILL compare figures across
         // this commit: `scanned` is the denominator of the all-MISS gate below and of
@@ -512,11 +541,32 @@ export async function publishMirror(
     // all-MISS leg into an empty-release creator and re-opens the burned-tag noise case
     // the second sentinel exists to prevent.
     //
-    // TWO AGGREGATE OUTCOMES CHANGE, both intended. An oversized-but-already-present asset
-    // now returns HERE, before the D-12 size check, so it no longer counts as `failed` --
-    // correct, since nothing is uploaded either way, but it is a different aggregate. And
-    // the D-11 cap branch below is now reached only by names that are ABSENT, which is
-    // behaviourally identical because that branch already exempts present names.
+    // THREE AGGREGATE OUTCOMES CHANGE, all intended.
+    //
+    // (1) An oversized-but-already-present asset now returns HERE, before the D-12 size
+    // check, so it no longer counts as `failed` -- correct, since nothing is uploaded
+    // either way, but it is a different aggregate.
+    //
+    // (2) The D-11 cap branch below is now reached with a PRESENT name only on the FIRST
+    // entry of a run -- the one that resolves the shard, and so the one this guard could
+    // not test, because `shard` is still undefined when it runs. Its `!shard.names.has(name)`
+    // clause is therefore STILL LOAD-BEARING for exactly that entry; do not delete it as
+    // newly-dead. A comment here previously said that branch is now reached only by ABSENT
+    // names, which is false in precisely that case: acting on it would make a shard at the
+    // cap emit a spurious cap warning for an entry that is already mirrored, and count it
+    // as a plain `skipped` rather than an `alreadyPresent`.
+    //
+    // (3) PUBLISH NO LONGER REFRESHES THE ACTIONS CACHE'S UNACCESSED CLOCK for an entry
+    // already in the shard, and that clock is what governs eviction (ci.yml names the
+    // 7-day-unaccessed policy). Before this reorder every default-branch push restored
+    // EVERY enumerated entry, and a restore is an access, so publish kept every mirrored
+    // entry alive indefinitely as a side effect. It no longer does. Accepted: a task hash
+    // still in use is fetched by the sidecar on each run and refreshed that way, and an
+    // entry already mirrored stays readable from the Release shard through the shard-window
+    // walk until retention prunes it. THE ONE CASE WORTH WATCHING is the month-shard
+    // rollover -- a hash that evicts from the Actions cache before the month rolls over
+    // cannot be re-mirrored into the NEW month's shard, where publish's own restore
+    // previously kept it alive.
     //
     // THE RECLASSIFICATION, stated precisely because the obvious overstatement of it is
     // FALSE. An entry that is present in the shard AND would not have restored now counts
@@ -753,6 +803,17 @@ export async function publishMirror(
     // motivating case. What covers that case is D1 and D2, which remove the accrual that
     // produced it; this guard's job is to catch a future WORSENING from the post-fix
     // baseline.
+    //
+    // WHICH BRANCH ACTUALLY FIRES ON A ROTATION, said here because the obvious reading of
+    // the pair -- gate above covers the total case, this one covers the partial -- credits
+    // the gate above with a cause it cannot trip IN THIS WORKFLOW. `ci.yml` runs the
+    // `mirror-seed` step immediately before the `publish` step in the SAME job, so this
+    // leg's own `feed<i><run_id>` seed is written in this run, under the current cache
+    // version, on the default-branch ref: it is enumerated and it always restores. A
+    // cache-VERSION rotation therefore leaves `mirrored >= 1` and the gate above SILENT.
+    // Treat this branch as the live rotation signal; the gate above covers only a
+    // read-scope regression wide enough to hide the seed itself. A reader tuning the
+    // threshold must not over-weight a gate that does not fire.
     //
     // THE REVISIT TRIGGER, as a RATIO and not as a bare count: the first live post-fix run
     // on the default branch is when the real numerator and denominator land, and at that

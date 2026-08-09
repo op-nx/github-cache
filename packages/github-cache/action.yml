@@ -18,7 +18,8 @@ description: >-
 inputs:
   hash:
     description: >-
-      Cache hash to seed or verify (the workflow run id in CI). Required by the
+      Cache hash to seed or verify (`bead<run id>` for the dogfood pair in CI since
+      D2, the bare run id for 'mirror-seed'). Required by the
       'seed', 'mirror-seed' and 'verify' operations; unused by 'publish', so it
       is optional here and each operation enforces its own requirement at
       runtime. 'mirror-seed' does not use it as the key -- it DERIVES one from it.

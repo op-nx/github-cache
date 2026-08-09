@@ -112,17 +112,26 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
   // one-sided edit produces no local signal whatsoever and surfaces only as a live-CI
   // MISS on the default branch. Nothing asserted either value before this clause.
   //
-  // THREE CLAUSES, and each closes a hole the other two leave open:
+  // THREE WEAKER DESIGNS WERE REJECTED, and this list is about those alternatives -- NOT
+  // about the three assertions actually shipped below, which is what an earlier version of
+  // this comment claimed:
   //
   //   - EQUALITY alone is satisfied by reverting BOTH jobs to the bare run id together.
-  //   - The FULL-SHAPE match on each is satisfied by changing only one of them.
-  //   - Shape-plus-equality would still be satisfied by a bare CONSTANT key in both
+  //   - A PREFIX-only match on each is satisfied by changing only one of them.
+  //   - Prefix-plus-equality would still be satisfied by a bare CONSTANT key in both
   //     jobs, which is the ONE-key-per-RUN violation the no-matrix clause above exists
   //     to prevent -- and which the publish mirror's seed filter now also depends on:
   //     that filter admits a seed only when the key ENDS WITH the current run id, so a
   //     run-id-less key would read as some other run's and be skipped forever.
   //
-  // Hence each value is pinned WHOLE and anchored -- the marker word, the run-id
+  // WHAT SHIPS INSTEAD is the strongest of the four: each value pinned WHOLE against the
+  // same literal, which closes all three holes at once. The consequence, stated rather
+  // than dressed up -- the third assertion, `toBe(verify)`, is ENTAILED by the first two
+  // and can never be the first to fail. It is kept as documentation of the round-trip the
+  // two inputs form, not as an independent gate, and deleting it would change nothing this
+  // case detects.
+  //
+  // Each value is pinned whole and anchored -- the marker word, the run-id
   // interpolation, and nothing else. `bead` must stay hex-letter-LEADING (that is what
   // keeps the key structurally separable from an all-decimal Nx task hash) and distinct
   // from `cafe` and `feed`, neither a prefix of them nor prefixed by them. `jobBlock`

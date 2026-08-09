@@ -80,6 +80,50 @@ const projectJson = JSON.parse(
   readFileSync(new URL('../project.json', import.meta.url), 'utf8'),
 ) as { targets: Record<string, TargetConfiguration> };
 
+/**
+ * The inputs a target ACTUALLY runs with -- the `project.json` layer merged over the
+ * `nx.json` `targetDefaults` layer, through Nx's own pair rather than a hand-rolled
+ * merge. Argument order is project-layer FIRST (higher priority); the two existing
+ * merge describes further down this file already use exactly this call shape.
+ *
+ * WHY IT EXISTS. Reading `nxJson.targetDefaults[name].inputs` directly asserts about
+ * the BASE of a merge, not about the effective configuration. A `project.json` key
+ * REPLACES the default's key wholesale, so `targets.test.inputs` carrying a platform
+ * discriminator makes `test` OS-sensitive -- killing this milestone's core outcome --
+ * with every defaults-layer guard green until the next two-leg parity run.
+ *
+ * `?? undefined` is mandatory, not defensive noise: `readTargetDefaultsForTarget`
+ * returns `null` (not `undefined`) when a target has no defaults entry, and `null` is
+ * not assignable to an optional parameter under `strict`. No `executor` argument is
+ * passed -- without one the lookup uses catch-all entries only, which is exactly what
+ * this repo's plain-object `targetDefaults` are.
+ *
+ * Can return `undefined` when NEITHER layer declares inputs. `runtimeInputsOf` absorbs
+ * that; `splitInputsIntoSelfAndDependencies` does not, which is why `hashedFilesFor`
+ * below asserts before splitting.
+ */
+function effectiveInputsFor(target: string): TargetInputs | undefined {
+  return mergeTargetConfigurations(
+    projectJson.targets[target] ?? {},
+    readTargetDefaultsForTarget(target, nxJson.targetDefaults) ?? undefined,
+  ).inputs;
+}
+
+/**
+ * Every target name either layer knows about. The UNION is required, not tidiness:
+ * a target inheriting everything from `targetDefaults` is ABSENT from
+ * `Object.keys(projectJson.targets)` -- measured, `project.json` declares only
+ * `integration` while `test`, `build`, `typecheck` and `lint` exist via inferred
+ * plugins plus defaults -- and a target declared ONLY in `project.json` is absent
+ * from the defaults keys. Enumerating either side alone is the bug.
+ */
+const ALL_TARGET_NAMES = [
+  ...new Set([
+    ...Object.keys(nxJson.targetDefaults),
+    ...Object.keys(projectJson.targets),
+  ]),
+];
+
 /** Every `{ runtime: ... }` command in an inputs list, in declaration order. */
 function runtimeInputsOf(inputs: TargetInputs | undefined): string[] {
   return (inputs ?? []).flatMap((input) =>
@@ -115,8 +159,23 @@ const PROBE_FILES = [
 ];
 
 function hashedFilesFor(target: string): string[] {
+  // Through the MERGED layer, not `nxJson.targetDefaults[target].inputs`. Reading the
+  // defaults alone means a `project.json` `targets.typecheck.inputs` re-opens the
+  // spec-excluding-inputs hole the describe below exists to close, invisibly to every
+  // clause here. `effectiveInputsFor` can return `undefined` when neither layer
+  // declares inputs, and `splitInputsIntoSelfAndDependencies` does not tolerate that
+  // -- assert first so an absent declaration fails loud instead of as a TypeError.
+  const inputs = effectiveInputsFor(target);
+
+  expect(
+    inputs,
+    `\`${target}\` must declare inputs in nx.json's targetDefaults or in ` +
+      'project.json. Every probe in this file is derived from them, so an absent ' +
+      'declaration would empty the assertions rather than fail them.',
+  ).toBeDefined();
+
   const { selfInputs } = splitInputsIntoSelfAndDependencies(
-    nxJson.targetDefaults[target].inputs,
+    inputs ?? [],
     nxJson.namedInputs,
   );
 
@@ -395,23 +454,22 @@ describe('lint declares its full input set (LINT-04)', () => {
   // exercises real per-OS behaviour; every other target -- `lint` included --
   // must stay OS-invariant or the cross-OS cache sharing this milestone exists
   // to protect silently stops working.
+  //
+  // ASSERTED AT THE MERGED LAYER, which is the only layer this claim is true of.
+  // Enumerating `nxJson.targetDefaults` alone asserted about the BASE of a merge:
+  // adding `inputs: ["default", { "runtime": "..." }]` to `test` in `project.json`
+  // REPLACES the default wholesale and makes `test` OS-sensitive, with this clause
+  // and every other defaults-layer guard still green. Measured both halves --
+  // today the filter yields exactly `['integration']`, and under that injection it
+  // yields `['test', 'integration']` and this assertion fails.
+  //
+  // `runtimeInputsOf` absorbs an `undefined` inputs list, so the `?.` crash guard the
+  // old shape needed is now structural rather than written out: a future entry
+  // carrying only `cache: true` reaches this filter as an empty runtime list.
   it('integration is still the only target with a platform runtime input', () => {
-    const targetsWithRuntimeInput = Object.entries(nxJson.targetDefaults)
-      .filter(
-        ([, target]) =>
-          // `?.` even though the type declares `inputs` required. nx.json is
-          // parsed from disk with a CAST, so that type is an ASSERTION about
-          // the file, not a check of it. A future targetDefaults entry carrying
-          // only `cache: true` would otherwise turn this guard into
-          // `TypeError: Cannot read properties of undefined (reading 'some')`
-          // -- a crash where a comprehensible assertion failure belongs, and in
-          // the one guard whose job is to notice a new target quietly acquiring
-          // a platform discriminator (CORR-04).
-          target.inputs?.some(
-            (input) => typeof input === 'object' && 'runtime' in input,
-          ) ?? false,
-      )
-      .map(([name]) => name);
+    const targetsWithRuntimeInput = ALL_TARGET_NAMES.filter(
+      (name) => runtimeInputsOf(effectiveInputsFor(name)).length > 0,
+    );
 
     expect(targetsWithRuntimeInput).toEqual(['integration']);
   });

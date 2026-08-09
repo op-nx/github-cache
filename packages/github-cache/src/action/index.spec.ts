@@ -621,5 +621,30 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
         expect.stringContaining('expected PUT 200, got 500'),
       );
     });
+
+    // C4. An empty run id does NOT produce an invalid hash -- it produces `feed<index>`,
+    // which matches HASH_PATTERN, crosses parseHash and is a perfectly acceptable cache
+    // key, so the server's SRV-03 route validator cannot reject it and the PUT returns
+    // 200. Nothing here would fail; the leg would just write a run-INDEPENDENT key that
+    // every future empty-run-id leg collides on. `getInput` throws only when the input
+    // is absent or empty, never when it is whitespace, and the trim after it is what
+    // turns whitespace into ''.
+    //
+    // BEFORE ANY WRITE is the assertion that matters. A refusal that still PUT would
+    // leave the colliding key behind and only report it afterwards.
+    it('refuses an EMPTY run id BEFORE writing anything (C4)', async () => {
+      getInputMock.mockImplementation((name: string) =>
+        name === 'operation' ? 'mirror-seed' : '',
+      );
+      serveMock.mockResolvedValue(fakeServer());
+
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 200 }));
+
+      await expect(run()).rejects.toThrow(/run id is required/);
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
   });
 });

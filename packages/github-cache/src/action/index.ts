@@ -391,6 +391,32 @@ export async function run(): Promise<void> {
       // `operation` still selects only a verb and now a key derivation with it. It
       // cannot influence read-versus-write capability -- that is derived from runtime
       // context inside selectBackend and no action input may steer it (TRUST-05).
+      // READER/WRITER SYMMETRY, and that is the whole reason this lives at the CALL
+      // SITE rather than inside mirrorSeedHash. roundtrip/read-back.ts validates the run
+      // id separately at its own layer, ahead of the derivation, with its own diagnosis
+      // -- so the writer refuses in the same shape at the same layer, and the two ends
+      // stay readable side by side.
+      //
+      // WHY AN EMPTY RUN ID NEEDS REFUSING AT ALL. It does not produce an invalid hash;
+      // it produces a perfectly VALID one. `mirrorSeedHash('', 'linux')` is `feed2`,
+      // which matches HASH_PATTERN, crosses parseHash, and is an acceptable cache key --
+      // so the server's SRV-03 route validator cannot reject it and the PUT returns 200.
+      // The result is a run-INDEPENDENT key that every future empty-run-id leg collides
+      // on. `getInput` throws only when the variable is absent or empty, never when it
+      // is whitespace, and the trim afterwards is what turns whitespace into ''.
+      //
+      // THROWN, not core.setFailed: this is the shape the reader uses, and the
+      // entrypoint catch converts it to setFailed anyway. Impact is bounded by the
+      // retention window and the reader still fails loud, so the severity here is a
+      // wasted key and a confusing verify, not a wrong artifact.
+      if (hash === '') {
+        throw new Error(
+          'github-cache mirror-seed: a run id is required as the seed input. An empty ' +
+            'one derives a VALID but run-independent key (feed<os-index>), which the ' +
+            'server accepts and every other empty-run-id leg then collides on.',
+        );
+      }
+
       const producerOs = cachePlatform();
       const seedHash = mirrorSeedHash(hash, producerOs);
       const seedUrl = `${running.url}/v1/cache/${seedHash}`;

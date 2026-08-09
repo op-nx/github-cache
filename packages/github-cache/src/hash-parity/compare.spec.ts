@@ -384,6 +384,18 @@ describe('the discriminator must have DISCRIMINATED on these two legs (D-20)', (
 
     expect(reasonOf(compareHashParity([a, b]))).toBe('PASS');
   });
+
+  // The OTHER half of C3's asymmetry, and it has to be asserted or the non-empty rule
+  // added for `stdout` reads as a rule about both streams. An EMPTY stderr is what a
+  // healthy leg produces -- it is what `--no-warnings` is pinned for -- so it must stay
+  // a PASS on both legs at once, not merely when the two differ.
+  it('does NOT fail a healthy pair whose `stderr` is empty on BOTH legs', () => {
+    const [a, b] = validPair();
+    a.discriminator.stderr = '';
+    b.discriminator.stderr = '';
+
+    expect(reasonOf(compareHashParity([a, b]))).toBe('PASS');
+  });
 });
 
 describe('CORR-03(c) + D-21: the four INVARIANT targets are IDENTICAL', () => {
@@ -467,6 +479,17 @@ describe('a malformed downloaded record is a VERDICT, never a TypeError (ASVS V5
       '`discriminator.stderr` is missing',
       (draft) => {
         delete child(draft, 'discriminator')['stderr'];
+      },
+    ],
+    // C3. An EMPTY stdout used to reach a PASS, not a fault: the shape check tested the
+    // TYPE and never the length. `capture-hashes.mjs` returns `stdout ?? ''` and a spawn
+    // that fails to LAUNCH yields exactly that, so leg A `''` against leg B `'win32'`
+    // made the trimmed comparison DIFFER, the platform-sensitivity clause PASS, and the
+    // gate print PARITY OK over a discriminator that produced nothing on one leg.
+    [
+      '`discriminator.stdout` is an empty string',
+      (draft) => {
+        child(draft, 'discriminator')['stdout'] = '';
       },
     ],
   ];

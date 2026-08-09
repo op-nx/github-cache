@@ -325,13 +325,33 @@ function shapeFault(record: unknown): string | undefined {
   }
 
   for (const stream of ['stdout', 'stderr'] as const) {
-    // Checks the TYPE, never the length: `stderr` is legitimately EMPTY on every
-    // healthy leg. Both streams are required present because Nx's `hash_runtime`
-    // hashes both, so a record missing one cannot explain why `integration`
-    // diverged (D-04, PARITY-06).
+    // Both streams are required PRESENT because Nx's `hash_runtime` hashes both, so a
+    // record missing one cannot explain why `integration` diverged (D-04, PARITY-06).
     if (typeof discriminator[stream] !== 'string') {
       return `\`discriminator.${stream}\` is missing or not a string`;
     }
+  }
+
+  // NON-EMPTY IS REQUIRED OF stdout AND NOT OF stderr, and the asymmetry is the point
+  // rather than an inconsistency. `stderr` is legitimately EMPTY on every healthy leg --
+  // that is what `--no-warnings` is pinned FOR. `stdout` never legitimately is: the
+  // pinned probe prints a platform token on every platform that can run node.
+  //
+  // Type-only, an empty stdout PASSED this check, and the failure it let through was a
+  // false PARITY OK. `capture-hashes.mjs`'s runDiscriminator returns `stdout ?? ''`, and
+  // a spawn that fails to LAUNCH yields exactly that. Leg A `''` against leg B `'win32'`
+  // then makes the trimmed comparison DIFFER, the platform-sensitivity clause PASS, and
+  // the gate print PARITY OK -- attributing a divergent `integration` hash to a
+  // discriminator that produced nothing on one leg. That is the CORR-03 class: malformed
+  // input yielding a PASS.
+  if (discriminator['stdout'] === '') {
+    return (
+      '`discriminator.stdout` is an empty string, so the platform probe produced ' +
+      'nothing on this leg (a spawn that failed to launch yields exactly this). It ' +
+      'cannot explain an `integration` divergence, and comparing it against the other ' +
+      "leg's real value would report a difference that is an artefact of the capture. " +
+      '`stderr` is deliberately allowed to be empty -- it is empty on every healthy leg'
+    );
   }
 
   return undefined;

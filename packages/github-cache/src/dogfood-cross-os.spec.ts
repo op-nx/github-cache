@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
  *   1. `dogfood-verify` declares the two-leg matrix -- otherwise the Windows OS is
  *      never sampled and the cross-OS claim rests on nothing.
  *   2. `dogfood-seed` declares NO matrix. The seed key is
- *      `nx-cache-<GITHUB_RUN_ID>`: ONE key per RUN, not per OS. So a Windows seed leg
+ *      `nx-cache-bead<GITHUB_RUN_ID>`: ONE key per RUN, not per OS. So a Windows seed leg
  *      makes the Windows verify job restore a WINDOWS-written entry and pass even
  *      with cross-OS restore completely dead. That is the vacuity trap, and this
  *      clause is what makes it structurally unreachable rather than merely
@@ -98,13 +98,58 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
     const seed = jobBlock('dogfood-seed');
     const reason =
       'dogfood-seed must stay single-leg (ubuntu-only). The seed key is ' +
-      'nx-cache-<GITHUB_RUN_ID> -- ONE key per RUN, not per OS -- so a Windows seed leg ' +
+      'nx-cache-bead<GITHUB_RUN_ID> -- ONE key per RUN, not per OS -- so a Windows seed leg ' +
       'makes the Windows dogfood-verify leg restore a WINDOWS-written entry and pass even ' +
       'if cross-OS restore is completely broken. That turns VER-06 into a presence check.';
 
     expect(seed, reason).not.toMatch(/strategy:/);
     expect(seed, reason).not.toMatch(/matrix/);
     expect(seed, reason).toMatch(/runs-on:\s*ubuntu-24\.04-arm/);
+  });
+
+  // D2's ROUND-TRIP gate. dogfood-seed PUTs the key its `hash:` composes and
+  // dogfood-verify GETs that same key back, so the two inputs are ONE round-trip: a
+  // one-sided edit produces no local signal whatsoever and surfaces only as a live-CI
+  // MISS on the default branch. Nothing asserted either value before this clause.
+  //
+  // THREE CLAUSES, and each closes a hole the other two leave open:
+  //
+  //   - EQUALITY alone is satisfied by reverting BOTH jobs to the bare run id together.
+  //   - The FULL-SHAPE match on each is satisfied by changing only one of them.
+  //   - Shape-plus-equality would still be satisfied by a bare CONSTANT key in both
+  //     jobs, which is the ONE-key-per-RUN violation the no-matrix clause above exists
+  //     to prevent -- and which the publish mirror's seed filter now also depends on:
+  //     that filter admits a seed only when the key ENDS WITH the current run id, so a
+  //     run-id-less key would read as some other run's and be skipped forever.
+  //
+  // Hence each value is pinned WHOLE and anchored -- the marker word, the run-id
+  // interpolation, and nothing else. `bead` must stay hex-letter-LEADING (that is what
+  // keeps the key structurally separable from an all-decimal Nx task hash) and distinct
+  // from `cafe` and `feed`, neither a prefix of them nor prefixed by them. `jobBlock`
+  // strips comment lines and THROWS on a missing job, so a rename fails loud here rather
+  // than passing vacuously.
+  it('both dogfood jobs carry the SAME marker-prefixed, run-id-suffixed hash: input (D2)', () => {
+    const hashInput = (job: string): string | undefined =>
+      jobBlock(job).match(/^ +hash: (.+)$/m)?.[1];
+    const seed = hashInput('dogfood-seed');
+    const verify = hashInput('dogfood-verify');
+    const reason =
+      'dogfood-seed and dogfood-verify must BOTH pass `hash: bead${{ github.run_id }}`. ' +
+      'They are the two halves of one cache round-trip -- the seed PUTs the key and the ' +
+      'verify GETs it back -- so a value present on only one side is a GET against a key ' +
+      'nothing ever wrote, which fails on live CI alone and is green everywhere else. ' +
+      'The `bead` marker word is hex-letter-LEADING on purpose (D2): both competing key ' +
+      'spaces, workflow run ids and Nx task hashes, are all-decimal, so the marker is ' +
+      'what makes this single-use seed STRUCTURALLY separable from a real task hash and ' +
+      "therefore skippable by the publish mirror's seed filter. The trailing run-id " +
+      'interpolation is equally load-bearing and may not be replaced by a constant: it ' +
+      'keeps ONE key per RUN (the vacuity clause above) and it is the exact token that ' +
+      "filter reads to tell THIS run's seed from a prior run's. If the marker word is " +
+      'genuinely being changed, move BOTH jobs and the filter in the SAME commit.';
+
+    expect(seed, reason).toBe('bead${{ github.run_id }}');
+    expect(verify, reason).toBe('bead${{ github.run_id }}');
+    expect(seed, reason).toBe(verify);
   });
 
   it('both dogfood jobs are SCHEDULED on same-repo pull requests, not push-only (CR-18)', () => {

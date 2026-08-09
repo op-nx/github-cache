@@ -31,11 +31,15 @@ import { CACHE_OS_VALUES, type CacheOs } from './release-asset-name.js';
  * -- which is why the length bound is asserted directly. Adding OS number ten therefore
  * has to change the ENCODING (a separator, or a fixed-width index), not just the tuple.
  *
- * The marker word must stay DISTINCT from `cafe<run_id>`, the seed ci.yml's
- * `consumer-smoke` job already ships (its comment carries the identical hex-word
- * rationale, and `cafe30401077417-linux` is live in the shard today). Two seed families
- * that both began `cafe` would be indistinguishable in a shard listing, so following the
- * in-repo convention with a DIFFERENT word is the point, not a coincidence.
+ * The marker word must stay DISTINCT from the OTHER TWO families ci.yml ships -- there
+ * are three now, not two. `cafe<run_id>` is the `consumer-smoke` job's seed (its comment
+ * carries the identical hex-word rationale, and `cafe30401077417-linux` is live in the
+ * shard today), and `bead<run_id>` is dogfood-seed's, which D2 moved off the bare run id
+ * for exactly this reason. Seed families sharing a marker word would be
+ * indistinguishable in a shard listing AND to the publish mirror's seed filter, so
+ * following the in-repo convention with a DIFFERENT word per family is the point, not a
+ * coincidence. No word may be a prefix of another either, or the filter cannot split
+ * them.
  *
  * The hex LETTERS are what make disjointness STRUCTURAL rather than probabilistic: both
  * competing key spaces -- workflow run ids and Nx task hashes -- are all-decimal, so no

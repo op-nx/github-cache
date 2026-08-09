@@ -412,7 +412,7 @@ export async function run(): Promise<void> {
       // Until it does, the assertion silently weakens to "the body came from whichever
       // OS seeded it" -- which is what a presence-only check already gives for free,
       // with cross-OS restore possibly completely dead. The seed key is
-      // nx-cache-<GITHUB_RUN_ID>: ONE key per RUN, not per OS. dogfood-cross-os.spec.ts
+      // nx-cache-bead<GITHUB_RUN_ID>: ONE key per RUN, not per OS. dogfood-cross-os.spec.ts
       // asserts dogfood-seed declares no matrix so this cannot happen unnoticed.
       //
       // NO ACTION INPUT carries this value on purpose: an input would be a SECOND place

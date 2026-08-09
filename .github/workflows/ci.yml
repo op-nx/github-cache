@@ -26,8 +26,8 @@ permissions:
 # READ THAT ENUMERATION PRECISELY: since CR-18, `dogfood-seed` PUTs on same-repo PR runs
 # too, so the cancellable runs are exactly the ones that now perform that PUT. It is safe,
 # and the reason is recorded here rather than left to be re-derived: the seed key is
-# nx-cache-<GITHUB_RUN_ID>, so a torn PR-side upload leaves at most an absent entry under
-# a run id that is never reused. There is no first-write-wins filename arbitration to
+# nx-cache-bead<GITHUB_RUN_ID>, so a torn PR-side upload leaves at most an absent entry
+# under a run id that is never reused. There is no first-write-wins filename arbitration to
 # poison -- that hazard belongs to the Release-asset uploads, which stay push-only.
 #
 # The group is keyed on `github.ref` so the two event kinds cannot share a group either.
@@ -1945,8 +1945,20 @@ jobs:
   # it, and merged code still gets this proof through the push path.
   # action.yml's main points into the build output, so each job builds first.
   dogfood-seed:
-    # run id as the cache hash: unique per run and already all-decimal, so it
-    # satisfies the server's ^[a-f0-9]{1,512}$ hash validator with no massaging.
+    # The marker word `bead` followed by the run id as the cache hash: unique per run,
+    # and still inside the server's ^[a-f0-9]{1,512}$ hash validator because the marker
+    # word is hex LETTERS. Being hex-letter-LEADING is the load-bearing half (D2), not
+    # the mere validity: both competing key spaces -- workflow run ids and Nx task
+    # hashes -- are all-decimal, so a marked key is STRUCTURALLY separable from a real
+    # task hash. That is what lets the publish mirror skip a PRIOR run's copy of this
+    # single-use seed instead of re-enumerating and re-restoring it on every run
+    # forever. The bare run id this replaced was valid but indistinguishable, which is
+    # exactly the property that made it unfilterable. Same convention as
+    # `cafe<run_id>` (consumer-smoke) and `feed<i><run_id>` (the publish leg), with a
+    # DISTINCT word per family so a shard listing can tell the three apart.
+    #
+    # dogfood-verify's `hash:` MUST carry the identical value -- the two are one
+    # round-trip, and a one-sided edit surfaces only as a live-CI MISS.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04-arm
     # Generic hang insurance -- see the build job. A hung step otherwise holds a runner
@@ -1976,7 +1988,7 @@ jobs:
       - run: npm run build
       - uses: ./packages/github-cache
         with:
-          hash: ${{ github.run_id }}
+          hash: bead${{ github.run_id }}
           operation: seed
         env:
           # selectBackend hands back the writable Actions-cache backend only when a
@@ -1985,7 +1997,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   dogfood-verify:
-    # Reads back exactly what dogfood-seed wrote, keyed on the same run id, so a real
+    # Reads back exactly what dogfood-seed wrote, keyed on the IDENTICAL `hash:` value
+    # (the `bead` marker word plus the run id -- see dogfood-seed), so a real
     # cross-job HIT is the only way this job passes; a MISS fails the job loudly. TWO
     # LEGS, and the Windows one is VER-06's whole proof: it restores a body a LINUX
     # runner produced, so a green windows-11-arm leg is the live evidence that an
@@ -1996,7 +2009,7 @@ jobs:
     #
     # THE VACUITY CONDITION -- read this before adding a Windows dogfood-seed leg.
     # dogfood-seed is ubuntu-ONLY BY DESIGN and must stay that way. The seed key is
-    # nx-cache-<GITHUB_RUN_ID>: ONE key per RUN, not per OS. So a Windows seed leg would
+    # nx-cache-bead<GITHUB_RUN_ID>: ONE key per RUN, not per OS. So a Windows seed leg would
     # make the Windows verify leg restore a WINDOWS-written entry and pass even with
     # cross-OS restore completely dead -- the proof would go green while proving nothing.
     # If a Windows seed leg is ever genuinely wanted, the expected-producer literal in
@@ -2041,7 +2054,7 @@ jobs:
       - run: npm run build
       - uses: ./packages/github-cache
         with:
-          hash: ${{ github.run_id }}
+          hash: bead${{ github.run_id }}
           operation: verify
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2113,10 +2126,14 @@ jobs:
       - name: Nx cache round-trip over the loopback sidecar
         env:
           # `cafe` prefix keeps the key valid hex (^[a-f0-9]+$) yet DISTINCT from the
-          # dogfood-seed / publish `nx-cache-<run_id>` key. All three ubuntu jobs share
-          # this run's Actions-cache scope; a bare run_id collides -- this job's PUT
-          # would land in the very key dogfood-verify reads back (Actions cache is
-          # first-write-wins), returning consumer-smoke's payload as wrong data.
+          # dogfood-seed `nx-cache-bead<run_id>` and publish `nx-cache-feed<i><run_id>`
+          # keys. All three ubuntu jobs share this run's Actions-cache scope; a bare
+          # run_id would collide -- this job's PUT would land in the very key
+          # dogfood-verify reads back (Actions cache is first-write-wins), returning
+          # consumer-smoke's payload as wrong data. A DISTINCT marker word per family is
+          # the convention rather than a coincidence, and since D2 all three families
+          # carry one: it is what lets a shard listing -- and the publish mirror's seed
+          # filter -- tell the three apart.
           RUN_HASH: cafe${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -2442,14 +2459,18 @@ jobs:
       # real task entries live in the Actions cache alone. Not done now -- it would
       # throw away the real cross-context mirror this change exists to prove.
       #
-      # Key namespaces stay disjoint, but NOT for the reason one might assume: real Nx
-      # task hashes here are ALL-DECIMAL 18-20 digits (Nx renders a 64-bit hash as a
-      # decimal string; verified over 153 local cache entries, zero containing a-f), so
-      # they are the same character class as a run id, not a contrasting hex. What keeps
-      # them apart is numeric range plus construction: a run id is ~11 digits, and
-      # `cafe<run_id>` is not all-decimal at all so it can never equal a task hash.
-      # A `nx-cache-<run_id>` collision would need a 64-bit task hash whose decimal form
-      # exactly equals THIS run's id -- about 1 in 1.8e19 per task. Negligible.
+      # Key namespaces stay disjoint STRUCTURALLY, and since D2 that holds for ALL THREE
+      # seed families rather than two of them. Real Nx task hashes here are ALL-DECIMAL
+      # 18-20 digits (Nx renders a 64-bit hash as a decimal string; verified over 153
+      # local cache entries, zero containing a-f), and so is a workflow run id -- the
+      # same character class, not a contrasting hex. What separates the seeds is the
+      # hex-LETTER marker word every one of them now carries: `cafe<run_id>`
+      # (consumer-smoke), `bead<run_id>` (dogfood-seed) and `feed<i><run_id>` (this
+      # step). None of the three can equal an all-decimal value, so the disjointness is
+      # a construction rather than a probability. The bare-run-id shape was the LAST
+      # family resting on a 1-in-1.8e19 collision argument; D2 retired it, and that is
+      # also what lets the publish mirror skip a PRIOR run's single-use seed instead of
+      # re-enumerating and re-restoring it on every run forever.
       - uses: ./packages/github-cache
         with:
           hash: ${{ github.run_id }}

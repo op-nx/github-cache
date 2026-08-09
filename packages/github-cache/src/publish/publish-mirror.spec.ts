@@ -1,4 +1,6 @@
 import * as core from '@actions/core';
+import { createRequire } from 'node:module';
+import { hashArray } from 'nx/src/hasher/file-hasher.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Hash } from '../lib/cache-key.js';
 import {
@@ -223,6 +225,74 @@ describe('publishMirror prior-run seed filter (D1)', () => {
     expect(getMock.mock.calls.map((call) => call[0])).toEqual(
       SEEDS_AND_A_TASK_HASH.map((entry) => entry.key.slice('nx-cache-'.length)),
     );
+  });
+
+  /**
+   * THE EXTERNALLY-OWNED PROPERTY THE WHOLE FILTER RESTS ON, pinned so a change in Nx goes
+   * RED rather than silent. `isOtherRunsSeed` is safe in the direction C1 forbids only
+   * because a real Nx task hash cannot BEGIN with `cafe` / `bead` / `feed`, and that holds
+   * only because Nx renders task hashes as ALL-DECIMAL. Nothing in this repo owns that
+   * property, and the evidence behind the three sites calling the disjointness STRUCTURAL
+   * is itself empirical -- "verified over 153 local cache entries, zero containing a-f".
+   *
+   * D1 UPGRADED THE COST of that assumption failing without upgrading its verification,
+   * which is why this case exists. Before D1 a hex-lettered task hash cost a cosmetic
+   * collision in a shard listing. After D1 it costs the entry being silently DROPPED from
+   * the mirror -- no error, no red, just a consumer cache MISS forever for that hash.
+   *
+   * IT EXERCISES A VALUE WHOSE SHAPE COMES FROM NX, not a literal restating the regex --
+   * the latter would pin nothing, since it would pass unchanged after Nx switched
+   * renderers. `hashArray` is the function Nx's own task hasher composes the final
+   * task-hash value with (`nx/src/hasher/task-hasher.js`: `value: hashArray([res.value,
+   * command])`), and it delegates straight to the native hasher, so these ARE Nx-rendered
+   * hashes. A switch to hex reddens the shape clause deterministically: a hex-rendered u64
+   * avoids a-f in roughly one string in 6500, and 32 independent draws make that certain.
+   *
+   * BOTH CLAUSES ARE LOAD-BEARING and neither subsumes the other. The shape clause is what
+   * actually detects the renderer change; the enumeration clause is what ties the shape to
+   * the CONSEQUENCE, so the failure names the mirror rather than a regex. The second alone
+   * would be a weak gate -- a hex hash collides with a marker word only about 3 times in
+   * 65536 -- and the first alone would not say why anyone should care.
+   *
+   * `nx/src/*` is an internal subpath with no semver guarantee, so an Nx major could move
+   * it and break this file at IMPORT time. That is the desired failure mode here too: loud
+   * and immediate, never a silent pass (the posture `nx-target-inputs.spec.ts` records).
+   */
+  it('pins the ALL-DECIMAL shape of REAL Nx-rendered hashes, the externally-owned property the filter rests on (T-2S6-01)', async () => {
+    const nxVersion = (
+      createRequire(import.meta.url)('nx/package.json') as { version: string }
+    ).version;
+    const nxHashes = Array.from({ length: 32 }, (_, index) =>
+      hashArray(['github-cache', `seed-filter-shape-probe-${index}`]),
+    );
+    const reason =
+      `Nx ${nxVersion} rendered a task hash containing something other than [0-9]. The ` +
+      'prior-run seed filter reads a marker PREFIX -- `cafe`, `bead`, `feed` -- and the ' +
+      'only thing keeping a real task hash out of that space is that both competing key ' +
+      'spaces are all-decimal. A hex-lettered hash can now be misclassified as another ' +
+      "run's seed and dropped from the mirror SILENTLY: no error, no red, just a " +
+      'permanent consumer cache MISS for that hash. If Nx genuinely changed its hash ' +
+      'rendering, the filter needs a new discriminator (a key-shape one, or a marker the ' +
+      'seed writers own outright) BEFORE this pin is relaxed -- and the three sites ' +
+      'calling the disjointness STRUCTURAL need rewording in the same commit.';
+
+    expect(
+      nxHashes.filter((hash) => !/^[0-9]+$/.test(hash)),
+      reason,
+    ).toEqual([]);
+
+    const fake = client({
+      listCacheEntries: vi.fn(async () =>
+        nxHashes.map((hash) => ({ key: `nx-cache-${hash}` })),
+      ),
+    });
+
+    await publishMirror(fake, { runId: '99' });
+
+    expect(
+      getMock.mock.calls.map((call) => call[0]),
+      reason,
+    ).toEqual(nxHashes);
   });
 });
 

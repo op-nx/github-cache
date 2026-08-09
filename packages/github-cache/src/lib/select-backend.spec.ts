@@ -608,18 +608,46 @@ const selectBackendCode = readFileSync(
  */
 describe('select-backend.ts keeps the knob LAST and reads it as bare truthiness (TRUST-14)', () => {
   it('places the knob branch AFTER every narrowing branch and BEFORE the writable return', () => {
+    // ALL THREE earlier branches, not just the token degrade. The clause used to anchor the
+    // knob against `resolveGitHubToken` alone, so a reorder moving the write-trust check or
+    // the repository-identity throw BELOW the knob kept it green while breaking the very
+    // guarantee its message states -- "every branch above has already returned read-only or
+    // thrown". An anchor against one of three earlier branches does not say that.
+    const trust = selectBackendCode.indexOf('isWriteTrusted(env).trusted');
+    const identity = selectBackendCode.indexOf('GITHUB_REPOSITORY_PATTERN.test');
     const token = selectBackendCode.indexOf('resolveGitHubToken(env)');
     const knob = selectBackendCode.indexOf('env.CACHE_READ_ONLY');
     const writable = selectBackendCode.indexOf(
       'return createActionsCacheBackend()',
     );
 
-    // POSITIVE CONTROLS: three `indexOf` misses are all -1, and -1 < -1 is false, so a
+    // POSITIVE CONTROLS: five `indexOf` misses are all -1, and -1 < -1 is false, so a
     // renamed anchor would fail the ordering rather than pass it -- but it would fail with
     // an unreadable message. Assert each anchor was FOUND so a rename says which one moved.
+    expect(trust, 'the write-trust check anchor is gone').toBeGreaterThan(-1);
+    expect(
+      identity,
+      'the GITHUB_REPOSITORY identity check anchor is gone',
+    ).toBeGreaterThan(-1);
     expect(token, 'the token-resolution anchor is gone').toBeGreaterThan(-1);
     expect(knob, 'the CACHE_READ_ONLY read is gone').toBeGreaterThan(-1);
     expect(writable, 'the writable return is gone').toBeGreaterThan(-1);
+
+    expect(
+      knob,
+      'CACHE_READ_ONLY must be read AFTER the write-trust check. Hoisted above it, the knob ' +
+        'is consulted on an UNTRUSTED context, where the branch it would bypass returns the ' +
+        'cross-context Releases reader -- so the knob could substitute a different backend ' +
+        'for the one an untrusted leg is required to get.',
+    ).toBeGreaterThan(trust);
+
+    expect(
+      knob,
+      'CACHE_READ_ONLY must be read AFTER the GITHUB_REPOSITORY identity check. That branch ' +
+        'is fail-CLOSED: hoisting the knob above it lets a corrupted repository identity ' +
+        'reach a read-only backend instead of throwing, which resolves reads into some other ' +
+        "repository's cache namespace rather than refusing to start.",
+    ).toBeGreaterThan(identity);
 
     expect(
       knob,

@@ -427,6 +427,223 @@ async function ensureShardRelease(
 }
 
 /**
+ * The two mutually exclusive read-miss warning branches, lifted VERBATIM out of
+ * `publishMirror`'s tail.
+ *
+ * WHY THE TAIL AND NOT THE LOOP. `publishMirror` is this repository's only
+ * newly-introduced complexity failure and the reason `fallow audit` exits 1. This span is
+ * the safe part to move: it reads only the miss count, the scanned count and the mirrored
+ * count, all FINAL by the time it runs, and it touches no loop state. Of its roughly 180
+ * lines about 170 are the comment blocks that argue the two branches, so the extraction
+ * moves the argument with the code rather than stranding it.
+ *
+ * MODULE-PRIVATE, for the reason `wilsonLowerBound` above already records: a spec that
+ * called this directly would pin the messages without proving `publishMirror` reaches
+ * them, and the branch selection is the thing under test. The specs drive it through
+ * `publishMirror`.
+ *
+ * EMITTED BYTES ARE UNCHANGED. The only edit inside the moved span is `hashes.length`
+ * becoming the `scanned` parameter -- same value, same position in every message. The
+ * emit oracle diffs empty across this change, and `publish-mirror.spec.ts` is untouched.
+ *
+ * DO NOT chase the remaining fallow entries the same way. `ensureShardRelease`, the shape
+ * check, the parity comparison, the cleanup routine, the action entry's run function and
+ * the capture script's argument parser, diff and premise assertion are flat ordered guard
+ * chains where every branch returns or throws a DISTINCT named reason -- several
+ * comment-lock their ordering by name, and their branch count IS the diagnosis surface.
+ * Flattening any of them loses an explicit failure branch.
+ */
+function warnOnReadMisses(
+  readMisses: number,
+  scanned: number,
+  mirrored: number,
+): void {
+  // Silent-degradation signal (WARN, not fail): if EVERY enumerated server-produced
+  // entry restored as a MISS and nothing mirrored, the axis is the `@actions/cache`
+  // cache VERSION -- the sha256 over (archive paths | compression method |
+  // ('windows-only') | salt) at cacheUtils.js:157-172, whose FIRST components are the
+  // archive path literals, which is why changing the path rotates the version. That is
+  // a SEPARATE mechanism from the Nx TASK hash and from the Release ASSET NAME, each of
+  // which produces a superficially similar all-MISS through unrelated machinery -- so
+  // the message names the axis rather than saying only "rotation", or a reader
+  // misdiagnoses one of the other two (OBS-04, D-30).
+  //
+  // The alternative cause is an Actions-cache read-scope regression, which looks
+  // identical to "nothing to do" and would otherwise exit green. This STAYS a warning:
+  // a hard fail would break every legitimate rotation window, and a tripwire that fires
+  // on correct work gets disabled (D-28b).
+  //
+  // The expectation for this milestone's rotation was recorded IN ADVANCE, before the
+  // commit that changed the version's input, at
+  // `.planning/phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md`.
+  // Read it before acting on this warning -- it carries the per-leg predicted counts,
+  // the non-triggers, and the bundle-drift signal that looks exactly like this one but
+  // is a defect.
+  //
+  // The message's "entr(y|ies)" counts DISTINCT keys, not enumerated rows, since the
+  // dedup above -- a strict improvement, but the wording shifted meaning silently,
+  // hence this clause.
+  if (scanned > 0 && readMisses === scanned && mirrored === 0) {
+    core.warning(
+      `github-cache publish: all ${scanned} server-produced cache ` +
+        `entr${scanned === 1 ? 'y' : 'ies'} restored as a MISS; nothing ` +
+        'mirrored. The axis here is the @actions/cache cache VERSION -- a SEPARATE ' +
+        'mechanism from the Nx TASK hash and from the Release ASSET NAME, each of ' +
+        'which produces a look-alike all-MISS through unrelated machinery. ' +
+        `${READ_MISS_CAUSES}. This is expected ONCE per version-affecting ` +
+        'change. Two consecutive all-miss pushes with NO version-affecting change ' +
+        'in between is the signal to act.',
+    );
+  } else if (
+    readMisses > 0 &&
+    wilsonLowerBound(readMisses, scanned) >= PARTIAL_READ_MISS_WARN_RATIO
+  ) {
+    // D5, THE PARTIAL CASE. The gate above fires only on the TOTAL case, which is why it
+    // stayed correctly silent while 42% of entries missed for 11 days across two windows.
+    // This is a strict ADDITION: a lower-threshold sibling that also subsumes the total
+    // case arithmetically, written as an `else if` so exactly ONE of the two can fire and
+    // the total case still reaches its own more specific message first.
+    //
+    // THE RULE IS A LOWER BOUND ON THE MISS PROPORTION, not the proportion itself, and
+    // `PARTIAL_READ_MISS_WARN_RATIO` is the TARGET RATE that bound must reach. See
+    // `wilsonLowerBound` above for why it is a small-sample regulariser and not a
+    // confidence bound. What the regularisation buys is scale invariance: no minimum-N
+    // floor, no constant tuned to any one enumeration size, and silence at small N by
+    // construction rather than by a second threshold.
+    //
+    // THE BASELINE IS MEASURED, not estimated. Run `31305961054` at head `e3bf98b`, both
+    // publish legs, after D1/D2/D3 landed: 43 misses of 112 enumerated on ubuntu-24.04-arm
+    // (38.4%) and 43 of 113 on windows-11-arm (38.1%). The bound at 43/112 is 0.299, so
+    // this branch is SILENT at the healthy steady state, and at that enumeration size the
+    // observed miss proportion has to reach roughly 60% before it fires. Every figure here
+    // carries that run id deliberately: two estimates preceded it and BOTH were wrong, in
+    // opposite directions and by the DENOMINATOR each time -- the miss COUNT of 43 was
+    // right in both. An unlabelled figure in this comment is how that happened.
+    //
+    // THE DENOMINATOR IS DELIBERATELY THE FULL ENUMERATION, `scanned`, and this is
+    // the non-obvious choice a future reader will otherwise "fix" to attempted-only
+    // (`scanned - alreadyPresent`), which reads more coherent and is wrong. MEASURED on the
+    // same run, attempted-only gives 43/53 = 0.811 on ubuntu and 43/44 = 0.977 on windows,
+    // so it would fire on BOTH legs of a healthy run. The cause is structural and
+    // permanent: `max-parallel: 1` runs ubuntu first, so the second leg finds nearly
+    // everything already present and its attempted-miss rate is dominated by leg ORDER
+    // rather than by cache health. The mixed denominator is the one that is stable across
+    // leg order.
+    //
+    // THE GAP AGAINST D5's OWN MOTIVATING CASE, recorded rather than left for review to
+    // find. D5 exists because a 42% miss rate went unread for 11 days; at the measured
+    // enumeration size this rule does not fire at 42% either, so it still does not cover
+    // that case. What covers it is D1 and D2, which removed the accrual that produced it.
+    // This branch's job is to catch a future WORSENING from the measured baseline.
+    //
+    // WHICH BRANCH ACTUALLY FIRES ON A ROTATION, said here because the obvious reading of
+    // the pair -- gate above covers the total case, this one covers the partial -- credits
+    // the gate above with a cause it cannot trip IN THIS WORKFLOW. `ci.yml` runs the
+    // `mirror-seed` step immediately before the `publish` step in the SAME job, so this
+    // leg's own `feed<i><run_id>` seed is written in this run, under the current cache
+    // version, on the default-branch ref: it is enumerated and it always restores. A
+    // cache-VERSION rotation therefore leaves `mirrored >= 1` and the gate above SILENT.
+    // The gate above covers only a read-scope regression wide enough to hide the seed
+    // itself. A reader tuning the threshold must not over-weight a gate that does not
+    // fire.
+    //
+    // NEITHER BRANCH DETECTS A ROTATION WHILE IT IS UNDER WAY, and this paragraph used to
+    // claim this one did. D3's own pre-restore reorder made that false: an entry present in the
+    // shard is SKIPPED with no restore attempted, so a mid-month cache-version rotation's
+    // victims land in `alreadyPresent` rather than in `readMisses`. On this file's own
+    // measured figures (run 31305961054: 112 enumerated, 43 misses, 59 skipped
+    // pre-restore) a full rotation gives roughly 53/112, whose Wilson lower bound lands
+    // near 0.38 -- under the target rate, so THIS branch stays silent too. Both tripwires
+    // silent, `failed` 0, leg GREEN having mirrored only what it wrote itself.
+    //
+    // THE DETECTABLE WINDOW is the first publish against a NEW month shard, where entries
+    // previously skipped as already mirrored are re-attempted and any that can no longer
+    // restore become visible at once -- which is exactly what cause (4) in this branch's
+    // own message already describes.
+    //
+    // Folding `alreadyPresent` into the condition is the obvious repair and is NOT taken
+    // here: whether `alreadyPresent + readMisses === scanned` false-positives on a
+    // healthy run is unmeasured, and the attempted-only denominator -- the other obvious
+    // repair -- was MEASURED firing on both legs of a healthy run. That needs a
+    // measurement against a real publish run, not a judgement call. This correction is
+    // the comment only; the firing condition is untouched.
+    //
+    // AND IT FIRES ON A VERSION SKEW TOO, not only on a rotation, which is the reading
+    // this instruction otherwise sends a reader away from. Where the artifact that WROTE
+    // the entries and the artifact this publish step runs from are different versions of
+    // this action, two cache versions exist in one repository and every entry written by
+    // the OTHER artifact misses -- with no rotation anywhere in the commit range to find.
+    // WHICH IS WHY THE SHAPE LANDS HERE AND NOT ON THE GATE ABOVE, and the distinction is
+    // worth the sentence: entries this run writes through the publish-side artifact still
+    // restore, so `mirrored >= 1` and the total gate stays silent, exactly as the
+    // paragraph above says it does for a rotation. A skew under which EVERY enumerated
+    // entry missed would reach the gate above instead, and this `else if` would be
+    // unreachable -- so a reader must not read this paragraph as "the partial branch owns
+    // every skew". Our own instance of the class is action-bundle drift between
+    // `start-cache-server/index.js` and the `dist/`-built internal action; the consumer's
+    // is a stale pinned ref against a newer install. Same mechanism, same miss shape, and
+    // the message names it in the consumer-general form because a stranger cannot act on
+    // ours.
+    //
+    // THE REVISIT TRIGGER HAS ALREADY FIRED ONCE, which is why the figures above are
+    // measured: it was "the first live post-fix run on the default branch", and that run is
+    // `31305961054`. What remains open is the bare-run-id seed cohort, which D1 cannot
+    // filter and which is still inside the 43. As it evicts, the measured baseline falls
+    // and the rate can be tightened -- from the next measurement, never from an estimate.
+    // Read the observable as `readMisses / scanned` and not as a bare `readMisses`: the
+    // count alone is consistent only at one denominator, and `scanned` moves.
+    //
+    // A WARNING, NEVER A FAILURE: `failed > 0` -> setFailed below is this file's only red
+    // signal and it is reserved for per-item upload faults.
+    const percent = Math.round((readMisses / scanned) * 100);
+
+    // THE MESSAGE IS WRITTEN FOR A STRANGER'S CI LOG, and that is a constraint on its
+    // CONTENT, not a matter of tone. It used to close by instructing the reader to compare
+    // this figure against a specific later reading of THIS repository rather than an
+    // earlier one, on the grounds that the seed filter had moved the denominator between
+    // them. A consumer has that filter in no version of their history and has neither
+    // reading -- the sentence was our own incident record rendered as a stranger's job
+    // log, which `PROJECT.md`'s distribution constraint forbids. The negative assertion in
+    // `publish-mirror.spec.ts` is what stops it returning; the phrases it proves absent
+    // are split there so they are not planted in the file that proves it.
+    //
+    // What survives is only what a reader can act on inside their OWN repository: the
+    // count, the enumeration size, which denominator that proportion is over, and the
+    // causes the sibling gate above already names.
+    //
+    // AND THE LIST IS NO LONGER CLOSED, which is a separate defect from any one missing
+    // item. The retired enumeration asserted a completeness it could not keep: under a
+    // version skew it named a rotation the reader never made while naming nothing that
+    // occurred. A closed list of three would be wrong again on the next careful reading,
+    // so the count is gone and the specifics stayed.
+    //
+    // ONE TRUE CAUSE LEFT THIS MESSAGE UNNOTICED, recorded here because that is the
+    // failure mode a closed list produces. Before `54677af` the closed list named a
+    // self-perpetuating cohort: an entry that MISSES is never mirrored, so it is never in
+    // the shard, so it is re-enumerated and retried on every future run and can never
+    // succeed. That commit removed a sentence leaking this repository's own baselines and
+    // realigned the list to the sibling gate's causes, and the cohort went with it. Read
+    // that as what the diff shows -- the commit message never mentions dropping a cause,
+    // so intent is not established either way.
+    //
+    // IT IS DELIBERATELY NOT RESTORED AS A NUMBERED CAUSE. "not exhaustive" now covers
+    // it, and it is a consequence of any miss rather than an independently actionable
+    // diagnosis for a stranger: knowing the cohort perpetuates itself tells the reader
+    // nothing to change. So the drop goes on the record without paying the consumer-log
+    // cost of a fifth item nobody can act on.
+    core.warning(
+      `github-cache publish: ${readMisses} of ${scanned} server-produced ` +
+        `cache entries (${percent}%) restored as a MISS. That is a proportion of ` +
+        'the entries ENUMERATED on this leg, not of the restores attempted. ' +
+        `${READ_MISS_CAUSES}; (4) the first publish run against a new month ` +
+        'shard, where entries previously skipped as already mirrored are ' +
+        're-attempted, so any of them that can no longer restore become visible ' +
+        'at once and stay counted until they evict.',
+    );
+  }
+}
+
+/**
  * The out-of-band publish/mirror engine (D-02/D-03/D-05/D-11/D-12, TEST-03,
  * ROBUST-01/02/05, TRUST-07, OBS-01). Enumerate default-branch Actions-cache entries,
  * mirror ONLY the server-produced keys via isServerProducedKey (D-16/D-08/TRUST-08),
@@ -803,189 +1020,7 @@ export async function publishMirror(
     }
   }
 
-  // Silent-degradation signal (WARN, not fail): if EVERY enumerated server-produced
-  // entry restored as a MISS and nothing mirrored, the axis is the `@actions/cache`
-  // cache VERSION -- the sha256 over (archive paths | compression method |
-  // ('windows-only') | salt) at cacheUtils.js:157-172, whose FIRST components are the
-  // archive path literals, which is why changing the path rotates the version. That is
-  // a SEPARATE mechanism from the Nx TASK hash and from the Release ASSET NAME, each of
-  // which produces a superficially similar all-MISS through unrelated machinery -- so
-  // the message names the axis rather than saying only "rotation", or a reader
-  // misdiagnoses one of the other two (OBS-04, D-30).
-  //
-  // The alternative cause is an Actions-cache read-scope regression, which looks
-  // identical to "nothing to do" and would otherwise exit green. This STAYS a warning:
-  // a hard fail would break every legitimate rotation window, and a tripwire that fires
-  // on correct work gets disabled (D-28b).
-  //
-  // The expectation for this milestone's rotation was recorded IN ADVANCE, before the
-  // commit that changed the version's input, at
-  // `.planning/phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md`.
-  // Read it before acting on this warning -- it carries the per-leg predicted counts,
-  // the non-triggers, and the bundle-drift signal that looks exactly like this one but
-  // is a defect.
-  //
-  // The message's "entr(y|ies)" counts DISTINCT keys, not enumerated rows, since the
-  // dedup above -- a strict improvement, but the wording shifted meaning silently,
-  // hence this clause.
-  if (hashes.length > 0 && readMisses === hashes.length && mirrored === 0) {
-    core.warning(
-      `github-cache publish: all ${hashes.length} server-produced cache ` +
-        `entr${hashes.length === 1 ? 'y' : 'ies'} restored as a MISS; nothing ` +
-        'mirrored. The axis here is the @actions/cache cache VERSION -- a SEPARATE ' +
-        'mechanism from the Nx TASK hash and from the Release ASSET NAME, each of ' +
-        'which produces a look-alike all-MISS through unrelated machinery. ' +
-        `${READ_MISS_CAUSES}. This is expected ONCE per version-affecting ` +
-        'change. Two consecutive all-miss pushes with NO version-affecting change ' +
-        'in between is the signal to act.',
-    );
-  } else if (
-    readMisses > 0 &&
-    wilsonLowerBound(readMisses, hashes.length) >= PARTIAL_READ_MISS_WARN_RATIO
-  ) {
-    // D5, THE PARTIAL CASE. The gate above fires only on the TOTAL case, which is why it
-    // stayed correctly silent while 42% of entries missed for 11 days across two windows.
-    // This is a strict ADDITION: a lower-threshold sibling that also subsumes the total
-    // case arithmetically, written as an `else if` so exactly ONE of the two can fire and
-    // the total case still reaches its own more specific message first.
-    //
-    // THE RULE IS A LOWER BOUND ON THE MISS PROPORTION, not the proportion itself, and
-    // `PARTIAL_READ_MISS_WARN_RATIO` is the TARGET RATE that bound must reach. See
-    // `wilsonLowerBound` above for why it is a small-sample regulariser and not a
-    // confidence bound. What the regularisation buys is scale invariance: no minimum-N
-    // floor, no constant tuned to any one enumeration size, and silence at small N by
-    // construction rather than by a second threshold.
-    //
-    // THE BASELINE IS MEASURED, not estimated. Run `31305961054` at head `e3bf98b`, both
-    // publish legs, after D1/D2/D3 landed: 43 misses of 112 enumerated on ubuntu-24.04-arm
-    // (38.4%) and 43 of 113 on windows-11-arm (38.1%). The bound at 43/112 is 0.299, so
-    // this branch is SILENT at the healthy steady state, and at that enumeration size the
-    // observed miss proportion has to reach roughly 60% before it fires. Every figure here
-    // carries that run id deliberately: two estimates preceded it and BOTH were wrong, in
-    // opposite directions and by the DENOMINATOR each time -- the miss COUNT of 43 was
-    // right in both. An unlabelled figure in this comment is how that happened.
-    //
-    // THE DENOMINATOR IS DELIBERATELY THE FULL ENUMERATION, `hashes.length`, and this is
-    // the non-obvious choice a future reader will otherwise "fix" to attempted-only
-    // (`scanned - alreadyPresent`), which reads more coherent and is wrong. MEASURED on the
-    // same run, attempted-only gives 43/53 = 0.811 on ubuntu and 43/44 = 0.977 on windows,
-    // so it would fire on BOTH legs of a healthy run. The cause is structural and
-    // permanent: `max-parallel: 1` runs ubuntu first, so the second leg finds nearly
-    // everything already present and its attempted-miss rate is dominated by leg ORDER
-    // rather than by cache health. The mixed denominator is the one that is stable across
-    // leg order.
-    //
-    // THE GAP AGAINST D5's OWN MOTIVATING CASE, recorded rather than left for review to
-    // find. D5 exists because a 42% miss rate went unread for 11 days; at the measured
-    // enumeration size this rule does not fire at 42% either, so it still does not cover
-    // that case. What covers it is D1 and D2, which removed the accrual that produced it.
-    // This branch's job is to catch a future WORSENING from the measured baseline.
-    //
-    // WHICH BRANCH ACTUALLY FIRES ON A ROTATION, said here because the obvious reading of
-    // the pair -- gate above covers the total case, this one covers the partial -- credits
-    // the gate above with a cause it cannot trip IN THIS WORKFLOW. `ci.yml` runs the
-    // `mirror-seed` step immediately before the `publish` step in the SAME job, so this
-    // leg's own `feed<i><run_id>` seed is written in this run, under the current cache
-    // version, on the default-branch ref: it is enumerated and it always restores. A
-    // cache-VERSION rotation therefore leaves `mirrored >= 1` and the gate above SILENT.
-    // The gate above covers only a read-scope regression wide enough to hide the seed
-    // itself. A reader tuning the threshold must not over-weight a gate that does not
-    // fire.
-    //
-    // NEITHER BRANCH DETECTS A ROTATION WHILE IT IS UNDER WAY, and this paragraph used to
-    // claim this one did. D3's own pre-restore reorder made that false: an entry present in the
-    // shard is SKIPPED with no restore attempted, so a mid-month cache-version rotation's
-    // victims land in `alreadyPresent` rather than in `readMisses`. On this file's own
-    // measured figures (run 31305961054: 112 enumerated, 43 misses, 59 skipped
-    // pre-restore) a full rotation gives roughly 53/112, whose Wilson lower bound lands
-    // near 0.38 -- under the target rate, so THIS branch stays silent too. Both tripwires
-    // silent, `failed` 0, leg GREEN having mirrored only what it wrote itself.
-    //
-    // THE DETECTABLE WINDOW is the first publish against a NEW month shard, where entries
-    // previously skipped as already mirrored are re-attempted and any that can no longer
-    // restore become visible at once -- which is exactly what cause (4) in this branch's
-    // own message already describes.
-    //
-    // Folding `alreadyPresent` into the condition is the obvious repair and is NOT taken
-    // here: whether `alreadyPresent + readMisses === hashes.length` false-positives on a
-    // healthy run is unmeasured, and the attempted-only denominator -- the other obvious
-    // repair -- was MEASURED firing on both legs of a healthy run. That needs a
-    // measurement against a real publish run, not a judgement call. This correction is
-    // the comment only; the firing condition is untouched.
-    //
-    // AND IT FIRES ON A VERSION SKEW TOO, not only on a rotation, which is the reading
-    // this instruction otherwise sends a reader away from. Where the artifact that WROTE
-    // the entries and the artifact this publish step runs from are different versions of
-    // this action, two cache versions exist in one repository and every entry written by
-    // the OTHER artifact misses -- with no rotation anywhere in the commit range to find.
-    // WHICH IS WHY THE SHAPE LANDS HERE AND NOT ON THE GATE ABOVE, and the distinction is
-    // worth the sentence: entries this run writes through the publish-side artifact still
-    // restore, so `mirrored >= 1` and the total gate stays silent, exactly as the
-    // paragraph above says it does for a rotation. A skew under which EVERY enumerated
-    // entry missed would reach the gate above instead, and this `else if` would be
-    // unreachable -- so a reader must not read this paragraph as "the partial branch owns
-    // every skew". Our own instance of the class is action-bundle drift between
-    // `start-cache-server/index.js` and the `dist/`-built internal action; the consumer's
-    // is a stale pinned ref against a newer install. Same mechanism, same miss shape, and
-    // the message names it in the consumer-general form because a stranger cannot act on
-    // ours.
-    //
-    // THE REVISIT TRIGGER HAS ALREADY FIRED ONCE, which is why the figures above are
-    // measured: it was "the first live post-fix run on the default branch", and that run is
-    // `31305961054`. What remains open is the bare-run-id seed cohort, which D1 cannot
-    // filter and which is still inside the 43. As it evicts, the measured baseline falls
-    // and the rate can be tightened -- from the next measurement, never from an estimate.
-    // Read the observable as `readMisses / scanned` and not as a bare `readMisses`: the
-    // count alone is consistent only at one denominator, and `scanned` moves.
-    //
-    // A WARNING, NEVER A FAILURE: `failed > 0` -> setFailed below is this file's only red
-    // signal and it is reserved for per-item upload faults.
-    const percent = Math.round((readMisses / hashes.length) * 100);
-
-    // THE MESSAGE IS WRITTEN FOR A STRANGER'S CI LOG, and that is a constraint on its
-    // CONTENT, not a matter of tone. It used to close by instructing the reader to compare
-    // this figure against a specific later reading of THIS repository rather than an
-    // earlier one, on the grounds that the seed filter had moved the denominator between
-    // them. A consumer has that filter in no version of their history and has neither
-    // reading -- the sentence was our own incident record rendered as a stranger's job
-    // log, which `PROJECT.md`'s distribution constraint forbids. The negative assertion in
-    // `publish-mirror.spec.ts` is what stops it returning; the phrases it proves absent
-    // are split there so they are not planted in the file that proves it.
-    //
-    // What survives is only what a reader can act on inside their OWN repository: the
-    // count, the enumeration size, which denominator that proportion is over, and the
-    // causes the sibling gate above already names.
-    //
-    // AND THE LIST IS NO LONGER CLOSED, which is a separate defect from any one missing
-    // item. The retired enumeration asserted a completeness it could not keep: under a
-    // version skew it named a rotation the reader never made while naming nothing that
-    // occurred. A closed list of three would be wrong again on the next careful reading,
-    // so the count is gone and the specifics stayed.
-    //
-    // ONE TRUE CAUSE LEFT THIS MESSAGE UNNOTICED, recorded here because that is the
-    // failure mode a closed list produces. Before `54677af` the closed list named a
-    // self-perpetuating cohort: an entry that MISSES is never mirrored, so it is never in
-    // the shard, so it is re-enumerated and retried on every future run and can never
-    // succeed. That commit removed a sentence leaking this repository's own baselines and
-    // realigned the list to the sibling gate's causes, and the cohort went with it. Read
-    // that as what the diff shows -- the commit message never mentions dropping a cause,
-    // so intent is not established either way.
-    //
-    // IT IS DELIBERATELY NOT RESTORED AS A NUMBERED CAUSE. "not exhaustive" now covers
-    // it, and it is a consequence of any miss rather than an independently actionable
-    // diagnosis for a stranger: knowing the cohort perpetuates itself tells the reader
-    // nothing to change. So the drop goes on the record without paying the consumer-log
-    // cost of a fifth item nobody can act on.
-    core.warning(
-      `github-cache publish: ${readMisses} of ${hashes.length} server-produced ` +
-        `cache entries (${percent}%) restored as a MISS. That is a proportion of ` +
-        'the entries ENUMERATED on this leg, not of the restores attempted. ' +
-        `${READ_MISS_CAUSES}; (4) the first publish run against a new month ` +
-        'shard, where entries previously skipped as already mirrored are ' +
-        're-attempted, so any of them that can no longer restore become visible ' +
-        'at once and stay counted until they evict.',
-    );
-  }
+  warnOnReadMisses(readMisses, hashes.length, mirrored);
 
   // OBS-01/D-15: fail the run loud on any aggregate per-item failure, mirroring
   // cleanupMirror. Per-item faults are isolated (D-13) so the batch still completes,

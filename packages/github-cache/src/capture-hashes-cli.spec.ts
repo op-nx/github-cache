@@ -227,11 +227,15 @@ describe('capture-hashes.mjs --diff localises a projectConfiguration divergence 
     );
 
     expect(result.status).toBe(0);
+    // ONE ORDERED MATCH, not a count and a key asserted independently. Separately, each
+    // half is satisfiable from a different part of the output: the `(1)` could be the
+    // count of some other partition while `targets.typecheck.outputs` appeared under
+    // `value-changed`, and the case would still pass. The count has to be followed by the
+    // key it is counting.
     expect(
       result.stdout,
-      'An empty container must flatten to a KEY. Emitting nothing for it makes it indistinguishable from an absent key, so the partition answers "no difference" for two nodes that genuinely differ and genuinely moved the hash -- and sends the operator looking at every field except the one that moved.',
-    ).toContain('targets.typecheck.outputs');
-    expect(result.stdout).toContain('only-in-A (1)');
+      'An empty container must flatten to a KEY, and that key must be what the only-in-A count is counting. Emitting nothing for it makes it indistinguishable from an absent key, so the partition answers "no difference" for two nodes that genuinely differ and genuinely moved the hash -- and sends the operator looking at every field except the one that moved.',
+    ).toMatch(/only-in-A \(1\)[\s\S]*?targets\.typecheck\.outputs/);
   });
 
   it('distinguishes an empty ARRAY from an empty OBJECT rather than conflating them', () => {

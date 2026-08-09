@@ -807,12 +807,15 @@ export async function publishMirror(
         `entr${hashes.length === 1 ? 'y' : 'ies'} restored as a MISS; nothing ` +
         'mirrored. The axis here is the @actions/cache cache VERSION -- a SEPARATE ' +
         'mechanism from the Nx TASK hash and from the Release ASSET NAME, each of ' +
-        'which produces a look-alike all-MISS through unrelated machinery. Two ' +
-        'candidate causes: (1) a cache-version rotation in this commit range -- the ' +
-        'archive path literal or the cross-OS flag changed; (2) the runtime ' +
-        "token's Actions-cache read scope. This is expected ONCE per " +
-        'version-affecting change. Two consecutive all-miss pushes with NO ' +
-        'version-affecting change in between is the signal to act.',
+        'which produces a look-alike all-MISS through unrelated machinery. Causes ' +
+        'worth checking, and this list is not exhaustive: (1) a cache-version ' +
+        'rotation in this commit range -- the archive path literal or the cross-OS ' +
+        'flag changed; (2) the sidecar that wrote these entries and this publish ' +
+        'step running at different versions of this action, which computes two ' +
+        "cache versions in one repository; (3) the runtime token's Actions-cache " +
+        'read scope. This is expected ONCE per version-affecting change. Two ' +
+        'consecutive all-miss pushes with NO version-affecting change in between ' +
+        'is the signal to act.',
     );
   } else if (
     readMisses > 0 &&
@@ -867,6 +870,17 @@ export async function publishMirror(
     // read-scope regression wide enough to hide the seed itself. A reader tuning the
     // threshold must not over-weight a gate that does not fire.
     //
+    // AND IT FIRES ON A VERSION SKEW TOO, not only on a rotation, which is the reading
+    // this instruction otherwise sends a reader away from. Where the artifact that WROTE
+    // the entries and the artifact this publish step runs from are different versions of
+    // this action, the two compute different cache versions in one repository and every
+    // enumerated entry misses -- with no rotation anywhere in the commit range to find.
+    // Our own instance of that class is action-bundle drift between
+    // `start-cache-server/index.js` and the `dist/`-built internal action; the consumer's
+    // is a stale pinned ref against a newer install. Same mechanism, same miss shape, and
+    // the message names it in the consumer-general form because a stranger cannot act on
+    // ours.
+    //
     // THE REVISIT TRIGGER HAS ALREADY FIRED ONCE, which is why the figures above are
     // measured: it was "the first live post-fix run on the default branch", and that run is
     // `31305961054`. What remains open is the bare-run-id seed cohort, which D1 cannot
@@ -890,15 +904,41 @@ export async function publishMirror(
     // are split there so they are not planted in the file that proves it.
     //
     // What survives is only what a reader can act on inside their OWN repository: the
-    // count, the enumeration size, which denominator that proportion is over, and the two
-    // candidate causes the sibling gate above already names.
+    // count, the enumeration size, which denominator that proportion is over, and the
+    // causes the sibling gate above already names.
+    //
+    // AND THE LIST IS NO LONGER CLOSED, which is a separate defect from any one missing
+    // item. The retired enumeration asserted a completeness it could not keep: under a
+    // version skew it named a rotation the reader never made while naming nothing that
+    // occurred. A closed list of three would be wrong again on the next careful reading,
+    // so the count is gone and the specifics stayed.
+    //
+    // ONE TRUE CAUSE LEFT THIS MESSAGE UNNOTICED, recorded here because that is the
+    // failure mode a closed list produces. Before `54677af` the closed list named a
+    // self-perpetuating cohort: an entry that MISSES is never mirrored, so it is never in
+    // the shard, so it is re-enumerated and retried on every future run and can never
+    // succeed. That commit removed a sentence leaking this repository's own baselines and
+    // realigned the list to the sibling gate's causes, and the cohort went with it. Read
+    // that as what the diff shows -- the commit message never mentions dropping a cause,
+    // so intent is not established either way.
+    //
+    // IT IS DELIBERATELY NOT RESTORED AS A NUMBERED CAUSE. "not exhaustive" now covers
+    // it, and it is a consequence of any miss rather than an independently actionable
+    // diagnosis for a stranger: knowing the cohort perpetuates itself tells the reader
+    // nothing to change. So the drop goes on the record without paying the consumer-log
+    // cost of a fifth item nobody can act on.
     core.warning(
       `github-cache publish: ${readMisses} of ${hashes.length} server-produced ` +
         `cache entries (${percent}%) restored as a MISS. That is a proportion of ` +
-        'the entries ENUMERATED on this leg, not of the restores attempted. Two ' +
-        'candidate causes: (1) a cache-version rotation in this commit range -- the ' +
-        'archive path literal or the cross-OS flag changed; (2) the runtime ' +
-        "token's Actions-cache read scope.",
+        'the entries ENUMERATED on this leg, not of the restores attempted. Causes ' +
+        'worth checking, and this list is not exhaustive: (1) a cache-version ' +
+        'rotation in this commit range -- the archive path literal or the cross-OS ' +
+        'flag changed; (2) the sidecar that wrote these entries and this publish ' +
+        'step running at different versions of this action, which computes two ' +
+        "cache versions in one repository; (3) the runtime token's Actions-cache " +
+        'read scope; (4) the first publish run against a new month shard, where ' +
+        'entries previously skipped as already mirrored are re-attempted and a ' +
+        'one-time rise is expected.',
     );
   }
 

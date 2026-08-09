@@ -1251,7 +1251,7 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
     );
   });
 
-  it('names the cache-VERSION axis, both candidate causes, and the two-push gate (OBS-04, D-27, D-28b, C-10)', async () => {
+  it('names the cache-VERSION axis, the causes worth checking, and the two-push gate (OBS-04, D-27, D-28b, C-10)', async () => {
     getMock.mockResolvedValue(MISS);
     const fake = client();
 
@@ -1277,11 +1277,13 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
     expect(core.warning).toHaveBeenCalledWith(
       expect.stringContaining('Release ASSET NAME'),
     );
-    // Cause 1 (D-27): the archive path literal or the cross-OS flag moved.
+    // The rotation cause (D-27): the archive path literal or the cross-OS flag moved.
+    // Named without its ordinal deliberately -- the list is no longer closed, so a
+    // position in it is not a stable identifier for the cause.
     expect(core.warning).toHaveBeenCalledWith(
       expect.stringContaining('cache-version rotation in this commit range'),
     );
-    // Cause 2 (D-27), the one that survives from the pre-Phase-9 message.
+    // The read-scope cause (D-27), the one that survives from the pre-Phase-9 message.
     expect(core.warning).toHaveBeenCalledWith(
       expect.stringContaining("runtime token's Actions-cache read scope"),
     );

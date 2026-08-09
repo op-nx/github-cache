@@ -993,7 +993,7 @@ jobs:
       # disabled. The reader above prints the structured cacheStatus value, which is the
       # remote-vs-local discrimination this count cannot make (D-24).
       #
-      # Four mechanics. The matrix value reaches the script through env: and is never
+      # Five mechanics. The matrix value reaches the script through env: and is never
       # interpolated into the run: body, so it never lands on a command line the shell
       # re-parses. The label is matched as a FIXED string, because square brackets are a
       # regex character class. OCCURRENCES are counted with an -o match piped into
@@ -1001,13 +1001,21 @@ jobs:
       # grep exits 1 on no match, which under pipefail would abort the leg on the very
       # outcome that is expected here -- hence the tolerant brace group INSIDE the
       # pipeline, so a legitimate zero prints 0 instead of reddening the leg.
+      #
+      # `-a` is the fifth, and it matches the three windows legs, which carry the full
+      # measurement. One NUL byte in the tee'd log -- routine for PowerShell-invoked
+      # tooling on windows-11-arm -- makes grep report `Binary file ... matches` as a
+      # SINGLE line, so wc -l returns 1 on ZERO real labels. This step is RECORDED and
+      # not gated, so it cannot launder a gate; but the Windows leg's recorded 0 is the
+      # observation the whole O3 narrative rests on, and that same byte would record a 1.
+      # Evidence corruption is the harm here, not a false green.
       - name: Record the remote-cache label occurrence count for this leg
         shell: bash
         env:
           LEG_OS: ${{ matrix.os }}
         run: |
           set -euo pipefail
-          count=$({ grep -o -F '[remote cache]' integration-nx.log || true; } | wc -l | tr -d '[:space:]')
+          count=$({ grep -a -o -F '[remote cache]' integration-nx.log || true; } | wc -l | tr -d '[:space:]')
           echo "remote-cache label occurrences on ${LEG_OS}: ${count} -- RECORDED, never gated"
       # D-16's positive control, and it asks a DIFFERENT question from the readiness poll
       # above, with a DIFFERENT acceptance set:
@@ -2160,21 +2168,31 @@ jobs:
           server="${NX_SELF_HOSTED_REMOTE_CACHE_SERVER:?NX_SELF_HOSTED_REMOTE_CACHE_SERVER not set (pre-set regular step missing?)}"
           token="${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN:?NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN not set (pre-set regular step missing?)}"
           auth="Authorization: Bearer ${token}"
-          # Wait for the loopback sidecar to accept connections: an authed GET on
-          # an unknown hash returns 404 (up). On connection-refused, curl's -w
-          # already prints 000 and exits non-zero, so swallow the exit with `|| true`
-          # -- NOT `|| echo 000`, which appends a second 000 so code becomes "000000"
-          # (!= "000") and breaks the poll on iteration 1 before the server binds.
+          # Wait for the loopback sidecar: the SAME 404-or-200 acceptance set the six
+          # Nx-target jobs use, and the same --max-time bound. This copy was the last
+          # holdout on the loose `!= "000"` form, which every other poll in this file
+          # was moved off precisely because it ACCEPTS A 401 -- a token-handshake
+          # mismatch, the one failure a readiness poll is best placed to catch, after
+          # which the round-trip below would fail with the cause named nowhere. Leaving
+          # it here also left two contradictory idioms in one file with the rejected
+          # one still present as a copy source.
+          #
+          # On connection-refused, curl's -w already prints 000 and exits non-zero, so
+          # swallow the exit with `|| true` -- NEVER `|| echo 000`, which appends a
+          # second 000 and makes the status unparseable. --max-time bounds EACH ATTEMPT
+          # at 10s (this copy previously had no bound at all, so one hung response could
+          # stall the step), which puts the loop's worst case at 30 x (10 + 1) = ~5.5
+          # min rather than 30s -- still under this job's timeout.
           code=000
           for _ in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -H "${auth}" "${server}/v1/cache/deadbeef" || true)
-            if [ "${code}" != "000" ]; then
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' -H "${auth}" "${server}/v1/cache/deadbeef" || true)
+            if [ "${code}" = "404" ] || [ "${code}" = "200" ]; then
               break
             fi
             sleep 1
           done
-          if [ "${code}" = "000" ]; then
-            echo "sidecar never accepted connections on ${server} after 30s" >&2
+          if [ "${code}" != "404" ] && [ "${code}" != "200" ]; then
+            echo "sidecar never answered 404 or 200 on ${server} (last status ${code}); a 401 means the token handshake, not the port, is the problem" >&2
             exit 1
           fi
           # PUT a payload keyed on the marker-prefixed run id (hex letters keep it

@@ -257,7 +257,8 @@ jobs:
     # a cancel: step is NOT subject to skip-on-failure -- measured on run
     # 30172032003, where a probe job with a failing step and a bare `cancel:` ran
     # the cancel (conclusion success), tore the sidecar down, and went red in 8s.
-    # README.md:84's hang warning is about OMITTING cancel:, which is a different
+    # README.md's hang warning, in its background-step lifecycle section, is about
+    # OMITTING cancel:, which is a different
     # thing. This bound only caps a genuine hang (a stalled npm ci, a wedged
     # vitest) at minutes instead of the 360-minute default.
     timeout-minutes: 15
@@ -1558,14 +1559,17 @@ jobs:
   # pair. Every job in this file that STILL carries that gate does so because it WRITES
   # (publishes a release asset, round-trips through a write-trusted sidecar) or because
   # it reads back something only the push path produces (publish-verify, which is itself
-  # read-only). This one only measures. Same rule the read-side jobs state at :170-172.
+  # read-only). This one only measures. Same rule the read-side proof jobs state in the
+  # dogfood pair's NOT push-gated paragraph.
   #
-  # fail-fast: false carries a SECOND reason here on top of the one at :392-393 ("so
+  # fail-fast: false carries a SECOND reason here on top of the one on the `integration`
+  # job ("so
   # a Windows-only failure never hides the Ubuntu result"): with fail-fast ON, a
   # Windows leg failure CANCELS the Ubuntu leg, and 08-06's compare job then reports
   # "fewer than two records" for a reason that has nothing to do with hash parity.
   #
-  # shell: bash on the capture step, for the reason recorded at :399-404 -- GitHub's
+  # shell: bash on the capture step, for the reason recorded on the `integration` job --
+  # GitHub's
   # DEFAULT shell on windows-11-arm is pwsh, which fails on the constructs this
   # file's scripted steps use. A bare `- run:` with no shell key inherits pwsh there.
   #
@@ -1576,16 +1580,18 @@ jobs:
   # block out removes an entire class of flake from a measurement that has to be
   # trusted.
   #
-  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full at :943-946: such a
-  # block REPLACES the workflow grant WHOLESALE rather than merging it, so adding one
-  # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
-  # covers checkout plus an artifact upload, and this job requests no secret.
+  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full on the `o3-witness`
+  # job: such a block REPLACES the workflow grant WHOLESALE rather than merging it, so
+  # adding one "to be explicit" silently drops scopes. The workflow-level `permissions:
+  # contents: read` at the top of this file covers checkout plus an artifact upload, and
+  # this job requests no secret.
   #
   # BUILD STEP, added by plan 08-05 and REPLACING a documented no-build design. The
   # original rationale is re-stated here rather than quietly reversed, because it was
   # half right and the half that was right still constrains this job.
   #
-  # It read: typecheck declares a dependentTasksOutputFiles input (nx.json:137) which
+  # It read: typecheck declares a dependentTasksOutputFiles input (nx.json's
+  # targetDefaults.typecheck.inputs) which
   # hashes the CONTENT of packages/github-cache/dist/, so a leg that built hashes a
   # populated directory while a leg that did not hashes an empty one; both legs must
   # be IDENTICAL in that respect, and "neither builds" is the identical option that
@@ -1799,7 +1805,8 @@ jobs:
   # `build`, `typecheck`, `test` and `lint` IDENTICAL between them. Note the sign on
   # `integration`: a MATCHING integration hash is a discriminator FAILURE, not a
   # parity success, because that target is the only one declaring a platform runtime
-  # input (nx.json:101, D-14). `lint` is the FOURTH invariant target rather than a
+  # input (nx.json's targetDefaults.integration.inputs, D-14). `lint` is the FOURTH
+  # invariant target rather than a
   # recorded observation -- D-21's PRIMARY branch, taken because plan 08-05 measured
   # `lint` byte-identical across both legs (6930879416208693542 on each). D-21's
   # named fallback (downgrade the clause to a recorded finding) therefore does NOT
@@ -1817,8 +1824,8 @@ jobs:
   # unreachable if the compare job simply skips alongside its dead upstream. The two
   # forms differ on exactly one case -- cancellation -- and a cancelled run producing
   # a red gate is noise, not signal. `!cancelled()` covers failure and skip, and it
-  # is ALREADY this file's house form for a dependent job (`publish` at :926 uses
-  # exactly it). So the narrower expression satisfies D-17's intent and matches
+  # is ALREADY this file's house form for a dependent job (the `publish` job's own `if:`
+  # uses exactly it). So the narrower expression satisfies D-17's intent and matches
   # precedent at the same time.
   #
   # The if: expression governs whether this job RUNS. NOTHING in it may govern
@@ -1836,20 +1843,22 @@ jobs:
   # (`publish-verify` needs `publish`). A reader looking for an in-repo precedent for
   # the fan-in shape should read this sentence rather than go looking: there is none.
   #
-  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full at :943-946: such a
-  # block REPLACES the workflow grant WHOLESALE rather than merging it, so adding one
-  # "to be explicit" silently drops scopes. The workflow-level contents: read (:9-10)
-  # covers checkout plus an artifact download, and this job requests no secret.
+  # NO JOB-LEVEL permissions BLOCK, for the trap recorded in full on the `o3-witness`
+  # job: such a block REPLACES the workflow grant WHOLESALE rather than merging it, so
+  # adding one "to be explicit" silently drops scopes. The workflow-level `permissions:
+  # contents: read` at the top of this file covers checkout plus an artifact download,
+  # and this job requests no secret.
   #
   # NO EVENT GATE. Every job in this file STILL carrying `if: github.event_name ==
   # 'push'` does so because it WRITES (publishes a release asset, round-trips through a
   # write-trusted sidecar) or because it reads back something only the push path
   # produces (publish-verify, which is itself read-only). This one only reads and
-  # asserts -- same rule the read-side jobs state at :170-172. A gate that only runs on
+  # asserts -- same rule the read-side proof jobs state in the dogfood pair's NOT
+  # push-gated paragraph. A gate that only runs on
   # the default branch is not a gate on a pull request.
   #
-  # CHECKOUT REF pinned to the PR head SHA, as in the capture job (see its CHECKOUT
-  # REF paragraph at :525-535 for the full reasoning). The narrower reason HERE: the
+  # CHECKOUT REF pinned to the PR head SHA, as in the capture job (see the CHECKOUT REF
+  # paragraph on the `hash-parity` job for the full reasoning). The narrower reason HERE: the
   # records were captured from the branch tree, so the comparator that judges them
   # must be the branch's comparator. On a default merge-commit checkout, a clause
   # WEAKENED on the default branch would silently judge this branch's records -- a
@@ -1858,8 +1867,8 @@ jobs:
   #
   # THE BUILD STEP IS MANDATORY and easy to forget: the comparator is TypeScript, so
   # dist/hash-parity/assert-parity.js does not exist until `npm run build` has run,
-  # and without it the step fails for the wrong reason. pack-check (:121-131, reason
-  # spelled out at :119-120) and publish-verify (:1043-1050) carry the same
+  # and without it the step fails for the wrong reason. The `pack-check` job (whose own
+  # comment spells out the reason) and the `publish-verify` job carry the same
   # build-then-run ordering.
   #
   # RECORDS DIRECTORY CREATED BEFORE THE DOWNLOAD, so the loader always has a
@@ -1876,7 +1885,7 @@ jobs:
   # the step under pipefail. The grep is the SECOND: it asserts the comparison
   # actually RAN and PRINTED its verdict, rather than the step succeeding because the
   # bin was absent, the directory was empty in a way the loader tolerated, or a future
-  # refactor turned the assertion into a no-op. The `lint` job at :66-72 is the exact
+  # refactor turned the assertion into a no-op. The `lint` job is the exact
   # precedent and its comment is this file's statement of the rule; Phase 7's
   # measurement that `nx run-many -t <missing>` prints "No tasks were run" and exits 0
   # is why the precedent exists. Unlike that job this one needs NO NO_COLOR: the
@@ -2140,7 +2149,7 @@ jobs:
           # core.setSecret runs far too late -- it only redacts once the action
           # step starts, so anything echoing the value between here and there would
           # land unredacted. ::add-mask:: redacts from the moment it is processed.
-          # node, not openssl -- same reasoning as the build job (see :179-182).
+          # node, not openssl -- same reasoning as the build job's own pre-set step.
           token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
           echo "::add-mask::${token}"
           echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
@@ -2318,8 +2327,12 @@ jobs:
   #   MEASURED on run 30400231720, which is why this widening is a fix and not a precaution:
   #   publish (ubuntu-24.04-arm) enumerated the Actions cache about 122 seconds BEFORE
   #   integration (windows-11-arm) finished, so the Windows integration entry did not exist yet
-  #   when the enumeration snapshot was taken -- and the shard carries the fingerprint, task
-  #   hash 8059758544828235640 present ONLY under a -windows suffix. Each leg's view of the
+  #   when the enumeration snapshot was taken -- and the shard carried the fingerprint, task
+  #   hash 8059758544828235640 present ONLY under a -windows suffix. THAT FINGERPRINT IS
+  #   PRE-CORR-02 AND IS NO LONGER REPRODUCIBLE AS AN INSTRUCTION: the OS suffix was removed
+  #   from the asset name in this same milestone, so a shard today holds `nx-cache-<hash>`
+  #   with the OS in the `mirrored-by` label instead. The measurement stays a true historical
+  #   fact; to check the equivalent today, read the label rather than the name. Each leg's view of the
   #   Actions-cache key set is ONE listCacheEntries() call taken at that leg's publish step
   #   start and is never re-read (the `const entries` line in publish-mirror.ts), so what a leg
   #   can mirror is a function of its START TIME. Waiting on every producer is what makes one

@@ -256,21 +256,33 @@ describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
  * built for one caller, which 10-RESEARCH's Don't-Hand-Roll table names as the smell. So the
  * guard comes to the helper rather than the helper going to the guard.
  *
- * THE SUPERSET HOLE, and how the shape below closes it. A `toMatch` against a `needs:` LIST is
- * satisfied by any SUPERSET, so one assertion looking for `integration` would still pass
- * against `needs: [integration]` alone -- against a rewrite that DROPPED `build`. Each of the
- * four producers therefore gets its own case, `build` INCLUDED: the `build`-SURVIVES clause is
- * not decoration, it is the half a naive check structurally cannot express. Four separate cases
- * rather than four `expect`s in one, so the revert-to-`needs: build` mutation shows its 3-of-4
- * split instead of stopping at the first failure.
+ * TWO HOLES, and why the shape below is ONE exact pin rather than four member checks.
+ *
+ * The first is the SUPERSET hole: a `toMatch` against a `needs:` LIST is satisfied by any
+ * superset, so a single assertion looking for `integration` still passes against
+ * `needs: [integration]` alone -- against a rewrite that DROPPED `build`. A per-member split
+ * closes that one, and did.
+ *
+ * The second is the SUBSTRING hole, and a per-member split structurally cannot close it.
+ * `\bbuild\b` matches inside `build-windows`, which XOS-04 introduced to this same file. So
+ * rewriting the list to the three `*-windows` jobs kept all four member clauses GREEN while
+ * dropping every real producer -- precisely the race this describe exists to prevent, passing
+ * its own guard. Word boundaries do not help: every producer name is a prefix of a job that now
+ * exists.
+ *
+ * The list is short, closed and load-bearing, so it is pinned WHOLE: indentation, order and
+ * members exact. An exact pin is not inhabitable by a superset or by a longer job name, and it
+ * makes any edit to the list a deliberate edit to this guard. The cost is that the four-member
+ * split's 3-of-4 failure readout is gone -- the assertion message below carries the full list
+ * instead, so a reader of a red run still learns which producers are required.
  *
  * Note the direction differs from every other clause in this file: `dogfood-cross-os` otherwise
  * asserts a job's shape is NARROW (the single-leg seed), and that direction inherits safety from
- * a non-vacuity control alone. Asserting a list is WIDE does not, which is why the per-member
- * split exists on top of the control.
+ * a non-vacuity control alone. Asserting a list is WIDE does not, which is why the exact pin
+ * exists on top of the control.
  *
- * Each pattern is anchored at `^ {4}needs:` -- a job's own keys sit one level under the
- * two-space job key -- so the token must appear ON the `needs:` line. Unanchored, `\bbuild\b`
+ * The pattern is anchored at `^ {4}needs:` -- a job's own keys sit one level under the
+ * two-space job key -- so the list must be the `needs:` line itself. Unanchored, `\bbuild\b`
  * would already be satisfied by this same job's `- run: npm run build` step and the guard would
  * be a tautology.
  *
@@ -322,10 +334,11 @@ describe('ci.yml publish waits on every job that produces a NEW mirrored key (XO
     'their ubuntu producer and on the happy path they HIT and write no NEW key. A Windows leg ' +
     'that MISSED would write one publish could race -- accepted, because that divergence is ' +
     'itself the regression hash-parity-compare and the scheduled detector exist to catch, and ' +
-    'the cost is a mirror entry deferred to the next push rather than a wrong artifact. Each ' +
-    'producer is asserted SEPARATELY because a toMatch against a needs: list is satisfied by ' +
-    'any SUPERSET: a check for `integration` alone would pass against needs: [integration], ' +
-    'which dropped build.';
+    'the cost is a mirror entry deferred to the next push rather than a wrong artifact. The ' +
+    'list is pinned WHOLE rather than member by member: a toMatch against a needs: list is ' +
+    'satisfied by any SUPERSET, and a per-member \\bbuild\\b is satisfied by the SUBSTRING in ' +
+    'build-windows, so a rewrite to the three windows legs passed a four-member split while ' +
+    'dropping every real producer.';
 
   // POSITIVE CONTROL, and it comes first for the same reason the two controls above do. Every
   // clause below is a `toMatch`, so a `jobBlock` that returned the WRONG non-empty block would
@@ -356,21 +369,9 @@ describe('ci.yml publish waits on every job that produces a NEW mirrored key (XO
     ).toMatch(/^ {4}if:.*&&\s*!github\.event\.forced\s*\}\}$/m);
   });
 
-  it('waits on build -- the SURVIVES clause, which a superset check cannot express', () => {
-    expect(jobBlock('publish'), reason).toMatch(/^ {4}needs:.*\bbuild\b/m);
-  });
-
-  it('waits on typecheck', () => {
-    expect(jobBlock('publish'), reason).toMatch(/^ {4}needs:.*\btypecheck\b/m);
-  });
-
-  it('waits on test', () => {
-    expect(jobBlock('publish'), reason).toMatch(/^ {4}needs:.*\btest\b/m);
-  });
-
-  it('waits on integration -- the two-leg matrix, so both OS legs finish first', () => {
+  it('waits on EXACTLY [build, typecheck, test, integration] -- the whole list, pinned', () => {
     expect(jobBlock('publish'), reason).toMatch(
-      /^ {4}needs:.*\bintegration\b/m,
+      /^ {4}needs: \[build, typecheck, test, integration\]$/m,
     );
   });
 

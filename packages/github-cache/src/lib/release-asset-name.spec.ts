@@ -122,7 +122,15 @@ describe('isServerProducedAssetName accepts BOTH name families (RETAIN-04)', () 
   // The LEGACY entries below are the pre-rename accept set, UNCHANGED. That is the
   // point of listing them rather than replacing them: RETAIN-04's widening must be
   // purely ADDITIVE, so every name the single-branch filter accepted has to still
-  // be accepted or the 122 already-published assets stop being prunable.
+  // be accepted.
+  //
+  // It pins DEFENCE-IN-DEPTH, not a live pruning path -- this comment used to justify
+  // the rows by the already-published assets staying prunable, which the legacy branch
+  // cannot deliver. The shard-tag prefix rename made those shards unreadable and
+  // unprunable and they were removed by hand; cleanup scopes on the new shard-tag
+  // pattern, so it never visits an old-prefix release. The rows stay because the
+  // accept set must not silently narrow, which is a claim about the FILTER and needs no
+  // surviving population to be worth pinning.
   it.each([
     // CURRENT shape (the new branch).
     'nx-cache-abc123',
@@ -160,7 +168,9 @@ describe('isServerProducedAssetName accepts BOTH name families (RETAIN-04)', () 
     `${CACHE_KEY_PREFIX}${'a'.repeat(513)}`,
     // The PoC-era family. Deliberately NOT admitted by either branch (D-08): the
     // shape is indistinguishable from a foreign asset dropped into a genuine shard,
-    // so its 50 shipped instances are accepted dead weight, not a third branch.
+    // so admitting it would widen a DELETE filter narrowed on security grounds. Its
+    // shipped instances lived in the pre-rename shards that were hand-removed, so a
+    // third branch would have nothing to reach either.
     'abc123.tar.gz',
   ])('rejects the non-server-produced name %s', (name) => {
     expect(isServerProducedAssetName(name)).toBe(false);

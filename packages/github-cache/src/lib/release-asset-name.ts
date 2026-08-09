@@ -6,12 +6,21 @@ import { CACHE_KEY_PREFIX, HASH_PATTERN, type Hash } from './cache-key.js';
  * asset is validated against a real value set rather than a second copy of the
  * literals; `CacheOs` derives from it.
  *
- * INTENTIONALLY KEPT after CORR-02 removed the OS from the name. Its live consumer
- * is `isLegacyOsSuffixedAssetName` below -- the cleanup accept filter's legacy
- * branch, which is the ONLY thing that can still prune the 122 assets already
- * published under the old shape. `fallow dead-code --fail-on-issues` gates this repo
- * in CI, so this annotation is what tells that gate (and the next reader) the
- * survival is deliberate and not leftovers.
+ * INTENTIONALLY KEPT after CORR-02 removed the OS from the name, and it has TWO live
+ * consumers, not one. Naming only the weaker of them is what makes an annotation a
+ * latent deletion, so both are named:
+ *
+ *   1. `mirror-seed.ts` imports this tuple as a VALUE and evaluates
+ *      `CACHE_OS_VALUES.indexOf(os)` at RUNTIME to derive the per-leg mirror seed.
+ *      That module says so at its own site ("The runtime edge to CACHE_OS_VALUES is
+ *      DELIBERATE"). This is the LOAD-BEARING consumer: the tuple's ORDER is part of
+ *      the seed encoding, so it cannot be reordered or re-authored as a type.
+ *   2. `isLegacyOsSuffixedAssetName` below -- the cleanup accept filter's legacy
+ *      branch -- validates the OS half of an already-published `<hash>-<os>` name
+ *      against it. See that function for what the branch actually covers.
+ *
+ * `fallow dead-code --fail-on-issues` gates this repo in CI, so this annotation is
+ * what tells that gate (and the next reader) the survival is deliberate.
  */
 export const CACHE_OS_VALUES = ['windows', 'macos', 'linux'] as const;
 
@@ -25,13 +34,24 @@ export type CacheOs = (typeof CACHE_OS_VALUES)[number];
  * absent locally.
  *
  * INTENTIONALLY KEPT after CORR-02, and for a DIFFERENT reason than the tuple
- * above. Its live consumer is OBS-03's `mirrored-by: <os>` Release LABEL, built in
- * publish-mirror.ts: with the OS gone from the name, the label is the one piece of
- * OS attribution the mirror still carries, and it names the PUBLISHING leg -- never
- * the producing one. `fallow dead-code --fail-on-issues` is a real CI gate here, so
- * an unexplained survivor is a build failure rather than a style note. RETAIN-04
- * names only the tuple; this mapper needs the same annotation for the same reason
- * and no requirement says so, which is why it is spelled out here.
+ * above. It has FIVE call sites across three modules, not the one this annotation
+ * used to name -- verified by grep, and worth listing because an under-named
+ * annotation is a latent deletion:
+ *
+ *   - `publish-mirror.ts` builds OBS-03's `mirrored-by: <os>` Release LABEL from it.
+ *     With the OS gone from the name, that label is the one piece of OS attribution
+ *     the mirror still carries, and it names the PUBLISHING leg -- never the
+ *     producing one.
+ *   - `action/index.ts` calls it FOUR times: the dogfood seed body's producer stamp,
+ *     the mirror-seed leg's producer binding, and twice in the verify branch's
+ *     diagnostics.
+ *   - `roundtrip/read-back.ts` binds it once as the reader leg's own OS, which is
+ *     half of the seed key that leg looks up.
+ *
+ * `fallow dead-code --fail-on-issues` is a real CI gate here, so an unexplained
+ * survivor is a build failure rather than a style note. RETAIN-04 names only the
+ * tuple; this mapper needs the same annotation for the same reason and no
+ * requirement says so, which is why it is spelled out here.
  */
 export function cachePlatform(
   platform: NodeJS.Platform = process.platform,
@@ -119,17 +139,30 @@ export function isCurrentAssetName(name: string): boolean {
  *
  * The pre-rename filter's body, preserved VERBATIM under a new name. That verbatim
  * preservation is what makes the RETAIN-04 widening provably ADDITIVE: every name
- * the single-branch filter accepted is still accepted, byte for byte, so the
- * already-published shape stays prunable instead of becoming permanent shard
- * growth. Reuses HASH_PATTERN for the hash half and CACHE_OS_VALUES for the OS half
- * so neither the hex char-class nor the OS literals are re-authored.
+ * the single-branch filter accepted is still accepted, byte for byte. Reuses
+ * HASH_PATTERN for the hash half and CACHE_OS_VALUES for the OS half so neither the
+ * hex char-class nor the OS literals are re-authored.
+ *
+ * DEFENCE-IN-DEPTH, not a live pruning path, and the distinction is the correction.
+ * This branch was described as the only thing that could still prune the assets
+ * already published under the old shape. It cannot reach them: the SHARD-TAG prefix
+ * rename made old-prefix shards unreadable AND unprunable, and `retention.ts` records
+ * that they were removed BY HAND instead. `cleanup.ts` scopes on the new shard-tag
+ * pattern, so it never visits an old-prefix release at all, and every new-prefix month
+ * shard postdates the asset rename and can therefore only hold new-shape names.
+ *
+ * The branch is cheap, provably disjoint from branch A (see below) and harmless to
+ * KEEP, so it stays -- as cover for any old-shape asset that turns out to survive in a
+ * current shard, not as the caretaker of a population that is no longer reachable. Do
+ * not delete it on the strength of this paragraph; do not re-describe it as a live
+ * pruning path either.
  *
  * What it is NOT: not a general "contains a dash" check, and there is deliberately
  * NO third branch for the PoC-era `<hash>.tar.gz` family. That shape is
  * indistinguishable from a foreign asset dropped into a genuine shard, so admitting
- * it would widen a DELETE filter that was narrowed on security grounds; its 50
- * shipped instances are accepted dead weight bounded by the shard and the retention
- * window (D-08).
+ * it would widen a DELETE filter that was narrowed on security grounds. Its shipped
+ * instances live in the pre-rename shards that were hand-removed, so there is nothing
+ * for a third branch to reach either (D-08).
  *
  * The `separator < 0` early return is LOAD-BEARING, not incidental: it is the
  * second of the two independent reasons this branch cannot overlap branch A.

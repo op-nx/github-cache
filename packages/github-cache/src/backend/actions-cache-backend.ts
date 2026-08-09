@@ -413,8 +413,28 @@ export function createActionsCacheBackend(): CacheBackend {
           return 'conflict';
         } catch (error) {
           // Defense-in-depth: if a future @actions/cache version throws a
-          // ReserveCacheError instead of returning -1, a reserve conflict still
-          // means another job is creating the same byte-identical entry (CORR-01).
+          // ReserveCacheError instead of returning -1, a reserve conflict is still
+          // reported as 'stored'.
+          //
+          // BYTE IDENTITY IS NO LONGER THE REASON, and the retired CORR-01 citation is
+          // gone with it. This comment used to say a reserve conflict means another job
+          // is creating the same byte-identical entry, citing the OS-namespaced-store
+          // invariant. That invariant is superseded. This branch is two jobs that each
+          // EXECUTED the task and race to reserve the same key -- structurally
+          // IMPOSSIBLE before this milestone, when the cache version partitioned by OS,
+          // and now reachable for an adopter running `build` read-write on both an ubuntu
+          // and a windows runner. Two independently produced tar archives from two
+          // operating systems are NOT byte-identical.
+          //
+          // The publish path's two copies of the old reason were corrected in this same
+          // milestone with a DIFFERENT one -- one entry per hash, restored and re-uploaded
+          // verbatim without re-running the task -- and that reason does not transfer
+          // here, because nothing on this branch is a re-upload.
+          //
+          // FIRST-WRITE-WINS IS ACCEPTED anyway, on its own merits: both entries are valid
+          // outputs of the SAME Nx task hash, so whichever archive lands is a correct
+          // answer for that hash. The trade is deliberate; only the justification was
+          // false. Behaviour is unchanged by this correction.
           if (error instanceof Error && error.name === 'ReserveCacheError') {
             return 'stored';
           }

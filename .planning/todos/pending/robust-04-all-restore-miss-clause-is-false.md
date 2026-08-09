@@ -84,13 +84,24 @@ neither. So drift surfaces as a warning pointing at a cause that did not occur.
 
 Both outcomes are bad, and neither resolves the gap this capture records.
 
-## The misattribution is an open, unfiled defect
+## The misattribution was an open defect, and is now FIXED
 
 A warning that points an operator at a cache-version rotation that never happened is a
 consumer-facing defect in its own right, of the same species as the one in `docs/advanced.md`
-that quick `260809-hcr` fixed. It is deliberately not filed as a separate follow-up: the
-maintainer was offered exactly that and chose the edit alone. Recording it here is what keeps it
-from being dropped instead.
+that quick `260809-hcr` fixed. It was recorded here rather than filed because the maintainer was
+offered exactly that and chose the edit alone.
+
+**Superseded the same day by quick `260809-og2`, which the maintainer then asked for.** Both
+warnings had asserted a COMPLETE set -- exactly two named causes -- so any cause outside the two was
+structurally unnameable. The completeness claim is gone from both, a consumer-general version-skew
+cause is named in both, and the partial branch additionally names a new month shard. Guarded per
+branch through the emitted message.
+
+That task also REFUTED the reachability argument this capture inherited. Bundle drift is NOT
+dogfood-only: `npm pack --dry-run` ships `dist/publish/publish-mirror.js` in the consumer tarball --
+the `!dist/action` exclusion covers the internal action ENTRY alone -- and `docs/advanced.md:139-145`
+sanctions an adopter wiring publish. So the misattribution was reachable in a stranger's CI log, not
+merely in ours.
 
 Worth noting alongside it: `publish-mirror.ts` is not in the action bundle's 18-file input set.
 The drifting artifact and the warning that misattributes it sit in different graphs entirely.

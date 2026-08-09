@@ -1181,20 +1181,20 @@ recommended; the resolution pointer under each question names the plan and task 
      nothing asserts the count.
    - Recommendation: **pin it.** One assertion, and it is the same defect class as the four stale
      `ci.yml` comments. Cheap insurance against a five-outcome selector documented as four.
-   - **RESOLVED as recommended.** Plan `13-04` Task 3 pins the prose count (not a row tally — a row
+   - **RESOLVED as recommended.** Plan `13-04` Task 3 pins the prose count (not a row tally -- a row
      tally re-derives the same number from the same file) and mutation-proves it by reverting the
      count to four. Note the site list is FIVE, not the two named here: `docs/advanced.md:21`,
      `docs/configuration.md:92`, `memory-backend.ts:59`, and the describe title plus its comment at
      `docs-adoption.spec.ts:116-117`. `memory-backend.ts` is `serve()`-reachable and esbuild
      preserves comments in this bundle configuration, so that one edit also drifts
-     `start-cache-server/index.js` — plan `13-03` folds it into the commit that already regenerates
+     `start-cache-server/index.js` -- plan `13-03` folds it into the commit that already regenerates
      the bundle.
 
 3. **Does the read-only leg's 403 storm warrant an `OBS` requirement?**
    - What we know: every MISSing task now 403s instead of 200s. No evidence it is noisy.
    - Recommendation: **defer.** Observe on the landing run; open a follow-up only if the log is
      actually confusing. Do not pre-build an observability feature for a problem not yet seen.
-   - **RESOLVED as recommended — deferred WITH an observation, not deferred silently.** Plan `13-06`
+   - **RESOLVED as recommended -- deferred WITH an observation, not deferred silently.** Plan `13-06`
      Task 2 reads the three Windows legs' logs on the landing run and answers Assumption A1 in one
      direction or the other, with the log evidence that settles it. A noisy result is recorded as a
      docs/comment follow-up; no `OBS` requirement was created up front.

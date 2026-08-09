@@ -16,7 +16,7 @@
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Root-level dev-only `.mjs` | Beside `esbuild.action.mjs`. Keeps the `nx` devDependency out of the published tree; never an Nx target, so it cannot replay a cached record | ✓ |
+| Root-level dev-only `.mjs` | Beside `esbuild.action.mjs`. Keeps the `nx` devDependency out of the published tree; never an Nx target, so it cannot replay a cached record | [OK] |
 | `packages/github-cache/src/` module | House convention and typed, but a shipped module importing `nx` (a devDependency) breaks consumer installs | |
 | New root `tools/` directory | Outside `{projectRoot}` so edits do not rotate hashes -- but that benefit is illusory (see notes) | |
 
@@ -32,7 +32,7 @@ Nx-cached instrument would replay a stale record instead of measuring.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| `createTaskHasher` + `hashTask` -> `Hash.details.nodes` | Verified present in installed Nx 23.1.0 at `dist/src/hasher/task-hasher.d.ts:19-33` | ✓ |
+| `createTaskHasher` + `hashTask` -> `Hash.details.nodes` | Verified present in installed Nx 23.1.0 at `dist/src/hasher/task-hasher.d.ts:19-33` | [OK] |
 | `HashPlanInspector` / `nx show target inputs` | Explicitly rejected by PARITY-02: skips `ProjectConfiguration`, reports paths not hashes | |
 | `.nx/cache/run.json` alone | Task-level only; complementary, not a substitute | |
 
@@ -44,7 +44,7 @@ complementary task-level surface, read immediately after the run that produced i
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| One JSON per observation point | `meta` + per-target `{hash, nodes}` + discriminator stdout/stderr | ✓ |
+| One JSON per observation point | `meta` + per-target `{hash, nodes}` + discriminator stdout/stderr | [OK] |
 | Markdown table | Human-readable but not machine-comparable by the gate | |
 
 **Selected:** JSON per observation point.
@@ -53,7 +53,7 @@ complementary task-level surface, read immediately after the run that produced i
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Five (incl. `lint`) | Settles Phase 7's D-35 hand-off empirically | ✓ |
+| Five (incl. `lint`) | Settles Phase 7's D-35 hand-off empirically | [OK] |
 | Four cacheable targets | Smaller instrument, leaves `@nx/eslint` inference unverified | |
 
 **Selected:** Five.
@@ -66,7 +66,7 @@ complementary task-level surface, read immediately after the run that produced i
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| `08-ROOT-CAUSE.md` in the phase dir | Matches Phase 7's `07-EVIDENCE.md` convention | ✓ |
+| `08-ROOT-CAUSE.md` in the phase dir | Matches Phase 7's `07-EVIDENCE.md` convention | [OK] |
 | A doc under `docs/` | Consumer-facing too early; DOCS-07 is Phase 12 | |
 | Folded into SUMMARY.md | Cannot be dated before the fix | |
 
@@ -76,7 +76,7 @@ complementary task-level surface, read immediately after the run that produced i
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Its own commit, before any fix commit | Git history is the proof; record names the measured SHA | ✓ |
+| Its own commit, before any fix commit | Git history is the proof; record names the measured SHA | [OK] |
 | A programmatic mtime / commit-order guard | Over-engineering for a one-shot ordering constraint | |
 
 **Selected:** Its own commit.
@@ -85,7 +85,7 @@ complementary task-level surface, read immediately after the run that produced i
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Four per target | Windows COLD + WARM, windows-11-arm, ubuntu-24.04-arm | ✓ |
+| Four per target | Windows COLD + WARM, windows-11-arm, ubuntu-24.04-arm | [OK] |
 | Three, warm as a footnote | Contradicts PARITY-03's explicit "four values per target, not two" | |
 
 **Selected:** Four.
@@ -97,7 +97,7 @@ quality limitation, not a hidden one.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Attempt root-cause, record OPEN if unsettled | PARITY-06 permits either; must not block the phase | ✓ |
+| Attempt root-cause, record OPEN if unsettled | PARITY-06 permits either; must not block the phase | [OK] |
 | Declare open immediately | Wastes a lead the probe already narrowed | |
 
 **Selected:** Attempt, then record OPEN with evidence if unsettled.
@@ -110,7 +110,7 @@ quality limitation, not a hidden one.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| `nx.json` `targetDefaults` only | Workspace is deliberately free of `project.json` | ✓ |
+| `nx.json` `targetDefaults` only | Workspace is deliberately free of `project.json` | [OK] |
 | Plugin `options` in `plugins[]` | Reserved as a fallback if inference proves unoverridable | |
 | A `project.json` | Contradicts a standing workspace decision | |
 
@@ -120,7 +120,7 @@ quality limitation, not a hidden one.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Narrow before widening; lock rationale in the guard spec | `nx.json` is strict JSON and holds no comments | ✓ |
+| Narrow before widening; lock rationale in the guard spec | `nx.json` is strict JSON and holds no comments | [OK] |
 | Add a normalizing synthetic input | Adds an input to fix an input problem | |
 
 **Selected:** Narrow first, rationale displaced into the guard spec.
@@ -129,7 +129,7 @@ quality limitation, not a hidden one.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| No -- stays byte-identical | Sole mechanism separating OS-sensitive targets after VER-03 | ✓ |
+| No -- stays byte-identical | Sole mechanism separating OS-sensitive targets after VER-03 | [OK] |
 | Re-spell it while here | Gratuitous risk to a Core-Value invariant | |
 
 **Selected:** No change.
@@ -138,7 +138,7 @@ quality limitation, not a hidden one.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Measure -> record -> fix -> wire | No `nx.json` edit before the record lands | ✓ |
+| Measure -> record -> fix -> wire | No `nx.json` edit before the record lands | [OK] |
 | Wire inputs first | Contaminates the investigation | |
 
 **Selected:** Measure -> record -> fix -> wire.
@@ -151,7 +151,7 @@ quality limitation, not a hidden one.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Two-leg matrix + third compare job (`needs` both, `if: always()`) | Only shape that can see both legs and fail on a MISSING leg | ✓ |
+| Two-leg matrix + third compare job (`needs` both, `if: always()`) | Only shape that can see both legs and fail on a MISSING leg | [OK] |
 | Assert inside the existing `integration` job | Perturbs the target being measured; still cannot see both legs | |
 
 **Selected:** Two-leg matrix + compare job.
@@ -160,7 +160,7 @@ quality limitation, not a hidden one.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Build-gating, no `continue-on-error` | CORR-03 says build-gating | ✓ |
+| Build-gating, no `continue-on-error` | CORR-03 says build-gating | [OK] |
 | Advisory first | Requirement does not permit it | |
 
 **Selected:** Build-gating.
@@ -169,7 +169,7 @@ quality limitation, not a hidden one.
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| `packages/github-cache/src/hash-parity/`, excluded from the tarball via `!dist/hash-parity` | Only location where it is typechecked and unit-testable; exclusion pattern already used three times | ✓ |
+| `packages/github-cache/src/hash-parity/`, excluded from the tarball via `!dist/hash-parity` | Only location where it is typechecked and unit-testable; exclusion pattern already used three times | [OK] |
 | Inline bash in `ci.yml` | Unprovable -- cannot be shown to fail | |
 | Root `.mjs` alongside the instrument | A spec importing an untyped `.mjs` fails `tsc --build` over the spec project | |
 
@@ -182,7 +182,7 @@ with real typed unit tests).
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Gated as a fourth IDENTICAL target | Roadmap SC6 says the job "treats `lint` as a FOURTH target" | ✓ |
+| Gated as a fourth IDENTICAL target | Roadmap SC6 says the job "treats `lint` as a FOURTH target" | [OK] |
 | Measured and recorded only | Wastes the measurement D-35 asked for | |
 
 **Selected:** Gated, with a **named fallback**: if `lint` diverges and the fix is out of Phase 8's

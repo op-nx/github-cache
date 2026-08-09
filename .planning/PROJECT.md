@@ -15,7 +15,7 @@ public and private** GitHub repositories - not only for dogfooding in this repo.
 an opt-in reader/cross-context store and its publish/cleanup are a separate, reader-specific
 step. Write-trust is an allowlist; the full CREEP control ledger is in
 `.planning/THREAT-MODEL.md`. **v0.0.1 (the greenfield MVP rebuild) shipped
-2026-07-22** — merged to `main` and tagged. The reader adapter is **LOCKED = GitHub Releases**
+2026-07-22** -- merged to `main` and tagged. The reader adapter is **LOCKED = GitHub Releases**
 (FOUND-01 spike, forward merits) and the Docker container form is **deferred to a later
 milestone** (FOUND-03); GHCR/OCI is the later-milestone revisit trigger (with cosign + Docker).
 
@@ -59,17 +59,17 @@ Shipped and verified in **v0.0.1 Greenfield MVP Rebuild** (all 7 phases verified
 6/6 E2E flows wired, all threats closed). Full per-requirement traceability:
 `milestones/v0.0.1-REQUIREMENTS.md`.
 
-- ✓ Nx self-hosted remote-cache HTTP server: loopback bind, timing-safe bearer auth, hash validation, 2 GB body cap, best-effort read degradation / fail-closed write (SRV-01..05) — v0.0.1
-- ✓ Runtime-context backend selection, one backend per process, no caller-facing mode flag (TRUST-05) — v0.0.1
-- ✓ Read-write Actions-cache backend in CI on trusted `{push,schedule}` events; per-hash lock; SIGTERM drain (ROBUST-04) — v0.0.1
-- ✓ Authenticated GitHub Releases read-only reader for cross-context/local read, private-repo-capable (FOUND-01/02); local `put()` always 403 — v0.0.1
-- ✓ OS-namespaced store so a cross-OS hit never serves a wrong-OS artifact (CORR-01) — v0.0.1
-- ✓ CREEP (CVE-2025-36852) write-trust: host-detected fail-closed allowlist + separate `{push,schedule}` sync gate + server-produced-key mirror filter (TRUST-01..08) — v0.0.1
-- ✓ `{push,schedule}`-gated publish/sync engine + fail-loud observability + ~2 GiB and 1000-asset graceful degradation (ROBUST-01/02/05, OBS-01) — v0.0.1
-- ✓ Age-based cleanup coupled to the read-lookback window via one `CACHE_MIRROR_MAX_AGE_DAYS` knob; daily single-writer scheduled cleanup (RETAIN-01/03) — v0.0.1
-- ✓ Shipped installable advisory PPE-hygiene gate (zizmor/actionlint) (TRUST-06) — v0.0.1
-- ✓ Cross-OS content-hash parity (`.gitattributes` `eol=lf`; OS-discriminated hash) + per-OS publish-mirror matrix (TEST-05) — v0.0.1
-- ✓ Published npm package `@op-nx/github-cache` + `uses:`-consumable `start-cache-server` JS action + background-step CI sidecar pattern; enumerated/tested public surface; SECURITY.md/LICENSE/semver (DOCS-01..06, GOV-01..03, FOUND-03) — v0.0.1
+- [OK] Nx self-hosted remote-cache HTTP server: loopback bind, timing-safe bearer auth, hash validation, 2 GB body cap, best-effort read degradation / fail-closed write (SRV-01..05) -- v0.0.1
+- [OK] Runtime-context backend selection, one backend per process, no caller-facing mode flag (TRUST-05) -- v0.0.1
+- [OK] Read-write Actions-cache backend in CI on trusted `{push,schedule}` events; per-hash lock; SIGTERM drain (ROBUST-04) -- v0.0.1
+- [OK] Authenticated GitHub Releases read-only reader for cross-context/local read, private-repo-capable (FOUND-01/02); local `put()` always 403 -- v0.0.1
+- [OK] OS-namespaced store so a cross-OS hit never serves a wrong-OS artifact (CORR-01) -- v0.0.1
+- [OK] CREEP (CVE-2025-36852) write-trust: host-detected fail-closed allowlist + separate `{push,schedule}` sync gate + server-produced-key mirror filter (TRUST-01..08) -- v0.0.1
+- [OK] `{push,schedule}`-gated publish/sync engine + fail-loud observability + ~2 GiB and 1000-asset graceful degradation (ROBUST-01/02/05, OBS-01) -- v0.0.1
+- [OK] Age-based cleanup coupled to the read-lookback window via one `CACHE_MIRROR_MAX_AGE_DAYS` knob; daily single-writer scheduled cleanup (RETAIN-01/03) -- v0.0.1
+- [OK] Shipped installable advisory PPE-hygiene gate (zizmor/actionlint) (TRUST-06) -- v0.0.1
+- [OK] Cross-OS content-hash parity (`.gitattributes` `eol=lf`; OS-discriminated hash) + per-OS publish-mirror matrix (TEST-05) -- v0.0.1
+- [OK] Published npm package `@op-nx/github-cache` + `uses:`-consumable `start-cache-server` JS action + background-step CI sidecar pattern; enumerated/tested public surface; SECURITY.md/LICENSE/semver (DOCS-01..06, GOV-01..03, FOUND-03) -- v0.0.1
 
 ### Active
 
@@ -97,11 +97,11 @@ Shipped and verified in **v0.0.1 Greenfield MVP Rebuild** (all 7 phases verified
 
 Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per the FOUND-01 ledger):
 
-- [ ] **GHCR-01** — GHCR/OCI as an additional synced store (additive; multi-store keeps Releases)
-- [ ] **PROV-01** — optional reader-verified cosign keyless provenance attestation
-- [ ] **FOUND-03 (Docker)** — Docker container distribution form (CI-sidecar motivation already covered by the background-step pattern)
+- [ ] **GHCR-01** -- GHCR/OCI as an additional synced store (additive; multi-store keeps Releases)
+- [ ] **PROV-01** -- optional reader-verified cosign keyless provenance attestation
+- [ ] **FOUND-03 (Docker)** -- Docker container distribution form (CI-sidecar motivation already covered by the background-step pattern)
 
-(LRU via a manifest remains out of scope — native Actions-cache LRU + age-only RO; see Key Decisions.)
+(LRU via a manifest remains out of scope -- native Actions-cache LRU + age-only RO; see Key Decisions.)
 
 ### Out of Scope
 
@@ -115,7 +115,7 @@ Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per
 
 ## Context
 
-- **Current state: v0.0.1 shipped (2026-07-22).** The greenfield rebuild is complete — the PoC was torn down (Phase 0) and rebuilt across MVP/vertical slices (Phases 1-6), merged to `main` via PR #3, and tagged `v0.0.1`. The `.planning/codebase/*` map should be regenerated against the shipped tree (`/gsd:map-codebase`); the platform facts/gotchas in `.planning/research/PITFALLS.md` remain reference.
+- **Current state: v0.0.1 shipped (2026-07-22).** The greenfield rebuild is complete -- the PoC was torn down (Phase 0) and rebuilt across MVP/vertical slices (Phases 1-6), merged to `main` via PR #3, and tagged `v0.0.1`. The `.planning/codebase/*` map should be regenerated against the shipped tree (`/gsd:map-codebase`); the platform facts/gotchas in `.planning/research/PITFALLS.md` remain reference.
 - **Ports-and-adapters** around a single `CacheBackend` port, with a thin HTTP protocol layer and side-effect-free pure domain modules (`shard`, `cleanup`, `trust`, `types`) for testability. The port isolates any future storage-primitive pivot to a new factory behind `selectBackend`.
 - **Auth assumption:** because the platform is GitHub, local developer environments are assumed already authenticated to GitHub (git credential helper and/or `gh`). Requiring auth is free; depending on anonymous access is not (it excludes private repos).
 - **Three credentials, never mixed:** per-process CSPRNG bearer token (Nx <-> server), `ACTIONS_RUNTIME_TOKEN` (Actions cache service, passed only by process inheritance into JS actions), and `GITHUB_TOKEN`/`GH_TOKEN` (gh/Octokit REST).
@@ -151,7 +151,7 @@ Later-milestone revisit triggers carried out of v0.0.1 (re-evaluate together per
 |----------|-----------|---------|
 | **One backend per process, context-selected** (`selectBackend`); default = Actions-cache CI-RW only; opt-in reader store + its publish/cleanup are a separate reader-specific step | Matches the ecosystem norm; minimal default, pay-as-you-compose; the publisher/cleanup subsystem is reader-specific (not port-isolated) | [OK] Decided - the project-level CREEP control ledger C1-C18 backing this and every other trust decision is `.planning/THREAT-MODEL.md`; re-read and reconcile it at each milestone Key Decisions audit (updated 2026-07-26) |
 | Reader / cross-context adapter: **GitHub Releases** (v0.0.1) | Forward merits (FOUND-01 spike): fewer incident/operational hazards + no public poison-remediation gap (vs GHCR's >5000 wall, child-manifest, delete-cred, visibility); reversible/additive. GHCR = later-milestone trigger with cosign + Docker | [OK] LOCKED (FOUND-01) |
-| **Write-trust = allowlist-only** (default-deny; no denylist); `pull_request`/`release` on **only where GitHub's untrusted-default-branch cache guard exists — host-detected from `GITHUB_SERVER_URL`** (`github.com`/`*.ghe.com` → ON; all GHES → OFF, fail-closed; no caller flag) | In-code gate is fork-spoofable defense-in-depth; the host-based check is a pure env-var function; no GA GHES has the guard yet (floor unpublished) | [OK] Decided |
+| **Write-trust = allowlist-only** (default-deny; no denylist); `pull_request`/`release` on **only where GitHub's untrusted-default-branch cache guard exists -- host-detected from `GITHUB_SERVER_URL`** (`github.com`/`*.ghe.com` -> ON; all GHES -> OFF, fail-closed; no caller flag) | In-code gate is fork-spoofable defense-in-depth; the host-based check is a pure env-var function; no GA GHES has the guard yet (floor unpublished) | [OK] Decided |
 | **Sync gate = a separate predicate = `{push, schedule}` only**, test-locked to reject all other events + non-default refs | Syncing a PR- or dispatch-influenced entry into a shared store recreates the CREEP precondition | [OK] Decided (load-bearing) |
 | **Shipped installable PPE-hygiene gate** (best-effort/advisory) + default-branch-protection prerequisite | Heuristic linters can't catch novel evasions, so the load-bearing containment is the `{push,schedule}` sync gate + branch protection; the gate is defense-in-depth | [OK] Decided |
 | **No content signing as a CREEP control**; digest-pin iff GHCR | CVE-2025-36852: poison precedes hashing, so signing is ineffective; CREEP is defended at the write/sync gates | [OK] Decided |

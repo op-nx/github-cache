@@ -58,28 +58,28 @@ warning either. Do not act on W019.
 
 ## Control ledger
 
-CVE-2025-36852 (CVSS 9.4, CWE-829, GHSA-rrr2-jcr8-7q3x, no patched version): poison at **construction, before hashing**; **first-to-cache-wins**; any PR-privileged contributor. Fix = write-scope isolation aligned to VCS trust; **signing/integrity is ineffective** against it. Controls scale with composition — the default (Actions-cache CI-RW only) carries only C1 + C4 + docs.
+CVE-2025-36852 (CVSS 9.4, CWE-829, GHSA-rrr2-jcr8-7q3x, no patched version): poison at **construction, before hashing**; **first-to-cache-wins**; any PR-privileged contributor. Fix = write-scope isolation aligned to VCS trust; **signing/integrity is ineffective** against it. Controls scale with composition -- the default (Actions-cache CI-RW only) carries only C1 + C4 + docs.
 
 | # | Control |
 |---|---------|
-| C1 | Write-trust allowlist (default-deny); `pull_request`/`release` on **only where GitHub's untrusted-default-branch cache guard exists — detected from `GITHUB_SERVER_URL` (`github.com`/`*.ghe.com` → ON; all GHES → OFF, fail-closed; no caller flag)**; dangerous set refused by construction |
+| C1 | Write-trust allowlist (default-deny); `pull_request`/`release` on **only where GitHub's untrusted-default-branch cache guard exists -- detected from `GITHUB_SERVER_URL` (`github.com`/`*.ghe.com` -> ON; all GHES -> OFF, fail-closed; no caller flag)**; dangerous set refused by construction |
 | C2 | Sync gate = separate predicate = `{push, schedule}` only; test-locked to reject all other events + non-default refs |
-| C3 | No-overwrite/409 per adapter — **contract-mandated**, CREEP value **conditional on C1/C2** (not standalone). Actions cache native; **GHCR has no atomic create-if-absent (confirmed absent from the OCI spec and GHCR) → best-effort check-then-write**, which is low-severity: same-hash trusted writes are byte-identical under CORR-01 (idempotent overwrite), and an untrusted overwrite is C2's job, not atomicity's. Reinforced by pull-by-digest (C6) |
-| C4 | Repo-wide PPE hygiene: a **shipped installable gate** (reusable workflow / composite action) running `zizmor`/`actionlint` for named patterns (no `pull_request_target`+PR-checkout; no `issue_comment`/`workflow_run` executing PR code). **Best-effort/advisory** — heuristic linters cannot verify novel/obfuscated evasions, so it is NOT load-bearing; containment is **C2 (untrusted writers kept out of the shared store) + default-branch protection** |
-| C5 | No content signing for CREEP (ineffective — trusted producer signs poisoned bytes) |
-| C6 | Pull-by-digest mandatory iff GHCR; the `{hash}→digest` map is **designed out** (tag == hash) or its single writer + concurrency pinned — never a mutable shared index |
-| C7 | Deferred (a later milestone): asymmetric provenance attestation (cosign keyless), reader-verified — never HMAC |
+| C3 | No-overwrite/409 per adapter -- **contract-mandated**, CREEP value **conditional on C1/C2** (not standalone). Actions cache native; **GHCR has no atomic create-if-absent (confirmed absent from the OCI spec and GHCR) -> best-effort check-then-write**, which is low-severity: same-hash trusted writes are byte-identical under CORR-01 (idempotent overwrite), and an untrusted overwrite is C2's job, not atomicity's. Reinforced by pull-by-digest (C6) |
+| C4 | Repo-wide PPE hygiene: a **shipped installable gate** (reusable workflow / composite action) running `zizmor`/`actionlint` for named patterns (no `pull_request_target`+PR-checkout; no `issue_comment`/`workflow_run` executing PR code). **Best-effort/advisory** -- heuristic linters cannot verify novel/obfuscated evasions, so it is NOT load-bearing; containment is **C2 (untrusted writers kept out of the shared store) + default-branch protection** |
+| C5 | No content signing for CREEP (ineffective -- trusted producer signs poisoned bytes) |
+| C6 | Pull-by-digest mandatory iff GHCR; the `{hash}→digest` map is **designed out** (tag == hash) or its single writer + concurrency pinned -- never a mutable shared index |
+| C7 | Deferred (a later milestone): asymmetric provenance attestation (cosign keyless), reader-verified -- never HMAC |
 | C8 | Retention: native Actions LRU + age-only RO + **no manifest** (no mutable retention state) |
 | C9 | Cleanup delete path: **list phase aborts with zero deletions on any non-404 fault / incomplete pagination**; delete phase isolates per item |
 | C10 | GHCR >5000-download refusal handled non-fatally; documented age-floor exception; recorded as a **poison-remediation gap** (weighs in Decision 3) |
-| C11 | Cleanup credential: **prefer keeping GHCR in-repo so a job-scoped `GITHUB_TOKEN` suffices** (no long-lived PAT). Fine-grained PATs / GitHub App tokens are **unsupported for GHCR deletion**, so an org-owned/unlinked package forces a **classic PAT (`delete:packages`)** — gate it **behind an Actions Environment with required reviewers** and **document its org-wide-package-deletion blast radius** as an accepted trade-off. Never referenced in a PR-triggered workflow |
+| C11 | Cleanup credential: **prefer keeping GHCR in-repo so a job-scoped `GITHUB_TOKEN` suffices** (no long-lived PAT). Fine-grained PATs / GitHub App tokens are **unsupported for GHCR deletion**, so an org-owned/unlinked package forces a **classic PAT (`delete:packages`)** -- gate it **behind an Actions Environment with required reviewers** and **document its org-wide-package-deletion blast radius** as an accepted trade-off. Never referenced in a PR-triggered workflow |
 | C12 | First-party Octokit cleanup (the delete credential never enters a third-party action) |
 | C13 | GHCR child-manifest cleanup gated on a reference check (fail-closed); reader degrades a missing/partial child to MISS, never truncated bytes |
 | C14 | Docs: github.com-only backstop + GHES floor; **never enable fork-PR "send write tokens"/"send secrets"**; default-branch-protection + ephemeral-single-tenant-runner prerequisites |
 | C15 | Docs: retention is storage-hygiene, **not** poison-containment |
-| C16 | Mirror filter admits **only server-produced keys** (distinguishing namespace/prefix), not "any 1-512 hex" — **must ship before/with** enabling the mirror for any private repo (else unrelated hex-keyed CI artifacts leak); docs warn every mirrored key is world-readable |
+| C16 | Mirror filter admits **only server-produced keys** (distinguishing namespace/prefix), not "any 1-512 hex" -- **must ship before/with** enabling the mirror for any private repo (else unrelated hex-keyed CI artifacts leak); docs warn every mirrored key is world-readable |
 | C17 | Observability: a whole-run sync/publish failure **fails loud** (annotation + non-zero exit); ship a "how do I know the cache is working" signal |
-| C18 | (GHCR) Publish-time **package-visibility fail-closed assert**: the publish pipeline verifies package visibility matches the repo (private repo → private package) and **fails the run** on mismatch — not a docs-only step |
+| C18 | (GHCR) Publish-time **package-visibility fail-closed assert**: the publish pipeline verifies package visibility matches the repo (private repo -> private package) and **fails the run** on mismatch -- not a docs-only step |
 
 ## Residual notes
 

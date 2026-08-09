@@ -18,7 +18,7 @@ re_verification:
 **Task goal:** Phase A burned-name skip, Phase B nx-cache- prefix, verified live
 **Verified:** 2026-08-03T13:30:00Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** No -- initial verification
 
 ## Goal Achievement
 
@@ -31,7 +31,7 @@ re_verification:
 | 3 | A 422 carrying only the pre_receive ruleset entry still FAILS the publish job (decoy stays fatal) | VERIFIED | A2 test passes now; **mutation-reproduced independently**: replacing the burned-name predicate with a status-only `statusOf(error)===422` reading reddens exactly this clause (`still FAILS the run on a 422 carrying ONLY the pre_receive...`) among 11 failures. Restored byte-exact (`git hash-object` = `a04f1bc5...` before and after, `git diff --quiet` clean) |
 | 4 | A 422 whose tag_name entry is reworded past 'immutable release' still FAILS the job, fatal log names tag_name entry not the decoy | VERIFIED | A3 test passes; same mutation run above reddens this clause too. Code reads `faultMessageForField(error, 'tag_name')` for the fatal log (`publish-mirror.ts:238`), not `reason.message` alone |
 | 5 | shardTag() produces nx-cache-YYYYMM and isShardTag accepts exactly that shape | VERIFIED | `retention.ts:62` `SHARD_TAG_PREFIX = 'nx-cache-'`; `retention.spec.ts` pins `shardTag(...)` to `'nx-cache-202607'` etc.; full suite passes (1011/1011). Live-CI: release `nx-cache-202608` (id 364151911) exists with 69 assets, confirmed via `gh api repos/op-nx/github-cache/releases` |
-| 6 | Non-shard rejection fixtures fail on the 6-digit SUFFIX, not a prefix mismatch — proven by loose-prefix mutation reddening both blocks | VERIFIED | **Mutation reproduced independently**: dropped the `\d{6}` suffix from `SHARD_TAG_PATTERN` (`new RegExp('^' + SHARD_TAG_PREFIX)`); ran `retention.spec.ts` + `cleanup.spec.ts` -- 9 failed / 39 passed, exactly the 7 rebased trap-1 fixtures + the "derives from..." pin + the trap-2 cleanup clause. `v1.0.0` stayed green (confirmed by name in per-test output). Restored byte-exact (hash `39f9e3c0...` matches before/after, `git diff --quiet` clean) |
+| 6 | Non-shard rejection fixtures fail on the 6-digit SUFFIX, not a prefix mismatch -- proven by loose-prefix mutation reddening both blocks | VERIFIED | **Mutation reproduced independently**: dropped the `\d{6}` suffix from `SHARD_TAG_PATTERN` (`new RegExp('^' + SHARD_TAG_PREFIX)`); ran `retention.spec.ts` + `cleanup.spec.ts` -- 9 failed / 39 passed, exactly the 7 rebased trap-1 fixtures + the "derives from..." pin + the trap-2 cleanup clause. `v1.0.0` stayed green (confirmed by name in per-test output). Restored byte-exact (hash `39f9e3c0...` matches before/after, `git diff --quiet` clean) |
 | 7 | Generated action bundle carries the new prefix in the SAME commit as the source rename | VERIFIED | `git show a1d6139 -- start-cache-server/index.js` shows `SHARD_TAG_PREFIX` changed from `cache-mirror-` to `nx-cache-` in the identical commit as `retention.ts`'s source change. `npm run check:action` run fresh from current tree: exit 0, no drift (`git status --porcelain` empty after) |
 | 8 | Phase A and Phase B are two separate commits, A first | VERIFIED | `git log --oneline`: `1e5bc10` (Phase A, fix(publish)) precedes `a1d6139` (Phase B, refactor(retention)); `git merge-base --is-ancestor 1e5bc10 a1d6139` confirms ancestry |
 
@@ -41,7 +41,7 @@ re_verification:
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `packages/github-cache/src/lib/octokit-fault-reason.ts` | field-scoped accessor `faultMessageForField` | VERIFIED | Exists, exported, filters `entry.field === field` then maps to string message — structurally cannot read the pre_receive decoy |
+| `packages/github-cache/src/lib/octokit-fault-reason.ts` | field-scoped accessor `faultMessageForField` | VERIFIED | Exists, exported, filters `entry.field === field` then maps to string message -- structurally cannot read the pre_receive decoy |
 | `packages/github-cache/src/publish/publish-mirror.ts` | burned-name branch + one-shot sentinel + fixed fatal log | VERIFIED | `ensureShardRelease` returns `number \| undefined`; `burnedShardTag` sentinel skips remaining hashes with no further API call; fatal log at line 238 uses `faultMessageForField(...) ?? reason.message` |
 | `packages/github-cache/src/publish/publish-mirror.spec.ts` | A1/A2/A3 clauses, existing clauses intact | VERIFIED | All three new clauses present and pass; both pre-existing `already_exists` and UNREADABLE-body clauses still present and pass (45/45 total) |
 | `packages/github-cache/src/lib/retention.ts` | SHARD_TAG_PREFIX = 'nx-cache-' | VERIFIED | Confirmed at line 62; CACHE_MIRROR_MAX_AGE_DAYS/CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION untouched (D3 respected) |
@@ -73,7 +73,7 @@ re_verification:
 | format-check | `npm run format:check` | exit 0 | PASS |
 | Residual sweep | `git grep -c -F "cache-mirror" -- . ':!.planning'` + `rg -c -F "cache-mirror" start-cache-server/index.js` | Matches expected table exactly: publish-mirror.ts 1, read-back.ts 3, read-back.spec.ts 1, cleanup.spec.ts 1, bundle 0 (rg exit 1) | PASS |
 
-### Live-CI Verification (independent of "already in hand" claims — re-checked via `gh api`/`gh run`)
+### Live-CI Verification (independent of "already in hand" claims -- re-checked via `gh api`/`gh run`)
 
 | Claim | Verification | Result |
 |-------|--------------|--------|
@@ -88,9 +88,9 @@ re_verification:
 
 | Item | Expected | Status |
 |------|----------|--------|
-| `CACHE_MIRROR_MAX_AGE_DAYS` / `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION` | NOT renamed (D3) | VERIFIED — both spellings intact in `retention.ts` |
-| `ROADMAP.md` | untouched | VERIFIED — empty `git log`/`git diff` for ROADMAP.md across the commit range |
-| Historical measurement records | kept verbatim, marker added, no blanket rename | VERIFIED — residual sweep table matches exactly (4 files, exact counts); each surviving line carries the tag names verbatim plus a "(the PRE-RENAME tag scheme)" marker in the same comment block |
+| `CACHE_MIRROR_MAX_AGE_DAYS` / `CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION` | NOT renamed (D3) | VERIFIED -- both spellings intact in `retention.ts` |
+| `ROADMAP.md` | untouched | VERIFIED -- empty `git log`/`git diff` for ROADMAP.md across the commit range |
+| Historical measurement records | kept verbatim, marker added, no blanket rename | VERIFIED -- residual sweep table matches exactly (4 files, exact counts); each surviving line carries the tag names verbatim plus a "(the PRE-RENAME tag scheme)" marker in the same comment block |
 
 ### Anti-Patterns Found
 
@@ -98,7 +98,7 @@ None. No `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER` markers introduced in a
 
 ### Requirements Coverage
 
-Not applicable — quick task, no ROADMAP phase or REQUIREMENTS.md rows (per PLAN.md's own source_audit note).
+Not applicable -- quick task, no ROADMAP phase or REQUIREMENTS.md rows (per PLAN.md's own source_audit note).
 
 ### Human Verification Required
 
@@ -106,7 +106,7 @@ None. All must-haves resolved to VERIFIED via direct code reading, independent m
 
 ### Gaps Summary
 
-No gaps found. One minor, non-blocking observation outside the plan's scope: `.planning/STATE.md`'s "Current Position" narrative section (lines 28-37) still reads "the merge is still BLOCKED on the `publish-verify` regression (PR #16)" — stale text from a prior session that the orchestrator's `45f5bb2` STATE.md update did not touch (it updated the quick-task log table, the deferred-items table, and a separate blocker-status bullet further down, but not this earlier narrative paragraph). PLAN.md explicitly marks STATE.md as "NOT IN THIS PLAN (orchestrator-owned)", so this is not a plan must-have and does not affect the phase goal (code-level burned-name skip + prefix rename, verified live). Flagged for awareness only, not as a gap requiring a closure plan.
+No gaps found. One minor, non-blocking observation outside the plan's scope: `.planning/STATE.md`'s "Current Position" narrative section (lines 28-37) still reads "the merge is still BLOCKED on the `publish-verify` regression (PR #16)" -- stale text from a prior session that the orchestrator's `45f5bb2` STATE.md update did not touch (it updated the quick-task log table, the deferred-items table, and a separate blocker-status bullet further down, but not this earlier narrative paragraph). PLAN.md explicitly marks STATE.md as "NOT IN THIS PLAN (orchestrator-owned)", so this is not a plan must-have and does not affect the phase goal (code-level burned-name skip + prefix rename, verified live). Flagged for awareness only, not as a gap requiring a closure plan.
 
 ---
 

@@ -198,8 +198,17 @@ export async function runPublish(): Promise<void> {
   const ref = process.env.GITHUB_REF ?? '';
   const octokit = createResilientOctokit(token);
 
+  // D1: the run id is what lets the engine tell THIS run's single-use CI seeds from a
+  // prior run's, which it must skip rather than re-restore forever. GITHUB_RUN_ID is
+  // runner-injected on this exact step -- proven by shipped behaviour rather than assumed,
+  // since the two reads above (GITHUB_REPOSITORY for the fail-closed repo identity,
+  // GITHUB_REF for the TRUST-10 ref scoping) are load-bearing on the same step and
+  // `read-back.ts` reads the same variable under the same convention. Dropping this
+  // argument leaves every engine-level spec green while the filter fails open in
+  // production, so `action/index.spec.ts` pins the forwarded VALUE.
   const result = await publishMirror(
     createPublishClient(octokit, owner, repo, ref),
+    { runId: process.env.GITHUB_RUN_ID },
   );
 
   // D-17 (OBS-01): the "is the cache working" signal -- the run counts as a

@@ -105,9 +105,72 @@ export interface PublishResult {
   readonly failed: number;
 }
 
-/** Test-injection knobs only (no runtime mode surface). `now` pins the shard tag. */
+/**
+ * `now` is a test-injection knob only (no runtime mode surface) and pins the shard tag.
+ *
+ * `runId` is NOT a knob: it is this workflow run's id, and the seed filter below is a
+ * no-op without it. `runPublish` reads it from `process.env.GITHUB_RUN_ID` at the one
+ * call site. It arrives as an OPTION rather than an ambient read because this engine is
+ * pure orchestration behind an injected client and `publish-mirror.spec.ts` drives it
+ * directly -- an env read here would put a global in the middle of that seam. Optional so
+ * every existing caller and spec keeps compiling; the cost of that is a filter that
+ * silently fails open when the edge is dropped, which is why `action/index.spec.ts` pins
+ * the forwarding itself rather than leaving it to the engine-level cases.
+ */
 export interface PublishOptions {
   readonly now?: Date;
+  readonly runId?: string;
+}
+
+/**
+ * The three CI seed marker words, and the ONLY thing separating a single-use seed from
+ * real cache content. Each is a hex-LETTER-leading word CI prepends to the workflow run
+ * id: `cafe` (consumer-smoke), `bead` (dogfood-seed, D2) and `feed` (the publish leg's
+ * own mirror seed, followed by its OS index). Both competing key spaces -- run ids and Nx
+ * task hashes -- are all-decimal, so a real task hash can never carry one of these words
+ * and can never be misread as a seed.
+ *
+ * THESE THREE LITERALS ARE DUPLICATED, and that is ACCEPTED rather than overlooked --
+ * recorded here so the next reader does not re-derive it and "fix" it. Two are authored in
+ * `ci.yml` (`RUN_HASH: cafe...` and both dogfood jobs' `hash: bead...`) and the third
+ * lives inside `mirrorSeedHash`'s template, with no gate tying any of them to this array.
+ * The drift direction is FAIL-OPEN: a renamed marker word simply stops being filtered,
+ * which is today's behaviour and not a new fault. And the one literal that COULD be
+ * derived instead -- the publish leg's own word, since `mirrorSeedHash` is exported and
+ * this file already imports from `lib/` -- would cover one family of three while coupling
+ * this filter to a helper whose own docblock says its ENCODING must change if a tenth OS
+ * discriminator is ever added.
+ */
+const SEED_MARKER_WORDS = ['cafe', 'bead', 'feed'] as const;
+
+/**
+ * "Is this a single-use CI seed belonging to some OTHER run?" -- D1, and the whole point
+ * of this task. A seed that misses on restore can never be mirrored, so it is never in the
+ * shard, so it is enumerated and re-restored on EVERY subsequent run and can never
+ * succeed: 48 of the 63 restore MISSes on run 31281406708 were prior runs' seeds.
+ *
+ * The rule is FAMILY-AGNOSTIC on purpose: marker-prefix AND does-not-end-with-this-run-id,
+ * with no per-family parse and nothing derived from the OS tuple. Ending with the run id
+ * is what admits every `feed<i>` index rather than only the running leg's, and that is
+ * REQUIRED, not incidental -- `max-parallel: 1` runs ubuntu first, so the windows leg
+ * enumerates the ubuntu leg's seed too and C1 needs it mirrored (publish-verify reads its
+ * own leg's seed back out of the SHARD).
+ *
+ * FAIL-OPEN when the run id is unavailable: the predicate answers false for everything and
+ * the enumeration is exactly what it is today. Dropping an entry is the direction C1
+ * forbids; admitting one it could have skipped is merely the status quo. The residual of
+ * the suffix test errs the same safe way -- a prior run whose id happens to END with this
+ * run's id is admitted, never dropped.
+ */
+function isOtherRunsSeed(hash: string, runId: string | undefined): boolean {
+  if (runId === undefined || runId === '') {
+    return false;
+  }
+
+  return (
+    SEED_MARKER_WORDS.some((word) => hash.startsWith(word)) &&
+    !hash.endsWith(runId)
+  );
 }
 
 /**
@@ -338,7 +401,20 @@ export async function publishMirror(
         // parseHash always succeeds here; the filter satisfies the Hash type and stays
         // defensive if the two ever drift.
         .map((entry) => parseHash(entry.key.slice(CACHE_KEY_PREFIX.length)))
-        .filter((hash): hash is Hash => hash !== undefined),
+        .filter((hash): hash is Hash => hash !== undefined)
+        // D1, and its POSITION inside this pipeline is load-bearing: BEFORE the Set, so a
+        // filtered seed can never inflate the distinct-hash count that the all-MISS gate
+        // below reads. A SECOND, narrowing filter rather than an edit to
+        // isServerProducedKey or HASH_PATTERN -- those predicates are shared with the
+        // server's SRV-03 route and both cleanup branches, their literal count is
+        // comment-locked, and `cache-key.ts` is a leaf with no notion of a run (it is also
+        // in the action bundle, which this file is not).
+        //
+        // IT SHRINKS `scanned`, deliberately, and a reader WILL compare figures across
+        // this commit: `scanned` is the denominator of the all-MISS gate below and of
+        // every ratio read off the OBS-01 summary. The 149 ubuntu / 150 windows figures
+        // recorded before this filter are NOT comparable to the ones after it.
+        .filter((hash) => !isOtherRunsSeed(hash, options.runId)),
     ),
   ];
 
@@ -393,6 +469,46 @@ export async function publishMirror(
   const label = `mirrored-by: ${cachePlatform()}`;
 
   for (const hash of hashes) {
+    const name = releaseAssetName(hash);
+
+    // D3: MEMBERSHIP BEFORE THE RESTORE. The enabling fact is that the asset name is a
+    // function of the hash ALONE -- releaseAssetName needs no bytes -- so an entry already
+    // in the shard can be skipped without an Actions-cache round-trip. Measured on run
+    // 31281406708: 78 of 149 restores per leg were fetched and then discarded by the
+    // first-write-wins branch at the bottom of this loop.
+    //
+    // UNDEFINED-SAFE ON THE SHARD, and that guard is not defensiveness. The shard is
+    // resolved LAZILY on the first restorable entry, precisely so an all-MISS leg never
+    // creates an empty release, so on early iterations there is no shard to interrogate
+    // and an unguarded membership test would throw before the first upload. Do NOT hoist
+    // ensureShardRelease above the loop to make this guard simpler: that converts an
+    // all-MISS leg into an empty-release creator and re-opens the burned-tag noise case
+    // the second sentinel exists to prevent.
+    //
+    // TWO AGGREGATE OUTCOMES CHANGE, both intended. An oversized-but-already-present asset
+    // now returns HERE, before the D-12 size check, so it no longer counts as `failed` --
+    // correct, since nothing is uploaded either way, but it is a different aggregate. And
+    // the D-11 cap branch below is now reached only by names that are ABSENT, which is
+    // behaviourally identical because that branch already exempts present names.
+    //
+    // THE RECLASSIFICATION, stated precisely because the obvious overstatement of it is
+    // FALSE. An entry that is present in the shard AND would not have restored now counts
+    // as an already-present skip instead of a read MISS, which moves `readMisses` down in
+    // PARTIAL runs. It does NOT weaken the total-case gate below, and no comment may claim
+    // it does: that gate needs `readMisses === hashes.length && mirrored === 0`, while
+    // this guard needs a RESOLVED shard, and the shard resolves only after a restore HIT
+    // -- which already falsifies the gate's condition. The two are mutually exclusive, so
+    // the set of runs on which the gate fires is identical before and after this reorder.
+    // In a genuine total rotation window nothing restores, the shard never resolves, this
+    // guard never runs, and the gate fires exactly as it does today. Measured on run
+    // 31281406708 the reclassification is currently nil in either direction -- zero of the
+    // 63 misses were present in the shard.
+    if (shard !== undefined && shard.names.has(name)) {
+      skipped++;
+
+      continue;
+    }
+
     const restored: GetResult = await actionsCache.get(hash);
 
     if (restored.kind === 'miss') {
@@ -403,7 +519,6 @@ export async function publishMirror(
     }
 
     const bytes = restored.bytes;
-    const name = releaseAssetName(hash);
 
     // D-12: deterministic pre-upload boundary check -- count and skip loud BEFORE any
     // upload, so an oversized artifact is never truncated or dropped (ROBUST-02).
@@ -465,6 +580,11 @@ export async function publishMirror(
     // OS-namespaced (CORR-02 removed that): byte-identical because the Actions cache
     // holds exactly ONE entry per hash and every leg restores and re-uploads it
     // VERBATIM without re-running the task.
+    //
+    // STILL REACHABLE AFTER D3, and it is not a leftover. The pre-restore guard at the top
+    // of the loop cannot run while `shard` is undefined, so the FIRST entry of a run --
+    // the one whose restore resolves the shard -- arrives here having never been tested
+    // for membership. This branch is what covers it.
     if (shard.names.has(name)) {
       skipped++;
 

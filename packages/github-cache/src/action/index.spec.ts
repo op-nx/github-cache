@@ -153,6 +153,43 @@ describe('runPublish sync gate + fail-closed identity (TRUST-02, CREEP C2)', () 
   });
 });
 
+describe('runPublish forwards the run id into the engine (D1)', () => {
+  // THE ONLY GATE ON THIS TASK'S PRIMARY OUTCOME, and it lives here because nothing at the
+  // engine level can see it. `publishMirror`'s seed filter fails OPEN without a run id, by
+  // design (dropping an entry is the forbidden direction), so omitting this argument in
+  // `runPublish` leaves every publish-mirror.spec.ts case green while the mirror keeps
+  // re-enumerating every prior run's seeds in production. That is the exact shape of the
+  // incident this change exists to close.
+  //
+  // Asserted on the EXACT VALUE, never on presence and never on "some string": both weaker
+  // forms are satisfied by a hardcoded constant in `runPublish`, which forwards nothing.
+  it('passes the EXACT GITHUB_RUN_ID value as PublishOptions.runId, not a constant', async () => {
+    isSyncTrustedMock.mockReturnValue({ trusted: true });
+    process.env.GITHUB_REPOSITORY = 'op-nx/github-cache';
+    process.env.GITHUB_RUN_ID = '31281406708';
+    resolveGitHubTokenMock.mockReturnValue('token');
+    publishMirrorMock.mockResolvedValue({
+      scanned: 0,
+      mirrored: 0,
+      skipped: 0,
+      readMisses: 0,
+      failed: 0,
+    });
+
+    await runPublish();
+
+    expect(publishMirrorMock).toHaveBeenCalledOnce();
+    expect(
+      publishMirrorMock.mock.calls[0][1]?.runId,
+      'runPublish must hand publishMirror the run id read from process.env.GITHUB_RUN_ID. ' +
+        'Without it the seed filter fails open and the publish leg goes back to restoring ' +
+        "every prior run's single-use CI seed on every run -- 48 of the 63 restore MISSes " +
+        'measured on run 31281406708. Nothing else in the suite can detect that: the engine ' +
+        'is driven directly by publish-mirror.spec.ts, which supplies its own run id.',
+    ).toBe('31281406708');
+  });
+});
+
 describe('runPublish OBS-01 summary rows (D-17)', () => {
   it('reports scanned and restore-MISS alongside mirrored/skipped/failed, labelling the miss row as a subset of skipped', async () => {
     isSyncTrustedMock.mockReturnValue({ trusted: true });

@@ -155,6 +155,115 @@ describe('publishMirror server-produced-key filter (D-16/D-08/TRUST-08)', () => 
   });
 });
 
+/**
+ * D1 -- the prior-run seed filter. CI writes three families of single-use seed into the
+ * SAME Actions-cache scope this engine enumerates, each keyed on a hex-letter marker word
+ * plus the workflow run id: `cafe<run>` (consumer-smoke), `bead<run>` (dogfood-seed) and
+ * `feed<i><run>` (the publish leg's own). A seed from a PRIOR run can never restore here,
+ * so it can never be mirrored, so it is never in the shard, so it is enumerated and
+ * re-restored on every future run forever -- 48 of the 63 restore MISSes measured on run
+ * 31281406708.
+ *
+ * THE RESTORE CALL LIST IS ASSERTED AS AN EXACT ARRAY rather than by count, so a failure
+ * report names WHICH hashes were attempted. A count would report "dropped a real task
+ * hash" and "admitted a stale seed" identically, and those are opposite defects with
+ * opposite repairs -- one violates C1 and reddens both publish-verify legs, the other is
+ * merely the status quo.
+ *
+ * The run ids are short (`99` for this run, `77` for a prior one) because the filter reads
+ * the marker prefix and the run-id SUFFIX and nothing about length. `1234567890123456789`
+ * stands in for a real Nx task hash: all-decimal, which is exactly why it cannot carry a
+ * marker word and cannot be misclassified.
+ */
+describe('publishMirror prior-run seed filter (D1)', () => {
+  const SEEDS_AND_A_TASK_HASH: CacheEntry[] = [
+    { key: 'nx-cache-cafe77' },
+    { key: 'nx-cache-bead77' },
+    { key: 'nx-cache-feed077' },
+    { key: 'nx-cache-cafe99' },
+    { key: 'nx-cache-bead99' },
+    { key: 'nx-cache-feed099' },
+    { key: 'nx-cache-feed199' },
+    { key: 'nx-cache-1234567890123456789' },
+  ];
+
+  it('drops a PRIOR run seed from all three families, admits every seed of THIS run at every feed index, and never drops a real task hash', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => SEEDS_AND_A_TASK_HASH),
+    });
+
+    await publishMirror(fake, { runId: '99' });
+
+    // BOTH feed indices, and that clause is the one C1 depends on rather than a
+    // completeness flourish: `max-parallel: 1` runs the ubuntu publish leg first, so the
+    // windows leg enumerates the ubuntu leg's `feed<i>` seed too, and publish-verify reads
+    // its own leg's seed back out of the SHARD. Filtering on this leg's own OS index would
+    // starve the other leg's read-back and redden it on a correct implementation.
+    expect(getMock.mock.calls.map((call) => call[0])).toEqual([
+      'cafe99' as Hash,
+      'bead99' as Hash,
+      'feed099' as Hash,
+      'feed199' as Hash,
+      '1234567890123456789' as Hash,
+    ]);
+  });
+
+  it('filters NOTHING when no run id is supplied -- FAIL-OPEN, because dropping an entry is the forbidden direction', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => SEEDS_AND_A_TASK_HASH),
+    });
+
+    await publishMirror(fake);
+
+    // The status quo, exactly. A missing run id must degrade to today's behaviour and
+    // never to a narrower enumeration: an entry wrongly ADMITTED costs one redundant
+    // round-trip, while an entry wrongly DROPPED is a seed publish-verify then cannot find
+    // in the shard, which its own error text calls a DEAD publish path.
+    expect(getMock.mock.calls.map((call) => call[0])).toEqual(
+      SEEDS_AND_A_TASK_HASH.map((entry) => entry.key.slice('nx-cache-'.length)),
+    );
+  });
+});
+
+/**
+ * D3 -- shard membership is tested BEFORE the restore. The asset name is a function of the
+ * hash alone, so an entry already in the shard needs no bytes to be skipped: 78 of 149
+ * restores per leg on run 31281406708 were fetched and then discarded by the
+ * first-write-wins branch.
+ *
+ * BOTH HALVES IN ONE CASE, because they are the same reorder seen from two sides and a
+ * fixture that showed only one would be satisfied by the wrong implementation. The shard
+ * resolves LAZILY on the first restorable entry -- so an all-MISS leg never creates an
+ * empty release -- which means the guard must be undefined-safe and the FIRST entry of a
+ * run must still restore rather than throw.
+ */
+describe('publishMirror pre-restore shard-membership skip (D3)', () => {
+  it('skips the round-trip for a name already in the shard, while the first entry of the run -- resolved before any shard exists -- still restores', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+      ]),
+      listReleaseAssets: vi.fn(async () => [releaseAssetName('bb22' as Hash)]),
+    });
+
+    await publishMirror(fake);
+
+    expect(
+      getMock.mock.calls.map((call) => call[0]),
+      'aa11 must restore (the shard is not resolved on the first iteration, so membership ' +
+        'cannot be tested and must not throw); bb22 must NOT, because its asset name is ' +
+        'already in the shard and the name needs no bytes to compute. A list containing ' +
+        'bb22 means the membership test slid back below the restore; a list missing aa11 ' +
+        'means the shard resolution was hoisted above the loop, which turns an all-MISS ' +
+        'leg into an empty-release creator.',
+    ).toEqual(['aa11' as Hash]);
+    expect(
+      vi.mocked(fake.uploadReleaseAsset).mock.calls.map((c) => c[1]),
+    ).toEqual([releaseAssetName('aa11' as Hash)]);
+  });
+});
+
 describe('publishMirror happy-path mirror (TEST-03)', () => {
   it('uploads a restored entry to the current-month shard and counts it mirrored', async () => {
     const fake = client();

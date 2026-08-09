@@ -8,7 +8,7 @@ import {
   createReleasesReadBackend,
   createReleasesReadClient,
 } from '../backend/releases-backend.js';
-import type { ReadableBackend, WritableBackend } from '../backend/types.js';
+import type { ReadOnlyBackend, WritableBackend } from '../backend/types.js';
 import {
   GITHUB_REPOSITORY_PATTERN,
   resolveGitHubToken,
@@ -40,7 +40,7 @@ import { isWriteTrusted } from './trust.js';
  */
 export function selectBackend(
   env: NodeJS.ProcessEnv = process.env,
-): ReadableBackend | WritableBackend {
+): ReadOnlyBackend | WritableBackend {
   if (!isWriteTrusted(env).trusted) {
     // The local/untrusted branch returns the real cross-context GitHub Releases
     // reader (D-01), constructed with the real default client. selectBackend stays

@@ -3,7 +3,7 @@ import type {
   CacheBackend,
   GetResult,
   PutResult,
-  ReadableBackend,
+  ReadOnlyBackend,
 } from './types.js';
 
 function readFrom(store: Map<string, Buffer>, hash: string): GetResult {
@@ -63,7 +63,7 @@ export function createWritableMemoryBackend(): CacheBackend {
  * nothing checks. RW-vs-RO is which factory constructs the server, never a
  * caller-facing mode flag (TRUST-05).
  */
-export function createReadOnlyMemoryBackend(): ReadableBackend {
+export function createReadOnlyMemoryBackend(): ReadOnlyBackend {
   const store = new Map<string, Buffer>();
 
   return {

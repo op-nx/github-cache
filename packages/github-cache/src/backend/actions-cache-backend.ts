@@ -13,7 +13,7 @@ import type {
   CacheBackend,
   GetResult,
   PutResult,
-  ReadableBackend,
+  ReadOnlyBackend,
 } from './types.js';
 
 // The server-produced-key namespace + filter (prefix + HASH_PATTERN) now live in
@@ -91,7 +91,7 @@ import type {
  * guards and the VER-07 archive-directory mkdir all run here, and the writable
  * factory inherits every one of them by CALLING this one rather than repeating it.
  */
-export function createReadOnlyActionsCacheBackend(): ReadableBackend {
+export function createReadOnlyActionsCacheBackend(): ReadOnlyBackend {
   // VER-04. ONE assertion, ONCE, at construction -- and BEFORE the mkdirSync below, so a
   // wrong cwd fails loud instead of the mkdir silently creating a `.nx/cache` in the wrong
   // tree.

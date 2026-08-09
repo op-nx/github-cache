@@ -6,7 +6,7 @@ import { statusOf } from '../lib/octokit-status.js';
 import * as assetNaming from '../lib/release-asset-name.js';
 import { resolveMaxAgeDays, shardTagsForWindow } from '../lib/retention.js';
 import type { Hash } from '../lib/cache-key.js';
-import type { GetResult, ReadableBackend } from './types.js';
+import type { GetResult, ReadOnlyBackend } from './types.js';
 
 /**
  * The D-04 injected read seam. Exactly one method on purpose: the seam sits at the
@@ -84,7 +84,7 @@ function warnOnce(status?: number): void {
  */
 export function createReleasesReadBackend(
   client: ReleaseReadClient,
-): ReadableBackend {
+): ReadOnlyBackend {
   return {
     async get(hash: Hash): Promise<GetResult> {
       try {

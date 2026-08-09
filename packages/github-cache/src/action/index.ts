@@ -224,6 +224,16 @@ export async function runPublish(): Promise<void> {
     ['mirrored', result.mirrored],
     ['skipped', result.skipped],
     ['restore-MISS (of skipped)', result.readMisses],
+    // D4: the second BREAKDOWN of `skipped`, added rather than folded into the row above,
+    // which used to mean both things at once -- and that conflation is why a 42%
+    // restore-MISS rate went unread for 11 days. RENAMING the miss row is forbidden: its
+    // label is pinned as an exact string below in action/index.spec.ts, and since
+    // writeCountSummary takes [string, number] pairs only, the label is the sole place the
+    // subset relation can be stated at all. Adding a row is safe -- the rows are asserted
+    // with a containment matcher. This label carries `(of skipped)` for exactly the reason
+    // the miss row's does: a reader who sums the column must not arrive at more than
+    // `scanned`.
+    ['already-present (of skipped)', result.alreadyPresent],
     ['failed', result.failed],
   ]);
 

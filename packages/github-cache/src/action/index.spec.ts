@@ -173,6 +173,7 @@ describe('runPublish forwards the run id into the engine (D1)', () => {
       mirrored: 0,
       skipped: 0,
       readMisses: 0,
+      alreadyPresent: 0,
       failed: 0,
     });
 
@@ -197,12 +198,16 @@ describe('runPublish OBS-01 summary rows (D-17)', () => {
     resolveGitHubTokenMock.mockReturnValue('token');
     // Shape echoes the investigated windows leg: 25 distinct hashes, 12 restore MISSes,
     // 2 mirrored. Self-consistent -- mirrored + skipped + failed === scanned, and the
-    // MISSes are INSIDE skipped, never added to it.
+    // MISSes are INSIDE skipped, never added to it. The 9 already-present skips are the
+    // SECOND subset of the same 23 (D4): 12 + 9 <= 23, so a reader summing the two
+    // breakdown rows never exceeds skipped, and summing the whole column never exceeds
+    // scanned. Those are the two arithmetic properties both labels exist to protect.
     publishMirrorMock.mockResolvedValue({
       scanned: 25,
       mirrored: 2,
       skipped: 23,
       readMisses: 12,
+      alreadyPresent: 9,
       failed: 0,
     });
 
@@ -216,7 +221,18 @@ describe('runPublish OBS-01 summary rows (D-17)', () => {
     // because readMisses is a strict subset of skipped and sibling rows would make every
     // reader double-count (2 + 23 + 12 != 25).
     expect(rows).toContainEqual(['scanned', '25']);
-    expect(rows).toContainEqual(['restore-MISS (of skipped)', '12']);
+    expect(
+      rows,
+      "The miss row's label is pinned BYTE-FOR-BYTE and may not be renamed. " +
+        'writeCountSummary takes [string, number] pairs only and is documented as not ' +
+        'widenable for one caller, so this label is the SOLE place the subset relation can ' +
+        'be stated at all -- rename it and every reader starts summing the column to more ' +
+        'than scanned. D4 ADDS a row rather than renaming this one for exactly that reason.',
+    ).toContainEqual(['restore-MISS (of skipped)', '12']);
+    // D4's second breakdown row. Both the label and the COUNT are asserted: a label-only
+    // check would stay green against a row wired to the wrong field, which is the defect
+    // that made one number mean two things in the first place.
+    expect(rows).toContainEqual(['already-present (of skipped)', '9']);
     // TWICE, not once: writeCountSummary's table, then VER-05's appended line. The
     // count moved from one to two in the same commit that added the second write,
     // because write() APPENDS by default (summary.js:69-77) and the two writes are
@@ -238,6 +254,7 @@ describe('runPublish OBS-01 summary rows (D-17)', () => {
       mirrored: 1,
       skipped: 0,
       readMisses: 0,
+      alreadyPresent: 0,
       failed: 0,
     });
 

@@ -9,6 +9,7 @@ import {
 import { shardTag } from '../lib/retention.js';
 import { octokitFault } from '../test/octokit-fault.js';
 import {
+  PARTIAL_READ_MISS_WARN_RATIO,
   publishMirror,
   RELEASE_ASSET_CAP,
   RELEASE_ASSET_MAX_BYTES,
@@ -275,6 +276,7 @@ describe('publishMirror happy-path mirror (TEST-03)', () => {
       mirrored: 1,
       skipped: 0,
       readMisses: 0,
+      alreadyPresent: 0,
       failed: 0,
     });
     expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
@@ -373,6 +375,7 @@ describe('publishMirror restore MISS skip (D-03)', () => {
       mirrored: 0,
       skipped: 1,
       readMisses: 1,
+      alreadyPresent: 0,
       failed: 0,
     });
     expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
@@ -390,11 +393,18 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
 
     const result = await publishMirror(fake);
 
+    // THE ONE case in this file that reaches an already-present skip, which is why it is
+    // the only whole-result assertion here carrying a NON-zero `alreadyPresent` (D4). A
+    // blanket zero across all eleven would have quietly asserted the opposite of what that
+    // counter exists to report. Single-entry, so the shard is still unresolved on the one
+    // iteration -- this exercises the POST-restore membership branch; the pre-restore one
+    // has its own case in the D3 describe above.
     expect(result).toEqual({
       scanned: 1,
       mirrored: 0,
       skipped: 1,
       readMisses: 0,
+      alreadyPresent: 1,
       failed: 0,
     });
     expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
@@ -414,6 +424,7 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
       mirrored: 0,
       skipped: 1,
       readMisses: 0,
+      alreadyPresent: 0,
       failed: 0,
     });
     // A benign already-exists is NOT a fault annotation.
@@ -513,6 +524,7 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
       mirrored: 0,
       skipped: 0,
       readMisses: 0,
+      alreadyPresent: 0,
       failed: 1,
     });
     // Annotated per item, and loud in aggregate -- the two halves that were both missing.
@@ -856,6 +868,7 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
       mirrored: 0,
       skipped: 3,
       readMisses: 0,
+      alreadyPresent: 0,
       failed: 0,
     });
     expect(result.skipped).toBe(result.scanned);
@@ -996,6 +1009,7 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
       mirrored: 1,
       skipped: 0,
       readMisses: 0,
+      alreadyPresent: 0,
       failed: 1,
     });
     expect(core.warning).toHaveBeenCalledOnce();
@@ -1068,6 +1082,7 @@ describe('publishMirror 1000-asset cap skip-and-warn (ROBUST-05, D-11)', () => {
           mirrored: 1,
           skipped: 0,
           readMisses: 0,
+          alreadyPresent: 0,
           failed: 0,
         });
         expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();
@@ -1078,6 +1093,7 @@ describe('publishMirror 1000-asset cap skip-and-warn (ROBUST-05, D-11)', () => {
           mirrored: 0,
           skipped: 1,
           readMisses: 0,
+          alreadyPresent: 0,
           failed: 0,
         });
         expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
@@ -1145,6 +1161,7 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
       mirrored: 0,
       skipped: 1,
       readMisses: 1,
+      alreadyPresent: 0,
       failed: 0,
     });
     expect(core.warning).toHaveBeenCalledWith(
@@ -1235,6 +1252,136 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
   });
 });
 
+/**
+ * D4 -- the split metric, and D5 -- the PARTIAL-case guard.
+ *
+ * `restore-MISS (of skipped)` used to conflate two unrelated things: entries that could
+ * not be restored, and entries skipped because their asset name was already in the shard.
+ * That conflation is the direct reason a 42% restore-MISS rate went unread for 11 days
+ * across two windows -- the number was large and nobody could tell which half it was.
+ *
+ * The existing all-MISS gate fires only on the TOTAL case, which is why it stayed
+ * correctly silent through those windows. The partial guard is a lower-threshold sibling
+ * written as an `else if`, so exactly ONE of the two can fire on any run.
+ */
+describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
+  it('the partial threshold is ONE HALF -- the value every boundary fixture below is built for', () => {
+    expect(
+      PARTIAL_READ_MISS_WARN_RATIO,
+      'The boundary cases below use a 4-entry enumeration because 4 * 0.5 is a whole ' +
+        'number of entries. Changing the ratio invalidates those fixtures rather than ' +
+        'merely moving them, so it must be changed HERE and in them together -- and the ' +
+        "engine's own comment carries the arithmetic behind one half, including the " +
+        'intermediate band that was considered and rejected on provenance. Do not retune ' +
+        'this from an estimate; the recorded revisit trigger is the first live post-fix ' +
+        'run on the default branch, read as readMisses / scanned.',
+    ).toBe(0.5);
+  });
+
+  // THE RECLASSIFICATION, and the one assertion that localizes the D3 reorder. An entry
+  // present in the shard that would NOT have restored is now an already-present skip
+  // rather than a read MISS, because the membership test runs before the restore. Both
+  // counts are asserted EXACTLY: a spec that only checked `alreadyPresent >= 1` would stay
+  // green with the membership test back below the restore.
+  it('counts a present-but-unrestorable entry as an already-present skip and NOT as a read MISS', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+      ]),
+      listReleaseAssets: vi.fn(async () => [releaseAssetName('bb22' as Hash)]),
+    });
+    // aa11 HITs, which is what resolves the shard; bb22 would MISS if it were ever asked.
+    getMock.mockResolvedValueOnce(hit()).mockResolvedValue(MISS);
+
+    const result = await publishMirror(fake);
+
+    expect(
+      { readMisses: result.readMisses, alreadyPresent: result.alreadyPresent },
+      'bb22 is in the shard, so it must never reach the restore and must count as an ' +
+        'already-present skip. If the membership test is moved back BELOW the restore, ' +
+        'bb22 MISSes instead and these two numbers swap -- which is exactly the ' +
+        'reclassification this reorder causes, so this case is what pins the direction.',
+    ).toEqual({ readMisses: 0, alreadyPresent: 1 });
+  });
+
+  it('warns ONCE on the partial case when the miss fraction sits exactly at the ratio', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+        { key: 'nx-cache-cc33' },
+        { key: 'nx-cache-dd44' },
+      ]),
+    });
+    getMock
+      .mockResolvedValueOnce(MISS)
+      .mockResolvedValueOnce(MISS)
+      .mockResolvedValue(hit());
+
+    const result = await publishMirror(fake);
+
+    expect(result.readMisses).toBe(2);
+    expect(result.scanned).toBe(4);
+    expect(core.warning).toHaveBeenCalledOnce();
+    const warned = vi.mocked(core.warning).mock.calls[0][0];
+    // Asserted on the MESSAGE, never on the call count alone: a count of one is equally
+    // satisfied by the WRONG branch firing, and the two branches diagnose different things.
+    expect(warned).toContain('self-perpetuating');
+    expect(warned).toContain('cache-VERSION rotation window');
+    // A warning, never a failure -- setFailed is reserved for per-item upload faults.
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  it('stays SILENT one entry below the ratio, so the immediate post-fix baseline does not trip it', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+        { key: 'nx-cache-cc33' },
+        { key: 'nx-cache-dd44' },
+      ]),
+    });
+    getMock.mockResolvedValueOnce(MISS).mockResolvedValue(hit());
+
+    const result = await publishMirror(fake);
+
+    expect(result.readMisses).toBe(1);
+    expect(
+      core.warning,
+      'One miss in four is below the threshold and must be silent. A tripwire that fires ' +
+        'on correct work gets disabled (D-28b), and this repo has already recorded that ' +
+        'happening -- which is the whole reason the threshold sits above the derived ' +
+        'post-fix baseline rather than just above the pre-fix one.',
+    ).not.toHaveBeenCalled();
+  });
+
+  it('fires the TOTAL-case branch, not the partial one, when everything missed', async () => {
+    getMock.mockResolvedValue(MISS);
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+      ]),
+    });
+
+    await publishMirror(fake);
+
+    // EXACTLY ONE warning, and the `else if` is what guarantees it: the total case
+    // satisfies the partial condition arithmetically too, so without the ordering both
+    // would fire and a reader would get two diagnoses of one event.
+    expect(core.warning).toHaveBeenCalledOnce();
+    const warned = vi.mocked(core.warning).mock.calls[0][0];
+    expect(
+      warned,
+      'The total case must reach its OWN, more specific message -- the one naming the ' +
+        'cache-VERSION axis and the two-push reading instruction. Asserted on content ' +
+        'because a call count of one cannot tell which of the two branches fired.',
+    ).toContain('nothing mirrored');
+    expect(warned).not.toContain('self-perpetuating');
+  });
+});
+
 describe('publishMirror duplicate-row dedup', () => {
   it('restores a hash enumerated twice (two archive versions of one key) exactly once', async () => {
     const fake = client({
@@ -1256,6 +1403,7 @@ describe('publishMirror duplicate-row dedup', () => {
       mirrored: 1,
       skipped: 0,
       readMisses: 0,
+      alreadyPresent: 0,
       failed: 0,
     });
     expect(fake.uploadReleaseAsset).toHaveBeenCalledOnce();

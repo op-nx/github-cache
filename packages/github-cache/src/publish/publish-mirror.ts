@@ -32,6 +32,15 @@ export const RELEASE_ASSET_MAX_BYTES = 2 * 1024 * 1024 * 1024;
  */
 export const RELEASE_ASSET_CAP = 1000;
 
+/**
+ * D5's PARTIAL-case threshold: the fraction of enumerated entries that must restore as a
+ * MISS before the second warning below fires. See that branch for the arithmetic behind
+ * the value, the intermediate band that was considered and rejected, and the gap this
+ * choice accepts against D5's own motivating case. Exported so a spec can drive the
+ * boundary from the constant rather than from a literal that would drift from it.
+ */
+export const PARTIAL_READ_MISS_WARN_RATIO = 0.5;
+
 // The restore-result the engine consumes IS the CacheBackend's GetResult
 // (actionsCache.get returns it), so re-export the single-source type from
 // backend/types instead of re-declaring a structurally-identical copy that would
@@ -102,6 +111,19 @@ export interface PublishResult {
    * log dive before this existed.
    */
   readonly readMisses: number;
+  /**
+   * Entries skipped because their asset name was ALREADY in the shard: like `readMisses`,
+   * a strict SUBSET of `skipped` and never a sibling of it -- both membership branches
+   * below increment BOTH. Reported separately because one number was meaning two things,
+   * and that conflation is the direct reason a 42% restore-MISS rate went unread for 11
+   * days: `restore-MISS (of skipped)` counted unrestorable entries, while the bulk of
+   * `skipped` was ordinary first-write-wins no-ops on entries that were fine.
+   *
+   * NOT the duplicate-upload race. That branch is a WRITE-race outcome, not an
+   * enumeration-cost signal, and folding it in here would make this number stop answering
+   * the one question it exists for.
+   */
+  readonly alreadyPresent: number;
   readonly failed: number;
 }
 
@@ -426,6 +448,11 @@ export async function publishMirror(
   // RETURNED for the OBS-01 summary so the distinction is visible without a log dive
   // -- it is no longer gate-only state.
   let readMisses = 0;
+  // Already-present subset of `skipped` (D4), incremented from BOTH membership branches:
+  // the pre-restore one at the top of the loop and the post-restore one the first entry of
+  // a run still reaches. Every iteration still increments exactly one of mirrored /
+  // skipped / failed, so the `scanned` reconciliation is unchanged.
+  let alreadyPresent = 0;
 
   // The shard release + its asset set, resolved lazily (as ONE sentinel: the two
   // were always set together) on the first restorable entry.
@@ -505,6 +532,7 @@ export async function publishMirror(
     // 63 misses were present in the shard.
     if (shard !== undefined && shard.names.has(name)) {
       skipped++;
+      alreadyPresent++;
 
       continue;
     }
@@ -587,6 +615,7 @@ export async function publishMirror(
     // for membership. This branch is what covers it.
     if (shard.names.has(name)) {
       skipped++;
+      alreadyPresent++;
 
       continue;
     }
@@ -618,6 +647,11 @@ export async function publishMirror(
       // below never fires, and the leg exits GREEN having mirrored nothing -- which is run
       // 30767511870, the run this whole branch was rewritten for. `reason` is still read
       // just below, for the log line, where FIRST-code is the right answer.
+      // COUNTED INTO `skipped` ONLY, deliberately never into `alreadyPresent` (D4). The
+      // name was absent when this leg listed the shard and another leg wrote it in
+      // between: that is a WRITE-race outcome, whereas `alreadyPresent` answers "how much
+      // of this enumeration was already done before the leg started". Folding this in
+      // would make that number stop answering the one question it exists for.
       if (statusOf(error) === 422 && hasFaultCode(error, 'already_exists')) {
         skipped++;
 
@@ -678,6 +712,71 @@ export async function publishMirror(
         'version-affecting change. Two consecutive all-miss pushes with NO ' +
         'version-affecting change in between is the signal to act.',
     );
+  } else if (
+    readMisses > 0 &&
+    readMisses >= hashes.length * PARTIAL_READ_MISS_WARN_RATIO
+  ) {
+    // D5, THE PARTIAL CASE. The gate above fires only on the TOTAL case, which is why it
+    // stayed correctly silent while 42% of entries missed for 11 days across two windows.
+    // This is a strict ADDITION: a lower-threshold sibling that also subsumes the total
+    // case arithmetically, written as an `else if` so exactly ONE of the two can fire and
+    // the total case still reaches its own more specific message first.
+    //
+    // THE THRESHOLD IS ONE HALF, and the arithmetic belongs here because the obvious
+    // quarter is WRONG. D1 keys on a marker prefix, so it removes only the 20 `cafe`/`feed`
+    // seeds; the 28 already written under the superseded bare-run-id shape are
+    // structurally indistinguishable from a task hash and stay unfilterable until they
+    // evict, which is accepted explicitly. So the IMMEDIATE post-fix window is roughly 43
+    // misses -- 15 real pre-rotation hashes plus those 28 -- against a total of roughly
+    // 129, i.e. 33%. A quarter would fire on that, which is to say on every single run,
+    // and a tripwire that fires on correct work gets disabled: that is the D-28b failure
+    // mode recorded three lines above this branch. The EVENTUAL state, once the
+    // bare-run-id cohort evicts, is 15 against 101, or 15%. One half sits above the
+    // immediate window with headroom and well above the eventual one.
+    //
+    // THE INTERMEDIATE BAND WAS CONSIDERED AND REJECTED, said plainly because an
+    // unexplained absence reads as an oversight. The band is real and non-empty: any
+    // threshold above 33% and at or below 42% -- 40%, say -- would stay silent through the
+    // immediate window AND still fire on a return to the pre-fix condition, which is
+    // strictly more coverage than one half gives. It is rejected on PROVENANCE, not on
+    // principle. The 33% figure is DERIVED, not measured: it is arithmetic over a single
+    // run's counts plus an assumption about which cohort D1 removes, and nobody has yet
+    // observed what the ratio actually is once D1 and D2 land. A threshold placed inside a
+    // nine-point window ABOVE an unmeasured estimate -- the band's lower edge IS that
+    // estimate, it is not centred on it -- is one estimation error away from firing on
+    // every correct run, at which point it is worth nothing at any threshold. One half is
+    // chosen because it survives being wrong about the estimate; the band does not.
+    //
+    // THE COST OF THAT CHOICE, recorded rather than left for review to find, because it is
+    // a gap against D5's own stated purpose. D5 exists because a 42% miss rate went unread
+    // for 11 days. One half does NOT fire at 42%, so this guard does not cover its own
+    // motivating case. What covers that case is D1 and D2, which remove the accrual that
+    // produced it; this guard's job is to catch a future WORSENING from the post-fix
+    // baseline.
+    //
+    // THE REVISIT TRIGGER, as a RATIO and not as a bare count: the first live post-fix run
+    // on the default branch is when the real numerator and denominator land, and at that
+    // point a tighter threshold can be set from a measurement rather than an estimate. The
+    // observable is `readMisses / scanned` settling near the real-hash cohort's share --
+    // stating it as `readMisses` below some number would be consistent only at the assumed
+    // denominator, and D1 makes `scanned` materially smaller. This is a recorded
+    // observation, not code.
+    //
+    // A WARNING, NEVER A FAILURE: `failed > 0` -> setFailed below is this file's only red
+    // signal and it is reserved for per-item upload faults.
+    const percent = Math.round((readMisses / hashes.length) * 100);
+
+    core.warning(
+      `github-cache publish: ${readMisses} of ${hashes.length} server-produced ` +
+        `cache entries (${percent}%) restored as a MISS. Two candidate causes: ` +
+        '(1) a cache-VERSION rotation window -- see the all-MISS comment just above ' +
+        'for which of the three look-alike mechanisms that is and why naming the axis ' +
+        'matters; (2) a self-perpetuating cohort -- an entry that MISSES can never be ' +
+        'mirrored, so it is never in the shard, so it is enumerated and retried on ' +
+        'every future run and can never succeed. Read this against the post-fix ' +
+        'baseline rather than against a pre-fix figure: the seed filter shrinks the ' +
+        'denominator, so counts recorded before it are not comparable.',
+    );
   }
 
   // OBS-01/D-15: fail the run loud on any aggregate per-item failure, mirroring
@@ -690,5 +789,12 @@ export async function publishMirror(
     core.setFailed(`github-cache publish: ${failed} asset mirror(s) failed.`);
   }
 
-  return { scanned: hashes.length, mirrored, skipped, readMisses, failed };
+  return {
+    scanned: hashes.length,
+    mirrored,
+    skipped,
+    readMisses,
+    alreadyPresent,
+    failed,
+  };
 }

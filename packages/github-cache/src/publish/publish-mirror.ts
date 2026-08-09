@@ -33,16 +33,19 @@ export const RELEASE_ASSET_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 export const RELEASE_ASSET_CAP = 1000;
 
 /**
- * D5's PARTIAL-case threshold: the fraction of enumerated entries that must restore as a
- * MISS before the second warning below fires. See that branch for the arithmetic behind
- * the value, the intermediate band that was considered and rejected, and the gap this
- * choice accepts against D5's own motivating case.
+ * D5's PARTIAL-case TARGET RATE: the value the miss proportion's Wilson lower bound must
+ * REACH before the second warning below fires. It is not a raw cutoff on
+ * `readMisses / scanned` -- it was one until the branch was regularised, and the change of
+ * meaning is why the fixtures had to be rebuilt rather than moved. See that branch for the
+ * measured baseline the rate is read against and for why the denominator is the full
+ * enumeration.
  *
  * EXPORTED SO A SPEC CAN PIN THE VALUE -- not so it can derive a boundary from it, and
  * the distinction matters because the weaker of those two is what actually shipped. The
- * boundary fixtures in `publish-mirror.spec.ts` are hand-built for ONE HALF specifically:
- * a 4-entry enumeration with 2 misses (at the threshold) and 1 (below it), chosen because
- * 4 * 0.5 is a whole number of entries. Changing this constant INVALIDATES those fixtures
+ * boundary fixtures in `publish-mirror.spec.ts` are computed for THIS rule at THIS rate:
+ * a 10-entry enumeration with 9 misses (bound 0.5958, fires) and with 8 (bound 0.4902,
+ * silent). The second sits 0.0098 under the rate, which is what lets the pair catch an
+ * off-by-one or a mis-transcribed z. Changing this constant INVALIDATES those fixtures
  * rather than merely moving them, so it must be changed here and in them together -- which
  * is exactly what the pin makes loud.
  */
@@ -813,8 +816,7 @@ export async function publishMirror(
     );
   } else if (
     readMisses > 0 &&
-    wilsonLowerBound(readMisses, hashes.length) >=
-      PARTIAL_READ_MISS_WARN_RATIO
+    wilsonLowerBound(readMisses, hashes.length) >= PARTIAL_READ_MISS_WARN_RATIO
   ) {
     // D5, THE PARTIAL CASE. The gate above fires only on the TOTAL case, which is why it
     // stayed correctly silent while 42% of entries missed for 11 days across two windows.
@@ -822,37 +824,37 @@ export async function publishMirror(
     // case arithmetically, written as an `else if` so exactly ONE of the two can fire and
     // the total case still reaches its own more specific message first.
     //
-    // THE THRESHOLD IS ONE HALF, and the arithmetic belongs here because the obvious
-    // quarter is WRONG. D1 keys on a marker prefix, so it removes only the 20 `cafe`/`feed`
-    // seeds; the 28 already written under the superseded bare-run-id shape are
-    // structurally indistinguishable from a task hash and stay unfilterable until they
-    // evict, which is accepted explicitly. So the IMMEDIATE post-fix window is roughly 43
-    // misses -- 15 real pre-rotation hashes plus those 28 -- against a total of roughly
-    // 129, i.e. 33%. A quarter would fire on that, which is to say on every single run,
-    // and a tripwire that fires on correct work gets disabled: that is the D-28b failure
-    // mode recorded three lines above this branch. The EVENTUAL state, once the
-    // bare-run-id cohort evicts, is 15 against 101, or 15%. One half sits above the
-    // immediate window with headroom and well above the eventual one.
+    // THE RULE IS A LOWER BOUND ON THE MISS PROPORTION, not the proportion itself, and
+    // `PARTIAL_READ_MISS_WARN_RATIO` is the TARGET RATE that bound must reach. See
+    // `wilsonLowerBound` above for why it is a small-sample regulariser and not a
+    // confidence bound. What the regularisation buys is scale invariance: no minimum-N
+    // floor, no constant tuned to any one enumeration size, and silence at small N by
+    // construction rather than by a second threshold.
     //
-    // THE INTERMEDIATE BAND WAS CONSIDERED AND REJECTED, said plainly because an
-    // unexplained absence reads as an oversight. The band is real and non-empty: any
-    // threshold above 33% and at or below 42% -- 40%, say -- would stay silent through the
-    // immediate window AND still fire on a return to the pre-fix condition, which is
-    // strictly more coverage than one half gives. It is rejected on PROVENANCE, not on
-    // principle. The 33% figure is DERIVED, not measured: it is arithmetic over a single
-    // run's counts plus an assumption about which cohort D1 removes, and nobody has yet
-    // observed what the ratio actually is once D1 and D2 land. A threshold placed inside a
-    // nine-point window ABOVE an unmeasured estimate -- the band's lower edge IS that
-    // estimate, it is not centred on it -- is one estimation error away from firing on
-    // every correct run, at which point it is worth nothing at any threshold. One half is
-    // chosen because it survives being wrong about the estimate; the band does not.
+    // THE BASELINE IS MEASURED, not estimated. Run `31305961054` at head `e3bf98b`, both
+    // publish legs, after D1/D2/D3 landed: 43 misses of 112 enumerated on ubuntu-24.04-arm
+    // (38.4%) and 43 of 113 on windows-11-arm (38.1%). The bound at 43/112 is 0.299, so
+    // this branch is SILENT at the healthy steady state, and at that enumeration size the
+    // observed miss proportion has to reach roughly 60% before it fires. Every figure here
+    // carries that run id deliberately: two estimates preceded it and BOTH were wrong, in
+    // opposite directions and by the DENOMINATOR each time -- the miss COUNT of 43 was
+    // right in both. An unlabelled figure in this comment is how that happened.
     //
-    // THE COST OF THAT CHOICE, recorded rather than left for review to find, because it is
-    // a gap against D5's own stated purpose. D5 exists because a 42% miss rate went unread
-    // for 11 days. One half does NOT fire at 42%, so this guard does not cover its own
-    // motivating case. What covers that case is D1 and D2, which remove the accrual that
-    // produced it; this guard's job is to catch a future WORSENING from the post-fix
-    // baseline.
+    // THE DENOMINATOR IS DELIBERATELY THE FULL ENUMERATION, `hashes.length`, and this is
+    // the non-obvious choice a future reader will otherwise "fix" to attempted-only
+    // (`scanned - alreadyPresent`), which reads more coherent and is wrong. MEASURED on the
+    // same run, attempted-only gives 43/53 = 0.811 on ubuntu and 43/44 = 0.977 on windows,
+    // so it would fire on BOTH legs of a healthy run. The cause is structural and
+    // permanent: `max-parallel: 1` runs ubuntu first, so the second leg finds nearly
+    // everything already present and its attempted-miss rate is dominated by leg ORDER
+    // rather than by cache health. The mixed denominator is the one that is stable across
+    // leg order.
+    //
+    // THE GAP AGAINST D5's OWN MOTIVATING CASE, recorded rather than left for review to
+    // find. D5 exists because a 42% miss rate went unread for 11 days; at the measured
+    // enumeration size this rule does not fire at 42% either, so it still does not cover
+    // that case. What covers it is D1 and D2, which removed the accrual that produced it.
+    // This branch's job is to catch a future WORSENING from the measured baseline.
     //
     // WHICH BRANCH ACTUALLY FIRES ON A ROTATION, said here because the obvious reading of
     // the pair -- gate above covers the total case, this one covers the partial -- credits
@@ -865,13 +867,13 @@ export async function publishMirror(
     // read-scope regression wide enough to hide the seed itself. A reader tuning the
     // threshold must not over-weight a gate that does not fire.
     //
-    // THE REVISIT TRIGGER, as a RATIO and not as a bare count: the first live post-fix run
-    // on the default branch is when the real numerator and denominator land, and at that
-    // point a tighter threshold can be set from a measurement rather than an estimate. The
-    // observable is `readMisses / scanned` settling near the real-hash cohort's share --
-    // stating it as `readMisses` below some number would be consistent only at the assumed
-    // denominator, and D1 makes `scanned` materially smaller. This is a recorded
-    // observation, not code.
+    // THE REVISIT TRIGGER HAS ALREADY FIRED ONCE, which is why the figures above are
+    // measured: it was "the first live post-fix run on the default branch", and that run is
+    // `31305961054`. What remains open is the bare-run-id seed cohort, which D1 cannot
+    // filter and which is still inside the 43. As it evicts, the measured baseline falls
+    // and the rate can be tightened -- from the next measurement, never from an estimate.
+    // Read the observable as `readMisses / scanned` and not as a bare `readMisses`: the
+    // count alone is consistent only at one denominator, and `scanned` moves.
     //
     // A WARNING, NEVER A FAILURE: `failed > 0` -> setFailed below is this file's only red
     // signal and it is reserved for per-item upload faults.

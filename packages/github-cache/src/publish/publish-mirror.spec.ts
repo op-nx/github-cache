@@ -1367,16 +1367,19 @@ async function runWithMisses(entries: number, misses: number) {
  * written as an `else if`, so exactly ONE of the two can fire on any run.
  */
 describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
-  it('the partial threshold is ONE HALF -- the value every boundary fixture below is built for', () => {
+  it('the partial TARGET RATE is one half -- the value every boundary fixture below is computed for', () => {
     expect(
       PARTIAL_READ_MISS_WARN_RATIO,
-      'The boundary cases below use a 4-entry enumeration because 4 * 0.5 is a whole ' +
-        'number of entries. Changing the ratio invalidates those fixtures rather than ' +
-        'merely moving them, so it must be changed HERE and in them together -- and the ' +
-        "engine's own comment carries the arithmetic behind one half, including the " +
-        'intermediate band that was considered and rejected on provenance. Do not retune ' +
-        'this from an estimate; the recorded revisit trigger is the first live post-fix ' +
-        'run on the default branch, read as readMisses / scanned.',
+      'This is the rate a Wilson LOWER BOUND on the miss proportion must reach, not a raw ' +
+        'cutoff on the proportion itself. The boundary cases below use a 10-entry ' +
+        'enumeration for that reason: 9 misses bounds to 0.5958 and 8 to 0.4902, which ' +
+        'straddle the rate by 0.0098 on the tight side. Changing this value invalidates ' +
+        'those fixtures rather than merely moving them, so it must be changed HERE and in ' +
+        "them together -- and the engine's own comment carries the MEASURED baseline the " +
+        'rate is read against and why the denominator is the full enumeration. Retune it ' +
+        'only from a measurement: the last one is run 31305961054 at head e3bf98b, 43 ' +
+        'misses of 112 enumerated, and the next one lands as the bare-run-id seed cohort ' +
+        'evicts.',
     ).toBe(0.5);
   });
 

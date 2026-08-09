@@ -48,6 +48,55 @@ export const RELEASE_ASSET_CAP = 1000;
  */
 export const PARTIAL_READ_MISS_WARN_RATIO = 0.5;
 
+/**
+ * The two-sided 95% normal quantile. Named rather than inlined so the one number a reader
+ * would want to check is checkable, and NOT tuned to anything in this repository -- which
+ * is the property that matters for a rule that ships to consumers.
+ */
+const WILSON_Z = 1.96;
+
+/**
+ * The Wilson score interval's LOWER endpoint for `successes` out of `trials`, used by the
+ * partial-miss branch below as a SMALL-SAMPLE REGULARISER and never as a confidence bound.
+ *
+ * That distinction is not pedantry. A restore MISS is deterministic given (entry cohort,
+ * leg platform) -- the cache version either matches or it does not -- so there is no
+ * superpopulation for an interval to cover and no estimand for it to be a bound ON.
+ * Calling it a confidence bound in a comment would ship a false justification, which is
+ * the exact defect class the previous version of that branch's comment was rewritten to
+ * remove.
+ *
+ * What it does do, which is why it is here: it shrinks the observed proportion toward zero
+ * by an amount that itself shrinks as `trials` grows, so a short enumeration cannot trip
+ * the branch on a couple of misses while a long one trips at close to its raw rate. The
+ * rule is then SCALE-INVARIANT -- it needs no constant beyond the target rate and z, and
+ * no minimum-N floor, because the bound cannot reach one half below four trials at all and
+ * at four only a 4/4 miss clears it, which the total-case gate above already owns.
+ *
+ * `trials === 0` returns 0 rather than dividing by it. The caller's `readMisses > 0` clause
+ * already makes that unreachable; this keeps the helper total anyway.
+ *
+ * NOT EXPORTED, and the specs drive it through `publishMirror` rather than directly. A
+ * spec that called it would pin the arithmetic without proving the branch reads it, and
+ * the branch is the thing under test.
+ */
+function wilsonLowerBound(successes: number, trials: number): number {
+  if (trials === 0) {
+    return 0;
+  }
+
+  const proportion = successes / trials;
+  const z2 = WILSON_Z * WILSON_Z;
+  const centre = proportion + z2 / (2 * trials);
+  const margin =
+    WILSON_Z *
+    Math.sqrt(
+      (proportion * (1 - proportion)) / trials + z2 / (4 * trials * trials),
+    );
+
+  return (centre - margin) / (1 + z2 / trials);
+}
+
 // The restore-result the engine consumes IS the CacheBackend's GetResult
 // (actionsCache.get returns it), so re-export the single-source type from
 // backend/types instead of re-declaring a structurally-identical copy that would
@@ -764,7 +813,8 @@ export async function publishMirror(
     );
   } else if (
     readMisses > 0 &&
-    readMisses >= hashes.length * PARTIAL_READ_MISS_WARN_RATIO
+    wilsonLowerBound(readMisses, hashes.length) >=
+      PARTIAL_READ_MISS_WARN_RATIO
   ) {
     // D5, THE PARTIAL CASE. The gate above fires only on the TOTAL case, which is why it
     // stayed correctly silent while 42% of entries missed for 11 days across two windows.

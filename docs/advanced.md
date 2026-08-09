@@ -95,14 +95,14 @@ a per-target exception.
   bound on the miss proportion and not the raw ratio, so a short enumeration
   needs a larger majority than a long one -- around 90% of ten entries against
   around 60% of a hundred. It reports the miss count, the enumeration size,
-  which denominator that proportion is over, and two candidate causes.
+  which denominator that proportion is over, and the causes worth checking.
 
   A publish-only or scheduled run that wrote nothing of its own has an entirely
   historical enumeration, and that is the shape the all-MISS warning is reserved
   for -- alongside a runtime token whose Actions-cache read scope regressed. It
   names the axis as well (the `@actions/cache` cache version, which is a
   separate mechanism from the Nx task hash and from the Release asset name) and
-  the same two causes worth checking. Two consecutive all-miss runs with no
+  the same causes worth checking. Two consecutive all-miss runs with no
   version-affecting change in between is the signal that something else is wrong
   -- most likely the runtime token's Actions-cache read scope. The two warnings
   are siblings at one branch pair in `publish/publish-mirror.ts`.

@@ -139,6 +139,21 @@ const DOCS_08_SITES = [
      * sentence free to return with the suite green. The first pattern likewise stops at
      * `mirrors`, because the pre-edit sentence wrapped between `mirrors` and `nothing` and
      * a phrase spanning that wrap would have matched nothing at all.
+     *
+     * THE CARDINALITY LEFT THIS PARAGRAPH TOO (`260809-og2`), in the same commit as the
+     * messages it describes. Both sentences counted the causes -- "two candidate causes"
+     * and "the same two causes worth checking" -- and the warnings no longer carry a count
+     * at all. The messages dropped the closed enumeration because a closed list had
+     * already shed a true cause once with nothing reddening, and because under a version
+     * skew between the sidecar and the publish step it asserted a completeness that sent
+     * the reader after a rotation nobody made.
+     *
+     * THE COUNT IS DELIBERATELY NOT RE-PINNED AS A `required` PHRASE. Pinning a
+     * cardinality is the defect this change removes: a guard on "the causes worth
+     * checking" would redden the moment a fifth cause is found, which is the outcome the
+     * prose is now written to accommodate. Neither sentence was pinned by any row before
+     * this edit either, which is exactly why it had to be made deliberately here rather
+     * than discovered stale later.
      */
     file: 'docs/advanced.md',
     bucket: 'correction',

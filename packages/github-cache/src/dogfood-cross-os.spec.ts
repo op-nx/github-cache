@@ -2159,3 +2159,36 @@ describe('ci.yml masks the sidecar token before writing it (T-12-05)', () => {
     ).toEqual(Array<boolean>(MASKED_TOKEN_SITES).fill(true));
   });
 });
+
+/**
+ * LINT-01's EXISTENCE CHAIN, second half.
+ *
+ * `nx-target-inputs.spec.ts` closes the first half -- nx.json still registers the plugin
+ * that INFERS the lint target -- and its comment credits this workflow grep with the
+ * complementary half: that the plugin still infers something on a RUNNER, which no amount
+ * of reading nx.json can settle. Nothing asserted the grep exists. `nx run-many -t lint`
+ * with no matching target anywhere prints "No tasks were run" and EXITS 0 (measured), so
+ * an inferred lint target is a silently deletable CI gate: delete the grep step and the
+ * lint leg reports success having linted nothing, with both halves of the chain green.
+ *
+ * WHY IT LIVES HERE. `jobBlock` above is the only job-block extractor in the repo, and
+ * this clause needs to assert about the LINT job's own steps rather than about `ci.yml`
+ * anywhere -- the same reason XOS-07's `needs:` guard came to the helper rather than the
+ * helper going to the guard.
+ *
+ * THE GREP IN `ci.yml` IS UNANCHORED, AND MUST STAY UNANCHORED. That asymmetry against its
+ * o3-witness and hash-parity siblings looks like an oversight and is not: MEASURED,
+ * `NO_COLOR=1 npx nx run-many -t lint --skip-nx-cache` prints the phrase with a leading
+ * space and Nx's own banner prefix ahead of it, so a column-0 anchor could NEVER match and
+ * the lint job would fail on every run including good ones. The regex below requires the
+ * unanchored literal for that reason. This paragraph exists so a future reader does not
+ * re-derive the anchor as an improvement.
+ */
+describe('ci.yml proves the lint target actually RAN, not merely exited 0 (LINT-01)', () => {
+  it('greps the lint run log for the target-ran line', () => {
+    expect(
+      jobBlock('lint'),
+      "ci.yml's `lint` job must grep its run log for `Successfully ran target lint`. `npm run lint` is `nx run-many -t lint`, which with NO matching target anywhere prints \"No tasks were run\" and EXITS 0 -- so without this grep, deleting the four-line @nx/eslint/plugin registration from nx.json converts the entire lint leg into a no-op that reports success. That registration is guarded locally by nx-target-inputs.spec.ts, but only this leg can catch the plugin inferring nothing ON A RUNNER (D-35's deliberately unverified cross-OS risk). Keep the grep UNANCHORED: Nx prints the phrase behind a leading space and its own banner prefix, so a `^` would fail every run.",
+    ).toMatch(/grep -q 'Successfully ran target lint' \S+\.log$/m);
+  });
+});

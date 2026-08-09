@@ -134,18 +134,50 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
   // `split(x).length - 1` counts NON-OVERLAPPING occurrences, which is the right
   // counter here: this command cannot overlap itself.
   //
-  // A FIFTH occurrence fails too, deliberately. If the doc legitimately grows another
-  // rendering, RE-MEASURE and update this expected count HERE in the SAME commit; do
-  // not relax it back to a floor to make the suite green.
-  const RENDERED_DISCRIMINATOR_SITES = 4;
+  // COUNTED PER FENCE, not over the whole document, and that is the correction. A
+  // single whole-document count of 4 cannot LOCALIZE: deleting the adopter-facing
+  // verification fence and adding a fourth target to the config snippet leaves the
+  // total at 4, so the number survives and the reader-facing instruction does not.
+  // Two different jobs need two different assertions.
+  //
+  // The snippet keeps an EXACT count rather than a floor: a green structural guard
+  // sitting over a wrong payload is the failure this repository has already paid for
+  // once. A FIFTH occurrence in the snippet fails too, deliberately. If the doc
+  // legitimately grows another target, RE-MEASURE and update this expected count HERE
+  // in the SAME commit; do not relax it back to a floor to make the suite green.
+  const SNIPPET_DISCRIMINATOR_SITES = 3;
 
-  it('the cross-os doc renders that exact command, byte for byte, at every site', () => {
+  /** Every fenced block opened with the given info string, bodies only. */
+  function fencedBodies(infoString: string): string[] {
+    return [
+      ...doc.matchAll(new RegExp(`^\`\`\`${infoString}\\n([\\s\\S]*?)^\`\`\``, 'gm')),
+    ].map((match) => match[1]);
+  }
+
+  it('the cross-os doc renders that exact command once per target in the config snippet', () => {
+    const command = declaredDiscriminators[0];
+    const snippets = fencedBodies('json');
+
+    // The extraction is asserted before it is counted: a fence whose info string
+    // changed would otherwise make the count below 0 and read as a doc regression.
+    expect(
+      snippets.length,
+      `docs/cross-os.md must carry exactly one \`\`\`json fence -- the copy-pasteable nx.json snippet. ${REWORD_ADVICE}`,
+    ).toBe(1);
+
+    expect(
+      snippets[0].split(command).length - 1,
+      `The copy-pasteable nx.json snippet in docs/cross-os.md must render the discriminator nx.json declares (\`${command}\`) ONCE PER TARGET -- build, test and lint. D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. A count of 1 means the snippet collapsed back to ONE target, which is CR-01: section 1's only copy-pasteable artifact demonstrating the opposite of section 1's heading. ${REWORD_ADVICE}`,
+    ).toBe(SNIPPET_DISCRIMINATOR_SITES);
+  });
+
+  it('the cross-os doc renders that exact command in the adopter-facing verification fence', () => {
     const command = declaredDiscriminators[0];
 
     expect(
-      doc.split(command).length - 1,
-      `docs/cross-os.md must render the discriminator nx.json declares (\`${command}\`) at EVERY site: once per target in the copy-pasteable config snippet (three: build, test, lint) AND once in the verification fence. D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. A count of 2 means the snippet collapsed back to ONE target, which is CR-01: section 1's only copy-pasteable artifact demonstrating the opposite of section 1's heading. ${REWORD_ADVICE}`,
-    ).toBe(RENDERED_DISCRIMINATOR_SITES);
+      fencedBodies('bash').filter((body) => body.includes(command)),
+      `docs/cross-os.md must render the discriminator nx.json declares (\`${command}\`) inside a \`\`\`bash fence -- the command an adopter RUNS on each of their operating systems. That fence closes T-12-09: an adopter's discriminator silently collapsing to one value, with no gate of ours to catch it. It is a DIFFERENT job from the config snippet above, so no count over the snippet can stand in for it. ${REWORD_ADVICE}`,
+    ).not.toHaveLength(0);
   });
 });
 

@@ -1323,6 +1323,38 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
 });
 
 /**
+ * Drive `publishMirror` over an `entries`-long enumeration of DISTINCT valid hashes whose
+ * first `misses` restores MISS and whose rest HIT.
+ *
+ * Generated rather than spelled out, because the boundary fixtures this rule needs are 10
+ * and 112 entries long and a hand-authored 112-row array is a transcription hazard in the
+ * one place the arithmetic has to be exact. The keys are `nx-cache-<hex>` counting up from
+ * 0x10, so every one is distinct, every one passes `isServerProducedKey`, and none can
+ * collide with a `cafe`/`bead`/`feed` seed marker.
+ *
+ * MISSES FIRST is not arbitrary: the shard resolves on the first restore HIT, so putting
+ * the hits last keeps every miss on the pre-shard path and out of the D3 already-present
+ * guard, which would otherwise reclassify them and move the very number under test.
+ */
+async function runWithMisses(entries: number, misses: number) {
+  const fake = client({
+    listCacheEntries: vi.fn(async () =>
+      Array.from({ length: entries }, (_, index) => ({
+        key: `nx-cache-${(index + 0x10).toString(16)}`,
+      })),
+    ),
+  });
+
+  for (let index = 0; index < misses; index++) {
+    getMock.mockResolvedValueOnce(MISS);
+  }
+
+  getMock.mockResolvedValue(hit());
+
+  return publishMirror(fake);
+}
+
+/**
  * D4 -- the split metric, and D5 -- the PARTIAL-case guard.
  *
  * `restore-MISS (of skipped)` used to conflate two unrelated things: entries that could
@@ -1375,54 +1407,59 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
     ).toEqual({ readMisses: 0, alreadyPresent: 1 });
   });
 
-  it('warns ONCE on the partial case when the miss fraction sits exactly at the ratio', async () => {
-    const fake = client({
-      listCacheEntries: vi.fn(async () => [
-        { key: 'nx-cache-aa11' },
-        { key: 'nx-cache-bb22' },
-        { key: 'nx-cache-cc33' },
-        { key: 'nx-cache-dd44' },
-      ]),
-    });
-    getMock
-      .mockResolvedValueOnce(MISS)
-      .mockResolvedValueOnce(MISS)
-      .mockResolvedValue(hit());
+  it('warns ONCE just ABOVE the target rate (10 entries, 9 misses -- bound 0.5958)', async () => {
+    const result = await runWithMisses(10, 9);
 
-    const result = await publishMirror(fake);
-
-    expect(result.readMisses).toBe(2);
-    expect(result.scanned).toBe(4);
+    expect(result.readMisses).toBe(9);
+    expect(result.scanned).toBe(10);
     expect(core.warning).toHaveBeenCalledOnce();
     const warned = vi.mocked(core.warning).mock.calls[0][0];
     // Asserted on the MESSAGE, never on the call count alone: a count of one is equally
     // satisfied by the WRONG branch firing, and the two branches diagnose different things.
+    expect(warned).toContain('restored as a MISS');
     expect(warned).toContain('self-perpetuating');
-    expect(warned).toContain('cache-VERSION rotation window');
     // A warning, never a failure -- setFailed is reserved for per-item upload faults.
     expect(core.setFailed).not.toHaveBeenCalled();
   });
 
-  it('stays SILENT one entry below the ratio, so the immediate post-fix baseline does not trip it', async () => {
-    const fake = client({
-      listCacheEntries: vi.fn(async () => [
-        { key: 'nx-cache-aa11' },
-        { key: 'nx-cache-bb22' },
-        { key: 'nx-cache-cc33' },
-        { key: 'nx-cache-dd44' },
-      ]),
-    });
-    getMock.mockResolvedValueOnce(MISS).mockResolvedValue(hit());
+  it('stays SILENT just BELOW the target rate (10 entries, 8 misses -- bound 0.4902)', async () => {
+    const result = await runWithMisses(10, 8);
 
-    const result = await publishMirror(fake);
-
-    expect(result.readMisses).toBe(1);
+    expect(result.readMisses).toBe(8);
     expect(
       core.warning,
-      'One miss in four is below the threshold and must be silent. A tripwire that fires ' +
-        'on correct work gets disabled (D-28b), and this repo has already recorded that ' +
-        'happening -- which is the whole reason the threshold sits above the derived ' +
-        'post-fix baseline rather than just above the pre-fix one.',
+      'This case sits 0.0098 below the target rate, which is what makes the pair able to ' +
+        'catch an off-by-one or a mis-transcribed z. A looser pair would pass against a ' +
+        'wrong formula. Under the raw ratio this rule replaced, 8 of 10 fired -- so this ' +
+        'case is also what pins that the ratio is no longer read raw.',
+    ).not.toHaveBeenCalled();
+  });
+
+  it('stays SILENT at small N without any minimum-N floor (4 entries, 3 misses -- bound 0.3006)', async () => {
+    const result = await runWithMisses(4, 3);
+
+    expect(result.readMisses).toBe(3);
+    expect(
+      core.warning,
+      'IN-03 is closed by CONSTRUCTION, not by a floor constant: the bound cannot reach ' +
+        'the target rate below four trials at all, and at four only a 4/4 miss clears it ' +
+        '-- which the total-case gate owns. A minimum-N floor added here would be dead ' +
+        'code, and this case is what proves it stays dead.',
+    ).not.toHaveBeenCalled();
+  });
+
+  it('stays SILENT at the MEASURED post-fix baseline (112 entries, 43 misses -- bound 0.2991)', async () => {
+    const result = await runWithMisses(112, 43);
+
+    expect(result.readMisses).toBe(43);
+    expect(result.scanned).toBe(112);
+    expect(
+      core.warning,
+      'The ubuntu-24.04-arm leg of run 31305961054 at head e3bf98b: 43 misses of 112 ' +
+        'enumerated, 38.4%. A tripwire that fires on correct work gets disabled (D-28b) ' +
+        'and this repo has already recorded that happening, so the healthy steady state ' +
+        'must be silent. This is a MEASURED case, not an estimated one -- the two ' +
+        'estimates that preceded it were both wrong, by the denominator each time.',
     ).not.toHaveBeenCalled();
   });
 

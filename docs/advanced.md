@@ -102,10 +102,13 @@ a per-target exception.
   for -- alongside a runtime token whose Actions-cache read scope regressed. It
   names the axis as well (the `@actions/cache` cache version, which is a
   separate mechanism from the Nx task hash and from the Release asset name) and
-  the same causes worth checking. Two consecutive all-miss runs with no
-  version-affecting change in between is the signal that something else is wrong
-  -- most likely the runtime token's Actions-cache read scope. The two warnings
-  are siblings at one branch pair in `publish/publish-mirror.ts`.
+  the same causes worth checking, apart from the month-shard one. That cause
+  cannot apply here: nothing restored on such a run, so no month shard was ever
+  opened, and a rollover moves nothing this warning counts. Two consecutive
+  all-miss runs with no version-affecting change in between is the signal that
+  something else is wrong -- most likely the runtime token's Actions-cache read
+  scope. The two warnings are siblings at one branch pair in
+  `publish/publish-mirror.ts`.
 
   **Upgrading to v0.0.2 rotates the Release asset name too, on top of the cache
   version.** The name dropped its OS component: an asset that was

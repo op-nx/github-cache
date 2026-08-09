@@ -141,12 +141,16 @@ const DOCS_08_SITES = [
      * a phrase spanning that wrap would have matched nothing at all.
      *
      * THE CARDINALITY LEFT THIS PARAGRAPH TOO (`260809-og2`), in the same commit as the
-     * messages it describes. Both sentences counted the causes -- "two candidate causes"
-     * and "the same two causes worth checking" -- and the warnings no longer carry a count
-     * at all. The messages dropped the closed enumeration because a closed list had
-     * already shed a true cause once with nothing reddening, and because under a version
-     * skew between the sidecar and the publish step it asserted a completeness that sent
-     * the reader after a rotation nobody made.
+     * messages it describes. Both sentences counted the causes -- one in the partial
+     * paragraph, one in the all-MISS paragraph -- and the retired wording is described BY
+     * CONCEPT here rather than quoted, per this file's own convention: spelling it would
+     * plant it in a file whose whole job is to prove such wording gone, and the relapse
+     * search could no longer tell the record apart from a regression. What left the
+     * messages is the COMPLETENESS CLAIM, not the enumeration; they still number their
+     * causes. The messages dropped the closed list because such a list had already shed a
+     * true cause once with nothing reddening, and because under a version skew between
+     * the sidecar and the publish step it asserted a completeness that sent the reader
+     * after a rotation nobody made.
      *
      * THE COUNT IS DELIBERATELY NOT RE-PINNED AS A `required` PHRASE. Pinning a
      * cardinality is the defect this change removes: a guard on "the causes worth

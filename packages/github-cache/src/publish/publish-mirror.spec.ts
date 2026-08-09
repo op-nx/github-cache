@@ -1287,6 +1287,11 @@ describe('publishMirror all-restore-MISS degradation signal', () => {
     expect(core.warning).toHaveBeenCalledWith(
       expect.stringContaining("runtime token's Actions-cache read scope"),
     );
+    // The skew cause, so this case pins the whole list its title names rather than the
+    // two causes that predate it.
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('different versions of this action'),
+    );
     // The gate (D-28b): a raw push counter would fire on correct work, so the message
     // carries the reading instruction instead of persisting cross-push state.
     expect(core.warning).toHaveBeenCalledWith(
@@ -1355,6 +1360,27 @@ async function runWithMisses(entries: number, misses: number) {
 
   return publishMirror(fake);
 }
+
+/**
+ * This repository's own build artifacts and incident record, which either warning MESSAGE
+ * is forbidden to name -- they are unactionable in a stranger's job log, and one such
+ * sentence has already been paid to remove once. Source COMMENTS may name them freely.
+ *
+ * ONE CONSTANT, TWO FIXTURES, deliberately: the partial branch and the total gate each
+ * need this row, and a fifth artifact name added to a duplicated literal would land in one
+ * copy and be silently missing from the other.
+ *
+ * Split with single-character character classes for the reason the W3 case states at
+ * length: spelling a forbidden token whole plants it in the file that proves it absent.
+ *
+ * TWO GAPS, RECORDED RATHER THAN COVERED. This catches artifact PATHS only, so it does not
+ * catch a leaked run id or measured baseline (a separate blocklist item), and it cannot
+ * catch a paraphrase. Both are judged out of reach of a literal pattern -- a digit-shaped
+ * needle would match the entry counts the messages legitimately carry -- so review, not
+ * this row, is what covers them.
+ */
+const FORBIDDEN_ARTIFACTS =
+  /action-bundle drif[t]|start-cache-server\/inde[x]\.js|dist\/action\/inde[x]\.js|\.plannin[g]/;
 
 /**
  * D4 -- the split metric, and D5 -- the PARTIAL-case guard.
@@ -1430,11 +1456,17 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
     expect(warned).toContain('cache-version rotation in this commit range');
     expect(warned).toContain("runtime token's Actions-cache read scope");
     const recorded = vi.mocked(core.warning).mock.calls.flat();
-    // Catches the return of a CLOSED enumeration. A fixed count asserted a completeness
-    // the message could not keep, and this same message already shed a true cause once
-    // with nothing reddening. Split phrase, and absence over every recorded argument
-    // rather than a negated matcher -- both for the reasons the W3 case below spells out
-    // at length; they are not restated here.
+    // Catches the RETRACTION being deleted, which is the one behaviour this whole change
+    // exists to add and the one that can regress in silence. It needs its own pin: the
+    // absence row below catches only the retired wording returning verbatim, so dropping
+    // the open-list clause without restoring that wording passes every other assertion
+    // here.
+    expect(warned).toContain('this list is not exhaustive');
+    // Catches a verbatim relapse of the retired closed enumeration -- and ONLY that. A
+    // rewrite to "these are the only causes" passes this row, which is why the pin above
+    // carries the load. Split phrase, and absence over every recorded argument rather
+    // than a negated matcher -- both for the reasons the W3 case below spells out at
+    // length; they are not restated here.
     expect(recorded).not.toContainEqual(
       expect.stringMatching(/Two candidate cause[s]/),
     );
@@ -1481,12 +1513,9 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
     );
     // Catches this repository's own build artifacts and incident record entering a
     // stranger's job log -- the same distribution constraint as the three rows above,
-    // applied to the artifact names a version-skew cause invites. Source COMMENTS may
-    // name them freely; the MESSAGE may not.
+    // applied to the artifact names a version-skew cause invites.
     expect(recorded).not.toContainEqual(
-      expect.stringMatching(
-        /action-bundle drif[t]|start-cache-server\/inde[x]\.js|dist\/action\/inde[x]\.js|\.plannin[g]\//,
-      ),
+      expect.stringMatching(FORBIDDEN_ARTIFACTS),
     );
   });
 
@@ -1562,17 +1591,25 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
     expect(warned).toContain('cache-version rotation in this commit range');
     expect(warned).toContain("runtime token's Actions-cache read scope");
     expect(warned).toContain('different versions of this action');
+    // The retraction, pinned here for the same reason as on the partial fixture: it is
+    // the behaviour this change exists to add, and deleting the clause reddens nothing
+    // else. Both messages carry it and only one branch fires per run, so one fixture
+    // cannot cover it.
+    expect(warned).toContain('this list is not exhaustive');
     const recorded = vi.mocked(core.warning).mock.calls.flat();
-    // The same closed-enumeration retraction as the partial case above. It has to be
-    // asserted on BOTH fixtures because the phrase lived in both messages and only one
-    // branch can fire per run.
+    // A verbatim relapse of the retired closed enumeration -- same both-fixtures
+    // reasoning, same narrow scope as the partial case's row.
     expect(recorded).not.toContainEqual(
       expect.stringMatching(/Two candidate cause[s]/),
     );
     // THE ASYMMETRY, NEGATIVE HALF -- catches the rollover cause being added to the
-    // branch that CANNOT have it. This gate needs `mirrored === 0`, so the shard never
-    // resolves, the pre-restore membership skip never runs, and rollover cannot move
-    // this number. Paired with the positive pin on the partial fixture: alone, either
+    // branch that CANNOT have it. The working conjunct is `readMisses === hashes.length`:
+    // every hash took the miss branch, so none reached the lazy shard resolve, so the
+    // pre-restore membership skip never runs and rollover cannot move this number.
+    // `mirrored === 0` alone would NOT give that -- already-present, cap, burned-tag and
+    // upload-fault runs all leave `mirrored` at 0 with a fully resolved shard. The
+    // engine's own comment at the reorder states the same premise; this one must not
+    // drift from it. Paired with the positive pin on the partial fixture: alone, either
     // half is satisfied by putting the clause on neither branch.
     expect(recorded).not.toContainEqual(
       expect.stringMatching(/new month shar[d]/),
@@ -1580,9 +1617,7 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
     // Same distribution constraint the W3 case pins on the partial branch; without this
     // row the total gate ships with no such guard at all.
     expect(recorded).not.toContainEqual(
-      expect.stringMatching(
-        /action-bundle drif[t]|start-cache-server\/inde[x]\.js|dist\/action\/inde[x]\.js|\.plannin[g]\//,
-      ),
+      expect.stringMatching(FORBIDDEN_ARTIFACTS),
     );
   });
 });

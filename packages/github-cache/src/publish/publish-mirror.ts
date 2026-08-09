@@ -811,8 +811,8 @@ export async function publishMirror(
         'worth checking, and this list is not exhaustive: (1) a cache-version ' +
         'rotation in this commit range -- the archive path literal or the cross-OS ' +
         'flag changed; (2) the sidecar that wrote these entries and this publish ' +
-        'step running at different versions of this action, which computes two ' +
-        "cache versions in one repository; (3) the runtime token's Actions-cache " +
+        'step running at different versions of this action, so two cache versions ' +
+        "exist in one repository; (3) the runtime token's Actions-cache " +
         'read scope. This is expected ONCE per version-affecting change. Two ' +
         'consecutive all-miss pushes with NO version-affecting change in between ' +
         'is the signal to act.',
@@ -873,9 +873,15 @@ export async function publishMirror(
     // AND IT FIRES ON A VERSION SKEW TOO, not only on a rotation, which is the reading
     // this instruction otherwise sends a reader away from. Where the artifact that WROTE
     // the entries and the artifact this publish step runs from are different versions of
-    // this action, the two compute different cache versions in one repository and every
-    // enumerated entry misses -- with no rotation anywhere in the commit range to find.
-    // Our own instance of that class is action-bundle drift between
+    // this action, two cache versions exist in one repository and every entry written by
+    // the OTHER artifact misses -- with no rotation anywhere in the commit range to find.
+    // WHICH IS WHY THE SHAPE LANDS HERE AND NOT ON THE GATE ABOVE, and the distinction is
+    // worth the sentence: entries this run writes through the publish-side artifact still
+    // restore, so `mirrored >= 1` and the total gate stays silent, exactly as the
+    // paragraph above says it does for a rotation. A skew under which EVERY enumerated
+    // entry missed would reach the gate above instead, and this `else if` would be
+    // unreachable -- so a reader must not read this paragraph as "the partial branch owns
+    // every skew". Our own instance of the class is action-bundle drift between
     // `start-cache-server/index.js` and the `dist/`-built internal action; the consumer's
     // is a stale pinned ref against a newer install. Same mechanism, same miss shape, and
     // the message names it in the consumer-general form because a stranger cannot act on
@@ -934,11 +940,12 @@ export async function publishMirror(
         'worth checking, and this list is not exhaustive: (1) a cache-version ' +
         'rotation in this commit range -- the archive path literal or the cross-OS ' +
         'flag changed; (2) the sidecar that wrote these entries and this publish ' +
-        'step running at different versions of this action, which computes two ' +
-        "cache versions in one repository; (3) the runtime token's Actions-cache " +
-        'read scope; (4) the first publish run against a new month shard, where ' +
-        'entries previously skipped as already mirrored are re-attempted and a ' +
-        'one-time rise is expected.',
+        'step running at different versions of this action, so two cache versions ' +
+        "exist in one repository; (3) the runtime token's Actions-cache read " +
+        'scope; (4) the first publish run against a new month shard, where entries ' +
+        'previously skipped as already mirrored are re-attempted, so any of them ' +
+        'that can no longer restore become visible at once and stay counted until ' +
+        'they evict.',
     );
   }
 

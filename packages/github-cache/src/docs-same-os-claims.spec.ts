@@ -260,7 +260,12 @@ const DOCS_08_SITES = [
     required: [
       'MECHANISM: !cancelled() runs this job even when a needs: dependency FAILED.',
       'BOUNDED FAILURE MODE: a skipped mirror, never a wrong artifact.',
-      'MEASURED on run 30400231720',
+      // EXTENDED to the unique tail. The bare run id occurs TWICE in ci.yml, in two
+      // different jobs -- this justification paragraph and the CORR-02 shard-growth
+      // comment -- so the short needle survived deleting the whole paragraph this
+      // row exists to protect. Only the justification carries "which is why this
+      // widening is a fix".
+      'MEASURED on run 30400231720, which is why this widening is a fix',
     ],
     forbidden: [],
   },
@@ -753,14 +758,28 @@ describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS
  * could not use that technique -- the replacement FACT is the same fact in both blocks and
  * rewording one to be unique would make the two blocks disagree about a shared truth. So the
  * count is asserted instead, which changes NO `ci.yml` prose and therefore cannot disturb the
- * other nine locked phrases. The other eight Phase 10/11 phrases were verified unique
- * (count 1); only row A's two are duplicated, which is why this guard is scoped to them.
+ * other locked phrases.
  *
- * KEPT ALONGSIDE row A rather than replacing it. The count subsumes the containment, but the
- * two failures say different things -- "the phrase is gone" and "the phrase survives in only
- * one of the two blocks" -- and a reader who deleted one block needs the second message, not
- * the first. Removing row A from the table would also force a rewrite of the header's
- * five-row Phase 11 arithmetic for no gain.
+ * WHAT THIS DOCSTRING USED TO CLAIM, and why the correction matters. It said "the other eight
+ * Phase 10/11 phrases were verified unique (count 1); only row A's two are duplicated". That
+ * is false as written -- the Phase 10 rows contribute 28 phrases, not eight, and one of THOSE
+ * is duplicated too: row `MEASURED on run 30400231720` occurs in the publish `needs:`
+ * justification AND in a CORR-02 shard-growth comment in a different job, so its `toContain`
+ * survived deleting the paragraph it exists to protect. The false completeness claim is
+ * exactly what made that gap look covered. That row now carries its unique tail; this
+ * docstring no longer asserts a uniqueness sweep it never performed.
+ *
+ * COUNT AND LOCATION, both, because the count ALONE cannot localize. Two occurrences anywhere
+ * in `ci.yml` satisfy it, so deleting the block above `hash-parity-compare` and duplicating
+ * the sentence inside the `hash-parity` block keeps the count at 2 -- one block locked, the
+ * other gone, guard green. The per-block clause pins each occurrence to the comment run
+ * directly above its own job key, where row A's own docstring says the subject lives.
+ *
+ * KEPT ALONGSIDE row A rather than replacing it. The clauses subsume the containment, but the
+ * failures say different things -- "the phrase is gone", "the phrase survives in only one of
+ * the two blocks", and "a third block now carries it" -- and a reader who deleted one block
+ * needs the second message, not the first. Removing row A from the table would also force a
+ * rewrite of the header's five-row Phase 11 arithmetic for no gain.
  *
  * `split(phrase).length - 1` counts NON-OVERLAPPING occurrences, which is the right counter
  * here: these phrases cannot overlap themselves.
@@ -774,6 +793,50 @@ describe('Phase 11 row A locks BOTH ci.yml blocks, not just the first (DOCS-08, 
     "ci.yml IS in nx.json's targetDefaults.test.inputs (PARITY-08, Phase 9)",
     'asserted by dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts',
   ] as const;
+
+  /**
+   * The contiguous comment run directly above a job key -- the block row A's docstring
+   * names as its subject. Throws rather than returning empty when the job key is absent
+   * or carries no comment run, so a renamed job fails loud here instead of silently
+   * satisfying a containment check against an empty string.
+   */
+  function commentBlockAbove(jobKey: string): string {
+    const lines = read('.github/workflows/ci.yml').split('\n');
+    const keyAt = lines.indexOf(`  ${jobKey}:`);
+
+    if (keyAt < 0) {
+      throw new Error(
+        `ci.yml has no job key \`  ${jobKey}:\`. Row A of DOCS_08_SITES locks the comment block above it; if the job was renamed, update this guard in the SAME commit.`,
+      );
+    }
+
+    let start = keyAt;
+
+    while (start > 0 && lines[start - 1].trim().startsWith('#')) {
+      start--;
+    }
+
+    if (start === keyAt) {
+      throw new Error(
+        `ci.yml carries no comment block directly above \`  ${jobKey}:\`. That block IS row A's subject -- its deletion is the regression this guard exists to catch.`,
+      );
+    }
+
+    return lines.slice(start, keyAt).join('\n');
+  }
+
+  it.each(
+    ROW_A_PHRASES.flatMap((phrase) =>
+      ['hash-parity', 'hash-parity-compare'].map(
+        (jobKey) => [jobKey, phrase] as const,
+      ),
+    ),
+  )('the comment block above %s carries `%s`', (jobKey, phrase) => {
+    expect(
+      commentBlockAbove(jobKey),
+      `ci.yml's comment block directly above the \`${jobKey}\` job must carry the phrase \`${phrase}\`. A whole-file count of 2 does not localize: deleting one block and duplicating the sentence inside the other keeps the count while losing half the lock. Both blocks previously claimed the OPPOSITE (that ci.yml is NOT an nx.json test input); removing the correction from one of them leaves a future reader holding a documented argument for REMOVING the registration, and removing it turns every ci.yml content guard in this file and in dogfood-cross-os.spec.ts into a replay of a pass computed before its subject existed. If a block was legitimately reworded, update this guard in the SAME commit.`,
+    ).toContain(phrase);
+  });
 
   it.each([...ROW_A_PHRASES])(
     'occurs in ci.yml exactly twice: `%s`',

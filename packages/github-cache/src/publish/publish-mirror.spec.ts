@@ -1419,10 +1419,47 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
     const warned = vi.mocked(core.warning).mock.calls[0][0];
     // Asserted on the MESSAGE, never on the call count alone: a count of one is equally
     // satisfied by the WRONG branch firing, and the two branches diagnose different things.
-    expect(warned).toContain('restored as a MISS');
-    expect(warned).toContain('self-perpetuating');
+    expect(warned).toContain('9 of 10 server-produced cache entries (90%)');
+    // WHICH DENOMINATOR, which is the one thing about this number a reader cannot infer
+    // and the one a future reader is most likely to "fix" (see the engine comment: the
+    // attempted-only reading fires on both legs of a healthy run).
+    expect(warned).toContain('not of the restores attempted');
+    // The two candidate causes, in the sibling gate's own words.
+    expect(warned).toContain('cache-version rotation in this commit range');
+    expect(warned).toContain("runtime token's Actions-cache read scope");
     // A warning, never a failure -- setFailed is reserved for per-item upload faults.
     expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  it('names nothing a consumer cannot observe in their OWN repository (W3)', async () => {
+    await runWithMisses(10, 9);
+
+    // The message used to close by telling the reader to read the figure against a
+    // post-fix baseline rather than a pre-fix one, because a filter had shrunk the
+    // denominator. A consumer has no such filter, no pre-fix figure and no baseline --
+    // that sentence was this repository's incident history rendered as a stranger's job
+    // log, which PROJECT.md's distribution constraint forbids.
+    //
+    // The single-character character class below is load-bearing, not style: spelling the
+    // phrase whole would plant it in the very file that proves it is gone, and a
+    // repo-wide search could then no longer tell this guard apart from a regression. Same
+    // technique, same reason, as the `/differen[t] OS/` guard earlier in this file.
+    //
+    // ASSERTED OVER EVERY RECORDED ARGUMENT, never as
+    // `toHaveBeenCalledWith(expect.not.stringMatching(...))`. That form passes when ANY
+    // ONE call fails to match, so it states "some warning lacks the phrase" rather than
+    // "no warning carries it" -- it negates the predicate instead of the quantifier, and
+    // a second warning added to this path would silently vacate it. The call count is
+    // pinned too, so the two clauses cover the same fact from both sides.
+    expect(core.warning).toHaveBeenCalledOnce();
+    const recorded = vi.mocked(core.warning).mock.calls.flat();
+    expect(recorded).not.toContainEqual(expect.stringMatching(/see[d] filter/));
+    expect(recorded).not.toContainEqual(
+      expect.stringMatching(/pre-fi[x] figure/),
+    );
+    expect(recorded).not.toContainEqual(
+      expect.stringMatching(/post-fi[x] baseline/),
+    );
   });
 
   it('stays SILENT just BELOW the target rate (10 entries, 8 misses -- bound 0.4902)', async () => {
@@ -1488,7 +1525,10 @@ describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
         'cache-VERSION axis and the two-push reading instruction. Asserted on content ' +
         'because a call count of one cannot tell which of the two branches fired.',
     ).toContain('nothing mirrored');
-    expect(warned).not.toContain('self-perpetuating');
+    // The partial branch's own denominator clause, which the total message does not carry.
+    // The two messages share both candidate causes by design, so this is the discriminator
+    // -- a needle taken from the shared half would pass whichever branch fired.
+    expect(warned).not.toContain('not of the restores attempted');
   });
 });
 

@@ -879,16 +879,26 @@ export async function publishMirror(
     // signal and it is reserved for per-item upload faults.
     const percent = Math.round((readMisses / hashes.length) * 100);
 
+    // THE MESSAGE IS WRITTEN FOR A STRANGER'S CI LOG, and that is a constraint on its
+    // CONTENT, not a matter of tone. It used to close by instructing the reader to compare
+    // this figure against a specific later reading of THIS repository rather than an
+    // earlier one, on the grounds that the seed filter had moved the denominator between
+    // them. A consumer has that filter in no version of their history and has neither
+    // reading -- the sentence was our own incident record rendered as a stranger's job
+    // log, which `PROJECT.md`'s distribution constraint forbids. The negative assertion in
+    // `publish-mirror.spec.ts` is what stops it returning; the phrases it proves absent
+    // are split there so they are not planted in the file that proves it.
+    //
+    // What survives is only what a reader can act on inside their OWN repository: the
+    // count, the enumeration size, which denominator that proportion is over, and the two
+    // candidate causes the sibling gate above already names.
     core.warning(
       `github-cache publish: ${readMisses} of ${hashes.length} server-produced ` +
-        `cache entries (${percent}%) restored as a MISS. Two candidate causes: ` +
-        '(1) a cache-VERSION rotation window -- see the all-MISS comment just above ' +
-        'for which of the three look-alike mechanisms that is and why naming the axis ' +
-        'matters; (2) a self-perpetuating cohort -- an entry that MISSES can never be ' +
-        'mirrored, so it is never in the shard, so it is enumerated and retried on ' +
-        'every future run and can never succeed. Read this against the post-fix ' +
-        'baseline rather than against a pre-fix figure: the seed filter shrinks the ' +
-        'denominator, so counts recorded before it are not comparable.',
+        `cache entries (${percent}%) restored as a MISS. That is a proportion of ` +
+        'the entries ENUMERATED on this leg, not of the restores attempted. Two ' +
+        'candidate causes: (1) a cache-version rotation in this commit range -- the ' +
+        'archive path literal or the cross-OS flag changed; (2) the runtime ' +
+        "token's Actions-cache read scope.",
     );
   }
 

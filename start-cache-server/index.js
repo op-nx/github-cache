@@ -68705,6 +68705,9 @@ function selectBackend(env = process.env) {
     );
   }
   if (resolveGitHubToken(env) === void 0) {
+    warning(
+      "github-cache: no GitHub token is available, so this job serves an EMPTY read-only memory backend -- every read is a permanent MISS and every PUT is answered 403, for the whole job, silently. The cache is cold and nothing else will say so. Wire GITHUB_TOKEN (or GH_TOKEN) into the sidecar step to enable caching."
+    );
     return createReadOnlyMemoryBackend();
   }
   if (env.CACHE_READ_ONLY) {

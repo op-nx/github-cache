@@ -286,6 +286,54 @@ describe('selectBackend fail-closed repository validation (TEST-01)', () => {
 
     expect(isWritableBackend(backend)).toBe(false);
   });
+
+  // C2. THE DEGRADE MUST BE OBSERVABLE, and every clause above it reads only the RETURNED
+  // BACKEND, so all of them stay green on a branch that degrades in total silence -- which
+  // is what it did. On a write-trusted push with an unwired token the sidecar starts, the
+  // readiness poll takes its 404 as proof of life, every read 404s, every write 403s, Nx
+  // degrades best-effort, and the job is GREEN with a permanently cold cache and not one
+  // line in the log.
+  //
+  // A WARNING, and the LEVEL is asserted, not just the emission. The adjacent
+  // CACHE_READ_ONLY branch deliberately emits an INFO because that narrowing was
+  // REQUESTED; this one is a surprise, so the two must not be allowed to converge. Pinning
+  // `core.info` as NOT called with this text is what keeps the distinction real.
+  //
+  // Asserted on the CONSEQUENCE words rather than the whole string, matching the sibling
+  // clause: rewording stays free, deleting the diagnosis does not.
+  it('WARNS about the cold cache when it degrades for want of a token, and does not merely info (C2)', () => {
+    selectBackend({
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'push',
+      GITHUB_REPOSITORY: 'op-nx/github-cache',
+    });
+
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('permanent MISS'),
+    );
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('no GitHub token is available'),
+    );
+    expect(core.info).not.toHaveBeenCalledWith(
+      expect.stringContaining('no GitHub token is available'),
+    );
+
+    vi.mocked(core.warning).mockClear();
+
+    // The non-vacuity half, sharing the case so neither can be dropped: an
+    // unconditional warning at the top of selectBackend would satisfy the rows above
+    // and prove nothing about this branch.
+    selectBackend({
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'push',
+      GITHUB_REPOSITORY: 'op-nx/github-cache',
+      GITHUB_TOKEN: 'ghs_token',
+    });
+
+    expect(core.warning).not.toHaveBeenCalledWith(
+      expect.stringContaining('no GitHub token is available'),
+    );
+  });
 });
 
 describe('resolveGitHubToken fallthrough (TEST-01)', () => {

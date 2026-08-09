@@ -65,6 +65,21 @@ export function selectBackend(
     // Degrade, do NOT throw: a merely-unwired workflow token must not break the
     // build. A malformed repository identity (above) is a misconfiguration and
     // does throw; an absent token is just a not-yet-write-capable context.
+    //
+    // WARNING, not info, and the asymmetry with the sibling below is the whole point.
+    // That one is an INFO because the narrowing was REQUESTED -- a workflow author set
+    // the knob on purpose. This one is a SURPRISE: on a write-trusted push with an
+    // unwired token the sidecar starts, the readiness poll takes its 404 as proof of
+    // life, every read 404s, every write 403s, Nx degrades best-effort, and the job is
+    // GREEN with a permanently cold cache and not one line in the log to find. It is
+    // the same class as every other warning in this package, so it gets the same level.
+    //
+    // Names the CONSEQUENCE rather than the missing variable, because the consequence is
+    // what an operator would be searching for.
+    core.warning(
+      'github-cache: no GitHub token is available, so this job serves an EMPTY read-only memory backend -- every read is a permanent MISS and every PUT is answered 403, for the whole job, silently. The cache is cold and nothing else will say so. Wire GITHUB_TOKEN (or GH_TOKEN) into the sidecar step to enable caching.',
+    );
+
     return createReadOnlyMemoryBackend();
   }
 
@@ -109,10 +124,16 @@ export function selectBackend(
     // that never had it. docs/configuration.md already names that trap; this is the signal that
     // makes it diagnosable from the job log instead of only from the docs.
     //
-    // info, NOT warning, and the level is the judgement rather than an oversight. Every other
-    // silent-degradation path in this package warns (the saveCache -1 ambiguity, the
-    // all-restore-MISS run, the asset cap, an unparseable created_at) because each is a
-    // SURPRISE. This one is a REQUEST: the workflow author asked for it, on purpose, on three
+    // info, NOT warning, and the level is the judgement rather than an oversight. The
+    // silent-degradation paths in this package warn -- the saveCache -1 ambiguity, the
+    // all-restore-MISS run, the asset cap, an unparseable created_at, and the token-absent
+    // degrade three branches above -- because each is a SURPRISE. That list is a SAMPLE,
+    // not a census: the previous wording said "every other silent-degradation path in this
+    // package warns" and then omitted the branch three lines above it, which is the same
+    // false-completeness this file has already paid for twice. Do not restore a totalising
+    // claim here unless something enforces it.
+    //
+    // This one is a REQUEST: the workflow author asked for it, on purpose, on three
     // legs of every run in this repo alone. A warning there is an annotation on correct
     // configuration three times per run, which is how a project teaches its operators to
     // ignore annotations -- the same tripwire-that-fires-on-correct-work failure D-30 forbids.

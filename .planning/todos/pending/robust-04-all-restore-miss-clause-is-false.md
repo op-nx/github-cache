@@ -43,8 +43,9 @@ day by `e78a842`, and gated on a Wilson lower bound hours later by `aee017c`.
 The gap above was latent and unrealised. It stood open for two weeks and nothing rode through it.
 
 The evidence is a direct measurement, not an argument. The last commit to rebuild the bundle is
-`501bcb1` (2026-08-04). Forty-seven commits later, a fresh build at HEAD still reproduces the
-committed `start-cache-server/index.js` byte for byte.
+`501bcb1` (2026-08-04). Forty-seven commits later -- measured at `23d9207`, this amendment's
+parent -- a fresh build still reproduced the committed `start-cache-server/index.js` byte for
+byte.
 
 The commit accounting agrees. Nine commits rebuilt the committed bundle in that window
 (`969de3e..HEAD`). Eight of the nine paired with the source change that required them; the

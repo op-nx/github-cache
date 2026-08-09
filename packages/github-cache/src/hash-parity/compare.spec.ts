@@ -735,10 +735,20 @@ describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)'
     new URL('assert-parity.ts', import.meta.url),
     'utf8',
   );
+  // COMMENT-STRIPPED, the same view `dogfood-cross-os.spec.ts` builds -- the spec this
+  // group's header already names as its own precedent. Reading `ci.yml` RAW makes the
+  // grep assertion below satisfiable by a `#` line: the house convention is that a
+  // workflow comment repeats the needle it explains VERBATIM, so a step deleted and
+  // described in a comment would keep this clause green. It is non-vacuous today only
+  // because the needle happens to occur exactly once, which is an accident of the
+  // current file rather than a property of it.
   const ciYml = readFileSync(
     new URL('.github/workflows/ci.yml', workspaceRoot),
     'utf8',
-  );
+  )
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
 
   // The extraction is its own test, and it comes FIRST: every assertion below is
   // built from this value, so a regex that silently stopped matching would make the

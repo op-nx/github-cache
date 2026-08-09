@@ -548,7 +548,7 @@ export async function publishMirror(
   // could only ever repeat the first answer.
   let burnedShardTag = false;
 
-  // OBS-03: producer attribution as Release METADATA, outside the lookup name, so it
+  // OBS-03: publisher attribution as Release METADATA, outside the lookup name, so it
   // survives a namespace change to the name itself. COMMENT-LOCKED, and the lock is the
   // load-bearing half -- what this value means is easy to overstate and the overstatement
   // is worse than no label at all.
@@ -866,9 +866,30 @@ export async function publishMirror(
     // leg's own `feed<i><run_id>` seed is written in this run, under the current cache
     // version, on the default-branch ref: it is enumerated and it always restores. A
     // cache-VERSION rotation therefore leaves `mirrored >= 1` and the gate above SILENT.
-    // Treat this branch as the live rotation signal; the gate above covers only a
-    // read-scope regression wide enough to hide the seed itself. A reader tuning the
-    // threshold must not over-weight a gate that does not fire.
+    // The gate above covers only a read-scope regression wide enough to hide the seed
+    // itself. A reader tuning the threshold must not over-weight a gate that does not
+    // fire.
+    //
+    // NEITHER BRANCH DETECTS A ROTATION WHILE IT IS UNDER WAY, and this paragraph used to
+    // claim this one did. D3's own pre-restore reorder made that false: an entry present in the
+    // shard is SKIPPED with no restore attempted, so a mid-month cache-version rotation's
+    // victims land in `alreadyPresent` rather than in `readMisses`. On this file's own
+    // measured figures (run 31305961054: 112 enumerated, 43 misses, 59 skipped
+    // pre-restore) a full rotation gives roughly 53/112, whose Wilson lower bound lands
+    // near 0.38 -- under the target rate, so THIS branch stays silent too. Both tripwires
+    // silent, `failed` 0, leg GREEN having mirrored only what it wrote itself.
+    //
+    // THE DETECTABLE WINDOW is the first publish against a NEW month shard, where entries
+    // previously skipped as already mirrored are re-attempted and any that can no longer
+    // restore become visible at once -- which is exactly what cause (4) in this branch's
+    // own message already describes.
+    //
+    // Folding `alreadyPresent` into the condition is the obvious repair and is NOT taken
+    // here: whether `alreadyPresent + readMisses === hashes.length` false-positives on a
+    // healthy run is unmeasured, and the attempted-only denominator -- the other obvious
+    // repair -- was MEASURED firing on both legs of a healthy run. That needs a
+    // measurement against a real publish run, not a judgement call. This correction is
+    // the comment only; the firing condition is untouched.
     //
     // AND IT FIRES ON A VERSION SKEW TOO, not only on a rotation, which is the reading
     // this instruction otherwise sends a reader away from. Where the artifact that WROTE

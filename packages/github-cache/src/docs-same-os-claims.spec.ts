@@ -115,7 +115,17 @@ const DOCS_08_SITES = [
      * emits names the axis". The total gate needs `readMisses === hashes.length &&
      * mirrored === 0`; a deliberate bump moves the sidecar and publish together, so the
      * entries written during that same RUN restore and mirror, `mirrored` is non-zero and
-     * the total gate stays silent. The partial branch is the live rotation signal instead.
+     * the total gate stays silent.
+     *
+     * NOR DOES THE PARTIAL BRANCH detect a rotation while it is under way, which is what
+     * this docstring used to claim -- the same false sentence as the one authored at the
+     * branch itself in publish-mirror.ts, retracted in the same commit. D3's pre-restore reorder skips
+     * shard-present entries with no restore attempted, so a mid-month rotation's victims
+     * land in `alreadyPresent` rather than `readMisses` and the partial branch stays under
+     * its target rate on the measured figures. Neither branch detects a mid-month
+     * rotation; the detectable window is the first publish against a NEW month shard.
+     * This row still records the version-bump correction it always did -- only the
+     * sentence naming a live signal is gone.
      *
      * A SEPARATE ROW FROM THE DOCS-08 ONE ABOVE, deliberately: that row records a DOCS-08
      * same-OS site, this one records an OBS-04 warning-selection correction. Keeping them

@@ -14,6 +14,7 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
@@ -44,6 +45,42 @@ vi.mock('@actions/cache');
 vi.mock('@actions/core', () => ({
   warning: vi.fn(),
 }));
+
+/**
+ * The fault to inject into the NEXT `writeFile`, or `undefined` for a real write.
+ *
+ * A FLAG rather than a `vi.fn`, deliberately: this file's `afterEach` calls
+ * `vi.resetAllMocks()`, which would wipe a passthrough implementation and break every
+ * other case's archive pre-write. A plain module-level `let` survives the reset, and the
+ * `beforeEach` below clears it so a fault can never leak into the next case.
+ */
+let writeFileFault: Error | undefined;
+
+/**
+ * `node:fs/promises` with a fault seam on `writeFile` only -- everything else is the real
+ * module, including the `rm` this spec and the source both depend on for cleanup.
+ *
+ * REQUIRED for the C1 case, and there is no lighter route. The behaviour under test is a
+ * write that THROWS while an archive already sits at the deterministic per-hash path, so
+ * the fault has to come from `writeFile` itself: a bad argument is rejected before the
+ * file is opened, which would leave nothing to sweep and make the case pass with the write
+ * outside the try. The realistic causes -- ENOSPC, or EPERM/EACCES/EBUSY from Windows
+ * antivirus or a concurrent handle -- cannot be provoked portably.
+ */
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+
+  return {
+    ...actual,
+    writeFile: (...args: Parameters<typeof actual.writeFile>) => {
+      if (writeFileFault) {
+        return Promise.reject(writeFileFault);
+      }
+
+      return actual.writeFile(...args);
+    },
+  };
+});
 
 const restoreCache = vi.mocked(cache.restoreCache);
 const saveCache = vi.mocked(cache.saveCache);
@@ -77,8 +114,13 @@ afterAll(() => {
   restoreCwd();
 });
 
+beforeEach(() => {
+  writeFileFault = undefined;
+});
+
 afterEach(async () => {
   vi.resetAllMocks();
+  writeFileFault = undefined;
   await rm(cacheArchivePath(HASH), { force: true });
 });
 
@@ -155,6 +197,35 @@ describe('createActionsCacheBackend get (ROBUST-03)', () => {
 });
 
 describe('createActionsCacheBackend put (ROBUST-03)', () => {
+  // C1. The archive WRITE used to sit outside the try/finally, so the finally's own
+  // claim -- cleanup runs on every exit path -- was false for the one exit that never
+  // reached saveCache: a throwing write left a partial archive at the deterministic
+  // per-hash path with the finally never entered. Without this case the fix has no
+  // guard at all, and the get-path sibling cases above would look like they covered it.
+  //
+  // A leftover is PRE-WRITTEN so the assertion is non-vacuous: a rejecting writeFile
+  // creates nothing itself, so with the write outside the try this case would pass
+  // against an empty directory rather than against the cleanup.
+  it('removes the archive when the WRITE itself throws, not only when saveCache does (T-2-11)', async () => {
+    await writeFile(cacheArchivePath(HASH), Buffer.from('partial-archive'));
+    writeFileFault = Object.assign(new Error('no space left on device'), {
+      code: 'ENOSPC',
+    });
+    const backend = createActionsCacheBackend();
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(true);
+
+    // Rethrown unchanged: a write fault is not a ReserveCacheError, so it falls
+    // through the existing catch into server.ts's put-fault handler. Behaviour is
+    // preserved by the move -- only the cleanup's reach changed.
+    await expect(backend.put(HASH, Buffer.from('tar-bytes'))).rejects.toThrow(
+      'no space left on device',
+    );
+
+    expect(existsSync(cacheArchivePath(HASH))).toBe(false);
+    expect(saveCache).not.toHaveBeenCalled();
+  });
+
   it('returns "stored" on a positive saveCache id (ROBUST-03)', async () => {
     saveCache.mockResolvedValue(42);
     const backend = createActionsCacheBackend();

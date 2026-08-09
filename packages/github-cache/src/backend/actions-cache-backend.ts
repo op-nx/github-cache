@@ -311,9 +311,23 @@ export function createActionsCacheBackend(): CacheBackend {
         // sync form matches the construction-time call for the reason stated there.
         mkdirSync(CACHE_ARCHIVE_DIR, { recursive: true });
 
-        await writeFile(path, bytes);
-
         try {
+          // THE WRITE IS INSIDE THE TRY, and the placement is what makes the finally's
+          // own claim true. Outside it, a THROWING write -- ENOSPC, or EPERM/EACCES/EBUSY
+          // from Windows antivirus or a concurrent handle -- left a partial archive at the
+          // deterministic per-hash path with the finally never entered. This is the same
+          // defect the READ path above fixed, for the same reason.
+          //
+          // BEHAVIOUR IS PRESERVED, stated so a future reader does not "restore" the old
+          // shape: a write fault falls into the existing catch below, is not a
+          // ReserveCacheError, and rethrows unchanged into server.ts's put-fault handler.
+          //
+          // SEVERITY, honestly: this was never a correctness hole. A stale partial cannot
+          // become a wrong HIT -- get() re-restores over the path and its own finally
+          // sweeps it -- and the put still fails closed. The cost was decrypted cache
+          // bytes left on a shared or reused runner, which is what T-2-11 is about.
+          await writeFile(path, bytes);
+
           // D-04 / D-06 / SRV-05: saveCache resolves a positive cache id on a
           // CONFIRMED write, or the ambiguous sentinel -1. -1 is NOT proof of a
           // benign no-op: @actions/cache (verified v6.2.0, cache.js saveCacheV1/V2
@@ -407,9 +421,10 @@ export function createActionsCacheBackend(): CacheBackend {
 
           throw error;
         } finally {
-          // Cleanup runs on every exit path -- success, benign no-op, and the
-          // propagating-error path -- so cache bytes are never left on a shared or
-          // reused runner (T-2-11).
+          // Cleanup runs on every exit path -- success, benign no-op, a FAILING WRITE,
+          // and the propagating-error path -- so cache bytes are never left on a shared
+          // or reused runner (T-2-11). The write sits inside the try above, which is what
+          // makes "every exit path" include the one that never reached saveCache.
           await rm(path, { force: true });
         }
       });

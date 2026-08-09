@@ -68319,8 +68319,8 @@ function createActionsCacheBackend() {
       return withHashLock(hash, async () => {
         const path11 = cacheArchivePath(hash);
         (0, import_node_fs2.mkdirSync)(CACHE_ARCHIVE_DIR, { recursive: true });
-        await (0, import_promises.writeFile)(path11, bytes);
         try {
+          await (0, import_promises.writeFile)(path11, bytes);
           const cacheId = await saveCache2(
             [path11],
             cacheKeyFor(hash),

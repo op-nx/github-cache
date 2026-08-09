@@ -44,6 +44,16 @@ const REQUIRED_DOCS = [
 /** The background-step lifecycle tokens both the README and the example must show. */
 const LIFECYCLE_TOKENS = ['start-cache-server', 'background:', 'cancel:'];
 
+/**
+ * A knob name as a WHOLE WORD. A bare substring match is vacuous for the short
+ * knobs: `toContain('PORT')` is satisfied by IMPORTANT, SUPPORT or EXPORT, all of
+ * which occur in ordinary prose, so `PORT` could vanish from either doc with both
+ * clauses green. Not live today -- but the clause did not mean what it read as.
+ */
+function wholeWord(knob: string): RegExp {
+  return new RegExp(`\\b${knob}\\b`);
+}
+
 describe('adoption docs exist (DOCS-01/02/04)', () => {
   it.each(REQUIRED_DOCS)('%s exists', (path) => {
     expect(existsSync(docUrl(path))).toBe(true);
@@ -54,7 +64,7 @@ describe('configuration.md documents the consumer contract (DOCS-02)', () => {
   const config = read('docs/configuration.md');
 
   it.each(EXPECTED_ENV_KNOBS)('documents env knob %s', (knob) => {
-    expect(config).toContain(knob);
+    expect(config).toMatch(wholeWord(knob));
   });
 
   it('documents MAX_CACHE_BODY_BYTES as a fixed contract limit, in one sentence', () => {
@@ -84,7 +94,7 @@ describe('versioning.md documents every consumer env knob (DOCS-02/DOCS-05)', ()
   const versioning = read('docs/versioning.md');
 
   it.each(EXPECTED_ENV_KNOBS)('lists env knob %s', (knob) => {
-    expect(versioning).toContain(knob);
+    expect(versioning).toMatch(wholeWord(knob));
   });
 
   // GROUP (c), ON THE SAME FOOTING, and this is the generalization the comment above
@@ -174,18 +184,26 @@ describe('advanced.md documents every selectBackend outcome (F11)', () => {
     expect(advanced).toMatch(/Releases \*\*reader\*\*|Releases reader/);
   });
 
+  // RELATION, not co-presence. Two independent whole-document matches assert only
+  // that both tokens occur SOMEWHERE -- they happen to land on one line today, and
+  // nothing held them there. Line-scoping makes each clause assert the outcome it
+  // names: the variable WITH its throw, the backend WITH its degrade.
   it('names the fail-closed throw outcome on a malformed identity', () => {
-    expect(advanced).toMatch(/throws?/i);
-    expect(advanced).toContain('GITHUB_REPOSITORY');
+    expect(advanced).toMatch(/GITHUB_REPOSITORY[^\n]*throws?/i);
   });
 
   it('names the empty-memory permanent-MISS degrade outcome', () => {
-    expect(advanced).toMatch(/memory backend/i);
-    expect(advanced).toMatch(/permanent MISS/i);
+    expect(advanced).toMatch(/memory backend[^\n]*permanent MISS/i);
   });
 
+  // Anchored at a TABLE ROW, in the style of the CACHE_READ_ONLY clause below.
+  // /Actions-cache backend/i alone occurs on five lines of advanced.md, only one
+  // of which is the selection-table row, so BOTH table rows could be deleted with
+  // this clause still green off the surrounding prose. Line-scoping to `writable`
+  // is not enough on its own either -- the prose at the end of the doc also pairs
+  // the two on one line; requiring the leading table pipe is what pins the row.
   it('names the writable Actions-cache backend outcome', () => {
-    expect(advanced).toMatch(/Actions-cache backend/i);
+    expect(advanced).toMatch(/^\|[^\n]*writable[^\n]*Actions-cache backend/im);
   });
 
   // Line-scoped, and it names the KNOB, because the clause above already matches

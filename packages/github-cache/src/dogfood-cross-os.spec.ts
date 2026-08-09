@@ -1074,7 +1074,21 @@ const strippedRunnerLines = codeLines.filter((line) =>
   line.includes('windows-11-arm'),
 ).length;
 
-function windowsLegReasons(leg: string, target: string, producer: string) {
+function windowsLegReasons(
+  leg: string,
+  target: string,
+  producer: string,
+  /**
+   * The leg's own gate floor -- one per CACHEABLE TASK the leg resolves, which is not the
+   * same as one per LEG. `typecheck` carries an inferred `dependsOn: ["build", "^typecheck"]`
+   * so `nx run-many -t typecheck` resolves TWO tasks; `build` and `test` resolve one each.
+   * Parameterised rather than hard-coded because a shared literal made this leg's floor read
+   * as a house constant, which is how it stayed at 1 while the leg resolved two tasks -- a
+   * state where cross-OS restore of the typecheck entry could break, `build` still restore,
+   * and the gate stay GREEN having never made its one observation.
+   */
+  floor: number,
+) {
   return {
     presence:
       `jobBlock THROWS when no job is keyed \`  ${leg}:\`, and that throw IS the presence ` +
@@ -1159,12 +1173,13 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
       "`env:`, because a REGULAR step's $GITHUB_ENV writes reach later steps while a BACKGROUND " +
       `step's do not (start-cache-server/action.yml records this). ${RENAME_NOTE}`,
     gatedCount:
-      `${leg} must COMPARE its [remote cache] count against the floor of 1 and FAIL below it ` +
+      `${leg} must COMPARE its [remote cache] count against its floor of ${floor} and FAIL below ` +
+      `it ` +
       '(XOS-09, D-04/D-05), not merely print it. The COMPARISON and the `exit 1` under it are ' +
       "matched TOGETHER, with the gap bounded to the branch's single message line: a " +
       '`::error::` workflow command only ANNOTATES, so a comparison whose exit was deleted ' +
-      'leaves the leg GREEN on a zero cross-OS count while still printing "GATED at a floor of ' +
-      '1" -- a gate that reads as coverage. A BARE `/exit 1/` needle remains rejected and that ' +
+      'leaves the leg GREEN on a short cross-OS count while still printing "GATED at a floor of ' +
+      `${floor}" -- a gate that reads as coverage. A BARE \`/exit 1/\` needle remains rejected and that ` +
       'rejection is why the gap is bounded: this job block already contains one, in the "Wait ' +
       'for the loopback sidecar" readiness poll, it is not a comment so the strip above keeps ' +
       'it, and an unbounded gap simply walks past the closing `fi` to reach it -- the same ' +
@@ -1177,13 +1192,14 @@ function windowsLegReasons(leg: string, target: string, producer: string) {
     countShape:
       `${leg} must PROVE its count is a decimal number before comparing it, and must force ` +
       "grep to treat the tee'd log as TEXT. Both halves close the same fail-OPEN route, and it " +
-      'is MEASURED rather than argued: `[ "${count}" -lt 1 ]` sits in an `if` CONDITION, where ' +
+      `is MEASURED rather than argued: \`[ "\${count}" -lt ${floor} ]\` sits in an \`if\` CONDITION, where ` +
       '`set -e` is SUSPENDED, so a non-decimal count prints `[: ...: integer expected` to ' +
       'stderr, tests FALSE, takes the else branch and EXITS 0 -- the identical test outside a ' +
-      'condition exits 2 and aborts. So the leg PASSES while printing "GATED at a floor of 1" ' +
+      `condition exits 2 and aborts. So the leg PASSES while printing "GATED at a floor of ${floor}" ` +
       'over a count it never evaluated. `-a` is the other half: one NUL byte in the log makes ' +
       'grep report `Binary file ... matches` as a SINGLE line, and `wc -l` then returns 1 on ' +
-      'ZERO real labels -- clearing a floor of 1 outright. Neither the gatedCount clause nor ' +
+      `ZERO real labels -- clearing a floor of ${floor} outright when it is 1, and halving it ` +
+      'otherwise. Neither the gatedCount clause nor ' +
       'any other clause on this leg reads either line, so losing them leaves a gate that still ' +
       'LOOKS present and can be satisfied by an encoding artefact. The correct response to a ' +
       `red here is to RESTORE the guard, never to drop it as noise. ${RENAME_NOTE}`,
@@ -1226,7 +1242,7 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     countShape,
     backendToken,
     noIf,
-  } = windowsLegReasons('build-windows', 'build', 'build');
+  } = windowsLegReasons('build-windows', 'build', 'build', 1);
 
   // POSITIVE CONTROL, and it comes FIRST for the same reason every other control in this file
   // does: the no-`if:` clause at the end is a `not.toMatch`, which an empty or mis-extracted
@@ -1463,7 +1479,7 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     countShape,
     backendToken,
     noIf,
-  } = windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck');
+  } = windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck', 2);
 
   it('scopes to a real typecheck-windows job block that runs npm run typecheck', () => {
     const block = jobBlock('typecheck-windows');
@@ -1541,11 +1557,18 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     );
   });
 
-  it('gates that count at a floor of 1 rather than only printing it (XOS-09)', () => {
+  // FLOOR OF 2, and this leg is the only one of the three where that is right. `npm run
+  // typecheck` is `nx run-many -t typecheck`, and the typecheck target carries an inferred
+  // `dependsOn: ["build", "^typecheck"]`, so the leg resolves TWO cacheable tasks --
+  // `capture-hashes.mjs` pins exactly that two-task set and the traceability record shows
+  // healthy counts of 1/2/1. At a floor of 1, cross-OS restore of the TYPECHECK entry could
+  // break while `build` still restored, the count would be 1, and the gate would stay GREEN
+  // having never made the one observation the leg exists for.
+  it('gates that count at a floor of 2 -- one per cacheable task it resolves (XOS-09)', () => {
     const block = jobBlock('typecheck-windows');
 
     expect(block, gatedCount).toMatch(
-      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then\n[^\n]*\n {12}exit 1$/m,
+      /^ {10}if \[ "\$\{count\}" -lt 2 \]; then\n[^\n]*\n {12}exit 1$/m,
     );
     expect(block, gatedCount).not.toMatch(/exit 0\b/);
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
@@ -1592,7 +1615,7 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     countShape,
     backendToken,
     noIf,
-  } = windowsLegReasons('test-windows', 'test', 'test');
+  } = windowsLegReasons('test-windows', 'test', 'test', 1);
 
   it('scopes to a real test-windows job block that runs npm run test', () => {
     const block = jobBlock('test-windows');

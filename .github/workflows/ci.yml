@@ -696,11 +696,24 @@ jobs:
         run: |
           set -euo pipefail
           npm run typecheck 2>&1 | tee typecheck-nx.log
-      # GATED at a floor of 1 -- the build-windows leg above carries the full rationale;
+      # GATED at a floor of 2 -- the build-windows leg above carries the full rationale;
       # this is the one-line form. The floor is sound because CACHE_READ_ONLY makes this
       # leg a pure CONSUMER: with no write path it cannot save an entry of its own, so a
-      # `[remote cache]` label is NECESSARILY a restore of the ubuntu producer's entry
+      # `[remote cache]` label is NECESSARILY a restore of an ubuntu producer's entry
       # and a re-run cannot launder a zero into a green.
+      #
+      # TWO, not one, and this leg is the only one of the three where that is true.
+      # `npm run typecheck` is `nx run-many -t typecheck`, and the typecheck target
+      # carries an inferred `dependsOn: ["build", "^typecheck"]` -- so the leg resolves
+      # TWO cacheable tasks, capture-hashes.mjs pins exactly that two-task set, and the
+      # traceability record shows healthy counts of 1/2/1. At a floor of 1, cross-OS
+      # restore of the TYPECHECK entry could break while `build` still restored, the count
+      # would be 1, and this gate would stay GREEN having never made the one observation
+      # it exists for. `build-windows` and `test-windows` resolve one task each and
+      # correctly stay at 1.
+      #
+      # Still a FLOOR, never an exact pin: XOS-09 forbids the exact form, because a count
+      # ABOVE the floor is a healthy cache doing more work than the minimum, not a defect.
       #
       # Stated ONCE rather than three times over: the argument was 13 lines verbatim on
       # each of the three legs, which triples the blast radius of the next correction --
@@ -715,15 +728,15 @@ jobs:
         run: |
           set -euo pipefail
           count=$({ grep -a -o -F '[remote cache]' typecheck-nx.log || true; } | wc -l | tr -d '[:space:]')
-          echo "remote-cache label occurrences on windows-11-arm (typecheck): ${count} -- GATED at a floor of 1"
+          echo "remote-cache label occurrences on windows-11-arm (typecheck): ${count} -- GATED at a floor of 2, one per cacheable task the leg resolves (build and typecheck)"
           case "${count}" in
             ''|*[!0-9]*)
               echo "::error::typecheck-windows could not COUNT the [remote cache] labels: '${count}' is not a decimal number, so the floor below was never evaluated. This is a FAILURE and never a pass -- an unevaluated gate must not read as coverage. Check the tee'd log for a binary-file notice (a NUL byte in typecheck-nx.log) or a truncated read."
               exit 1
               ;;
           esac
-          if [ "${count}" -lt 1 ]; then
-            echo "::error::typecheck-windows got ${count} [remote cache] labels, but this leg is read-only and can only get one by restoring the ubuntu typecheck job's entry. Either cross-OS restore is broken (an @actions/cache regression or a cache-version drift), the ubuntu producer never populated the entry this run, or Nx stopped printing the literal '[remote cache]' label this grep counts (an Nx upgrade renames it and fails all three legs at once on a HEALTHY cache). Check the producer job's own log: a HIT there points at cross-OS restore, a save without a HIT at the producer, and no label at all on a green producer at the Nx rename."
+          if [ "${count}" -lt 2 ]; then
+            echo "::error::typecheck-windows got ${count} [remote cache] labels and needs 2. This leg is read-only, so every label is necessarily a restore of an ubuntu producer's entry -- and 'nx run-many -t typecheck' resolves TWO cacheable tasks here, build and typecheck, because typecheck carries an inferred dependsOn on build. A count of 1 therefore does NOT mean the typecheck entry restored: it is exactly the state where one of the two broke while the other still restored, which is why this floor is 2 and not 1. Either cross-OS restore is broken for one of them (an @actions/cache regression or a cache-version drift), an ubuntu producer never populated its entry this run, or Nx stopped printing the literal '[remote cache]' label this grep counts (an Nx upgrade renames it and fails all three legs at once on a HEALTHY cache). Check BOTH producer jobs' logs: a HIT there points at cross-OS restore, a save without a HIT at the producer, and no label at all on a green producer at the Nx rename."
             exit 1
           fi
       - cancel: cache-server

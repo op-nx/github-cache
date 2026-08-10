@@ -508,7 +508,7 @@ jobs:
   # wrong. What the edge buys is that the producer has finished before the consumer
   # starts. WITHOUT it the two legs compute the same hash at the same time, so both
   # MISS, both execute, and both call saveCache(nx-cache-H) -- the race TRUST-11
-  # predicted in advance (.planning/phases/10-os-invariant-releases-mirror/
+  # predicted in advance (.planning/milestones/v0.0.2-phases/10-os-invariant-releases-mirror/
   # 10-SECURITY.md, the Q1 section). The edge removes the RACE. It does NOT remove the
   # SECOND PRODUCER: from these jobs onward a windows-11-arm runner writes
   # build/typecheck/test entries too, and that half is recorded in the same Q1 section
@@ -1822,9 +1822,9 @@ jobs:
       #       `integration`. The build-windows / typecheck-windows / test-windows legs
       #       falsify the second conjunct PERMANENTLY, so the premise alone can no longer
       #       carry it. The second-producer consequence is priced in
-      #       .planning/phases/10-os-invariant-releases-mirror/10-SECURITY.md's Q1.
+      #       .planning/milestones/v0.0.2-phases/10-os-invariant-releases-mirror/10-SECURITY.md's Q1.
       #   (c) WHERE THE ATTRIBUTION RECORD IS FROZEN:
-      #       .planning/phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md's O1 section,
+      #       .planning/milestones/v0.0.2-phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md's O1 section,
       #       captured at proof time precisely because no future session can re-derive
       #       it. Read that record; do not try to reconstruct the attribution from this
       #       assertion.
@@ -2556,7 +2556,7 @@ jobs:
       #         is where a reader arrives with the idea: the windows leg's ONE asset is the
       #         only thing OBS-05 has to read back, so collapsing the matrix to one leg would
       #         DESTROY OBS-05's dead-publish detection. The full both-halves record is
-      #         .planning/phases/10-os-invariant-releases-mirror/10-SC6-NOTES.md.
+      #         .planning/milestones/v0.0.2-phases/10-os-invariant-releases-mirror/10-SC6-NOTES.md.
       #   (b) Wall clock. Uploads are throttled to ~1/sec, so publish gains a few
       #       seconds per push.
       #

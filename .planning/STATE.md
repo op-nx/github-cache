@@ -1,13 +1,14 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.0.2
-milestone_name: framing
-current_phase: 13
-current_phase_name: read-only-actions-cache-backend
-status: complete
-last_updated: "2026-08-10T20:45:00.000Z"
-last_activity: 2026-08-10
-last_activity_desc: "Quick 260810-v1g: closed the two substantive items the v0.0.2 milestone audit named -- and one of them was never open. ITEM B was already closed a DAY BEFORE the audit ran: 260809-2s6-SUMMARY.md carries TWO `## NOT OBSERVED` sections and the audit read the FIRST (PLAN-1's, written BEFORE PLAN-2 opened the main window that closed all three items). Run 31305961054 at head e3bf98b had already measured readMisses 43 of scanned 112 on the ubuntu publish leg and 43 of 113 on windows, both publish-verify legs green, and the bead cross-job HIT under the new key with the windows leg reading a linux-produced payload. The maintainer-approved temporary push to main was therefore CANCELLED as unnecessary rather than spent -- and research measured the approval's own premise FALSE and dangerous: !github.event.forced exists at HEAD but is ABSENT at fe25a3f, and a push runs the workflow at the pushed TIP, so the restore hop would have run the UNGATED workflow and attempted real production writes. Four prior fe25a3f runs are already `failure` from exactly that, and the mitigation (gh workflow disable) is recorded DENIED to the agent. The orchestrator's own CONTEXT.md had asserted the opposite, lifted from a must_haves line its own file contradicts 64 lines later. ITEM A closed by measurement, and the cost framing that kept it open was never itself measured: the full eight-gate uncached battery is 13 SECONDS, so the \"22 checkouts x 6 gates, not run\" excuse cost more to write than to discharge. All 22 commits of 4518787..1b06816, oldest first, on all EIGHT gates (a superset of the unenumerated \"six\"), uncached, on the main tree: 22 of 22 GREEN, 88 exit codes all 0, zero bundle drift, 369s end to end. The in-loop execution probe read 0 on all 22 while nx exited 0 -- Nx wraps target names in SGR escapes so the plain literal cannot match; resolved by RECOUNTING the already-captured logs, never by re-running for a greener number. The verifier then proved MORE than the probe intended: Cache: Skipped on every log and test counts progressing 1174 -> 1177 -> 1184 across the range, so the targets provably EXECUTED rather than merely printed. Every layer caught the layer above it again: plan-check found 6 warnings including a verify that would have failed a CORRECT sweep; the executor found the <verify> blocks for three tasks could NEVER pass (git grep -c with one pathspec prints path:count, so [ -ge 1 ] dies with \"integer expected\"); and recounting the audit's own frontmatter surfaced a THIRD error nobody had reported -- \"Total: 12 items across 8 groupings\" summarised a frontmatter holding 13, corrected to 10 across 6 with open_by_design now empty. Verified 5/5. Zero commits by the executor, zero pushes, zero source files touched; five tracked records edited. Nothing merged, nothing pushed."
+milestone_name: OS-invariant cross-OS sharing
+milestone_status: shipped
+current_phase: null
+current_phase_name: null
+status: Awaiting next milestone
+last_updated: "2026-08-11T00:00:00.000Z"
+last_activity: 2026-08-11
+last_activity_desc: "Milestone v0.0.2 (OS-invariant cross-OS sharing) closed and archived: 7 phases, 45 plans, 110 tasks, 57/57 requirements, all phases verified passed. Roadmap and requirements archived to milestones/v0.0.2-*; REQUIREMENTS.md removed for the next milestone; tagged v0.0.2. Next: /gsd:new-milestone."
 progress:
   total_phases: 7
   completed_phases: 7
@@ -20,179 +21,26 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-18)
+See: .planning/PROJECT.md (updated 2026-08-11)
 
 **Core value:** Correct and safe caching on GitHub infrastructure, for public and private repos, with nothing extra to host.
-**Current focus:** Phase 13 -- read-only-actions-cache-backend
+**Current focus:** Planning the next milestone. Nothing is in flight.
 
 ## Current Position
 
-Phase: 13 (read-only-actions-cache-backend) -- COMPLETE
-Plan: 6 of 6
-Status: COMPLETE. All six plans executed, verified 7/7, and the full audit tail closed this session:
-secure-phase 27/27 threats closed, validate-phase nyquist_compliant, learnings extracted and pooled
-Progress: 7/7 phases complete [##########] 100%
-Last activity: 2026-08-10 -- Completed quick task 260810-v1g: closed the two substantive items the v0.0.2 milestone audit named. Item B needed no work and no push -- it was already closed by run 31305961054 a day before the audit ran; the audit had read the first of two `## NOT OBSERVED` sections. Item A closed by measurement: 22 of 22 commits green on all eight gates, 88 exit codes all 0, 369s. The approved push to `main` was cancelled as unnecessary, and its safety premise was measured false besides.
-`/ponytail-review` multi-agent OVER-ENGINEERING review of PR #16 (6 agents over 6 components of the
-non-`.planning` diff; 46 findings). **Every layer of the pipeline found real errors in the layer
-above it, including the orchestrator's own triage.** 46 findings -> 26 accepted -> 22 after research
--> 20 after plan-check -> 19 applied, 1 MEASURED-BLOCKED, 2 RETAINED under authority. Net **-38
-lines** across 19 files, not the -450 first estimated -- and the estimate was demoted from a target
-mid-flight precisely because a line goal is pressure to delete guards. Three contested findings were
-settled by MUTATION, and TWO INVERTED: `mirror-seed.spec.ts`'s "a hardcoded 0/1/2 map fails only
-there" is false (22/22 pass), and `compare.spec.ts`'s "invisible to every other gate ... it
-typechecks" is false (TS2440 top-level, TS6133 shadowed) -- both became PROSE CORRECTIONS with the
-tests KEPT. Research then falsified three of the ledger's own premises: the blanket "no item touches
-a serve()-reachable source" claim is wrong (`backend/types.ts` is in the bundle graph), P12's copies
-are not byte-identical, P13's renderer covers two sites not three; four items left scope, one because
-its real site rotates the `integration` task hash D2-01 protects. Plan-check then found two more
-guard weakenings **inside the accepted set**: P5's premise was false (the constants are imported from
-production `compare.ts`, where `:682` is the only pin on `REQUIRED_META_KEYS` membership and `:662`
-the only catcher of an invariant/divergent swap -- both RETAINED), and P18's gate was structurally
-DEAD, since the four VER-04 tests are conjunct-specific so no mutation can redden all four; restated
-as surviving coverage. P21 ended MEASURED-BLOCKED with nothing applied, which is the gate working.
-Verification returned `human_needed` on two items and BOTH were closed by measurement: the P18
-composition question (mutating the writable factory to stop delegating reddens **12** assertions,
-including `:402`, P17's named survivor-of-record -- no gap), and one orphaned comment in production
-source that P6 had falsified, corrected in place. All six gates green uncached at `4664855`;
-`check:action` zero bundle drift. `nx.json` and `.github/` byte-unchanged. `b070b60..4664855`.
-NOT pushed at time of writing, not merged.
+Phase: none -- milestone v0.0.2 shipped 2026-08-11
+Plan: —
+Status: Awaiting next milestone (`/gsd:new-milestone`, which authors a fresh REQUIREMENTS.md)
+Last activity: 2026-08-11 — v0.0.2 closed and archived (7 phases, 45 plans, 110 tasks, 57/57 requirements, all phases verified `passed`)
 
-Prior: 2026-08-10 -- Completed quick task 260810-kuo: applied the 15 triaged survivors of the
-/simplify multi-agent cleanup review of PR #16 (8 reviewers; 36 findings deduped to 15 accepted, 12
-rejected against a named authority, 9 recorded UNRESOLVED for v0.0.3). Code review caught that A12 --
-an accepted item -- had WEAKENED a guard; reversed, and the verifier proved the false premise by
-measurement (`tsc --noEmit` exits 0 on a locally re-authored symbol). 1174 -> 1184 tests, eight gates
-green uncached at HEAD, `nx.json` and all of `.github/` byte-unchanged across 22 commits.
-Verification `human_needed`: full per-commit bisect gating (22 x 6) was not run.
+**Carried into the next milestone** (candidates, not commitments -- see `ROADMAP.md` `## Carried forward`):
+GHCR-01, PROV-01, FOUND-03 (Docker), PKG-SPLIT, collapsing the publish matrix to one leg (now
+unblocked by XOS-05), nine deferred `/simplify` items (`b6580ad`), and archive file-mode handling
+across the OS boundary.
 
-Prior: 2026-08-10 -- Completed quick task 260810-bxj: addressed all 27 in-scope survivors of the thermos review of PR #16, 7 structural items deferred to v0.0.3
-of the PR #16 multi-agent review in 31 bisect-safe commits (`c7793c4..2b570b3`). Verified 44/44
-findings closed, 9/9 must-haves, no guard weakened -- the one guard that reddened (B1's
-`typecheck-windows` floor, which was 1 over a leg resolving TWO cacheable tasks) was closed by
-changing the CODE. Four errors in the review artifacts were caught by measurement BEFORE any code
-was touched, including one that would have reddened the `lint` job on every run. All five gates
-green uncached at HEAD; 1090 tests across 43 files. NOT pushed, so no CI-gate change has run on a
-real runner.
-
-Prior: 2026-08-04 -- Milestone v0.0.2 AUDITED (`tech_debt`: 51/51 requirements satisfied,
-7/7 phases verified, 8/8 integration seams wired, 4/4 outcomes achieved; zero blockers, 11
-bookkeeping/behavioural debt items). Then quick 260804-h3b found the audit's own follow-up #1 was
-NOT open: the `o3-witness` Case-B note (`da462b5`, 08-03 01:09) PREDATES both its fixes -- `40e4d21`
-(03:13) and `e5d3cd3` (22:27) -- proven by `git merge-base --is-ancestor`, and 24 assertions already
-pin it. Note superseded IN PLACE and the audit corrected at four sites. The fix's Case-B path was
-then OBSERVED LIVE in two separately-reported sub-claims: (a) the prior-existence delta allowance,
-run `30907575624` whose `headSha` EQUALS its own pre-registration commit `d4dc093` --
-`delta=9596s matched_ref=refs/pull/16/merge`, free, no window; and (b) the `$defaultref` clause
-`e5d3cd3` added, run `30910935382` on stacked draft PR #17 (base = the feature branch, so
-`base_ref != default_ref`) -- `delta=1252s matched_ref=refs/heads/main`. (b) is attributable rather
-than merely printed: both other jq arms were MEASURED empty at observation time (own merge ref held
-only its run-id seed; base scope returned `total_count: 0`). `main` window open 3m30s, restored to
-`fe25a3f` behind a three-way gate. Verifier 8/8, every claim re-derived from raw job logs and the
-live caches API. Previously, 2026-08-03: Quick 260803-mew observed BOTH directions of the Phase 12 Windows
-regression detector on real `windows-11-arm` runners against the FOUR-target needle at HEAD (GREEN
-`30825110047`, RED `30825602626`), closing a gate half that had only ever been measured on the
-maintainer's workstation and re-closing a PASS half whose evidence pinned a needle `9e79009`
-superseded. Verifier 7/7, `status: human_needed` for ONE newly-surfaced side effect that belongs to
-the shared `main`-window PROCEDURE rather than to this task: the STEP 7 restore force-push carries
-no `[skip ci]` (it re-pushes an existing commit, so the marker is structurally unavailable) and
-therefore fires a full `ci.yml` run -- run `30825636788`, which failed on BOTH `publish` legs
-attempting real production writes. Pre-existing and already-tracked, not a new regression, but
-undisclosed until now and likely present in every prior window. Earlier the same day: Quick
-260803-fcd CLOSED the `publish-verify` blocker, proven live on
-run `30807461616` (FULL GREEN, zero failed jobs, fresh `nx-cache-202608` shard with 69 assets).
-Earlier the same day: 260803-0rr closed assumption A1 across five artifacts, and 260803-3g1 swept
-the status-only-422 defect class. **PR #16 is no longer blocked**; milestone v0.0.2 awaits
-/gsd:audit-milestone. 1011 tests.
-
-**BOTH AUDIT GATES FOUND REAL GAPS, and neither was visible by reading.** Each found a mechanical
-control that a plan DECLARED and that did not exist -- and in both cases the STATE was correct, so
-nothing looked broken. Had either workflow's clean-path short-circuit been taken (secure-phase skips
-its auditor at `threats_open:0`; validate-phase writes VALIDATION.md inline when its gap analysis
-finds nothing), both would have shipped as "verified".
-
-- **T-13-05-D1** (medium): 13-05 declared "exactly two survivors, asserted mechanically". No
-  assertion existed. The three per-leg `not.toContain` clauses cover only the UNDER-sweep direction;
-  deleting either surviving diagnostic reddened nothing. Closed by `7968f21` -- both survivors pinned
-  by their OWN surrounding token (`RUNNER_DEBUG_OBSERVED`, `LEG_OS`) so they cannot cover for each
-  other, plus a marker-site count pinned at exactly 2. Mutation-proven three ways.
-- **T-13-03-E1** (HIGH, the serious one): `select-backend.ts:33-35` and `:80-81` both claimed the
-  "knob is checked last" guarantee was asserted mechanically. The `indexOf` check was a one-shot from
-  plan 13-03 that never became a clause. Hoisting the knob above `resolveGitHubToken` -- exactly the
-  registered shape -- left **978/978 GREEN**. The exhaustive narrowing table is blind to it because
-  `outcomeOf` collapses both read-only outcomes into one token, so `widened()` stays false while the
-  fail-safe branch is bypassed. Real consequence: knob set + no resolvable token would build a LIVE
-  Actions-cache backend instead of the memory stub. Closed by `cbe69ce`.
-
-The security audit had found T-13-03-E1's guard was not standing and then DISMISSED it, reasoning
-through `isWritableBackend` -- the same lens that blinds the table. It retracted that in writing on a
-third pass (`934bd98`). Two audits asking different questions were needed; neither found it alone.
-
-Phase 13's live-CI half is OBSERVED for Case A only, now on THREE runs. Run 30744366870 (attempt 1,
-`pull_request`, head 631a2e7) shows all three read-only Windows legs green at gate counts 1 / 2 / 1
-against a floor of 1, matching counts pre-registered in 631a2e7 -- which IS that run's head, so the
-prediction was provably in the tree the run measured. Every ubuntu producer was reached: `typecheck`
-MISS-and-saved both `build` and `typecheck` (0/2), `test` MISS-and-saved (0/1), and `build` HIT the
-entry the `typecheck` job wrote, the race named in advance. Sent equals received per entry (137951 /
-98227 / 1309). Independently re-verified during the security audit: 631a2e7 introduced 13-EVIDENCE.md
-as 203 insertions / 0 deletions and the file's first 203 lines at HEAD are byte-identical to it, so
-the record is pure append and was never back-edited, and `gh run view 30744366870` returns that same
-sha as `headSha`. Run 30745558383 proved the FAIL path (`build-windows` red AT THE GATE STEP at count
-0, other two green at 2/1 as a same-run positive control). Run 30746080731 reproduced 1 / 2 / 1 on
-head e6b3268 -- but note the scope: every commit between 631a2e7 and e6b3268 touches only
-`.planning/`, so no task hash rotated and it consumed the SAME producer entries. It reproduces the
-observation; it is not an independent Case-A instance.
-
-TWO ITEMS STAYED OPEN BY DESIGN at the phase's close, and both audits were explicitly instructed
-not to close them: the Case-B base-scope read (unprovable by a landing commit that rotates all
-three hashes) and RESEARCH assumption A1 (no Windows task MISSed, so no PUT was attempted and the
-403 path never ran). **BOTH ARE NOW CLOSED**, by two quick tasks rather than by phase execution --
-Case B by `260802-toz` (run `30768540898`, producers HIT with zero `Sent` yet all three Windows
-legs restored `main`-scope keys byte-identically at 1 / 2 / 1) and A1 by `260803-0rr` (local
-measurement: four PUTs attempted, each refused 403, Nx silent, build green). A1's route changed
-rather than its condition being met -- the landing-run observation condition was never needed,
-because `server.ts:128-133` returns the 403 BEFORE `handlePut`, so the backend cannot affect the
-PUT path. The phase's audit artifacts still read OPEN and are deliberately FROZEN, each with a
-forward pointer; the status of record is `13-VALIDATION.md`'s Manual-Only table and
-`13-EVIDENCE.md` ADDENDUM 3.
-
-**Milestone v0.0.2 gained a SEVENTH phase.** Phases 7 through 12 are Complete in the ROADMAP table
-(39 of 39 plans), but `/gsd:audit-milestone` now waits on Phase 13, added by maintainer instruction
-to close CR-18. Phase 12's four -- XOS-04, XOS-05, XOS-08, DOCS-07 -- closed at the phase step
-rather than per-plan, because every plan deliberately skipped `requirements.mark-complete` after it
-falsely closed all three XOS rows on 12-01's RED-only plan. Phase 13's seven are registered Pending
-for exactly the same reason and close only as their code lands in 13-02..13-06.
-
-Phase 12's live-CI half is OBSERVED, not inferred. O4 was measured on run 30586177358, the FIRST run
-of same-repo PR #12: `[remote cache]` counted per Windows leg at 1/2/1 (total 4), matching counts
-pre-registered in `f5d03b0` BEFORE the run, with every ubuntu leg MISS-and-saved in the same run.
-The scheduled detector went green on run 30603713356 on a real `windows-11-arm` runner. Both are
-recorded in 11-EVIDENCE.md's O4 section and 12-UAT.md.
-
-SUPERSEDED by quick 260803-mew, on the detector clause only (the O4 `[remote cache]` counts above
-are untouched). Run 30603713356 proved the THREE-target needle at `e757d4c`; `9e79009` replaced the
-needle with the FOUR-target form and `git merge-base --is-ancestor 9e79009 e757d4c` is FALSE, so
-that run cannot speak to the needle at HEAD. Both directions of the four-target needle are now
-observed on real `windows-11-arm` runners: run 30825110047 PASS (headSha 41f65e1, needle as genuine
-Nx output, `lint` executing) and run 30825602626 FAIL (throwaway 3-of-4 tree, red at the needle's
-grep with nx at exit 0 in the same step). The FAIL half had never been observed on a runner in
-either needle form. See
-.planning/quick/260803-mew-observe-phase-12-fail-half-on-real-run/260803-mew-EVIDENCE.md.
-
-RESEARCH assumption A1 is CLOSED by measurement -- both hash-parity artifacts from run 30586177358
-carry the hardened `node --no-warnings -p process.platform` with empty stderr and differing stdout.
-`12-VERIFICATION.md:20` and `12-SECURITY.md` still describe it as open; both were correct for the
-trees they audited and are superseded by 12-VALIDATION.md rather than back-edited.
-
-Two non-blocking residuals carried forward, both recorded in 12-SECURITY.md: the `::add-mask::`
-ordering in `ci.yml` is now guarded (commit `e73f49c`) after this phase took it from 5 sites to 8;
-and code review's CR-01 showed a green structural guard can sit over a wrong payload, which is why
-`RENDERED_DISCRIMINATOR_SITES` is pinned at an exact 4 rather than a floor.
-
-Prior phase: Phase 11 (Live Proofs O1-O2-O3) is COMPLETE, 7 of 7 plans. Phase 10 (OS-Invariant
-Releases Mirror) is COMPLETE, 8 of 8, 12/12 requirements closed; its two live-CI items were observed
-on run 30471772954 via a temporary push to main, since restored to fe25a3f. See
-10-EVIDENCE-LIVE-CI.md.
+**Standing exposures carried forward, unchanged by the close:** the immutable-releases design
+incompatibility (maintainer-deferred), and the one unattributed `test` failure at `69bd1b7` --
+actionable only on a second occurrence WITH output captured, per the procedure now in `AGENTS.md`.
 
 ## Performance Metrics
 
@@ -513,7 +361,19 @@ None yet.
 
 ## Deferred Items
 
-Items acknowledged and carried forward:
+Items acknowledged and carried forward. The pre-close artifact audit for v0.0.2 reported **all
+artifact types clear**, so nothing below was deferred BY the milestone close -- these predate it.
+
+Three rows were removed at the v0.0.2 close because their subject is fully resolved, with their
+closures recorded elsewhere rather than here:
+
+- **Value** (no cross-OS HITs for `build`/`typecheck`/`test`) -- RESOLVED by v0.0.2. That row
+  argued the MISS was CORR-01's specified behaviour and that fixing it meant taking CORR-01's
+  SECOND branch as a design change. That is exactly what v0.0.2 did (D2-01), and O1-O4 are proven.
+  See `milestones/v0.0.2-ROADMAP.md` and `milestones/v0.0.2-phases/11-*/11-EVIDENCE.md`.
+- **Docs** (consumer-doc defects found while dogfooding) -- CLOSED 2026-07-26 by quick `260726-gok`.
+- **CI hygiene** (`typecheck` serving a stale cache HIT over a spec type error) -- CLOSED 2026-07-26
+  by quick `260726-gok` (`37f7d63`), guarded by `nx-target-inputs.spec.ts`.
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
@@ -523,9 +383,7 @@ Items acknowledged and carried forward:
 | Distribution | Docker container form (FOUND-03) | a later milestone | 2026-07-18 |
 | Packaging | Zero-dep barrel vs CLI/Action package split (PKG-SPLIT, PR #3 review code-reviewer #6) | a later milestone (needs a package restructure; peer/optional half-measure would break the published CLI-bin contract) | 2026-07-21 |
 | Review | Deleted-rationale sweep: diff the deleted comment blocks in origin/main against the greenfield rewrite to find further dropped invariants | deferred to a later milestone by user instruction (quick 260722-0od); value proven -- three were already found this way during the PR #3 review: the get-side hash lock (T2), the 405 handler (T3), and a third that turned out to be deliberate; cost is a full-history comment diff | 2026-07-22 |
-| Value | Cross-OS cache HITs for the platform-independent targets (`build`/`typecheck`/`test`) are not achieved, so a Windows/macOS developer's local Releases read MISSES them even though the artifact would be valid. **FRAMING CORRECTED 2026-07-26 (quick 260725-w3s Step 0), read from the requirements rather than from summaries -- the deferral decision and milestone standing are UNCHANGED, but the severity framing below was too weak in the other direction.** This is not merely "compliant" or "deferred value": the MISS is v0.0.1's SPECIFIED, TESTED, and now LIVE-DEMONSTRATED behavior. ROADMAP SC2 (`v0.0.1-ROADMAP.md:277-280`, CORR-01) requires that the store is "OS-namespaced **by default** ... so a Linux-produced entry is **never served to a Windows reader**; the discriminator lives in the key/namespace, not left to chance", and TEST-05 (SC3, `:282-284`) asserts "a correct hit or a MISS -- never a wrong-OS artifact". Phase 3's proof is a deliberately NON-VACUOUS negative test (`SENSITIVE_HASH` seeded only under `OTHER_PLATFORM` -> `{kind:'miss'}`, with a comment noting a positive-only test would still pass with namespacing deleted). Step 0 then demonstrated it live on real infrastructure: a Windows local read of `14522047022641658505` and `12332927989897543193` (both published `-linux` only) returned clean 404s. So there are NO OS-agnostic cache records in v0.0.1 -- by design, not by omission -- and a cross-OS hit for these targets would VIOLATE CORR-01 as currently worded. IMPORTANT: CORR-01 is an either/or -- "OS-namespaced by default (**or** the consumer requirement to OS-discriminate non-portable outputs is documented + enforced)". v0.0.1 took the FIRST branch. Achieving cross-OS hits means taking the SECOND branch, which is a design change to a LOCKED requirement (plus CORR-01's uniform wording in PROJECT.md and two comment-locked single sources), NOT a bug fix. What IS deferred value is the second branch itself. Two independent causes, both measured in quick 260725-rk4. (1) Nx hash parity across OSes was engineered and verified pre-rebuild but is NOT re-established in the greenfield tree: probe run 30173654069 recorded `build` computing two different hashes at one commit (nx-cache-14522047022641658505 and nx-cache-13655686526929222562) -- **STALE ATTRIBUTION REMOVED 2026-07-26: this pair is NOT ubuntu-vs-windows and must never be cited as an OS measurement. Both values are reproducible on ONE Windows machine by toggling `.nx/workspace-data` freshness. See `.planning/research/v0.0.2/PROBE-RESULTS.md` for the definitive cold-vs-cold cross-OS reading** -- and of the three documented parity fixes the `typecheck.outputs` pin is absent from BOTH `package.json` `nx.targets` AND `nx.json` `targetDefaults` (all four targetDefaults have outputs:null). Because `ProjectConfiguration` is one hash node folded into EVERY task hash, one target's config divergence diverges all of them. Fix home = `nx.json` targetDefaults (D-02 keeps this project free of project.json); root-cause first via the method that worked before -- node-by-node hash comparison, native Windows vs a Linux clone -- because on a current Windows box the inference yields all 7 typecheck outputs, so the missing pin may be latent rather than the active cause. EVIDENCE FRAMING CORRECTION (quick 260725-w3s, 2026-07-25, evidence only -- the deferral decision, severity framing, TEST-05 compliance and milestone standing are unchanged): the cited hash pair does NOT isolate OS as the variable. BOTH values are reproducible on ONE Windows machine at one commit by varying only `.nx/workspace-data` freshness -- warm workspace-data -> 14522047022641658505, fresh/cold workspace-data -> 13655686526929222562 -- so workspace-data-derived state (plugin target re-inference, lockfile re-parse) is an uncontrolled variable in that evidence. The divergence is NOT disproven and this evidence is NOT retracted: CI is always cold, and cold-Windows measured locally equals the recorded cold-Windows value. But the parity investigation must control for workspace-data freshness on BOTH sides before attributing any hash difference to OS. w3s further measured that ALL FOUR cacheable targets (not just `build`) compute a different hash under freshness alone: typecheck 3381254060286801611 (cold) vs 17612203514283256006 (warm), test 5027851155743781967 vs 12332927989897543193, integration 13758457399293023985 vs 18311993323643153366. (2) Even WITH parity, `releaseAssetName` is unconditionally `<hash>-<os>` and the reader resolves the RUNNING platform's asset, so a Windows read asks for `<hash>-windows` while ubuntu CI published `<hash>-linux`; the Windows publish leg cannot create it either (the recorded `publish-mirror cross-OS gap`), so it would require running every target on every consumer OS in CI. Deciding whether the OS suffix should apply only to OS-SENSITIVE targets is the design half, and it touches CORR-01's uniform wording plus the comment-locked `releaseAssetName` single source. Superseded framing note: OS-namespacing is uniform where it arguably should be per-target -- `build`/`typecheck` are `tsc` (output is portable JS / a pass-fail) and `test` is vitest over the same sources -- a Linux-produced result is correct on Windows, so these SHOULD hit cross-OS. Only `integration` is genuinely OS-sensitive (binds sockets, spawns processes, touches tmpdir), which is what its explicit `{"runtime":"node -p process.platform"}` discriminator is for. Today a cross-OS hit is impossible at every layer: the Releases reader resolves the RUNNING platform's `<hash>-<os>` asset (per-OS publish matrix populates each), and even with identical Nx keys `@actions/cache` version-hashes `join(tmpdir(),...)`. Hash parity is a second thing to fix, and it is REAL -- but the evidence originally cited here (quick 260725-rk4, probe run 30173654069, a windows-11-arm `build` writing nx-cache-13655686526929222562 against ubuntu's nx-cache-14522047022641658505) did NOT establish it, because graph freshness was uncontrolled. **The claim is established instead by the 2026-07-26 pre-flight probe (`.planning/research/v0.0.2/PROBE-RESULTS.md`), which ran `nx reset` on BOTH legs: at `fe25a3f`, cold-ubuntu and cold-windows differ for every target. That probe also showed why the earlier pair was misleading -- warm local Windows equals cold ubuntu CI to the digit, and cold local Windows equals cold windows CI to the digit, for both `build` and `test`. So there are TWO independent axes and the earlier evidence conflated them.** COST: a matrix consumer never reuses another OS's compiled output, and a Windows developer's local Releases read MISSES for build/typecheck/test even though the artifact would be valid. Fix direction: classify targets OS-sensitive vs OS-independent and namespace only the sensitive ones -- which touches CORR-01's uniform wording in PROJECT.md plus two comment-locked single sources (`releaseAssetName`, `cacheArchivePath`), so it is a design change, not a patch. Also still UNTESTED: the version-hash layer PROJECT.md cites, because the keys never collided -- a probe forcing two OSes onto one key would close that. | later milestone (maintainer decision, 2026-07-25) | 2026-07-25 |
-| Docs | Consumer-doc follow-up PR, three real defects found while dogfooding (quick 260725-rk4/w3s): (1) the quickstart tells consumers to mint the bearer token with `openssl`, which is ABSENT from the Windows runners' Git Bash -- use `node` instead; (2) the quickstart has no readiness poll, so a consumer's first task can race the sidecar's bind; (3) no `timeout-minutes` guidance, despite omitting `cancel:` being measured to hang the job at an implicit wait-all (run 30172888579 died at its 3-min cap). A ready 112-line patch existed in a since-expired session scratchpad -- re-derive from `260725-w3s-RESULTS.md` and the rk4 SUMMARY rather than hunting for it. ALSO in scope: two dead-citation claims to verify or drop -- "max 10 concurrent background steps" and "composite cannot declare `background:`" -- both resting on an unreproducible `[VERIFIED: docs.github.com]` tag in `06-RESEARCH.md`. **CLOSED 2026-07-26 by quick 260726-gok (`e6430bf`, `3385cb7`, `5f54049`, `58c6e82`).** (1) openssl -> node at ALL FIVE sites, not the three the row names -- `README.md`, `docs/advanced.md`, `docs/examples/minimal-ci.yml`, `start-cache-server/action.yml` and `.github/workflows/ci.yml:523` (the `consumer-smoke` job, which contradicted the node-not-openssl reasoning stated 344 lines above it in the same file); the one-liner is the form already proven on both runner OSes at `ci.yml:183`. (2) Readiness poll ported into the two copy-paste surfaces with its REASONING, not just its shape -- it demands exactly 404-or-200 because accepting "any status but 000" would pass a **401**, after which every Nx request 401s, best-effort read degradation kicks in, and the job goes GREEN having cached nothing. (3) `timeout-minutes` documented as generic hang insurance, kept DISTINCT from the hang caused by omitting `cancel:`, and with no `continue-on-error` / fail-gate mechanism (rk4 measured that as unnecessary AND fail-open on drift). **The two "dead citations" were NOT dead -- both are CORROBORATED, and the framing in this row was wrong.** GitHub's workflow-syntax reference documents both verbatim (`#jobsjob_idstepsbackground`); docs PR #61978 landed 2026-06-30, three weeks BEFORE the 2026-07-20 fetch, so that citation was legitimate when written and the "unreproducible" flag was a FETCH failure (docs.github.com blocks WebFetch's UA), not a factual finding. So the composite-`background:` claim SHIPS UNCHANGED and `06-RESEARCH.md:508` is annotated as corroborated with the URL; the 10-step limit is still deliberately not propagated to any consumer doc (no consumer doc asserted it, and adopters run one background step). This was the trap-quadrant UNRESOLVED item: had `--auto` locked "drop the claim", it would have deleted an accurate, citable statement. A 5th defect surfaced by the independent verification and fixed in `58c6e82`: `docs/advanced.md`'s `&`-fallback snippet used `export` / `$(...)` / `&` / `>> "$GITHUB_ENV"` with no `shell: bash`, so it would break on the Windows runner its own new comment addresses. | CLOSED 2026-07-26 (quick 260726-gok) | 2026-07-26 |
-| CI hygiene | **`typecheck` can serve a stale nx cache HIT that masks a real type error in a spec file.** Surfaced (not fixed, out of scope) during quick 260726-4cc and independently reproduced by its verifier. Mechanism, confirmed from config on both halves: `nx.json`'s `targetDefaults.typecheck.inputs` starts from the `production` named input, which EXCLUDES `*.spec.ts` **and** `tsconfig.spec.json`; but the target's command is `tsc --build tsconfig.json --emitDeclarationOnly`, and `packages/github-cache/tsconfig.json` references `./tsconfig.spec.json`, which includes `src/**/*.spec.ts` -- so the command DOES compile specs while their content is absent from the hash. Live repro on a tree with a genuine `TS2353` in a spec: `npm run typecheck` exits **0** with `Cache: 2/2 hit (100%)` and prints "Successfully ran target typecheck" while the REPLAYED output itself contains "Found 1 error." and "exited with non-zero status code"; the same tree with `--skip-nx-cache` exits 1. Exit 0 is what any `&&` chain or CI gate reads. Nx's own flaky-task detector fires (one hash, two outcomes) -- the detector is the symptom, the input set is the cause. Same false-pass class as T-06-03-02 (the stale-cache false pass that already bit `governance-email.spec.ts` in 06-03). Did NOT undermine 260726-4cc's own battery claims: its two source commits changed files that ARE in `production`, and the verifier re-ran every commit with `--skip-nx-cache`. `build` is unaffected (`tsc --build tsconfig.lib.json` does not compile specs). Fix direction: add the spec fileset to `targetDefaults.typecheck.inputs` (dropping the `!tsconfig.spec.json` exclusion for that target), or stop the `typecheck` target building the spec project. **CLOSED 2026-07-26 by quick 260726-gok (`37f7d63`), first direction taken, as a ONE-TOKEN change: `typecheck.inputs[0]` `production` -> `default`.** The second direction was rejected on evidence -- vitest transpiles via esbuild and does NOT typecheck, so dropping the spec project would have silently removed spec type coverage entirely (260726-4cc's Task 1 RED depended on `typecheck` catching a spec `TS2353`). Research PROVED by executed probe that a third candidate -- keep `production` and re-add the spec globs -- is DEAD: Nx partitions a fileset's patterns into included/excluded buckets by a leading `!`, DISCARDS position, and sorts the array, so a later positive pattern can never undo an earlier negation. `tsconfig.spec.json` needed no separate entry (`default` covers it via `{projectRoot}/**/*`) -- and it was a SECOND, unreported instance of the same defect, closed by the same token. Proven by differential, not reasoning: warm cache + a real spec type error now exits **1** ("Found 2 errors.") where it previously exited 0 at `Cache: 2/2 hit (100%)`; touching `tsconfig.spec.json` now re-runs `typecheck` (`Cache: 1/2`) where it previously replayed (`2/2`). Guarded by `packages/github-cache/src/nx-target-inputs.spec.ts`, which resolves the invariant through Nx's own `splitInputsIntoSelfAndDependencies` -> `extractPatternsFromFileSets` -> `filterUsingGlobPatterns` trio (NOT `expandSingleProjectInputs`, which THROWS on this inputs array because it rejects entries carrying `dependencies: true`). MUTATION-TESTED: reverting the token makes the guard fail with exactly its two spec-hashing assertions red. The guard's own precondition -- `{workspaceRoot}/nx.json` added to `test.inputs` in the SAME commit -- was load-bearing, not tidiness: a target's `inputs` array and root `namedInputs` are NOT in the ProjectConfiguration hash, so without it the guard would have replayed a cached PASS after someone reopened the hole, i.e. the same bug class one level up. | CLOSED 2026-07-26 (quick 260726-gok, `37f7d63`) | 2026-07-26 |
+| Test harness | **Vitest worker crash, SECOND occurrence -- and the first one with output captured.** During the v0.0.2 milestone close, `npm test` exited 1 with no failing assertion: 43 of 44 spec files reported, 1134 of 1145 tests passed, and `src/serve.spec.ts` produced no line at all because its worker fork exited unexpectedly. An immediate uncached streamed re-run was fully green (44/44, 1145/1145), so it did not reproduce -- same as occurrence 1 at `69bd1b7`, which left no evidence because the re-run destroyed it. `AGENTS.md` names exactly this condition as the point at which the event becomes actionable. Full capture, environment, what is now known and what must not be guessed: `.planning/debug/vitest-worker-crash-serve-spec.md`. NOT a v0.0.2 gap -- the milestone's gates were green at close. | open, 2 occurrences; act on a third, capturing FIRST | 2026-08-11 |
 | Release | Cut and push the `v0` git tag | release-checklist item, NOT an action: deliberately not created during quick 260722-0od (outward-facing, hard to retract); the maintainer cuts it at publish time | 2026-07-22 |
 
 ## Session Continuity
@@ -551,6 +409,7 @@ Two things a next session needs that no artifact would otherwise carry:
 1. **`gh workflow disable` is DENIED to the agent by the auto-mode classifier.** Hop 3's suppression
    had to be run by the maintainer. Every future window hits this -- budget for it up front rather
    than discovering it mid-window with `main` forward.
+
 2. **A job summary is invisible to `gh` and to any unauthenticated fetch.** Two of the four
    observations had a component that exists ONLY in the job summary, and they were first recorded
    NOT OBSERVED until the maintainer supplied a signed-in browser via `playwright-cli --extension`.
@@ -729,72 +588,4 @@ Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates
 
 ## Operator Next Steps
 
-*Rewritten 2026-08-02 at Phase 13 close. The previous list was stale: its first two items (plan
-Phase 7; capture the pre-rename O2 baseline before Phase 10) were completed milestones ago, and the
-third said `gsd/v0.0.2-os-invariant-cross-os-sharing` had no PR when PR #12 has been open since.*
-
-- **`publish-verify` is CLOSED, proven live on run `30807461616` (FULL GREEN, zero failed jobs).**
-  Both `publish` legs, BOTH `publish-verify` legs, `o3-witness` and `format-check` green, with a
-  fresh `nx-cache-202608` shard holding 69 assets. Closed by quick `260803-fcd`: the burned-name
-  skip (Phase A, proven separately on run `30803953260`) plus the `nx-cache-` prefix rotation
-  (Phase B). The legacy `cache-mirror-202607` release and tag were deleted afterwards, verified by
-  exit code against a positive control. **PR #16's blocker is gone.** Historical record of how it
-  was diagnosed follows.
-- ~~**`publish-verify` is ROOT-CAUSED and fixed in code; one `main` window remains to prove it.**~~
-  `.planning/debug/publish-verify-422-empty-shard.md`. **It was never a regression this branch
-  introduced** -- the earlier note here said so and was wrong. `createRelease`
-  (`action/index.ts:103-111`), which decides the shard's born state, is byte-identical to
-  `origin/main`; the publish path is the same code that produced five green pushes. What changed is
-  a REPOSITORY SETTING: immutable releases were enabled between 2026-07-16 and 2026-08-02, so
-  `cache-mirror-202608` was born `immutable: true` and rejected all 65 uploads, while
-  `cache-mirror-202607` (field absent) holds 155 assets. The status-only 422 classifier then
-  reported that total failure as a GREEN publish leg, and the failure surfaced one job later in
-  `publish-verify`, naming the wrong subsystem. **Fixed by `e96670e`:** only an explicit
-  `already_exists` 422 earns the benign skip; an unreadable body falls through to the fault branch,
-  because guessing benign is the defect. TDD RED then GREEN, 980/980, no bundle drift. **Maintainer
-  actions done 2026-08-03:** immutability disabled; the dead `cache-mirror-202608` release AND its
-  tag deleted (both WERE deletable -- the debug session's "undeletable" claim was wrong, corrected
-  in its addendum), so August is recoverable rather than written off. The design incompatibility is
-  DEFERRED to a later milestone -- see Deferred Items. **Remaining:** one authorised `main` window
-  to prove `publish` and `publish-verify` both go green -- backup ref first, PR #16 closed first,
-  `main` restored and the restore VERIFIED after.
-- **Then run `/gsd:audit-milestone`.** All seven v0.0.2 phases are Complete (45 of 45 plans) with
-  every post-completion gate closed.
-- **Phase 13 verification: CLOSED 2026-08-03, `status: passed` 7/7.** Re-run by `gsd-verifier`
-  rather than resolved by editing the frontmatter -- editing `status:` to make a gate pass is the
-  self-certification this project forbids. The prior `human_needed` snapshot is preserved verbatim
-  as a dated superseded section. The item it waited on was closed AT STEP GRANULARITY, not by the
-  job's colour: on run `30745558383` step 9 (`Gate on the cross-OS remote-cache label count`) is
-  the failure while steps 7 and 8 are green, which matters because `ci.yml:527`'s readiness poll
-  carries a pre-existing bare `exit 1` and could redden the same job for an unrelated reason -- the
-  exact vacuity trap TEST-11 exists to catch. Three non-blocking flags in the report: the prior
-  single-line grep evidence method now under-covers a multi-line `toMatch` added by `40e4d21`; run
-  `30768540898` reads `conclusion: failure` at run level while ROADMAP marks Case B PROVEN (only
-  `o3-witness` was red -- the documented false red -- so the row deserves one clarifying sentence);
-  and two concurrent agents were measuring the same working tree, whose transient reds were
-  collisions rather than HEAD.
-- **Both live-CI residuals are now CLOSED.** Case B by quick 260802-toz (run 30768540898); **A1 by
-  quick 260803-0rr**, answered AFFIRMATIVELY by local measurement rather than by the sidecar
-  instrumentation the earlier note assumed would be needed -- `server.ts:128-133` returns the 403
-  BEFORE `handlePut`, so the backend's identity cannot affect the PUT path and the existing
-  read-only MEMORY backend was exactly equivalent. Four PUTs observed, each refused 403, Nx silent.
-  Propagated to five artifacts; `ROADMAP.md`'s `**Live-CI close**` block is closed on both items.
-- **Fix the O3 witness before the first post-merge no-input PR.** `o3-witness` asserts a CREATION
-  ordering, and on a Case-B run nothing is created because every producer HITs, so it reddens as a
-  false red. Found by run 30768540898.
-- **PR #16 replaces #12** (closed unmerged so the temporary `main` push could not mark it merged).
-  Note the 5 push-gated jobs (`consumer-smoke`, `dogfood-seed`, `dogfood-verify`, `publish`,
-  `publish-verify`) stay `skipped` on a feature branch because `on.push` is `branches: [main]` --
-  structurally unreachable on a PR, which is precisely how the `publish-verify` regression hid.
-- **One follow-up sits outside Phase 13:** `packages/github-cache/src/dogfood-cross-os.spec.ts:349-352`
-  conflates OBS-04 with what is actually OBS-02's subject. Two executors and the verifier each
-  declined to edit it because the referent of "its" is ambiguous and one reading would delete a true
-  claim. The verifier traced it to Phase 12's `fee5fbe`, so it now has a diagnosis rather than an
-  ambiguity.
-- **`docs/versioning.md:15-17` lists only four of the six package type exports** (`ReadableBackend`
-  and `WritableBackend` are missing). Pre-existing, uncovered by any guard -- `docs-adoption.spec.ts`
-  pins versioning.md's env-knob group only, which is why the drift survived. Logged in 13-04.
-- **Regenerate `.planning/codebase/*` via `/gsd:map-codebase`** -- mapped 2026-07-22 against v0.0.1
-  and already flagged stale in PROJECT.md. v0.0.2 invalidates it materially: renamed asset scheme,
-  new archive path, a new inferred `lint` target, ESLint in the toolchain, and now a second
-  Actions-cache backend behind `selectBackend`.
+- Start the next milestone with /gsd-new-milestone

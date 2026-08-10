@@ -481,7 +481,7 @@ function warnOnReadMisses(
   //
   // The expectation for this milestone's rotation was recorded IN ADVANCE, before the
   // commit that changed the version's input, at
-  // `.planning/phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md`.
+  // `.planning/milestones/v0.0.2-phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md`.
   // Read it before acting on this warning -- it carries the per-leg predicted counts,
   // the non-triggers, and the bundle-drift signal that looks exactly like this one but
   // is a defect.

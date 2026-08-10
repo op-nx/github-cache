@@ -8,12 +8,12 @@ is brought back in sync with the allowlists.
 
 ## Single sources of truth
 
-| Concern                                        | Source                                                                                             |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Write-trust allowlist (which events may WRITE) | `packages/github-cache/src/lib/trust.ts` (`TRUSTED_EVENTS`, `HOST_GATED_EVENTS`, `isWriteTrusted`) |
-| Sync/publish gate (which events may PUBLISH)   | `packages/github-cache/src/lib/sync-gate.ts` (`SYNC_EVENTS`, `isSyncTrusted`)                      |
-| CREEP control ledger (C1-C18)                  | `.planning/THREAT-MODEL.md`                                                                        |
-| The audited, settled model                     | `.planning/phases/05-trust-widening-ppe-gate/05-SECURITY.md` and `05-VERIFICATION.md`              |
+| Concern                                        | Source                                                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Write-trust allowlist (which events may WRITE) | `packages/github-cache/src/lib/trust.ts` (`TRUSTED_EVENTS`, `HOST_GATED_EVENTS`, `isWriteTrusted`)      |
+| Sync/publish gate (which events may PUBLISH)   | `packages/github-cache/src/lib/sync-gate.ts` (`SYNC_EVENTS`, `isSyncTrusted`)                           |
+| CREEP control ledger (C1-C18)                  | `.planning/THREAT-MODEL.md`                                                                             |
+| The audited, settled model                     | `.planning/milestones/v0.0.1-phases/05-trust-widening-ppe-gate/05-SECURITY.md` and `05-VERIFICATION.md` |
 
 The threat this model defends is CVE-2025-36852 (CREEP): cache poisoning at
 construction, before hashing, by any pull-request-privileged contributor.

@@ -1,5 +1,87 @@
 # Milestones
 
+## v0.0.2 OS-invariant cross-OS sharing (Shipped: 2026-08-11)
+
+**Phases completed:** 7 phases (7-13), 45 plans, 110 tasks
+
+**Delivered:** The cache store became OS-invariant on both layers, and all four cross-OS
+reuse outcomes (O1-O4) were proven on real runners in the mandated order -- then shipped as a
+safe-by-default recipe an outside project can copy.
+
+**Stats:** 664 commits over 20 days (2026-07-22 -> 2026-08-11). 80 source/config files changed
+(+25,161 / -1,047), excluding `.planning/`. 1,145 tests across 44 files green at close.
+57/57 requirements complete. All 7 phases verified `passed`.
+
+**Key accomplishments:**
+
+- **The OS discriminator moved out of the store and into the declared Nx input** (D2-01,
+  superseding CORR-01's OS-namespacing branch). Both layers went OS-invariant in the same
+  milestone: the `@actions/cache` version via one hardcoded forward-slash archive-path literal
+  plus `enableCrossOsArchive` at all three call sites (Phase 9), and the Releases mirror via a
+  single `nx-cache-<hash>` asset name whose cleanup filter admits the legacy family in the same
+  commit so nothing silently stops pruning (Phase 10).
+
+- **The cross-OS Nx task-hash divergence was root-caused to one field before it was fixed.**
+  Four readings at one commit isolated `targets.typecheck.outputs` -- seven entries on Linux,
+  one on Windows -- as the entire divergence on both the OS axis AND the staleness axis that
+  had been masquerading as it. One `nx.json` key collapsed it to zero differing nodes, and a
+  build-gating two-leg CI job now enforces the comparison every run rather than once, proven
+  RED on real runner data for both halves of the gate and GREEN again on the revert (Phase 8).
+
+- **All four target outcomes proven live, in the order that makes O1's evidence possible at
+  all.** From a cold `.nx/cache`, a native Windows arm64 workstation logged `[remote cache]`
+  for all four targets against Linux-CI-produced artifacts, with per-hash producer attribution
+  captured at the last commit before anything rotated -- the record that enabling O4 destroys
+  permanently. O3 was proven as an Nx-hash property with a positive control in the same job,
+  not as a storage probe (Phase 11). O4 followed on three new windows-11-arm legs wired
+  `needs:` their ubuntu counterparts (Phase 12).
+
+- **The Windows reuse gate was made unlaunderable rather than merely present.** A read-only
+  Actions-cache backend -- `createActionsCacheBackend()` is now
+  `{ ...createReadOnlyActionsCacheBackend(), put }`, so exactly one `restoreCache` call site
+  survives and cache-version drift is unrepresentable rather than guarded -- lets the three
+  Windows legs decline the write. A leg that cannot save can only earn a `[remote cache]`
+  label by genuinely restoring the ubuntu producer's entry, so the count is soundly gateable
+  (Phase 13).
+
+- **"Unit specs must not read the running machine" became a build failure instead of a
+  convention.** ESLint 9 flat config and a `lint` target were adopted first, for a hashing
+  reason rather than a tidiness one -- `@nx/eslint` is an inference plugin, so adopting it
+  after the parity work would have invalidated it. The ban is proven RED against every extant
+  violation before those violations are removed downstream, and stale disable directives fail
+  rather than pre-authorising a future violation (Phase 7).
+
+- **Incident-response attribution survived the namespace collapse.** `mirrored-by: <os>` moved
+  into the Release asset's free-form `label`, outside the lookup name, and is comment-locked so
+  it can never be misread as naming the producing OS -- precisely the identity Phase 9 breaks.
+  The trust consequences of collapsing two namespaces into one were classified by an
+  independent security auditor rather than assumed away (Phase 10).
+
+- **A consumer-facing cross-OS recipe that leads with the safe default** (`docs/cross-os.md`):
+  declare the platform discriminator across all cacheable targets first, then earn a removal
+  per target against a portability checklist derived from the Phase 8 root-cause findings. It
+  names architecture and libc as axes `process.platform` does not cover, and states plainly
+  that this repo cannot exercise them (Phase 12).
+
+**Known tech debt carried forward** (from `milestones/v0.0.2-MILESTONE-AUDIT.md`, status
+`tech_debt`, 0 requirement/integration/flow gaps):
+
+- One unattributed `test` failure at `69bd1b7`, not reproducible in 7 attempts and with no
+  output captured. **A SECOND occurrence landed during this milestone close, and the capture
+  procedure in `AGENTS.md` worked**: the failure is a vitest worker fork exiting with no
+  assertion error, localised to `src/serve.spec.ts`, and again not reproducible on an uncached
+  re-run. Full capture in `.planning/debug/vitest-worker-crash-serve-spec.md`. Not a v0.0.2
+  gap -- every gate was green at close.
+- Four stale-prose items behind the shipped tree (`11-EVIDENCE.md`'s O4 verdict slot,
+  `codebase/INTEGRATIONS.md`'s four-outcome `selectBackend` count, and two sealed VERIFICATION
+  notes). All are documented as superseded; none contradicts code.
+- SUMMARY `requirements_completed` frontmatter is absent for 34 of 57 requirements, so the
+  audit's third cross-reference source is structurally non-discriminating on this project. All
+  34 were verified manually against their phase VERIFICATION.md coverage tables instead.
+- Nine `/simplify` items deliberately deferred to v0.0.3 (`b6580ad`) -- recorded so the lane is
+  not lost, not counted as v0.0.2 debt.
+---
+
 ## v0.0.1 Greenfield MVP Rebuild (Shipped: 2026-07-22)
 
 **Phases completed:** 7 phases, 33 plans, 63 tasks

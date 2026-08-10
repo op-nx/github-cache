@@ -214,7 +214,7 @@ export function createReadOnlyActionsCacheBackend(): ReadOnlyBackend {
           // ALONE therefore rotates only WINDOWS entries. The both-legs all-MISS this commit
           // produces comes from VER-01's PATH change, whose components are pushed
           // unconditionally (cacheUtils.js:159). See
-          // .planning/phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md -- an
+          // .planning/milestones/v0.0.2-phases/09-os-invariant-actions-cache-version/09-ROTATION-SIGNAL.md -- an
           // ASYMMETRIC (Windows-only) signal would mean the flag landed WITHOUT the path.
           const matched = await cache.restoreCache(
             [path],

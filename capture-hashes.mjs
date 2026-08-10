@@ -4,7 +4,7 @@
 // -- and emits the per-NODE `Hash.details.nodes` map plus the merged project
 // configuration node. Nothing here re-derives a hash, so it cannot drift from
 // Nx's behaviour. Its output is the raw material for
-// `.planning/phases/08-nx-task-hash-parity/08-ROOT-CAUSE.md` and for the two-leg
+// `.planning/milestones/v0.0.2-phases/08-nx-task-hash-parity/08-ROOT-CAUSE.md` and for the two-leg
 // cross-OS comparison.
 //
 // WHY A ROOT-LEVEL DEV-ONLY SCRIPT RATHER THAN A MODULE OF THE PUBLISHED PACKAGE
@@ -122,7 +122,7 @@ const INSTALL_MODES = ['ci', 'install'];
  *       conjunct PERMANENTLY, so the premise alone cannot carry the attribution
  *       and no re-run of this mode can restore it.
  *   (c) WHERE THE ATTRIBUTION RECORD IS FROZEN:
- *       `.planning/phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md`'s O1 section,
+ *       `.planning/milestones/v0.0.2-phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md`'s O1 section,
  *       captured at proof time precisely because no future session can re-derive
  *       it. Read that record rather than reconstructing attribution from here.
  */
@@ -736,7 +736,7 @@ async function assertGraphPremise(args) {
         'attribution rested on a CONJUNCTION -- this premise AND the fact that Windows CI ran ' +
         "only `integration` -- and ci.yml's build-windows/typecheck-windows/test-windows legs " +
         'falsify the second conjunct permanently. The attribution record is FROZEN at ' +
-        ".planning/phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md's O1 section; this assertion " +
+        ".planning/milestones/v0.0.2-phases/11-live-proofs-o1-o2-o3/11-EVIDENCE.md's O1 section; this assertion " +
         'now guards the graph property alone.',
     );
   }

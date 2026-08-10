@@ -282,7 +282,7 @@ function directoryState(directory) {
  * which the lazy-import change falsified; it is CORRECTED rather than deleted,
  * because the conclusion it supports is unchanged and a reader needs to know the
  * mechanism still holds. The mechanism now: the `await import` of
- * `nx/src/utils/cache-directory.js` two lines below requires `nx/src/native`,
+ * `nx/src/utils/cache-directory.js` below in this function requires `nx/src/native`,
  * which performs that copy -- so the native directory is still populated before
  * `directoryState` reads it, on the very call that reads it. Requiring both
  * counts to be zero would therefore STILL make `cold`
@@ -450,9 +450,18 @@ async function capture(args) {
   }
 
   // MEASURED BEFORE the project graph is built (Pitfall 1), and deliberately
-  // before the two `await import`s below rather than after them -- the lazy-import
-  // change must not quietly move this measurement later in the sequence than the
-  // static imports used to put it.
+  // before the two `await import`s below rather than after them.
+  //
+  // Say what is true rather than "unchanged": under the old static imports all six
+  // Nx modules had loaded before `capture()` ran at all, so this measurement now
+  // happens EARLIER in the sequence, not at the same point. It is the `graphState`
+  // VERDICT that is unaffected, and that was measured rather than argued -- loading
+  // the four deferred specifiers first leaves the workspace-data directory
+  // untouched (`{"workspaceData":{"exists":false,"entries":0}}` both ways under a
+  // redirected NX_WORKSPACE_DATA_DIRECTORY), and the verdict derives from that
+  // directory alone. Keeping the measurement first is still the right order: it is
+  // the only position that stays correct if a future deferred specifier DOES write
+  // there.
   const graph = await measureGraphState();
 
   const { readNxJson } = await import('nx/src/config/nx-json.js');

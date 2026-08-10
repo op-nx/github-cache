@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { repoFileUrl } from './test/repo-file.js';
 import { enterWorkspaceRootCwd } from './test/workspace-root-cwd.js';
 
 /**
@@ -45,9 +46,7 @@ import { enterWorkspaceRootCwd } from './test/workspace-root-cwd.js';
  * pinned by name in `nx-target-inputs.spec.ts` because deleting it reinstates the defect
  * silently.
  */
-const SCRIPT = fileURLToPath(
-  new URL('../../../capture-hashes.mjs', import.meta.url),
-);
+const SCRIPT = fileURLToPath(repoFileUrl('capture-hashes.mjs'));
 
 function capture(...args: string[]) {
   const result = spawnSync(process.execPath, [SCRIPT, ...args], {

@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import { repoFileUrl } from './test/repo-file.js';
 
 /**
  * BEHAVIOURAL COVERAGE FOR `read-integration-hash.mjs` (XOS-03, TEST-09, D-17b).
@@ -87,9 +88,7 @@ import { afterAll, describe, expect, it } from 'vitest';
  * workspace-root instrument, not a cohesive module (`.planning/codebase/TESTING.md` spec
  * placement) -- the same reason `dogfood-cross-os.spec.ts` sits here.
  */
-const SCRIPT = fileURLToPath(
-  new URL('../../../read-integration-hash.mjs', import.meta.url),
-);
+const SCRIPT = fileURLToPath(repoFileUrl('read-integration-hash.mjs'));
 
 const WORKSPACE = mkdtempSync(join(tmpdir(), 'read-integration-hash-'));
 

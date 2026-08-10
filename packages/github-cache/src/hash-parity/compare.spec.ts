@@ -636,12 +636,7 @@ describe('the comparator constants are content-pinned, never snapshotted', () =>
   // the instrument -- which would have reintroduced the LINT-04 hole in the very test
   // written to close a lockstep gap.
   const instrumentTargets = /^const TARGETS = \[([^\]]+)\];/m
-    .exec(
-      readFileSync(
-        new URL('../../../../capture-hashes.mjs', import.meta.url),
-        'utf8',
-      ),
-    )?.[1]
+    .exec(readRepoFile('capture-hashes.mjs'))?.[1]
     ?.split(',')
     .map((entry) => entry.trim().replace(/^'|'$/g, ''));
 

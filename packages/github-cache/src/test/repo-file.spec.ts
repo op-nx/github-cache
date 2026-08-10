@@ -191,12 +191,9 @@ const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
  * derives the real set from the tree.
  */
 const WORKSPACE_ROOT_WALK_EXCEPTIONS = [
-  'capture-hashes-cli.spec.ts',
   'consumer-action-runtime.spec.ts',
   'docs-trust.spec.ts',
   'governance-docs.spec.ts',
-  'hash-parity/compare.spec.ts',
-  'read-integration-hash.integration.spec.ts',
 ];
 
 /**

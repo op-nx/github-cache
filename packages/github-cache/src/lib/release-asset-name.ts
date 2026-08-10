@@ -34,7 +34,7 @@ export type CacheOs = (typeof CACHE_OS_VALUES)[number];
  * absent locally.
  *
  * INTENTIONALLY KEPT after CORR-02, and for a DIFFERENT reason than the tuple
- * above. It has FIVE call sites across three modules, not the one this annotation
+ * above. It has SIX call sites across three modules, not the one this annotation
  * used to name -- verified by grep, and worth listing because an under-named
  * annotation is a latent deletion:
  *

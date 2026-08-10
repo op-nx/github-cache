@@ -195,7 +195,7 @@ scanned for stub/placeholder markers and found none.
   still poison a cache entry undetected by any signature check.
 - Files: N/A (feature does not exist yet); tracked as **PROV-01** in
   `.planning/PROJECT.md` and `.planning/milestones/v0.0.1-REQUIREMENTS.md`.
-- Current mitigation: `ARCHITECTURE-DECISION.md` explicitly rejects content
+- Current mitigation: `THREAT-MODEL.md` explicitly rejects content
   signing as a CREEP control for v0.0.1: CVE-2025-36852's poisoning precedes
   hashing, so signing the bytes verifies transport integrity, not
   correctness-for-the-key. CREEP is instead defended at the write/sync trust
@@ -386,9 +386,11 @@ here.
 
 ## Deferred Later-Milestone Triggers
 
-These are LOCKED architectural decisions (not accidental gaps), recorded in
-`.planning/ARCHITECTURE-DECISION.md` and `.planning/milestones/v0.0.1-REQUIREMENTS.md`,
-re-evaluated together when their shared trigger condition is met.
+These are LOCKED architectural decisions (not accidental gaps), recorded as rows in
+`.planning/PROJECT.md` `## Key Decisions` and in
+`.planning/milestones/v0.0.1-REQUIREMENTS.md`, re-evaluated together when their shared trigger
+condition is met. What `.planning/THREAT-MODEL.md` still records for them is the
+control surface each trigger carries (C6/C10/C11/C13/C18, cited in the bullets below).
 
 **GHCR-01 -- GHCR/OCI as an additional synced store:**
 - Status: Deliberately deferred, not built. v0.0.1 locked GitHub Releases as
@@ -411,7 +413,7 @@ re-evaluated together when their shared trigger condition is met.
 
 **PROV-01 -- optional reader-verified cosign keyless provenance attestation:**
 - Status: Deliberately deferred (one line by design per
-  `ARCHITECTURE-DECISION.md` control C7). Explicitly never content signing,
+  `THREAT-MODEL.md` control C7). Explicitly never content signing,
   never HMAC -- would only be clean on a GHCR/OCI backend.
 - Trigger to revisit: Paired with GHCR-01 and FOUND-03 (Docker) graduating
   together.

@@ -3,7 +3,7 @@ import type {
   CacheBackend,
   GetResult,
   PutResult,
-  ReadableBackend,
+  ReadOnlyBackend,
 } from './types.js';
 
 function readFrom(store: Map<string, Buffer>, hash: string): GetResult {
@@ -48,7 +48,7 @@ export function createWritableMemoryBackend(): CacheBackend {
 }
 
 /**
- * Read-only form of the Map-backed backend (the D-04 read seam): a ReadableBackend
+ * Read-only form of the Map-backed backend (the D-04 read seam): a ReadOnlyBackend
  * with NO put -- a write is unrepresentable, and the SERVER (not a put() return
  * value) answers a PUT routed here with the Nx contract's 403.
  *
@@ -56,18 +56,22 @@ export function createWritableMemoryBackend(): CacheBackend {
  * write-trusted trigger with a valid identity but no resolvable token, this backend
  * is served so an unwired workflow token does not break the build. The store is
  * never populated, so it is a PERMANENT MISS on every read (and a 403 on every
- * write) -- deliberately. That is one of the four backend-selection outcomes; see
- * the table in docs/advanced.md ("How the backend is selected"). RW-vs-RO is which
- * factory constructs the server, never a caller-facing mode flag (TRUST-05).
+ * write) -- deliberately. That is one of the documented backend-selection outcomes;
+ * see the table in docs/advanced.md ("How the backend is selected"). The COUNT is
+ * deliberately not restated here: docs/advanced.md owns it and docs-adoption.spec.ts
+ * pins it there, so a sixth outcome is one edit rather than a hunt through prose that
+ * nothing checks. RW-vs-RO is which factory constructs the server, never a
+ * caller-facing mode flag (TRUST-05).
  */
-export function createReadOnlyMemoryBackend(): ReadableBackend {
+export function createReadOnlyMemoryBackend(): ReadOnlyBackend {
   const store = new Map<string, Buffer>();
 
   return {
     async get(hash: Hash): Promise<GetResult> {
       return readFrom(store, hash);
     },
-    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // No put: read-only-ness is structural (ReadOnlyBackend, DECLARED as this factory's
+    // return type just above), not a runtime
     // 'forbidden'. The server answers a PUT here with the contract's 403.
   };
 }

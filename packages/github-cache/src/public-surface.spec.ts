@@ -27,56 +27,56 @@
  * the barrel keys excludes them structurally, without naming any of them, so internal
  * refactors do not churn this guard.
  */
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readRepoFile } from './test/repo-file.js';
 import * as barrel from './index.js';
 import { MAX_CACHE_BODY_BYTES } from './server/server.js';
-import { EXPECTED_ENV_KNOBS } from './test/consumer-contract.js';
+import {
+  EXPECTED_ENV_KNOBS,
+  EXPECTED_TYPE_EXPORTS,
+  EXPECTED_VALUE_EXPORTS,
+} from './test/consumer-contract.js';
 
 // --- The enumerated consumer contract. An intentional, reviewed surface change
 // edits the lists below; that edit IS the human-readable diff a reviewer sees. ---
 
-/** D-04 group (c): the runtime value exports of the package barrel. */
-const EXPECTED_VALUE_EXPORTS = ['createCacheServer'];
-
-/** D-04 group (c): the type-only exports of the package barrel. */
-const EXPECTED_TYPE_EXPORTS = [
-  'CacheBackend',
-  'GetHit',
-  'GetResult',
-  'PutResult',
-  'ReadableBackend',
-  'WritableBackend',
-];
+// D-04 group (c): the package value and type exports. Sourced from the shared
+// test/consumer-contract.ts so this guard and docs-adoption.spec.ts cannot drift.
+// NO inline sorted-literal pin, unlike group (a): this group is asserted for EXACT
+// equality against the PARSED BARREL below, and that equality is what makes an
+// intentional surface change land as a reviewable diff HERE. A third copy of the
+// same list would add no failure the barrel equality does not already produce.
 
 /** D-04 group (b): the consumer JS action inputs. */
 const EXPECTED_ACTION_INPUTS = ['port'];
 
 // D-04 group (a): the consumer-set process.env knobs. Sourced from the shared
 // test/consumer-contract.ts so this guard and docs-adoption.spec.ts cannot drift;
-// the inline sorted-literal self-check below is the human-reviewable pin.
+// the inline sorted-literal self-check below is the human-reviewable pin, and it is
+// MANDATED (DOCS-10) rather than optional -- there is no parsed barrel to compare
+// this group against, so the literal is the only reviewable diff it can produce.
 
 /**
  * The fixed set of package source files a documented env knob must still appear
  * in. A code refactor that renames or drops a knob orphans it from this set and
- * fails the guard (T-06-02-02: a silent cache-MISS class defect). Paths are
- * resolved from this spec via import.meta.url (the pinned-deps.spec.ts idiom).
+ * fails the guard (T-06-02-02: a silent cache-MISS class defect).
+ *
+ * REPO-RELATIVE, because these paths are read through the shared `readRepoFile`
+ * instead of a re-implementation resolving against this spec's own location. One path
+ * family for every entry, including the one outside the package -- which the old
+ * spec-relative form had to reach with a four-levels-up walk.
  */
 const KNOB_SOURCE_FILES = [
-  './server/server.ts',
-  './serve.ts',
-  './lib/retention.ts',
-  './lib/github-identity.ts',
-  './lib/select-backend.ts',
-  '../../../start-cache-server/entry.ts',
+  'packages/github-cache/src/server/server.ts',
+  'packages/github-cache/src/serve.ts',
+  'packages/github-cache/src/lib/retention.ts',
+  'packages/github-cache/src/lib/github-identity.ts',
+  'packages/github-cache/src/lib/select-backend.ts',
+  'start-cache-server/entry.ts',
 ];
 
 /** The fixed 2 GiB PUT body cap (SRV-04), a contract limit and NOT an env knob. */
 const EXPECTED_MAX_CACHE_BODY_BYTES = 2_147_483_648;
-
-function readSource(relativePath: string): string {
-  return readFileSync(new URL(relativePath, import.meta.url), 'utf8');
-}
 
 /**
  * Parse the `export type { ... }` names out of the barrel source. Iterates ALL
@@ -142,14 +142,16 @@ describe('public consumer surface (DOCS-05)', () => {
   });
 
   it('package type exports are exactly the enumerated set (D-04 group c)', () => {
-    const typeExports = parseTypeExports(readSource('./index.ts'));
+    const typeExports = parseTypeExports(
+      readRepoFile('packages/github-cache/src/index.ts'),
+    );
 
     expect(typeExports.sort()).toEqual([...EXPECTED_TYPE_EXPORTS].sort());
   });
 
   it('consumer action inputs are exactly the enumerated set (D-04 group b)', () => {
     const inputs = parseActionInputKeys(
-      readSource('../../../start-cache-server/action.yml'),
+      readRepoFile('start-cache-server/action.yml'),
     );
 
     expect(inputs.sort()).toEqual([...EXPECTED_ACTION_INPUTS].sort());
@@ -159,6 +161,7 @@ describe('public consumer surface (DOCS-05)', () => {
     expect([...EXPECTED_ENV_KNOBS].sort()).toEqual([
       'CACHE_MIRROR_ALLOW_AGGRESSIVE_RETENTION',
       'CACHE_MIRROR_MAX_AGE_DAYS',
+      'CACHE_READ_ONLY',
       'GH_TOKEN',
       'GITHUB_REPOSITORY',
       'GITHUB_TOKEN',
@@ -175,7 +178,7 @@ describe('public consumer surface (DOCS-05)', () => {
 });
 
 describe('documented env knobs stay wired in the package source (T-06-02-02)', () => {
-  const knobSource = KNOB_SOURCE_FILES.map((path) => readSource(path)).join(
+  const knobSource = KNOB_SOURCE_FILES.map((path) => readRepoFile(path)).join(
     '\n',
   );
 

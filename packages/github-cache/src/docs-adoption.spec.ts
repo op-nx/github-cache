@@ -1,6 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { EXPECTED_ENV_KNOBS } from './test/consumer-contract.js';
+import { readRepoFile, repoFileUrl } from './test/repo-file.js';
+import {
+  EXPECTED_ENV_KNOBS,
+  EXPECTED_TYPE_EXPORTS,
+  EXPECTED_VALUE_EXPORTS,
+} from './test/consumer-contract.js';
 
 /**
  * DOCS-01/02/04/06 adoption-docs content guard.
@@ -19,15 +24,8 @@ import { EXPECTED_ENV_KNOBS } from './test/consumer-contract.js';
  * any of them busts the Nx cache and re-runs this guard instead of replaying a
  * stale pass.
  */
-const repoRoot = new URL('../../../', import.meta.url);
-
-function docUrl(relativePath: string): URL {
-  return new URL(relativePath, repoRoot);
-}
-
-function read(relativePath: string): string {
-  return readFileSync(docUrl(relativePath), 'utf8');
-}
+/** Local name for the shared helper, so the existence clause below reads unchanged. */
+const docUrl = repoFileUrl;
 
 const REQUIRED_DOCS = [
   'README.md',
@@ -40,6 +38,16 @@ const REQUIRED_DOCS = [
 /** The background-step lifecycle tokens both the README and the example must show. */
 const LIFECYCLE_TOKENS = ['start-cache-server', 'background:', 'cancel:'];
 
+/**
+ * A knob name as a WHOLE WORD. A bare substring match is vacuous for the short
+ * knobs: `toContain('PORT')` is satisfied by IMPORTANT, SUPPORT or EXPORT, all of
+ * which occur in ordinary prose, so `PORT` could vanish from either doc with both
+ * clauses green. Not live today -- but the clause did not mean what it read as.
+ */
+function wholeWord(knob: string): RegExp {
+  return new RegExp(`\\b${knob}\\b`);
+}
+
 describe('adoption docs exist (DOCS-01/02/04)', () => {
   it.each(REQUIRED_DOCS)('%s exists', (path) => {
     expect(existsSync(docUrl(path))).toBe(true);
@@ -47,10 +55,10 @@ describe('adoption docs exist (DOCS-01/02/04)', () => {
 });
 
 describe('configuration.md documents the consumer contract (DOCS-02)', () => {
-  const config = read('docs/configuration.md');
+  const config = readRepoFile('docs/configuration.md');
 
   it.each(EXPECTED_ENV_KNOBS)('documents env knob %s', (knob) => {
-    expect(config).toContain(knob);
+    expect(config).toMatch(wholeWord(knob));
   });
 
   it('documents MAX_CACHE_BODY_BYTES as a fixed contract limit, in one sentence', () => {
@@ -77,11 +85,30 @@ describe('versioning.md documents every consumer env knob (DOCS-02/DOCS-05)', ()
   // docs-trust.spec.ts never checked versioning.md, so a knob could be present in
   // the consumer-contract constant and configuration.md yet missing from the
   // versioning surface -- exactly what happened to GITHUB_REPOSITORY.
-  const versioning = read('docs/versioning.md');
+  const versioning = readRepoFile('docs/versioning.md');
 
   it.each(EXPECTED_ENV_KNOBS)('lists env knob %s', (knob) => {
-    expect(versioning).toContain(knob);
+    expect(versioning).toMatch(wholeWord(knob));
   });
+
+  // GROUP (c), ON THE SAME FOOTING, and this is the generalization the comment above
+  // never got. public-surface.spec.ts pinned the exports against the CODE and this
+  // describe pinned only the knobs against the PROSE, so the exports had no prose pin
+  // at all -- and versioning.md named four of the six for as long as ReadableBackend
+  // and WritableBackend had existed.
+  //
+  // Two accepted limits, both cheaper than engineering around:
+  // - `toContain` is a substring match, so `CacheBackend` is also satisfied by
+  //   `createCacheBackend`. The env-knob clause above already accepts that weakness;
+  //   a presence guard is the right rung for prose.
+  // - Scoped to versioning.md ALONE -- the doc that CLAIMS to define the contract.
+  //   Widening to README.md or configuration.md would churn on ordinary prose edits.
+  it.each([...EXPECTED_VALUE_EXPORTS, ...EXPECTED_TYPE_EXPORTS])(
+    'lists package export %s',
+    (exportName) => {
+      expect(versioning).toContain(exportName);
+    },
+  );
 });
 
 describe('documented snippets mask the bearer token before writing $GITHUB_ENV (F17)', () => {
@@ -98,51 +125,116 @@ describe('documented snippets mask the bearer token before writing $GITHUB_ENV (
     'docs/examples/minimal-ci.yml',
   ];
 
+  // The mask directive must be matched in its EXECUTABLE form. A bare
+  // toContain('::add-mask::') is satisfied by the explanatory `#` YAML comment that
+  // sits directly above the echo in all three docs, so deleting the ONE executable
+  // line left this clause green while the documented snippet went on writing an
+  // unmasked bearer token to $GITHUB_ENV. Presence is not enough; the directive has
+  // to be emitted, and it has to be emitted BEFORE the append that carries the value.
+  const EXECUTABLE_MASK = /echo "::add-mask::/;
+  // The append itself, not merely the token name: advanced.md also `export`s the
+  // token into the shell earlier (`TOKEN="$(node ...)"`), which is not a
+  // $GITHUB_ENV write and legitimately precedes the mask. Only the interpolating
+  // `TOKEN=${...}` form is the write this guard orders the mask against.
+  const ENV_TOKEN_WRITE = new RegExp(`${TOKEN}=\\$\\{`);
+
   it.each(DOCS_WITH_ENV_WRITE)(
     '%s masks the token before appending it to $GITHUB_ENV',
     (path) => {
-      const doc = read(path);
+      const doc = readRepoFile(path);
 
-      // Only assert on docs that actually write the token to $GITHUB_ENV.
-      if (!(doc.includes(TOKEN) && doc.includes('GITHUB_ENV'))) {
-        return;
-      }
+      // The precondition is ASSERTED, not silently skipped. As an early `return`
+      // it made all three cases self-disabling: a doc that stopped naming the token
+      // literally -- a rename, a refactor into an `env:` block, a reflow -- reported
+      // PASS while asserting nothing at all. If a doc genuinely stops writing the
+      // token to $GITHUB_ENV, this clause is what has to be revisited deliberately.
+      expect(doc).toContain(TOKEN);
+      expect(doc).toContain('GITHUB_ENV');
 
-      expect(doc).toContain('::add-mask::');
+      expect(doc).toMatch(EXECUTABLE_MASK);
+      expect(doc).toMatch(ENV_TOKEN_WRITE);
+      expect(doc.search(EXECUTABLE_MASK)).toBeLessThan(
+        doc.search(ENV_TOKEN_WRITE),
+      );
     },
   );
 });
 
-describe('advanced.md documents all four selectBackend outcomes (F11)', () => {
-  // selectBackend has FOUR outcomes, two of which were invisible in the old binary
-  // read-write-versus-reader prose: the fail-closed THROW on a malformed identity,
-  // and the empty-memory permanent-MISS degrade on a trusted-but-tokenless context
-  // (the one adopters actually hit). A future selectBackend change not reflected
-  // here is caught by this guard.
-  const advanced = read('docs/advanced.md');
+// The count lives in ONE place -- advanced.md's prose sentence, pinned by the last clause in
+// this describe -- and deliberately nowhere else. It was previously restated at five sites of
+// which only that one was guarded, so the four -> five correction had to find the others by
+// hand and MISSED memory-backend.ts until a review caught it. This title, configuration.md
+// and memory-backend.ts now all say "documented" instead of a number.
+describe('advanced.md documents every selectBackend outcome (F11)', () => {
+  // selectBackend is not the binary read-write-versus-reader switch the old prose
+  // implied. Two outcomes were invisible in it -- the fail-closed THROW on a
+  // malformed identity, and the empty-memory permanent-MISS degrade on a
+  // trusted-but-tokenless context (the one adopters actually hit) -- and TRUST-14
+  // added the CACHE_READ_ONLY narrowing outcome on top. A future selectBackend
+  // change not reflected here is caught by this guard.
+  const advanced = readRepoFile('docs/advanced.md');
 
   it('names the untrusted read-only Releases reader outcome', () => {
     expect(advanced).toMatch(/Releases \*\*reader\*\*|Releases reader/);
   });
 
+  // RELATION, not co-presence. Two independent whole-document matches assert only
+  // that both tokens occur SOMEWHERE -- they happen to land on one line today, and
+  // nothing held them there. Line-scoping makes each clause assert the outcome it
+  // names: the variable WITH its throw, the backend WITH its degrade.
   it('names the fail-closed throw outcome on a malformed identity', () => {
-    expect(advanced).toMatch(/throws?/i);
-    expect(advanced).toContain('GITHUB_REPOSITORY');
+    expect(advanced).toMatch(/GITHUB_REPOSITORY[^\n]*throws?/i);
   });
 
   it('names the empty-memory permanent-MISS degrade outcome', () => {
-    expect(advanced).toMatch(/memory backend/i);
-    expect(advanced).toMatch(/permanent MISS/i);
+    expect(advanced).toMatch(/memory backend[^\n]*permanent MISS/i);
   });
 
+  // Anchored at a TABLE ROW, in the style of the CACHE_READ_ONLY clause below.
+  // /Actions-cache backend/i alone occurs on five lines of advanced.md, only one
+  // of which is the selection-table row, so BOTH table rows could be deleted with
+  // this clause still green off the surrounding prose. Line-scoping to `writable`
+  // is not enough on its own either -- the prose at the end of the doc also pairs
+  // the two on one line; requiring the leading table pipe is what pins the row.
   it('names the writable Actions-cache backend outcome', () => {
-    expect(advanced).toMatch(/Actions-cache backend/i);
+    expect(advanced).toMatch(/^\|[^\n]*writable[^\n]*Actions-cache backend/im);
+  });
+
+  // Line-scoped, and it names the KNOB, because the clause above already matches
+  // /Actions-cache backend/i -- which the read-only row also contains. A clause both
+  // rows satisfy is not coverage of the fifth outcome, it is a second reading of the
+  // fourth. Requiring the knob and the read-only backend on the SAME line pins the
+  // row itself, without pinning column widths that prettier reflows.
+  //
+  // MEASURED, not argued: deleting the read-only row from the selection table reddens
+  // THIS clause and nothing else in the file (1 failed | 42 passed) -- in particular
+  // the writable-Actions clause above stays GREEN under that same mutation, which is
+  // exactly the false pass this clause exists to prevent.
+  it('names the CACHE_READ_ONLY read-only Actions-cache outcome (TRUST-14)', () => {
+    expect(advanced).toMatch(
+      /CACHE_READ_ONLY[^\n]*read-only[^\n]*Actions-cache backend/,
+    );
+  });
+
+  // The COUNT, not just the outcomes. Every clause above asserts CONTENT, so nothing
+  // held the number honest: a six-outcome selector could stay documented as five
+  // indefinitely -- the same defect class as a rationale comment that outlives the
+  // code it describes. Asserted against the PROSE sentence a reader actually reads,
+  // deliberately NOT a tally of table rows: a row tally re-derives the number from
+  // the same table it is checking, so it would agree with itself while the sentence
+  // above it lied.
+  //
+  // MEASURED, not argued: reverting that sentence to the previous count reddens THIS
+  // clause and nothing else in the file (1 failed | 42 passed); every content clause
+  // above stays GREEN, because the outcomes are all still described.
+  it('states the outcome count in prose, so a stale count cannot survive', () => {
+    expect(advanced).toMatch(/`selectBackend` has FIVE outcomes/i);
   });
 });
 
 describe('README + minimal example show the background-step lifecycle (DOCS-06)', () => {
-  const readme = read('README.md');
-  const example = read('docs/examples/minimal-ci.yml');
+  const readme = readRepoFile('README.md');
+  const example = readRepoFile('docs/examples/minimal-ci.yml');
 
   it.each(LIFECYCLE_TOKENS)('README references %s', (token) => {
     expect(readme).toContain(token);
@@ -154,7 +246,7 @@ describe('README + minimal example show the background-step lifecycle (DOCS-06)'
 });
 
 describe('minimal example is distinct from the dogfood config (DOCS-04)', () => {
-  const example = read('docs/examples/minimal-ci.yml');
+  const example = readRepoFile('docs/examples/minimal-ci.yml');
 
   it('does not include dogfood-only action operations', () => {
     expect(example).not.toContain('operation:');

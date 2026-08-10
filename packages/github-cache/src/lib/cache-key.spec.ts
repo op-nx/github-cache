@@ -1,4 +1,11 @@
 import { readFileSync } from 'node:fs';
+import {
+  forbiddenLeafImports,
+  nonSpecModules,
+  PACKAGE_SOURCE_ROOT,
+  readRepoFile,
+  stripLineComments,
+} from '../test/repo-file.js';
 import { describe, expect, it } from 'vitest';
 import {
   cacheKeyFor,
@@ -11,22 +18,18 @@ import {
 /**
  * Count authored occurrences of `needle` in a source file, ignoring comment
  * lines (a trimmed line starting with `*`, `//`, or `/*`). Used for the
- * single-source count assertions: the authored prefix literal must live in
- * exactly one production place (TRUST-08 / T-05-08-02).
+ * single-source count assertions: the authored prefix literal must live only in
+ * the production modules the tree-walk clause below allowlists by name, and in
+ * no others (TRUST-08 / T-05-08-02).
  */
 function countAuthored(source: string, needle: string): number {
-  const code = source
-    .split('\n')
-    .filter((line) => {
-      const trimmed = line.trim();
-
-      return (
-        !trimmed.startsWith('*') &&
-        !trimmed.startsWith('//') &&
-        !trimmed.startsWith('/*')
-      );
-    })
-    .join('\n');
+  // Through the SHARED stripper (`src/test/repo-file.ts`), which owns the marker set and
+  // carries the positive control. This was one of several hand-authored copies. MEASURED, and
+  // the first version of this line claimed BYTE-IDENTITY, which is false: the shared helper
+  // also drops BLANK lines and the copy did not (559 -> 552 chars on `lib/cache-key.ts`). The
+  // difference is dropped blank lines and nothing else, and this function counts occurrences of
+  // a single-line needle, so no count moves.
+  const code = stripLineComments(source);
 
   return code.split(needle).length - 1;
 }
@@ -99,40 +102,68 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
       'utf8',
     );
 
-    expect(source).not.toMatch(/from '\.\.\/backend/);
-    expect(source).not.toMatch(/from '\.\.\/publish/);
-    expect(source).not.toMatch(/from '\.\.\/server/);
-    expect(source).not.toMatch(/from '\.\/select-backend/);
+    expect(
+      forbiddenLeafImports(source, [
+        '../backend',
+        '../publish',
+        '../server',
+        './select-backend',
+      ]),
+    ).toEqual([]);
   });
 
-  it('authors the prefix literal exactly ONCE across the leaf + its consumers (strict cross-file single source)', () => {
-    // Now that the backend and publish path route through the leaf, the authored
-    // prefix literal must exist in exactly one production place -- cache-key.ts --
-    // and nowhere else. A second authored copy re-opens the drift T-05-08-02 guards.
-    const files = {
-      'cache-key.ts': new URL('./cache-key.ts', import.meta.url),
-      'actions-cache-backend.ts': new URL(
-        '../backend/actions-cache-backend.ts',
-        import.meta.url,
-      ),
-      'publish-mirror.ts': new URL(
-        '../publish/publish-mirror.ts',
-        import.meta.url,
-      ),
+  it('authors the prefix literal in exactly the TWO allowlisted production modules (strict cross-file single source)', () => {
+    // A TREE WALK, not a hand-maintained file map, and the swap is the point. The map
+    // this replaced named four files, so it could see neither the copy that already
+    // existed outside it nor a FIFTH module inlining the literal tomorrow -- and a
+    // single-source guard that cannot see a new source is not a single-source guard.
+    // The walk is the SHARED `nonSpecModules()` in `test/repo-file.ts`, the same one
+    // `actions-cache-backend.spec.ts` uses for its VER-09 clause; the allowlist below is
+    // what the map used to be, but now it constrains a complete enumeration instead of
+    // standing in for one.
+    //
+    // TWO SITES, NOT ONE. The wording this replaced claimed a single production home
+    // for the literal, and that was already FALSE when it was written.
+    // `retention.ts` authors a byte-identical
+    // `nx-cache-` as SHARD_TAG_PREFIX, deliberately and argued at its own site: the
+    // Actions-cache KEY namespace and the Release month-shard TAG namespace are two
+    // different GitHub APIs and two disjoint keyspaces, `isServerProducedKey` is never
+    // asked about a tag and `isShardTag` never about a key, and the two should stay
+    // independently changeable. That is a deliberate second copy, not drift -- so it is
+    // allowlisted BY NAME with its count pinned, rather than papered over by widening
+    // the total.
+    //
+    // The prefix governs FOUR distinct consumers (the Actions-cache key, the
+    // Actions-cache enumeration filter, the Release asset name, and the cleanup accept
+    // filter's current-shape branch -- RETAIN-05c). An unallowlisted third authored
+    // copy means a change applied to one of them orphans the entire mirror silently.
+    //
+    // Spec files are deliberately EXCLUDED by the walk, and must stay excluded. The
+    // pinned expectation in `release-asset-name.spec.ts` MUST author the literal --
+    // that is the pinned-literal discipline, and spelling it out is what catches a
+    // separator change -- so counting a spec here would redden this for entirely the
+    // wrong reason.
+    const ALLOWED = {
+      [`${PACKAGE_SOURCE_ROOT}/lib/cache-key.ts`]: 1,
+      [`${PACKAGE_SOURCE_ROOT}/lib/retention.ts`]: 1,
     };
 
-    const perFile: Record<string, number> = {};
-    let total = 0;
+    const authored: Record<string, number> = {};
 
-    for (const [name, url] of Object.entries(files)) {
-      const count = countAuthored(readFileSync(url, 'utf8'), CACHE_KEY_PREFIX);
-      perFile[name] = count;
-      total += count;
+    for (const file of nonSpecModules()) {
+      const count = countAuthored(
+        readRepoFile(`${PACKAGE_SOURCE_ROOT}/${file}`),
+        CACHE_KEY_PREFIX,
+      );
+
+      if (count > 0) {
+        authored[`${PACKAGE_SOURCE_ROOT}/${file}`] = count;
+      }
     }
 
-    expect(total).toBe(1);
-    expect(perFile['cache-key.ts']).toBe(1);
-    expect(perFile['actions-cache-backend.ts']).toBe(0);
-    expect(perFile['publish-mirror.ts']).toBe(0);
+    expect(
+      authored,
+      `Exactly two production modules may author the \`${CACHE_KEY_PREFIX}\` literal: lib/cache-key.ts (the Actions-cache KEY namespace) and lib/retention.ts (the Release month-shard TAG namespace, a deliberate second copy argued at its own site). Any other module inlining it is the drift T-05-08-02 guards -- editing the literal in one place then ORPHANS THE ENTIRE MIRROR. Import CACHE_KEY_PREFIX from lib/cache-key.ts instead. If a third home is genuinely earned, allowlist it HERE in the SAME commit and record why at its site. A shell copy in a workflow cannot import the leaf and is annotated in ci.yml instead; it is outside this walk by construction.`,
+    ).toEqual(ALLOWED);
   });
 });

@@ -1,12 +1,31 @@
 ---
 slug: windows-publish-one-asset
-status: root_caused
+status: resolved
 trigger: "Why did the Windows publish leg mirror only one task-hash asset while the Linux leg mirrored four?"
 goal: find_root_cause_only
 verdict: correct_by_design
 created: 2026-07-26
-updated: 2026-07-26
+updated: 2026-08-11
+resolved: 2026-08-11
+resolved_by: /gsd:complete-milestone v0.0.2 pre-close resolution
 ---
+
+> **RESOLVED 2026-08-11 (bookkeeping close -- no new investigation).** This session's declared
+> `goal` was `find_root_cause_only`, and it met that goal: the 4/1 split is the workflow's job
+> topology projected through same-OS restore, `verdict: correct_by_design`, `next_action: none for
+> diagnosis`, zero unexplained residue across 37 enumerated rows per leg and a replication on run
+> `30181729913`. It stayed at `root_caused` only because that is a terminal state for a
+> root-cause-only session with no `resolved` transition to make.
+>
+> The one thing it left hanging -- observability improvements 1-4, recorded above as awaiting a
+> decision -- was decided and SHIPPED by quick `260726-4cc`: `scanned`/`readMisses` in
+> `PublishResult` (`0b05d1e`), distinct-hash dedup (`55dfb87`), the expected per-OS asymmetry
+> documented in `docs/advanced.md` (`98c13b9`), and Pitfall 7's stale zstd/`uploadHash` claims
+> corrected (`cf91b42`). That task carries an independent `status: passed` verification.
+>
+> U2 (the missing Windows-version `nx-cache-cafe<runid>` fixture entries) was explicitly scoped
+> OUT of this session and remains a separate, unrelated thread -- it is not a residual of this
+> diagnosis.
 
 # Debug: Windows publish leg mirrored only one task-hash asset
 

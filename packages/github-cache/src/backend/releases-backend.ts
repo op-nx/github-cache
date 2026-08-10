@@ -6,13 +6,22 @@ import { statusOf } from '../lib/octokit-status.js';
 import * as assetNaming from '../lib/release-asset-name.js';
 import { resolveMaxAgeDays, shardTagsForWindow } from '../lib/retention.js';
 import type { Hash } from '../lib/cache-key.js';
-import type { GetResult, ReadableBackend } from './types.js';
+import type { GetResult, ReadOnlyBackend } from './types.js';
 
 /**
  * The D-04 injected read seam. Exactly one method on purpose: the seam sits at the
- * OS-namespaced asset NAME -- the boundary CORR-01 and TEST-05 must prove -- so a
- * test fake reduces to a Map. fetchAsset resolves the asset bytes, or undefined
- * when the asset is genuinely absent (the ordinary cold-cache path).
+ * OS-INVARIANT asset NAME -- one name per hash since CORR-02 -- so a test fake
+ * reduces to a Map. fetchAsset resolves the asset bytes, or undefined when the asset
+ * is genuinely absent (the ordinary cold-cache path).
+ *
+ * WHAT THE SEAM PROVES, now that the name is OS-invariant. It used to prove the
+ * cross-OS boundary itself: a fake Map keyed by `<hash>-<os>` could show that a read
+ * on one platform never resolved another platform's asset. That claim is gone with
+ * the suffix, and the seam still earns its place for a different reason -- it is
+ * where TEST-05 proves the reader DERIVES its name through the single-source helper
+ * and composes none of its own. That is now the only thing standing between the
+ * reader and the publisher, because with one name per hash a derivation drift is no
+ * longer a per-OS MISS that some legs survive; it is a total MISS for every leg.
  *
  * It is NOT a mode flag: selectBackend always constructs the reader with the real
  * client, and no env value or caller argument can swap it (TRUST-05).
@@ -53,11 +62,19 @@ function warnOnce(status?: number): void {
 }
 
 /**
- * Read-only cross-context CacheBackend over GitHub Releases (CORR-01, D-02, D-11).
- * get resolves the running platform's asset through the single-source
- * releaseAssetName helper and returns its bytes or a MISS; put is forbidden by
- * construction. The injected client is the D-04 seam and the ONLY parameter -- this
- * factory must never grow a mode argument (TRUST-05).
+ * Read-only cross-context CacheBackend over GitHub Releases (CORR-02, D-02, D-11).
+ * get resolves THE hash's one asset name through the single-source releaseAssetName
+ * helper and returns its bytes or a MISS; put is forbidden by construction. The
+ * injected client is the D-04 seam and the ONLY parameter -- this factory must never
+ * grow a mode argument (TRUST-05).
+ *
+ * It resolves that name and NOT "the running platform's asset" (which is what this
+ * paragraph used to claim): since CORR-02 there is exactly one asset per hash and the
+ * reader is platform-blind. The consequence worth naming is that this reader can now
+ * serve bytes a DIFFERENT OS mirrored -- which is the point, and is safe only because
+ * VER-01 and VER-03 made the underlying archive OS-invariant. A task whose outputs
+ * genuinely differ by OS must declare that difference as an Nx input; this backend
+ * no longer partitions by platform on its behalf.
  *
  * This backend never returns 'stored' and never returns 'conflict' (those belong to
  * the writable Actions backend, and in Phase 4 to the mirror). The asymmetry worth
@@ -67,7 +84,7 @@ function warnOnce(status?: number): void {
  */
 export function createReleasesReadBackend(
   client: ReleaseReadClient,
-): ReadableBackend {
+): ReadOnlyBackend {
   return {
     async get(hash: Hash): Promise<GetResult> {
       try {
@@ -98,7 +115,8 @@ export function createReleasesReadBackend(
       }
     },
 
-    // D-02: read-only by CONSTRUCTION -- there is no put method at all (ReadableBackend),
+    // D-02: read-only by CONSTRUCTION -- there is no put method at all (ReadOnlyBackend,
+    // which this factory DECLARES as its return type),
     // so a write is unrepresentable, not a disabled feature (TRUST-05). The server
     // answers a PUT routed to this backend with the contract's 403.
   };

@@ -4,8 +4,17 @@ quick_id: 260726-4cc
 slug: audit-and-triage-proposals-1-4-then-appl
 tasks_completed: 4
 total_tasks: 4
-status: executed
+status: complete
 executed: 2026-07-26
+completed: 2026-08-11
+completed_by: /gsd:complete-milestone v0.0.2 pre-close resolution
+completion_note: >-
+  Bookkeeping close, no new work. 260726-4cc-VERIFICATION.md already records status `passed`
+  with `blocking_gaps: 0` from an independent fresh-context audit; the status field simply
+  never advanced past `executed`. All 3 advisory findings are non-blocking, and A1 (the
+  lowercase sentence start at PITFALLS.md:160) is fixed at HEAD -- the line now reads
+  "The engine's `restored.kind === 'miss'` skip branch". This task also discharged the
+  observability proposals 1-4 left open by debug session `windows-publish-one-asset`.
 branch: gsd/debug-windows-publish-one-asset
 base: b32b5c8
 head: cf91b42

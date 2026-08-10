@@ -6,7 +6,7 @@
  * window makes an asset simultaneously unreadable (reads never scan its shard) and
  * unprunable (cleanup never visits it), leaking toward the 1000-asset-per-release cap.
  *
- * LOAD-BEARING, comment-locked (Pitfall 7). The `cache-mirror-YYYYMM` month-shard tag
+ * LOAD-BEARING, comment-locked (Pitfall 7). The `nx-cache-YYYYMM` month-shard tag
  * scheme lives HERE and nowhere else -- both the Phase 3 reader and the Phase 4 publisher
  * derive their tags through these helpers, and `shardTagsForWindow` reuses `shardTag` so
  * the template exists in exactly one place. A drift between two tag derivations is a
@@ -39,18 +39,40 @@ const MIN_AGE_DAYS = 7;
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * The month-shard release tag: `cache-mirror-` plus the UTC year and zero-padded month
- * (e.g. cache-mirror-202607). Moved verbatim from the Phase 3 releases-backend seam so the
- * tag scheme has exactly one home. Computed from the clock (not a fixed constant) so it
- * already tracks the current month.
- */
-/**
  * The month-shard tag prefix. Authored HERE, the one home for the tag scheme, so the
  * cleanup engine's `startsWith` scope filter cannot drift from the tag shardTag builds
  * (I8). Never inline a second copy of this literal.
+ *
+ * It shares the `nx-cache-` prefix with the Actions-cache KEY namespace, and the reuse is
+ * DELIBERATE NON-ALIASING rather than an oversight -- recorded as such at
+ * `release-asset-name.ts`, whose filter is likewise NOT aliased to `isServerProducedKey`
+ * even though the body is identical. Aliasing would COUPLE the Actions-cache KEY namespace to
+ * the Release namespace, so a later change intended for one would silently move both. A prior
+ * revision of this block argued the reuse was safe from an invariant no test enforces; the
+ * argument is now the recorded decision, which does not need one.
+ *
+ * WHAT THE REUSE ACTUALLY COSTS, stated because the previous version omitted it and the
+ * omission is the more useful half. A six-decimal-digit shard tag satisfies the CURRENT
+ * asset-name filter, so `nx-cache-202607` is a syntactically valid current asset NAME as well
+ * as a valid shard TAG. Nothing exploits that today -- `isServerProducedKey` is applied only
+ * to Actions-cache keys and `isShardTag` only to Release tag names, two different GitHub APIs
+ * over two keyspaces, and neither predicate is ever asked about the other's strings -- but the
+ * overlap is latent rather than absent, and a future reader weighing a change here should
+ * know it exists. Do NOT single-source the prefix from the cache-key constant to "fix" it:
+ * quick 260803-fcd retracted that exact collision objection, and the record documents the
+ * identical-bodied filters as deliberately not aliased.
+ * The name says what the tag IS -- an Nx cache shard -- rather than what it was temporarily
+ * for; a future read-write Releases backend would make a "mirror" spelling a permanent
+ * misnomer baked into every tag ever created.
  */
-export const SHARD_TAG_PREFIX = 'cache-mirror-';
+export const SHARD_TAG_PREFIX = 'nx-cache-';
 
+/**
+ * The month-shard release tag: `nx-cache-` plus the UTC year and zero-padded month
+ * (e.g. nx-cache-202607). Moved verbatim from the Phase 3 releases-backend seam so the
+ * tag scheme has exactly one home. Computed from the clock (not a fixed constant) so it
+ * already tracks the current month.
+ */
 export function shardTag(date: Date = new Date()): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -60,20 +82,35 @@ export function shardTag(date: Date = new Date()): string {
 
 /**
  * Exact month-shard tag pattern: the prefix followed by a 6-digit `YYYYMM`
- * (equivalent to `/^cache-mirror-\d{6}$/`). Built FROM `SHARD_TAG_PREFIX` so the
+ * (equivalent to `/^nx-cache-\d{6}$/`). Built FROM `SHARD_TAG_PREFIX` so the
  * prefix literal is not copied a second time (I8: one home for the tag scheme).
  * The `\d{6}` deliberately matches ALL month shards (wider than the reader window,
- * per Pitfall 4) -- it only excludes non-shard `cache-mirror-*` tags such as
- * `cache-mirror-latest` / `cache-mirror-backup`.
+ * per Pitfall 4) -- it only excludes non-shard `nx-cache-*` tags such as
+ * `nx-cache-latest` / `nx-cache-backup`.
  */
 export const SHARD_TAG_PATTERN = new RegExp('^' + SHARD_TAG_PREFIX + '\\d{6}$');
 
 /**
- * Whether a release tag is a genuine `cache-mirror-YYYYMM` month shard. The exact
+ * Whether a release tag is a genuine `nx-cache-YYYYMM` month shard. The exact
  * accepter the cleanup scope filter uses instead of a loose `startsWith` prefix,
- * so a `cache-mirror-latest` / `cache-mirror-backup` tag is never scoped for
+ * so a `nx-cache-latest` / `nx-cache-backup` tag is never scoped for
  * pruning. Round-trip-safe with `shardTag`: `isShardTag(shardTag(anyDate))` is
  * always true, so the accepter can never drift from the producer.
+ *
+ * THE PREFIX RENAME DELIBERATELY DID NOT WIDEN THIS ACCEPTER, and `cleanup.ts` states the
+ * opposite rule one level down for ASSET names -- that a rename's widening "had to land in
+ * the SAME COMMIT as the rename", because a publisher writing the new name against an
+ * unwidened filter silently stops pruning. That rule is right and does not apply here: a
+ * widened accepter has to be maintained forever, and the shards it would cover were ONE
+ * hand-deleted release with no adopters outside this repository (the tag scheme is not part
+ * of the consumer contract -- `docs/versioning.md` names `shardTag` as internal).
+ *
+ * THIS ACCEPTER IS THE ROOT OF THE UNREACHABILITY CHAIN, and the chain itself is stated once
+ * at `isLegacyOsSuffixedAssetName` in `release-asset-name.ts` rather than re-derived here --
+ * this file's copy was one of the three the review found. The fact this site owns: shards
+ * written under the old prefix became unreadable AND unprunable at the rename, which is a
+ * cache MISS rather than data loss, and they were removed by hand instead. `docs/advanced.md`
+ * states that consequence for a CONSUMER, which is where it matters most.
  */
 export function isShardTag(tag: string): boolean {
   return SHARD_TAG_PATTERN.test(tag);

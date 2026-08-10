@@ -12,26 +12,33 @@ The default Actions-cache backend is scoped to a repository's Actions cache,
 which is not shared with a developer's machine and is capped at 10 GB
 ([Configuration](configuration.md#two-limits-to-know-about)). The GitHub Releases
 store is a second, cross-context layer: cache entries mirrored to a monthly
-GitHub Release (`cache-mirror-YYYYMM`) can be read from anywhere with repository
+GitHub Release (`nx-cache-YYYYMM`) can be read from anywhere with repository
 read access.
 
 ### How the backend is selected
 
 **The backend is chosen from runtime context -- there is nothing to enable in
-code (D-01/TRUST-05).** `selectBackend` has FOUR outcomes, not a binary
+code (D-01/TRUST-05).** `selectBackend` has FIVE outcomes, not a binary
 read-write-versus-reader switch:
 
-| Context                                                               | Backend                                | Observable behavior                                                                                   |
-| --------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Untrusted (a developer machine, a fresh runner, an untrusted trigger) | read-only GitHub Releases **reader**   | reads resolve from the mirror; a `put()` always returns `403`                                         |
-| Trusted, but `GITHUB_REPOSITORY` is malformed                         | none -- it **throws**                  | fail-closed: the server does not start, rather than resolve into another repository's cache namespace |
-| Trusted, valid identity, but no resolvable token                      | an **empty read-only memory backend**  | **every read is a permanent MISS and every write a `403`, silently -- no error**                      |
-| Trusted, valid identity, resolvable token                             | the writable **Actions-cache backend** | full read-write caching                                                                               |
+| Context                                                                                                   | Backend                                 | Observable behavior                                                                                   |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Untrusted (a developer machine, a fresh runner, an untrusted trigger)                                     | read-only GitHub Releases **reader**    | reads resolve from the mirror; the server answers every `PUT` with `403`                              |
+| Trusted, but `GITHUB_REPOSITORY` is malformed                                                             | none -- it **throws**                   | fail-closed: the server does not start, rather than resolve into another repository's cache namespace |
+| Trusted, valid identity, but no resolvable token                                                          | an **empty read-only memory backend**   | **every read is a permanent MISS and every `PUT` a `403`, silently -- no error**                      |
+| Trusted, valid identity, resolvable token                                                                 | the writable **Actions-cache backend**  | full read-write caching                                                                               |
+| Trusted, valid identity, resolvable token, plus [`CACHE_READ_ONLY`](configuration.md#cache_read_only) set | the read-only **Actions-cache backend** | reads resolve from the real Actions cache; the server answers every `PUT` with `403`                  |
+
+A read-only backend has **no `put()` at all** -- a write is unrepresentable rather
+than a runtime error value, and the `403` is produced by the server at the protocol
+boundary. So do not implement `put()` returning `'forbidden'` when supplying your
+own reader: `PutResult` is `'stored' | 'conflict'`, and a `'forbidden'` return does
+not typecheck.
 
 The third row is the one adopters actually hit: a trusted CI trigger with no
 `GH_TOKEN` / `GITHUB_TOKEN` wired does not fail -- it degrades to an empty backend
-that MISSes every read and `403`s every write with no error, so a "cache that
-never hits" on CI usually means a missing token, not a bug.
+that MISSes every read, with every `PUT` answered `403` and no error raised, so a
+"cache that never hits" on CI usually means a missing token, not a bug.
 
 What it needs from you:
 
@@ -44,19 +51,89 @@ What it needs from you:
 
 Every read fault degrades to a MISS (a rebuild), never a wrong result.
 
+That covers read **faults**, and it carries one precondition: a cached task's
+outputs must not depend on which OS produced them. The store does not partition
+by runner OS, so a task whose output genuinely differs per OS has to declare that
+difference as an Nx input -- this repo's `integration` target carries a platform
+discriminator for exactly that reason.
+
 ## Publish / sync and cleanup
 
 These are the maintenance layers that keep the Releases store populated and
 bounded. They are opt-in and run in CI, not on a developer machine.
 
+Sharing one store across operating systems has its own recipe -- see
+[Cross-OS caching](cross-os.md) for the safe default and the checklist that earns
+a per-target exception.
+
 - **Publish / sync.** Enumerates the repository's `nx-cache-*` Actions-cache
-  entries, restores the ones the current OS can restore, and uploads them to the
-  current month's `cache-mirror-YYYYMM` Release. Restore is same-OS -- an entry
-  saved on one runner OS cannot be restored on another -- so each leg can only
-  mirror the tasks that actually **ran** on that OS. An asymmetry between the
-  legs' mirrored task-hash asset counts is therefore the expected shape, not a
-  bug; the per-leg totals also include seed assets, which do not follow that
-  split. It is gated by a **separate** sync allowlist (`isSyncTrusted`: `push` /
+  entries, restores them, and uploads them to the current month's
+  `nx-cache-YYYYMM` Release. **Restore is not same-OS.** From v0.0.2 the
+  archive path is a workspace-relative literal and the cross-OS archive flag is
+  set, so the `@actions/cache` cache version no longer partitions by runner OS
+  and a leg can restore an entry that was saved on another OS. Two legs are still
+  worth running, for a different reason: each leg is still the only place its own
+  OS's tasks **run**, because a target that touches real OS surface declares a
+  platform discriminator that keeps its Linux and Windows Nx task hashes distinct
+  (this repo's `integration` target is that case). Both legs may now reach the
+  same entry, which is harmless -- uploads are first-write-wins and the asset set
+  is byte-identical. The per-leg mirrored asset counts can still differ, since
+  either leg may reach a given entry first and the totals also include seed
+  assets, so an asymmetry is not by itself a bug.
+
+  **Bumping this action rotates the cache version, and which warning you get
+  depends on the run.** Anything that changes the `@actions/cache` cache version
+  -- the archive path literal above all -- rotates it for every entry already
+  sitting in the Actions cache, so every entry that predates the bump restores
+  as a MISS. That is expected **once per version-affecting change**. Which
+  warning that produces depends on whether the publish run also wrote entries of
+  its own at the new cache version. A run that did -- this repository's CI, and
+  any workflow where the sidecar and publish share a run -- restores and mirrors
+  those, so the all-MISS warning cannot fire. Expect instead a spike in
+  restore-MISS counts, and a warning once that cohort dominates the enumeration.
+  That one is proportional rather than a promise: it is weighed against a lower
+  bound on the miss proportion and not the raw ratio, so a short enumeration
+  needs a larger majority than a long one -- around 90% of ten entries against
+  around 60% of a hundred. It reports the miss count, the enumeration size,
+  which denominator that proportion is over, and the causes worth checking.
+
+  A publish-only or scheduled run that wrote nothing of its own has an entirely
+  historical enumeration, and that is the shape the all-MISS warning is reserved
+  for -- alongside a runtime token whose Actions-cache read scope regressed. It
+  names the axis as well (the `@actions/cache` cache version, which is a
+  separate mechanism from the Nx task hash and from the Release asset name) and
+  the same causes worth checking, apart from the month-shard one. That cause
+  cannot apply here: nothing restored on such a run, so no month shard was ever
+  opened, and a rollover moves nothing this warning counts. Two consecutive
+  all-miss runs with no version-affecting change in between is the signal that
+  something else is wrong -- most likely the runtime token's Actions-cache read
+  scope. The two warnings are siblings at one branch pair in
+  `publish/publish-mirror.ts`.
+
+  **Upgrading to v0.0.2 rotates the Release asset name too, on top of the cache
+  version.** The name dropped its OS component: an asset that was
+  `<hash>-<os>` is now `nx-cache-<hash>`. The reader derives the new name only
+  and has no fallback to the old one, so on the first run after the upgrade
+  **every asset mirrored before v0.0.2 reads as a MISS** and stays that way until
+  it is re-mirrored under the new name. This is a one-time cost at the upgrade,
+  and it is a second axis from the cache-version rotation above; the two land in
+  the same run, so expect one disrupted publish run, not two.
+
+  **The pre-v0.0.2 assets are NOT reachable by cleanup, and you must delete them
+  by hand.** They sit in shard releases under the superseded `cache-mirror-*`
+  tag prefix, and cleanup's scope filter admits only the current
+  `nx-cache-YYYYMM` shape, so it never opens those releases at all. Nothing
+  prunes them and they never age out through the retention window -- the window
+  only applies to shards cleanup can see. **On a public repository those assets
+  stay world-readable forever until you remove them**, so treat this as a
+  required upgrade step rather than housekeeping: delete the old
+  `cache-mirror-*` releases (which deletes their assets with them) once the
+  first post-upgrade publish run has re-mirrored what you still need. The tag
+  scheme is internal (see `docs/versioning.md`), and the accepter was
+  deliberately not widened to cover the old prefix -- a widened accepter would
+  have to be maintained forever for a population that no longer grows.
+
+  It is gated by a **separate** sync allowlist (`isSyncTrusted`: `push` /
   `schedule` on the default branch), never by the write gate -- widening
   write-trust must never widen sync, or a pull-request-influenced entry could
   reach the shared store. It needs `contents: write` (create the release and
@@ -67,6 +144,7 @@ bounded. They are opt-in and run in CI, not on a developer machine.
   month shard** -- the 1000-asset cap is a soft per-leg check, so concurrent
   legs can both observe the shard under the cap and push it over; this
   repository's own CI enforces it with `max-parallel: 1`.
+
 - **Cleanup.** Prunes mirror assets older than
   [`CACHE_MIRROR_MAX_AGE_DAYS`](configuration.md#cache_mirror_max_age_days) from
   the month-shard Releases. It is **storage hygiene, not poison-containment** --

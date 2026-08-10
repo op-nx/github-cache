@@ -30,6 +30,12 @@
         "testTargetName": "test",
         "testMode": "watch"
       }
+    },
+    {
+      "plugin": "@nx/eslint/plugin",
+      "options": {
+        "targetName": "lint"
+      }
     }
   ],
   "analytics": false,
@@ -48,24 +54,38 @@
         "{workspaceRoot}/LICENSE",
         "{workspaceRoot}/package.json",
         "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/eslint.config.mjs",
+        "{workspaceRoot}/tools/eslint-rules/**/*",
         "{workspaceRoot}/start-cache-server/action.yml",
         "{workspaceRoot}/start-cache-server/entry.ts",
         "{workspaceRoot}/README.md",
         "{workspaceRoot}/docs/configuration.md",
+        "{workspaceRoot}/docs/cross-os.md",
         "{workspaceRoot}/docs/advanced.md",
         "{workspaceRoot}/docs/trust-and-security.md",
         "{workspaceRoot}/docs/versioning.md",
         "{workspaceRoot}/docs/examples/minimal-ci.yml",
         "{workspaceRoot}/docs/examples/README.md",
         "{workspaceRoot}/.github/workflows/cleanup.yml",
+        "{workspaceRoot}/.github/workflows/ci.yml",
+        "{workspaceRoot}/.github/workflows/windows-regression-detector.yml",
         "{workspaceRoot}/.gitattributes",
         "{workspaceRoot}/ppe/action.yml",
+        "{workspaceRoot}/capture-hashes.mjs",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
         {
           "json": "{workspaceRoot}/tsconfig.json",
           "fields": ["compilerOptions"]
         },
-        { "externalDependencies": ["vitest"] },
+        {
+          "externalDependencies": [
+            "vitest",
+            "eslint",
+            "@eslint/js",
+            "typescript-eslint",
+            "@eslint-community/eslint-plugin-eslint-comments"
+          ]
+        },
         { "dependentTasksOutputFiles": "**/*.js", "transitive": true }
       ]
     },
@@ -75,6 +95,7 @@
       "inputs": [
         "default",
         "^production",
+        "{workspaceRoot}/read-integration-hash.mjs",
         { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
         {
           "json": "{workspaceRoot}/tsconfig.json",
@@ -82,7 +103,7 @@
         },
         { "externalDependencies": ["vitest"] },
         { "dependentTasksOutputFiles": "**/*.js", "transitive": true },
-        { "runtime": "node -p process.platform" }
+        { "runtime": "node --no-warnings -p process.platform" }
       ]
     },
     "build": {
@@ -115,6 +136,15 @@
       ]
     },
     "typecheck": {
+      "outputs": [
+        "{projectRoot}/tsconfig.tsbuildinfo",
+        "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}",
+        "{projectRoot}/dist/**/*.{d.ts,d.cts,d.mts}.map",
+        "{projectRoot}/dist/tsconfig.lib.tsbuildinfo",
+        "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}",
+        "{projectRoot}/out-tsc/vitest/**/*.{d.ts,d.cts,d.mts}.map",
+        "{projectRoot}/out-tsc/vitest/tsconfig.spec.tsbuildinfo"
+      ],
       "inputs": [
         "default",
         {
@@ -126,6 +156,23 @@
           "dependencies": true
         },
         { "externalDependencies": ["typescript", "tslib", "@types/node"] }
+      ]
+    },
+    "lint": {
+      "outputs": [],
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/eslint.config.mjs",
+        "{workspaceRoot}/tools/eslint-rules/**/*",
+        {
+          "externalDependencies": [
+            "eslint",
+            "@eslint/js",
+            "typescript-eslint",
+            "@eslint-community/eslint-plugin-eslint-comments"
+          ]
+        }
       ]
     }
   }

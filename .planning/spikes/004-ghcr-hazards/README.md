@@ -22,7 +22,7 @@ that Releases does not.
 Empirically: overwrote a tag with different content and inspected the resulting versions;
 attempted a version deletion with the current `gh` token (`write:packages`, no
 `delete:packages`). Documented facts (>5000 wall; fine-grained-PAT-unsupported) are already
-established in `.planning/ARCHITECTURE-DECISION.md` C10/C11 and confirmed here, not
+established in `.planning/THREAT-MODEL.md` C10/C11 and confirmed here, not
 re-litigated. The in-repo `GITHUB_TOKEN` cleanup path (C11-preferred) needs a real Actions
 token and is proven in the CI leg (005).
 

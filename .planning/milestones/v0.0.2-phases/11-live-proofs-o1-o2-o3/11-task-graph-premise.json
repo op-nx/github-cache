@@ -1,0 +1,31 @@
+{
+  "mode": "assert-graph-premise",
+  "meta": {
+    "os": "win32",
+    "arch": "arm64",
+    "nxVersion": "23.1.0",
+    "nodeVersion": "v24.13.0",
+    "project": "@op-nx/github-cache",
+    "commit": "7d909078eec61010535e5de12504d94c5b4e5dd1",
+    "capturedAt": "2026-07-29T20:51:08.116Z"
+  },
+  "forbiddenTargets": [
+    "build",
+    "typecheck",
+    "test"
+  ],
+  "integration": {
+    "command": "nx run-many -t integration",
+    "taskIds": [
+      "@op-nx/github-cache:integration"
+    ]
+  },
+  "control": {
+    "command": "nx run-many -t typecheck",
+    "taskIds": [
+      "@op-nx/github-cache:build",
+      "@op-nx/github-cache:typecheck"
+    ]
+  },
+  "verdict": "PREMISE OK"
+}

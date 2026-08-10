@@ -28,6 +28,7 @@
     "!dist/action",
     "!dist/roundtrip",
     "!dist/test",
+    "!dist/hash-parity",
     "!dist/**/*.tsbuildinfo",
     "!dist/**/*.d.ts.map"
   ],

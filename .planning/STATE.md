@@ -5,10 +5,10 @@ milestone_name: OS-invariant cross-OS sharing
 milestone_status: shipped
 current_phase: null
 current_phase_name: null
-status: Awaiting next milestone
-last_updated: "2026-08-11T00:00:00.000Z"
+status: Shipped v0.0.2 (PR #16 merged) — awaiting next milestone
+last_updated: "2026-08-11T01:40:00.000Z"
 last_activity: 2026-08-11
-last_activity_desc: "Milestone v0.0.2 (OS-invariant cross-OS sharing) closed and archived: 7 phases, 45 plans, 110 tasks, 57/57 requirements, all phases verified passed. Roadmap and requirements archived to milestones/v0.0.2-*; REQUIREMENTS.md removed for the next milestone; tagged v0.0.2. Next: /gsd:new-milestone."
+last_activity_desc: "Milestone v0.0.2 (OS-invariant cross-OS sharing) closed, archived and SHIPPED. PR #16 merged to main as a true merge commit 91839c2 (merge-commit strategy per maintainer instruction); remote branch auto-deleted. Post-merge run 31442314030 green end to end, including the push-gated legs a PR never exercises: both publish legs, both publish-verify legs, consumer-smoke, and all three read-only Windows reuse legs. Tagged v0.0.2 at the merge commit and moved the floating v0 tag onto it, so the three documented adopter entrypoints (@v0) now serve v0.0.2. Package bumped 0.0.1 -> 0.0.2 (ab65684). NOT published: @op-nx/github-cache 404s on the public npm registry, so v0.0.1 was never published either — decide whether the npm channel is wanted at all. Next: /gsd:new-milestone."
 progress:
   total_phases: 7
   completed_phases: 7
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-08-11)
 
 ## Current Position
 
-Phase: none -- milestone v0.0.2 shipped 2026-08-11
+Phase: none -- milestone v0.0.2 shipped and MERGED 2026-08-11 (PR #16, merge commit `91839c2`)
 Plan: —
 Status: Awaiting next milestone (`/gsd:new-milestone`, which authors a fresh REQUIREMENTS.md)
 Last activity: 2026-08-11 — v0.0.2 closed and archived (7 phases, 45 plans, 110 tasks, 57/57 requirements, all phases verified `passed`)
@@ -384,7 +384,8 @@ closures recorded elsewhere rather than here:
 | Packaging | Zero-dep barrel vs CLI/Action package split (PKG-SPLIT, PR #3 review code-reviewer #6) | a later milestone (needs a package restructure; peer/optional half-measure would break the published CLI-bin contract) | 2026-07-21 |
 | Review | Deleted-rationale sweep: diff the deleted comment blocks in origin/main against the greenfield rewrite to find further dropped invariants | deferred to a later milestone by user instruction (quick 260722-0od); value proven -- three were already found this way during the PR #3 review: the get-side hash lock (T2), the 405 handler (T3), and a third that turned out to be deliberate; cost is a full-history comment diff | 2026-07-22 |
 | Test harness | **Vitest worker crash, SECOND occurrence -- and the first one with output captured.** During the v0.0.2 milestone close, `npm test` exited 1 with no failing assertion: 43 of 44 spec files reported, 1134 of 1145 tests passed, and `src/serve.spec.ts` produced no line at all because its worker fork exited unexpectedly. An immediate uncached streamed re-run was fully green (44/44, 1145/1145), so it did not reproduce -- same as occurrence 1 at `69bd1b7`, which left no evidence because the re-run destroyed it. `AGENTS.md` names exactly this condition as the point at which the event becomes actionable. Full capture, environment, what is now known and what must not be guessed: `.planning/debug/vitest-worker-crash-serve-spec.md`. NOT a v0.0.2 gap -- the milestone's gates were green at close. | open, 2 occurrences; act on a third, capturing FIRST | 2026-08-11 |
-| Release | Cut and push the `v0` git tag | release-checklist item, NOT an action: deliberately not created during quick 260722-0od (outward-facing, hard to retract); the maintainer cuts it at publish time | 2026-07-22 |
+| Release | **npm publish is unresolved, and it predates v0.0.2.** `npm view @op-nx/github-cache` returns 404 -- the package has never been published, so v0.0.1's DOCS-01..06 / GOV-01..03 "published npm package" claim and `README.md`'s npm-install instructions describe a channel that does not exist. Nothing automates it: no tag-triggered workflow, no `NPM_TOKEN` in `.github/`. The manifest is publish-ready at `0.0.2` with `pack:check` green. Decide whether the npm channel is wanted at all, or whether the JS Action (`@v0`) is the intended sole distribution -- then either publish or correct the docs. | open, maintainer decision | 2026-08-11 |
+| Release | ~~Cut and push the `v0` git tag~~ **DONE 2026-08-11**: `v0` force-moved from `4c85b7a` to the v0.0.2 merge commit `91839c2` and pushed, alongside a new annotated `v0.0.2`. The three documented adopter entrypoints reference `@v0`, so it now serves v0.0.2. Original row text follows for the reasoning it records. | release-checklist item, NOT an action: deliberately not created during quick 260722-0od (outward-facing, hard to retract); the maintainer cuts it at publish time | 2026-07-22 |
 
 ## Session Continuity
 
@@ -588,39 +589,38 @@ Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates
 
 ## Operator Next Steps
 
-1. **Merge PR #16** (`gsd/v0.0.2-os-invariant-cross-os-sharing` -> `main`, 624 commits ahead,
-   0 behind). Held for the maintainer -- no milestone or PR merge happens without explicit
-   approval.
+Steps 1-3 of the previous list are DONE (2026-08-11, `/gsd:ship v0.0.2`). What remains:
 
-2. **THEN tag v0.0.2 on the merge commit**, not before. `git.create_tag` is `true` and the close
-   deliberately did NOT tag: `v0.0.1` tags `4c85b7a`, the PR #3 merge commit on `main`, and a tag
-   cut on the branch head would not be an ancestor of `main` after the merge (a merge commit and
-   a squash both produce a different commit), so it would have to be deleted and recreated.
+1. **Publish `@op-nx/github-cache@0.0.2` to npm** -- if publishing is intended at all.
+   `npm view @op-nx/github-cache` returns **404**: the package does not resolve on the public
+   registry, so v0.0.1 was never published either, despite `DOCS-01..06`/`GOV-01..03` describing
+   a published package and `README.md` documenting npm install. Nothing in CI publishes -- there
+   is no tag-triggered workflow and no `NPM_TOKEN` anywhere in `.github/`, so this is manual by
+   design.
+
+   Decide first whether the npm channel is actually wanted, or whether the JS Action (`@v0`) is
+   the only intended distribution. If publishing:
 
    ```
-   git checkout main && git pull
-   git tag -a v0.0.2 -m "v0.0.2 OS-invariant cross-OS sharing
-
-   Delivered: the cache store is OS-invariant on both layers, all four cross-OS reuse outcomes
-   (O1-O4) are proven on real runners in the mandated order, and the recipe is shipped for
-   consumers to copy.
-
-   Key accomplishments:
-   - OS discrimination moved out of the store and into the consumer's declared Nx input (D2-01,
-     superseding CORR-01), on both the Actions-cache and Releases-mirror layers
-   - Cross-OS Nx task-hash divergence root-caused to one field and gated every run thereafter
-   - O1-O4 proven live, with O1's producer attribution captured before enabling O4 destroyed it
-   - A read-only Actions-cache backend composed from the writable one, making the Windows reuse
-     gate unlaunderable and cache-version drift unrepresentable
-   - docs/cross-os.md: a safe-by-default consumer recipe, drift-guarded
-
-   See .planning/MILESTONES.md for full details."
-   git push origin v0.0.2
+   npm publish --workspace @op-nx/github-cache --access public
    ```
 
-3. **Consider moving the `v0` tag** to the same commit. It currently points at `4c85b7a`
-   alongside `v0.0.1`. Cutting/moving `v0` is a standing release-checklist item in Deferred
-   Items, deliberately left to the maintainer as outward-facing.
+   The manifest is ready: version `0.0.2` (`ab65684`), `files: ["dist"]`, MIT licence, and
+   `pack:check` green.
 
-4. **Start the next milestone** with `/gsd:new-milestone` (authors a fresh `REQUIREMENTS.md`;
+2. **Start the next milestone** with `/gsd:new-milestone` (authors a fresh `REQUIREMENTS.md`;
    the v0.0.2 set is archived, not present).
+
+### Completed this session
+
+| Step | Result |
+|---|---|
+| Merge PR #16 | MERGED as a true merge commit `91839c2` (parents `fe25a3f` + `5cb3a93`), merge-commit strategy per maintainer instruction. Remote branch auto-deleted. |
+| Tag `v0.0.2` | Created at `91839c2` and pushed -- same shape as `v0.0.1`, which tags the PR #3 merge commit. |
+| Move `v0` | Force-updated `4c85b7a` -> `91839c2` and pushed. This is the tag the three documented adopter entrypoints reference (`README.md:87`, `docs/examples/minimal-ci.yml:54`, `start-cache-server/action.yml:21`), so `@v0` now serves v0.0.2. |
+| Bump package version | `0.0.1` -> `0.0.2` (`ab65684`), lockfile edited surgically to avoid the Windows optional-dep pruning trap. |
+| Post-merge CI on `main` | Run `31442314030` **green end to end**, including the push-gated legs that never run on a PR: both `publish` legs, both `publish-verify` legs, `consumer-smoke`, and all three read-only Windows reuse legs. |
+
+Note: the version bump (`ab65684`) landed on `main` AFTER the `v0.0.2` / `v0` tags were cut, so
+both tags point at `91839c2` and do not include it. That is deliberate -- the tags mark the
+milestone merge. Re-point them only if a published artifact must carry the bumped manifest.

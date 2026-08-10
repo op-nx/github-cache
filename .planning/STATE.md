@@ -588,4 +588,39 @@ Next: lead verifies the series -> pushes gsd/v0.0.1-greenfield-rebuild + updates
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+1. **Merge PR #16** (`gsd/v0.0.2-os-invariant-cross-os-sharing` -> `main`, 624 commits ahead,
+   0 behind). Held for the maintainer -- no milestone or PR merge happens without explicit
+   approval.
+
+2. **THEN tag v0.0.2 on the merge commit**, not before. `git.create_tag` is `true` and the close
+   deliberately did NOT tag: `v0.0.1` tags `4c85b7a`, the PR #3 merge commit on `main`, and a tag
+   cut on the branch head would not be an ancestor of `main` after the merge (a merge commit and
+   a squash both produce a different commit), so it would have to be deleted and recreated.
+
+   ```
+   git checkout main && git pull
+   git tag -a v0.0.2 -m "v0.0.2 OS-invariant cross-OS sharing
+
+   Delivered: the cache store is OS-invariant on both layers, all four cross-OS reuse outcomes
+   (O1-O4) are proven on real runners in the mandated order, and the recipe is shipped for
+   consumers to copy.
+
+   Key accomplishments:
+   - OS discrimination moved out of the store and into the consumer's declared Nx input (D2-01,
+     superseding CORR-01), on both the Actions-cache and Releases-mirror layers
+   - Cross-OS Nx task-hash divergence root-caused to one field and gated every run thereafter
+   - O1-O4 proven live, with O1's producer attribution captured before enabling O4 destroyed it
+   - A read-only Actions-cache backend composed from the writable one, making the Windows reuse
+     gate unlaunderable and cache-version drift unrepresentable
+   - docs/cross-os.md: a safe-by-default consumer recipe, drift-guarded
+
+   See .planning/MILESTONES.md for full details."
+   git push origin v0.0.2
+   ```
+
+3. **Consider moving the `v0` tag** to the same commit. It currently points at `4c85b7a`
+   alongside `v0.0.1`. Cutting/moving `v0` is a standing release-checklist item in Deferred
+   Items, deliberately left to the maintainer as outward-facing.
+
+4. **Start the next milestone** with `/gsd:new-milestone` (authors a fresh `REQUIREMENTS.md`;
+   the v0.0.2 set is archived, not present).

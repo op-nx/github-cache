@@ -1,6 +1,8 @@
+import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   readRepoFile,
+  repoFileUrl,
   stripLineComments,
   stripYamlComments,
 } from './repo-file.js';
@@ -157,5 +159,117 @@ describe('readRepoFile resolves from the workspace root (T4-6)', () => {
   // workspace root has.
   it('reads a workspace-root file, proving the four-levels-up walk lands where it claims', () => {
     expect(readRepoFile('nx.json')).toContain('targetDefaults');
+  });
+});
+
+/**
+ * The package source root, workspace-relative. Read through `repoFileUrl` rather than as a
+ * cwd-relative literal, for the reason `readRepoFile`'s own docstring gives: this suite
+ * installs no cwd hook, so a cwd-relative walk would resolve differently here than in the
+ * specs that do.
+ */
+const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
+
+/**
+ * The specs that author their OWN walk up to the workspace root instead of importing this
+ * layer. Named ONCE, and set-asserted below rather than described in prose.
+ *
+ * THE LAYER IS NOT CLAIMED TO BE REPO-WIDE, and this list is what makes the scope honest
+ * instead of merely stated. Each of these reaches a workspace-root file directly, and leaving
+ * them alone was the deliberate call: the defect T4-6 fixed was a FALSE canonical claim plus a
+ * duplicated READER, not a repo-wide sweep, and rewriting six unrelated specs to prove a
+ * docstring is the speculative restructuring this project's retrospective penalises by name.
+ *
+ * WHY IT IS ASSERTED RATHER THAN WRITTEN DOWN. This set first shipped as a hand-authored count
+ * plus a hand-authored list inside `WORKSPACE_ROOT_URL`'s docstring, and the list was wrong in
+ * BOTH directions -- it named `docs-cross-os.spec.ts`, whose only occurrence of the idiom is
+ * inside a comment (it routes through this layer), and it omitted
+ * `lib/release-asset-name.spec.ts`, which authored a real four-level walk to read
+ * `.gitattributes` while citing as its precedent a file this same pass had already routed
+ * through the layer. A docstring whose stated purpose is that contributors trust it without
+ * checking cannot carry an unguarded list. So the docstring points here, and this clause
+ * derives the real set from the tree.
+ */
+const WORKSPACE_ROOT_WALK_EXCEPTIONS = [
+  'capture-hashes-cli.spec.ts',
+  'consumer-action-runtime.spec.ts',
+  'docs-trust.spec.ts',
+  'governance-docs.spec.ts',
+  'hash-parity/compare.spec.ts',
+  'read-integration-hash.integration.spec.ts',
+];
+
+/**
+ * Every `.ts` module under the package source root except this layer's own directory, as
+ * workspace-relative paths with the separator normalised.
+ *
+ * The separator transform is a fixed, unconditional replace and deliberately NOT `node:path`'s
+ * `sep`, which LINT-02/CORR-06 bans in a unit spec because it derives an expectation from the
+ * running machine: `readdirSync` emits `\` on Windows and `/` elsewhere, so the same tree must
+ * yield the same array either way.
+ */
+function packageModules(): string[] {
+  return readdirSync(repoFileUrl(PACKAGE_SOURCE_ROOT), {
+    encoding: 'utf8',
+    recursive: true,
+  })
+    .map((entry) => entry.replaceAll('\\', '/'))
+    .filter((file) => file.endsWith('.ts') && !file.startsWith('test/'));
+}
+
+/** How many `../` a module needs to reach the workspace root from its own directory. */
+function levelsToWorkspaceRoot(file: string): number {
+  return 3 + (file.split('/').length - 1);
+}
+
+describe('the layer names its own exceptions correctly (T4-6)', () => {
+  // DERIVED FROM THE TREE, COMMENT-STRIPPED, and both halves matter. Derived, so the set cannot
+  // rot the way the deleted hand-authored list did. Comment-stripped, because a PROSE mention of
+  // the idiom is what put a false member on that list -- `docs-cross-os.spec.ts` describes the
+  // walk in its header and routes through this layer in its code, and an unstripped scan reads
+  // the description as the deed.
+  it('lists exactly the specs that author their own workspace-root walk', () => {
+    const authorsOwnWalk = packageModules()
+      .filter((file) => {
+        const code = stripLineComments(
+          readRepoFile(`${PACKAGE_SOURCE_ROOT}/${file}`),
+        );
+        const walk = new RegExp(
+          `new URL\\(\\s*(?:\`|')(?:\\.\\./){${levelsToWorkspaceRoot(file)}}`,
+        );
+
+        return walk.test(code);
+      })
+      .sort();
+
+    expect(
+      authorsOwnWalk,
+      "The set of specs authoring their own workspace-root walk has changed, so WORKSPACE_ROOT_URL's " +
+        'scoped canonical claim no longer matches the tree. If a spec was ROUTED through the ' +
+        'layer, drop it from WORKSPACE_ROOT_WALK_EXCEPTIONS here in the same commit. If a NEW ' +
+        'spec authored its own walk, prefer routing it through `readRepoFile`/`repoFileUrl` -- ' +
+        'a fourth authored walk is the duplication T4-6 removed. Adding the name here to get ' +
+        'green is the last resort and needs a stated reason, because this list IS the honesty ' +
+        "of the docstring's scope.",
+    ).toEqual([...WORKSPACE_ROOT_WALK_EXCEPTIONS].sort());
+  });
+
+  // NON-VACUITY, and it is not decoration: the derivation above walks the tree and builds a
+  // regex per file, so a broken walk, a wrong root or an over-narrow pattern all produce an
+  // EMPTY array -- which would compare equal to an emptied list and report the layer as
+  // canonical everywhere. This clause fails first, and says which of the two went wrong.
+  it('walks a non-empty tree, so an empty exception set cannot pass as agreement', () => {
+    expect(
+      packageModules().length,
+      'the package source walk found no .ts modules at all, so every derived set below is ' +
+        'vacuous -- fix the walk, never the expectation',
+    ).toBeGreaterThan(0);
+    expect(
+      WORKSPACE_ROOT_WALK_EXCEPTIONS.length,
+      'WORKSPACE_ROOT_WALK_EXCEPTIONS is empty. If the last authored walk was genuinely ' +
+        "routed through this layer, then WORKSPACE_ROOT_URL's docstring can drop its scope " +
+        'qualification and claim to be canonical outright -- do that deliberately rather than ' +
+        'leaving a scoped claim with nothing to scope against.',
+    ).toBeGreaterThan(0);
   });
 });

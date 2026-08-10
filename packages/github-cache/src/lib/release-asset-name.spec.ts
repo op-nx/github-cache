@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readRepoFile } from '../test/repo-file.js';
 import { CACHE_KEY_PREFIX, HASH_PATTERN, type Hash } from './cache-key.js';
 import { describe, expect, it } from 'vitest';
 import {
@@ -360,12 +360,12 @@ describe('.gitattributes LF normalisation guard (TEST-05)', () => {
   // different Nx content hashes than Linux/macOS, diverging the key space cross-OS
   // -- the exact invariant CORR-02 now depends on even more directly, since one
   // asset name per hash means a diverged hash is a permanent MISS rather than a
-  // per-OS namespace. Path resolved via import.meta.url (the pinned-deps.spec.ts
-  // idiom), NOT __dirname and NOT process.cwd().
-  const gitattributes = readFileSync(
-    new URL('../../../../.gitattributes', import.meta.url),
-    'utf8',
-  );
+  // per-OS namespace. Read through `src/test/repo-file.ts`, which owns the ONE authored
+  // walk to the workspace root -- NOT __dirname and NOT process.cwd(). This clause used to
+  // author its own four-levels-up walk and cite "the pinned-deps.spec.ts idiom" as its
+  // precedent; pinned-deps.spec.ts was routed through that layer, which left the citation
+  // pointing at a file that no longer does what it was cited for.
+  const gitattributes = readRepoFile('.gitattributes');
 
   it('forces LF line endings repo-wide so cross-OS Nx hashes stay identical (TEST-05)', () => {
     expect(gitattributes).toContain('* text=auto eol=lf');

@@ -6,15 +6,22 @@ import { readFileSync } from 'node:fs';
  *
  * THE QUALIFICATION IS DELIBERATE and the unqualified claim was false. This docstring used to
  * assert flatly that it is the one authored copy while THREE constants of that name existed in
- * the package and two further sites re-implemented `readRepoFile`'s body verbatim. All five are
- * routed through here now, so the claim holds of this layer -- but six OTHER specs still author
- * a levels-up walk of their own (`capture-hashes-cli`, `consumer-action-runtime`,
- * `docs-cross-os`, `governance-docs`, `hash-parity/compare`,
- * `read-integration-hash.integration`), and they are deliberately out of scope: the defect was
+ * the package and two further sites re-implemented `readRepoFile`'s body verbatim. All of those
+ * are routed through here now, so the claim holds of this layer -- but a set of specs still
+ * author a levels-up walk of their own, and they are deliberately out of scope: the defect was
  * the false claim plus the duplicate READER, not a repo-wide sweep. So the claim is scoped to
  * what it can honestly cover. Weakening it further -- or dropping the qualification and letting
  * it be false again -- is worse than no helper, because the next contributor believes the layer
  * is canonical and does not check.
+ *
+ * THAT EXCEPTION SET IS NOT SPELLED OUT HERE, and its absence is the point. The first version
+ * of this paragraph hand-authored a count and a list, and the list was wrong in BOTH
+ * directions: it named a file whose only occurrence of the idiom is inside a comment (so it
+ * routes through this layer after all), and it omitted one that authored a real four-level walk
+ * and never imported the layer at all -- exactly the reading a contributor would trust without
+ * checking, which is this docstring's own stated hazard. A hand-authored list rots the same way
+ * a hand-authored count does. The set is DERIVED BY SEARCH and asserted by set equality in
+ * `repo-file.spec.ts`, which is where to look and which reddens naming which file drifted.
  *
  * Four levels from `src/test/`: `src/` -> `github-cache/` -> `packages/` -> the workspace
  * root. `workspace-root-cwd.ts` next door IMPORTS this rather than recomputing it -- a

@@ -1,6 +1,6 @@
 {
   "name": "@op-nx/github-cache",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "author": "Lars Gyrup Brink Nielsen <larsbrinknielsen@gmail.com>",
   "repository": {

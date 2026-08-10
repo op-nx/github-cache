@@ -266,6 +266,64 @@ function quotedGlobsIn(code: string, key: string, label: string): string[] {
 }
 
 describe('the ESLint ban scope cannot drift from the vitest partition (LINT-02, D-19)', () => {
+  // THE GLOBAL IGNORES, asserted by SET EQUALITY, because `eslint.config.mjs` claims a
+  // control over all of them and only one was exercised anywhere. That block's own header
+  // calls itself "REQUIRED, not hygiene", and the reason is measurable: `eslint .` walks the
+  // real FILESYSTEM while Nx's `default` input resolves against a git-derived file map, so a
+  // gitignored build directory that is present on disk WOULD be linted while `lint`'s Nx hash
+  // does not move -- a stale-cache false PASS by construction.
+  //
+  // Only `**/dist/` had a committed assertion (through `lint-rules.spec.ts`'s IGNORED_PATH
+  // control, and even there only incidentally), so dropping any of the other four
+  // reintroduced that documented false PASS with nothing red.
+  //
+  // SET EQUALITY, and neither a count nor membership of one. A count is the T2-1 census
+  // defect and cannot say WHICH entry went; membership of one is what the file already had.
+  // Equality also catches the opposite direction -- an entry ADDED here silently removes a
+  // path from linting altogether, which is a much wider effect than the D-17 per-object
+  // `ignores` and deserves to be a deliberate edit.
+  //
+  // `**/node_modules/` and `.git/` are deliberately NOT in this list: ESLint's own default
+  // config already ignores them and `eslint.config.mjs` records that it does not restate
+  // them.
+  it('declares exactly the five global ignore entries the config claims a control over', () => {
+    const globalIgnores = flatConfig.filter(
+      (entry) =>
+        entry.ignores !== undefined &&
+        entry.files === undefined &&
+        entry.rules === undefined,
+    );
+
+    // POSITIVE CONTROL. A standalone `ignores` object is the only shape that removes paths
+    // from linting ENTIRELY; if the block were merged into another config object it would
+    // narrow that object alone (the D-17 shape) and this clause would have no subject.
+    expect(
+      globalIgnores,
+      'eslint.config.mjs no longer carries a STANDALONE `ignores` config object -- one with ' +
+        '`ignores` and no `files` and no `rules`. Only that shape removes paths from linting ' +
+        'entirely; an `ignores` alongside `files` narrows that object alone (the D-17 shape). ' +
+        'Without it, `dist/` and `out-tsc/` are linted whenever a build has run, so the ' +
+        'lint result depends on whether `build` ran while its Nx hash does not move.',
+    ).toHaveLength(1);
+
+    expect(
+      [...(globalIgnores[0].ignores ?? [])].sort(),
+      'The global ignore list has drifted from the five entries eslint.config.mjs claims a ' +
+        'control over. A REMOVED entry reintroduces the documented stale-cache false PASS: ' +
+        '`eslint .` walks the real filesystem and would lint that directory once a build has ' +
+        'put it on disk, while Nx never hashes it, so `lint` silently depends on whether ' +
+        '`build` ran. An ADDED entry removes a path from linting altogether, which is wider ' +
+        'than any per-object `ignores` and must be deliberate. If an entry was legitimately ' +
+        'added or removed, update this expected list HERE in the same commit.',
+    ).toEqual([
+      '**/.nx/',
+      '**/coverage/',
+      '**/dist/',
+      '**/out-tsc/',
+      '**/test-output/',
+    ]);
+  });
+
   it('configures the ban in ONE object with ignores a SIBLING of files (D-17)', () => {
     const banConfig = banConfigObject();
 

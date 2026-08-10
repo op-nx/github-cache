@@ -149,8 +149,8 @@ function externalDependenciesOf(target: string): string[] {
  * shared by both clauses that police them -- so this guard cannot itself become a third
  * hand-synced copy of the list it exists to police. Sorted, to compare as a set.
  *
- * `vitest` is deliberately absent: it belongs to `test` alone, and the drift clause pins it
- * as exactly the difference between the two targets.
+ * `vitest` is deliberately absent: it belongs to `test` alone, and `TEST_TOOLCHAIN` below adds
+ * it back for the one target that carries it.
  */
 const ESLINT_TOOLCHAIN = [
   '@eslint-community/eslint-plugin-eslint-comments',
@@ -158,6 +158,15 @@ const ESLINT_TOOLCHAIN = [
   'eslint',
   'typescript-eslint',
 ];
+
+/**
+ * What `test` must declare: the same four ESLint names PLUS the test runner. Expressed as a
+ * UNION of the shared list rather than as a second literal spelling, so the two expectations
+ * cannot drift from each other here the way the two `nx.json` copies can.
+ *
+ * Sorted, to compare as a set against `externalDependenciesOf`'s sorted output.
+ */
+const TEST_TOOLCHAIN = [...ESLINT_TOOLCHAIN, 'vitest'].sort();
 
 /** Every `{ runtime: ... }` command in an inputs list, in declaration order. */
 function runtimeInputsOf(inputs: TargetInputs | undefined): string[] {
@@ -471,13 +480,19 @@ describe('lint declares its full input set (LINT-04)', () => {
   // (whose whole job is proving the ban FIRES against the real root config) replays a cached
   // PASS while the config it lints has moved.
   //
-  // THE SUBSET RELATION, NOT SET EQUALITY, and this is MEASURED rather than assumed. The two
-  // arrays are NOT equal: `lint` carries the four ESLint names, `test` carries those four PLUS
-  // the test-runner name, which `lint` correctly does not need. A plain set-equality assertion
-  // would therefore be RED on a correct tree -- the exact defect class this whole task exists
-  // to close. Two clauses instead, which together close both drift directions: a fifth ESLint
-  // plugin added to one side and not the other reddens, and so does an unexplained new entry
-  // in `test`, while the deliberate asymmetry stays legal.
+  // EACH SIDE PINNED OUTRIGHT, AS A UNION -- and the shape of this assertion was corrected
+  // AFTER being measured against the mutations it claims to catch, which is the only reason it
+  // is trustworthy. The two arrays are NOT equal to each other: `lint` carries the four ESLint
+  // names, `test` carries those four PLUS the test-runner name, which `lint` correctly does not
+  // need, so a plain `lint`-equals-`test` assertion would be RED on a correct tree. The FIRST
+  // attempt at the asymmetry SUBTRACTED the ESLint names from `test` before comparing, and that
+  // form was BLIND TO A REMOVAL: deleting one ESLint name -- or all four -- from
+  // `test.externalDependencies` left the subtracted remainder equal to the test runner and every
+  // clause green, which is verbatim the stale-cache false PASS this guard exists to close.
+  // MEASURED, subtraction form vs this union form, five mutations: correct tree GREEN/GREEN;
+  // plugin on `lint` only RED/RED; plugin on `test` only RED/RED; `test` loses ONE ESLint
+  // package GREEN/RED; `test` loses ALL FOUR GREEN/RED. So each side is now pinned to its own
+  // full set, with `test`'s expressed as `ESLINT_TOOLCHAIN` UNION the runner.
   //
   // NO ELEMENT COUNT on either side -- that would be the census defect one file over. This is
   // expressed as set relations over NAMED packages, so a failure says which package drifted.
@@ -501,22 +516,23 @@ describe('lint declares its full input set (LINT-04)', () => {
         'If an ESLint plugin was legitimately adopted, add it to BOTH targets and update ' +
         'ESLINT_TOOLCHAIN here in the same commit -- a plugin on `lint` alone means `test` ' +
         'stops rotating on ESLint upgrades, so lint-rules.spec.ts replays a cached PASS against ' +
-        'a config that has moved. A removal is the same hazard mirrored.',
+        'a config that has moved. A removal from `lint` reddens this same clause; a removal ' +
+        'from `test` reddens the one below.',
     ).toEqual(ESLINT_TOOLCHAIN);
 
-    const testOnly = externalDependenciesOf('test').filter(
-      (name) => !ESLINT_TOOLCHAIN.includes(name),
-    );
-
     expect(
-      testOnly,
-      "nx.json's `test` externalDependencies minus the ESLint toolchain is no longer exactly " +
-        'the test runner. `test` legitimately carries the runner on top of the four ESLint ' +
-        'names -- that asymmetry is CORRECT and is why this is a subset relation rather than ' +
-        'set equality. What this catches is an ESLint plugin added to `test` and not `lint` ' +
-        '(the difference shrinks), or an unexplained new external dependency on `test` (it ' +
-        'grows). Neither should land without being named here.',
-    ).toEqual(['vitest']);
+      externalDependenciesOf('test'),
+      "nx.json's `test` externalDependencies is no longer exactly the four ESLint packages " +
+        'plus the test runner. `test` legitimately carries the runner on top of the four ' +
+        'ESLint names -- that asymmetry is CORRECT, which is why this pins the union rather ' +
+        'than comparing the two targets to each other. What this catches, in both directions: ' +
+        'an ESLint plugin added to `test` and not `lint`, an unexplained new external ' +
+        'dependency on `test`, and an ESLint package REMOVED from `test` -- which stops `test` ' +
+        'rotating on ESLint upgrades, so lint-rules.spec.ts replays a cached PASS against a ' +
+        'config that has moved. Update ESLINT_TOOLCHAIN (both targets) or TEST_TOOLCHAIN (the ' +
+        'runner) here in the same commit as the nx.json edit -- and never by deleting the ' +
+        'entry that reddened.',
+    ).toEqual(TEST_TOOLCHAIN);
   });
 
   // `eslint .` with no --output-file writes nothing, so an empty array is the

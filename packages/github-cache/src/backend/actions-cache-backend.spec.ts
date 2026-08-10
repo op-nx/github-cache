@@ -343,8 +343,15 @@ describe('createReadOnlyActionsCacheBackend is read-only BY CONSTRUCTION (VER-08
   // a comparison against the factory reference passes while a smuggled flag still hands
   // back something writable -- the failure mode select-backend.spec.ts:307-335 records
   // having shipped once. `isWritableBackend` reads the SAME structural fact the server
-  // reads when it answers a PUT with the contract's 403 (`'put' in backend`,
-  // types.ts:46-50), so a green here is the property the server actually depends on.
+  // reads when it answers a PUT with the contract's 403 (`'put' in backend`, the
+  // discriminator `isWritableBackend` in `backend/types.ts`), so a green here is the
+  // property the server actually depends on.
+  //
+  // ANCHORED BY NAME, not by line. This used to cite a line range in that module, and a
+  // 37-line insertion IN THE SAME CHANGESET moved the definition out from under it -- so
+  // the citation pointed at unrelated text. This package's own convention two modules over
+  // already says to reference by name for exactly that reason: a line range decays on the
+  // next edit above it, silently.
   it('has NO put, so isWritableBackend is false and a write is unrepresentable (VER-08)', () => {
     const backend = createReadOnlyActionsCacheBackend();
 

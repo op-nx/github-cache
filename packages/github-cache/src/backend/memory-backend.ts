@@ -48,7 +48,7 @@ export function createWritableMemoryBackend(): CacheBackend {
 }
 
 /**
- * Read-only form of the Map-backed backend (the D-04 read seam): a ReadableBackend
+ * Read-only form of the Map-backed backend (the D-04 read seam): a ReadOnlyBackend
  * with NO put -- a write is unrepresentable, and the SERVER (not a put() return
  * value) answers a PUT routed here with the Nx contract's 403.
  *
@@ -70,7 +70,8 @@ export function createReadOnlyMemoryBackend(): ReadOnlyBackend {
     async get(hash: Hash): Promise<GetResult> {
       return readFrom(store, hash);
     },
-    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // No put: read-only-ness is structural (ReadOnlyBackend, DECLARED as this factory's
+    // return type just above), not a runtime
     // 'forbidden'. The server answers a PUT here with the contract's 403.
   };
 }

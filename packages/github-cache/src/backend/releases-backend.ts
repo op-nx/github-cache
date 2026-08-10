@@ -115,7 +115,8 @@ export function createReleasesReadBackend(
       }
     },
 
-    // D-02: read-only by CONSTRUCTION -- there is no put method at all (ReadableBackend),
+    // D-02: read-only by CONSTRUCTION -- there is no put method at all (ReadOnlyBackend,
+    // which this factory DECLARES as its return type),
     // so a write is unrepresentable, not a disabled feature (TRUST-05). The server
     // answers a PUT routed to this backend with the contract's 403.
   };

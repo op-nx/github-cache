@@ -171,7 +171,7 @@ describe('createReleasesReadBackend read-only by construction (D-02, TRUST-05)',
   it('exposes NO put method -- a write is unrepresentable, not a runtime forbidden', () => {
     const backend = createReleasesReadBackend(recordingClient(new Map()));
 
-    // The Releases reader is a ReadableBackend: no write path exists at all. The
+    // The Releases reader is a ReadOnlyBackend: no write path exists at all. The
     // server, not a put() return value, produces the Nx contract's 403 for a PUT
     // routed to a read-only backend (all three former scenarios -- normal write,
     // empty buffer, already-present -- collapse to "there is no put").

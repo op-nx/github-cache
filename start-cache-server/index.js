@@ -68308,7 +68308,8 @@ function createReadOnlyActionsCacheBackend() {
         }
       });
     }
-    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // No put: read-only-ness is structural (ReadOnlyBackend, DECLARED as this factory's
+    // return type just above), not a runtime
     // 'forbidden'. The server answers a PUT here with the contract's 403.
   };
 }
@@ -68373,7 +68374,8 @@ function createReadOnlyMemoryBackend() {
     async get(hash) {
       return readFrom(store, hash);
     }
-    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // No put: read-only-ness is structural (ReadOnlyBackend, DECLARED as this factory's
+    // return type just above), not a runtime
     // 'forbidden'. The server answers a PUT here with the contract's 403.
   };
 }
@@ -68564,7 +68566,8 @@ function createReleasesReadBackend(client) {
         return { kind: "miss" };
       }
     }
-    // D-02: read-only by CONSTRUCTION -- there is no put method at all (ReadableBackend),
+    // D-02: read-only by CONSTRUCTION -- there is no put method at all (ReadOnlyBackend,
+    // which this factory DECLARES as its return type),
     // so a write is unrepresentable, not a disabled feature (TRUST-05). The server
     // answers a PUT routed to this backend with the contract's 403.
   };

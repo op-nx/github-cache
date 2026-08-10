@@ -72,7 +72,7 @@ import type {
  */
 
 /**
- * Read-only form of the Actions-cache backend (D-01): a ReadableBackend with NO put
+ * Read-only form of the Actions-cache backend (D-01): a ReadOnlyBackend with NO put
  * -- a write is unrepresentable, and the SERVER (not a put() return value) answers a
  * PUT routed here with the Nx contract's 403.
  *
@@ -240,7 +240,8 @@ export function createReadOnlyActionsCacheBackend(): ReadOnlyBackend {
         }
       });
     },
-    // No put: read-only-ness is structural (ReadableBackend), not a runtime
+    // No put: read-only-ness is structural (ReadOnlyBackend, DECLARED as this factory's
+    // return type just above), not a runtime
     // 'forbidden'. The server answers a PUT here with the contract's 403.
   };
 }

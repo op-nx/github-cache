@@ -439,6 +439,86 @@ const EVASION_SHAPES = [
       "export async function loadPath() {\n  return await import('node:path');\n}\n",
     expected: ['no-restricted-syntax', 'no-restricted-syntax'],
   },
+  {
+    // THE `node:process` FAMILY, and it was a COMPLETE bypass of the ban rather than
+    // one more shape. P1/P7 reach only the GLOBAL `process` object, and there was no
+    // `paths` entry for the module, so every static-import form of it reported
+    // NOTHING -- measured across all six. Each row below is one of those forms.
+    shape:
+      'a NAMED import of the process platform accessor (prefixed specifier)',
+    source:
+      "import { platform } from 'node:process';\nexport const p = platform;\n",
+    expected: ['no-restricted-imports'],
+  },
+  {
+    // The BARE specifier half. `paths[].name` is an exact string lookup, so
+    // `process` is an independent key from `node:process` and a fix applied to one
+    // prefix leaves the other open -- already proven in-repo for the os/path pair,
+    // and re-measured here: this row only started reporting once the second entry
+    // was added.
+    shape:
+      'a NAMED import of the process arch accessor from the BARE specifier',
+    source: "import { arch } from 'process';\nexport const a = arch;\n",
+    expected: ['no-restricted-imports'],
+  },
+  {
+    // The ALIASED DEFAULT import, reported at the IMPORT SITE because `'default'` is
+    // in the accessor list -- NOT by any alias selector. This row is the proof that
+    // no P4/P5-style hardcoded-binding-name selector is needed for process, and that
+    // adding one would be dead configuration.
+    shape:
+      'a DEFAULT import of the process module under a non-conventional binding name',
+    source:
+      "import proc from 'node:process';\nexport const p = proc.platform;\n",
+    expected: ['no-restricted-imports'],
+  },
+  {
+    // The NAMESPACE import, which the config's own comment claimed "is reported\n    // anyway" -- true for node:os and node:path, and FALSE for node:process until
+    // there was a `paths` entry to carry the synthetic `'*'` name. This is the shape
+    // the review did NOT name and the one closest to an already-caught form.
+    shape: 'a NAMESPACE import of the process module',
+    source:
+      "import * as proc from 'node:process';\nexport const p = proc.platform;\n",
+    expected: ['no-restricted-imports'],
+  },
+  {
+    // `import { env }` is the route that bypasses P8 ENTIRELY: there is no
+    // `process.env` base for that selector to match, so without `'env'` in the
+    // accessor list every environment key becomes readable again through one import.
+    shape: 'a NAMED import of the process env accessor',
+    source:
+      "import { env } from 'node:process';\nexport const value = env.OS;\n",
+    expected: ['no-restricted-imports'],
+  },
+  {
+    // The DYNAMIC form, closed by P6 alone for the same reason as its os/path
+    // siblings: `no-restricted-imports` has no ImportExpression visitor.
+    shape: 'a dynamic import of the process module (P6 only)',
+    source:
+      "export async function loadProcess() {\n  return await import('node:process');\n}\n",
+    expected: ['no-restricted-syntax'],
+  },
+  {
+    // THE FILESYSTEM-LAYOUT KEYS, which are the substitution pressure this ban
+    // created for itself: Phase 9 banned `os.tmpdir`, and the way around a banned
+    // accessor is the environment variable behind it. Five keys in one source, so
+    // dropping any one of them from P8's alternation reddens this row.
+    shape:
+      'dotted environment reads of the five filesystem-layout keys (P8 widening)',
+    source:
+      'export const a = process.env.TEMP;\n' +
+      'export const b = process.env.RUNNER_TEMP;\n' +
+      'export const c = process.env.USERPROFILE;\n' +
+      'export const d = process.env.HOME;\n' +
+      'export const e = process.env.windir;\n',
+    expected: [
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+    ],
+  },
 ] as const;
 
 /**
@@ -500,6 +580,26 @@ const FALSE_POSITIVE_CONTROLS = [
     shape:
       'a default import of a LOCAL module, which the os/path ban must not reach',
     source: "import local from './local.js';\nexport const value = local;\n",
+  },
+  {
+    // THE PROCESS BAN IS PER-NAME, not whole-module, exactly like the os/path pair.
+    // This is the row that would go red if the four accessors were widened into a
+    // blanket "do not import node:process": `exit` and `argv` say nothing about the
+    // running machine and a spec may legitimately need them.
+    shape: 'a named import of NON-banned process accessors',
+    source:
+      "import { exit, argv } from 'node:process';\n" +
+      'export const value = argv.length > 0 ? argv[0] : exit;\n',
+  },
+  {
+    // P8's alternation is ANCHORED (`^...$`), and this row is what holds the anchors
+    // in place. `HOMEPATH` and `TEMPLATE_DIR` both CONTAIN a banned key as a
+    // substring, so dropping either anchor -- the easy mistake when adding the sixth
+    // key to the list -- flags two ordinary environment reads.
+    shape: 'dotted environment reads that merely CONTAIN a banned key name',
+    source:
+      'export const a = process.env.HOMEPATH;\n' +
+      'export const b = process.env.TEMPLATE_DIR;\n',
   },
 ] as const;
 

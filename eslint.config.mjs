@@ -82,6 +82,25 @@ const BANNED_OS_ACCESSORS = [
 ];
 const BANNED_PATH_ACCESSORS = ['default', 'sep', 'delimiter', 'win32', 'posix'];
 
+// The `node:process` family, and it closed a hole WIDER than it looks: measured, all six
+// static-import shapes of this module reported NOTHING before these lists existed -- the two
+// named-import forms, the aliased DEFAULT import, the NAMESPACE import, and `import { env }`.
+// P1/P7 only ever reached the GLOBAL `process` object, so importing the module was a complete
+// bypass of the whole ban.
+//
+// `'default'` for the same measured reason it heads the two lists above: it is the synthetic
+// name `no-restricted-imports` gives an `ImportDefaultSpecifier`, so listing it reports
+// `import proc from 'node:process'` at the IMPORT SITE regardless of the local binding name.
+// That is why NO alias selector is added for process -- a P4/P5-style hardcoded-binding-name
+// selector here would be dead configuration. `'*'` needs no entry either: the rule maps an
+// `ImportNamespaceSpecifier` to it and reports whenever any restricted name is carried in.
+//
+// `'env'` is the one addition beyond platform and arch, and it is load-bearing rather than
+// thorough: it is the ONLY route that bypasses P8 entirely, because `import { env } from
+// 'node:process'; env.OS` has no `process.env` base for that selector to match. Measured
+// clean on this tree.
+const BANNED_PROCESS_ACCESSORS = ['default', 'platform', 'arch', 'env'];
+
 export default [
   // GLOBAL ignores. A standalone `ignores` with no other key removes these paths
   // from linting ENTIRELY -- deliberately NOT the D-17 shape, which only narrows a
@@ -305,6 +324,16 @@ export default [
               importNames: BANNED_PATH_ACCESSORS,
               message: BAN_MESSAGE,
             },
+            {
+              name: 'node:process',
+              importNames: BANNED_PROCESS_ACCESSORS,
+              message: BAN_MESSAGE,
+            },
+            {
+              name: 'process',
+              importNames: BANNED_PROCESS_ACCESSORS,
+              message: BAN_MESSAGE,
+            },
           ],
         },
       ],
@@ -417,7 +446,8 @@ export default [
           // a silent hole, and an executor looking for the miss would look in the
           // wrong rule. Constrained to the two module specifiers, so a dynamic
           // import of a local module is untouched.
-          selector: 'ImportExpression[source.value=/^(node:)?(os|path)$/]',
+          selector:
+            'ImportExpression[source.value=/^(node:)?(os|path|process)$/]',
           message: BAN_MESSAGE,
         },
         {
@@ -444,6 +474,16 @@ export default [
           // contributor on this milestone is actively primed to write. Measured
           // zero findings on this tree when added.
           //
+          // THE FILESYSTEM-LAYOUT KEYS (TEMP, TMP, RUNNER_TEMP, USERPROFILE, HOME,
+          // windir) are the SUBSTITUTION PRESSURE this ban created for itself. Phase
+          // 9 banned `os.tmpdir`, and the obvious way around a banned accessor is
+          // the environment variable behind it -- `process.env.RUNNER_TEMP` on a
+          // runner, `process.env.TEMP` on Windows, `process.env.HOME` on a POSIX box.
+          // Each is a derivation from the RUNNING machine by a different name, so
+          // banning the accessor without them left the ban half-applied. `TMP` is the
+          // Windows sibling of `TEMP` and is included so the pair cannot be
+          // half-covered. All six measured zero findings on this tree.
+          //
           // An ALLOWLIST would be the wrong shape here: `process.env` is mostly
           // legitimate in a spec, so a denylist of the machine-dependent keys is
           // the narrow instrument and `process.env.CI` stays untouched.
@@ -456,13 +496,14 @@ export default [
           // `<anything>.process.platform` surface, a local object named `env` is
           // an ordinary thing to write.
           selector:
-            "MemberExpression[computed=false][object.object.name='process'][object.property.name='env'][property.name=/^(OS|OSTYPE|RUNNER_OS|PROCESSOR_ARCHITECTURE|ComSpec)$/]",
+            "MemberExpression[computed=false][object.object.name='process'][object.property.name='env'][property.name=/^(OS|OSTYPE|RUNNER_OS|PROCESSOR_ARCHITECTURE|ComSpec|TEMP|TMP|RUNNER_TEMP|USERPROFILE|HOME|windir)$/]",
           message:
             BAN_MESSAGE +
             ' This applies to the handful of process.env keys that describe the' +
-            ' RUNNING machine (OS, OSTYPE, RUNNER_OS, PROCESSOR_ARCHITECTURE,' +
-            ' ComSpec). Every other process.env read, process.env.CI included,' +
-            ' is untouched.',
+            ' RUNNING machine or its filesystem layout (OS, OSTYPE, RUNNER_OS,' +
+            ' PROCESSOR_ARCHITECTURE, ComSpec, TEMP, TMP, RUNNER_TEMP,' +
+            ' USERPROFILE, HOME, windir). Every other process.env read,' +
+            ' process.env.CI included, is untouched.',
         },
       ],
     },

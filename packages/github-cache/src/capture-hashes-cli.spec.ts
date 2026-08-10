@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { repoFileUrl } from './test/repo-file.js';
+import { readRepoFile, repoFileUrl } from './test/repo-file.js';
 import { enterWorkspaceRootCwd } from './test/workspace-root-cwd.js';
 
 /**
@@ -258,4 +258,60 @@ describe('capture-hashes.mjs --diff localises a projectConfiguration divergence 
       'They are different JSON and Nx hashes them differently, so a marker that collapsed both to one token would report `same` for a real divergence.',
     ).toContain('value-changed (1)');
   });
+});
+
+/**
+ * THE SIX INTERNAL `nx/src/...` SUBPATHS THE INSTRUMENT DEFERS, resolved for real.
+ *
+ * WHY THIS EXISTS, and it is a hole this task opened. Those six specifiers used to be
+ * STATIC imports, so a moved or renamed internal subpath failed at MODULE LOAD on every
+ * invocation -- including all ten spawns above, loudly and locally. Moving them behind
+ * `await import()` removed that: every case in the first block rejects its arguments
+ * before the first `await import`, and `--diff` is a local JSON comparator with no Nx
+ * edge, so after the move NOTHING in build, typecheck, test, integration or lint loaded
+ * any of the six. `nx-target-inputs.spec.ts` imports a DISJOINT set, and its one overlap
+ * is an `import type`, which erases.
+ *
+ * `nx/src/...` carries no semver guarantee -- `pinned-deps.spec.ts` (T-08-03) records
+ * exactly that, and the reasoning it recorded when it closed the matching hole was that a
+ * broken subpath must "break BOTH the instrument and this suite at import time -- loudly,
+ * which is the desired failure mode". Without the clauses below, an Nx upgrade breaks the
+ * instrument and the whole eight-gate battery stays green until the CI hash-parity capture
+ * job runs. This restores the loud half at the one place that lost it.
+ *
+ * DERIVED FROM THE INSTRUMENT'S OWN SOURCE, the house pattern already used for
+ * `const TARGETS` at `hash-parity/compare.spec.ts`, so the list cannot drift from the file
+ * it is meant to gate. The destructured binding is captured alongside the specifier, so a
+ * subpath that still resolves but no longer exports what the instrument reads off it is
+ * also caught -- a renamed export is the likelier Nx change of the two.
+ */
+const DEFERRED_NX_IMPORTS: readonly (readonly [string, string])[] = [
+  ...new Map(
+    [
+      ...readRepoFile('capture-hashes.mjs').matchAll(
+        /const \{ (\w+) \} =\s*await import\('(nx\/src\/[^']+)'\)/g,
+      ),
+    ].map((match) => [match[2], match[1]] as const),
+  ),
+];
+
+describe('capture-hashes.mjs resolves the internal Nx subpaths it defers (T-08-03)', () => {
+  it('the deferred-import list is extractable, so the clauses below are not vacuous', () => {
+    expect(
+      DEFERRED_NX_IMPORTS.map(([specifier]) => specifier),
+      'The extraction over capture-hashes.mjs found the wrong number of deferred `nx/src/...` imports. Zero would make every clause below pass by iterating nothing, which is the vacuity this file already guards against once. If the instrument legitimately gained or dropped a deferred specifier, update this count in the SAME commit; if it changed the SHAPE of the `const { X } = await import(...)` site, update the regex.',
+    ).toHaveLength(6);
+  });
+
+  it.each(DEFERRED_NX_IMPORTS)(
+    'capture-hashes.mjs can load %s and read %s off it',
+    async (specifier, binding) => {
+      const loaded: Record<string, unknown> = await import(specifier);
+
+      expect(
+        loaded[binding],
+        `capture-hashes.mjs destructures \`${binding}\` off \`${specifier}\`, an INTERNAL Nx subpath with no semver guarantee. A moved subpath (which throws on the import above) or a renamed export (which lands here as undefined) breaks the hash-parity instrument, and since the six imports became lazy nothing else in the battery loads them -- so without this clause the break surfaces only when the CI capture job runs. Reconcile capture-hashes.mjs with the installed Nx in the same commit as the upgrade.`,
+      ).toBeDefined();
+    },
+  );
 });

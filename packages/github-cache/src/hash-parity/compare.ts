@@ -215,33 +215,18 @@ export type ParityVerdict =
  * line. Neither half suffices alone. This half is the one this module owns, and
  * `compare.spec.ts` pins it.
  *
- * THE COLLAPSE IS EXPORTED because "the single place" was not true of the one
- * path that does not go through `fail` at all. `assert-parity.ts` wraps `run()`
- * in a top-level try/catch and printed `error.message` RAW into the same
- * `hash-parity: PARITY FAILED` line the grep reads -- and the messages reaching
- * it are built from record BYTES: `JSON.parse` embeds the offending input
- * verbatim, newlines included, in `Unexpected token ... is not valid JSON`. So
- * the throw path was protected only by V8's ~10-character cap on that quoted
- * snippet, an implementation detail of the runtime rather than the choke point
- * this block credits. Exporting the collapse and calling it there makes the
- * claim above true of EVERY path instead of every path but one.
+ * THE COLLAPSE IS EXPORTED so that "the single place" is true of EVERY path, including the
+ * one that does not go through `fail` at all: `assert-parity.ts` wraps `run()` in a top-level
+ * try/catch, and the messages reaching it are built from record BYTES -- `JSON.parse` embeds
+ * the offending input verbatim, newlines included. Without the export, that path was
+ * protected only by V8's cap on the quoted snippet, which is a runtime implementation detail
+ * rather than a choke point.
  *
- * CORRECTED (Phase 12), and supplying the REPLACEMENT FACT is the point rather
- * than retracting the old sentence. This block used to say the anchor "cannot be
- * pinned from a spec", on the ground that `ci.yml` was not a declared `test`
- * input (PARITY-08, deferred to Phase 9), so a spec asserting on its content
- * would serve a stale cached PASS. Both halves are now false:
- * `{workspaceRoot}/.github/workflows/ci.yml` IS a `test` input (`nx.json`,
- * PARITY-08, Phase 9, pinned by name in `nx-target-inputs.spec.ts`), and
- * `dogfood-cross-os.spec.ts` pins the sibling `o3-witness` job's
- * `grep -q '^o3-witness: EXISTENCE OK'` expression by exactly this mechanism. The
- * `hash-parity-compare` job's `^hash-parity: PARITY OK` anchor is now pinned the
- * same way, in `compare.spec.ts`'s "the hash-parity-compare gate agrees with the
- * bin it runs" group -- so BOTH halves of the two-half defence are guarded. A bare
- * deletion of the old sentence would have left a future reader holding a
- * documented argument that one half of a defence this same comment calls
- * load-bearing is UNGUARDABLE, which is a documented reason not to guard it. Do
- * not read the old wording as that reason.
+ * BOTH HALVES ARE PINNED. This module's half is pinned by `compare.spec.ts`; the grep's `^`
+ * anchor is pinned in the same file's "the hash-parity-compare gate agrees with the bin it
+ * runs" group, by the mechanism `dogfood-cross-os.spec.ts` uses for the sibling `o3-witness`
+ * job -- `ci.yml` is a declared `test` input in `nx.json`, so a spec may assert on its
+ * content without serving a stale cached PASS.
  */
 export function collapseToOneLine(detail: string): string {
   return detail.replace(/[\r\n]+/g, ' ');

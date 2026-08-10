@@ -68,8 +68,18 @@ const BAN_MESSAGE =
 // `default`, which was not in either list, and P4/P5 below only reach the four
 // hardcoded binding names. Both modules have working CJS default exports under
 // `nodenext` + `esModuleInterop`, so that is an idiomatic reachable shape one token
-// away from `import * as os`, which the ban DID catch. Listing it here bans the
-// whole machine-dependent surface at the import, regardless of the local name.
+// away from `import * as os`, which the ban DID catch.
+//
+// WHAT LISTING IT BUYS, stated precisely because the previous wording overclaimed. It bans
+// THE LISTED ACCESSORS at the import site regardless of the local binding name -- not "the
+// whole machine-dependent surface". The lists below are denylists, so a named import of any
+// `node:os` or `node:path` accessor NOT on them is still legal, and several
+// machine-dependent ones are not on them. That is a deliberate narrowing (the ban targets
+// the accessors that decide a cache version, and `path.join` must stay usable), so the
+// remedy for the overclaim is to state the scope honestly rather than to widen the lists --
+// an unmeasured widening surfaces as a red `lint` job on an unrelated commit, and would need
+// its own EVASION_SHAPES rows and a clean package lint run, exactly as the `node:process`
+// widening did.
 const BANNED_OS_ACCESSORS = [
   'default',
   'tmpdir',

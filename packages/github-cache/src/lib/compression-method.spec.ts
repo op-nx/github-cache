@@ -42,10 +42,16 @@ import { stripLineComments } from '../test/repo-file.js';
  * `error.stdout` / `error.stderr`. So the idiomatic `.catch(() => '')` reports
  * `gzip` for a broken-but-present zstd -- the exact inversion VER-05 exists to
  * forbid, arrived at by writing the natural thing. Case 4 below is the control that
- * catches it. Plain callback `execFile` is merely a trap rather than wrong (it
- * delivers `stdout`/`stderr` alongside `err`, so the correct implementation has to
- * ignore `err` deliberately) and additionally imposes a 1 MiB `maxBuffer` default
- * that upstream does not have.
+ * catches it. Plain callback `execFile` is merely a trap rather than wrong: it delivers
+ * `stdout`/`stderr` alongside `err`, so the correct implementation has to ignore `err`
+ * deliberately.
+ *
+ * THE `maxBuffer` REASON IS DROPPED, because it did not distinguish the two. This block used
+ * to add that `execFile` "additionally imposes a 1 MiB `maxBuffer` default that upstream does
+ * not have" -- but `spawnSync`, the helper actually used, carries a `maxBuffer` default of its
+ * own, so the ceiling is a property of the node API family rather than a reason to prefer one
+ * member of it. It is also not load-bearing either way here: `zstd --version` emits one short
+ * line, and the probe reads only whether the combined output is EMPTY.
  *
  * ## Recorded deviation from D-14's wording
  *

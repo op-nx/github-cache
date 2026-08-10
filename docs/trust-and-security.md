@@ -166,9 +166,10 @@ Two things follow for adopters:
   redundant with a protection the client already applies.
 - The protection is the CLIENT's, so it travels with your Nx version, not with
   this package. If you pin an Nx older than the version above, re-check it
-  yourself -- we verify this claim only against the Nx version we target, and
-  our conformance fixture pins that version deliberately (see
-  `docs/versioning.md`).
+  yourself -- we verify this claim only against the Nx version we target. That
+  version is pinned as an EXACT specifier in this repository's root
+  `package.json`, and `pinned-deps.spec.ts` fails the build if it is ever
+  loosened to a range.
 
 This is defence against a hostile SERVER. It is unrelated to CREEP, which is a
 poisoning attack carried out by a trusted PRODUCER before hashing, and is

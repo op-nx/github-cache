@@ -2025,8 +2025,12 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
  * the `integration` job block, so both are scoped to it and neither can be satisfied by a
  * Windows leg.
  *
- * COUNT PINNED EXACTLY, never a floor -- the same rule `MASKED_TOKEN_SITES` records
- * below. "Exactly two survivors" is the registered claim, so a floor of 2 would be
+ * COUNT PINNED EXACTLY, never a floor -- and this one is pinned ON ITS OWN TERMS, because
+ * the constant it used to cite as precedent is gone: T-12-05's mask pairing is now DERIVED
+ * per sidecar block, which needs no count at all. The difference is real rather than
+ * stylistic. A mask has a per-block subject to be derived FROM -- its own token write -- so
+ * the count there was redundant. Here the claim IS the number: exactly this many diagnostics
+ * were left unconverted, and there is no per-site structure to derive that from. "Exactly two survivors" is the registered claim, so a floor of 2 would be
  * satisfied by a third record appearing somewhere new, which is the under-sweep direction
  * leaking back in through a job the per-leg clauses do not read. MEASURED against the
  * comment-stripped file, not predicted: `ci.yml` carries the marker on two `echo` lines
@@ -2081,56 +2085,13 @@ describe('ci.yml keeps exactly the two record-only diagnostics XOS-09 did not co
         'true (T-13-05-D1). MORE means a new [remote cache] record landed UNGATED somewhere ' +
         'the three per-leg clauses do not read, which is the launderable shape XOS-09 exists ' +
         'to remove. Pinned exactly rather than as a floor for the same reason ' +
-        '`MASKED_TOKEN_SITES` is: a floor of 2 is satisfied by the two survivors alone and ' +
+        'this pin is exact rather than a floor: a floor of 2 is satisfied by the two ' +
+        'survivors alone and ' +
         'would let a third record appear in silence. If a record is legitimately added or ' +
         'converted, RE-MEASURE and update this constant HERE in the same commit.',
     ).toHaveLength(RECORD_ONLY_SURVIVOR_SITES);
   });
 });
-
-/**
- * T-12-05's ORDERING, which was correct in all eight sidecar blocks and guarded in
- * NONE of them until this clause. `12-SECURITY.md`'s `## Residual 1` names it and
- * hands over this exact shape: the mask's index must be less than the token write's
- * index. It is recorded there as a RATCHET rather than a static gap -- Phase 11's
- * audit logged it as PRE-EXISTING surface at five masked-token sites, and Phase 12
- * took the file to EIGHT by copying the sidecar block onto `build-windows`,
- * `typecheck-windows` and `test-windows`. Three of the eight are this phase's.
- *
- * WHAT IS AT STAKE, stated as the consequence rather than the mechanism: the token is
- * a per-process loopback bearer, but it is written to `$GITHUB_ENV`, so it is live in
- * every subsequent step's environment and reachable by captured terminal output on a
- * PUBLIC repository. `::add-mask::` redacts only from the moment it is PROCESSED, so
- * a mask that lands AFTER its write leaves a window in which the value is live and
- * unregistered. Until this clause, the protection was carried entirely by D-03's
- * verbatim-copy discipline across eight hand-maintained copies -- one careless
- * "cleanup" reordering away from a real leak, with the three `cacheClient` clauses
- * above and all 24 other Windows-leg clauses still green, because nothing read the
- * mask line at all.
- *
- * WHOLE-FILE AND PAIRWISE, deliberately, rather than the per-leg `jobBlock` scoping
- * every other clause in this file uses. The usual reason for scoping does not apply:
- * a file-wide `toContain('::add-mask::')` would be vacuous because the token appears
- * eight times, but a PAIRWISE ORDERING WITH COUNT EQUALITY is the stronger claim, not
- * the weaker one -- it says every mask/write pair in the file is correctly ordered,
- * which no per-job clause can say, and it cannot be satisfied by an unrelated
- * occurrence. It also covers the five PRE-EXISTING sites that no phase owns, which a
- * three-leg version would leave exactly as unguarded as they are today.
- *
- * The pairing is sound in both failure directions. Delete a mask and the counts
- * diverge; move a mask past its own write and that pair's comparison inverts.
- *
- * COUNT PINNED EXACTLY, never a `>= 1` floor. A floor is satisfied by the first pair,
- * so seven blocks could lose their mask with this clause still green -- the same
- * half-locking defect WR-09 and CR-01 both landed on in this phase. MEASURED against
- * the comment-stripped file, not predicted. If a job legitimately gains or loses a
- * sidecar block, RE-MEASURE and update this count HERE in the same commit.
- *
- * `codeLines` is comment-stripped, which is load-bearing here in the usual direction:
- * `ci.yml` mentions `::add-mask::` in three separate prose comments explaining the
- * rule, so a raw read would count 11 and the pairing would be garbage.
- */
-const MASKED_TOKEN_SITES = 8;
 
 /**
  * Every line inside a `run:` block scalar, with the job it belongs to. A block scalar owns
@@ -2473,44 +2434,121 @@ describe('ci.yml keeps the read-only knob on the CONSUMERS only (XOS-09, TRUST-1
   });
 });
 
+/**
+ * T-12-05's ORDERING, which was correct in all eight sidecar blocks and guarded in
+ * NONE of them until this clause. `12-SECURITY.md`'s `## Residual 1` names it and
+ * hands over this exact shape: the mask's index must be less than the token write's
+ * index. It is recorded there as a RATCHET rather than a static gap -- Phase 11's
+ * audit logged it as PRE-EXISTING surface at five masked-token sites, and Phase 12
+ * took the file to EIGHT by copying the sidecar block onto `build-windows`,
+ * `typecheck-windows` and `test-windows`. Three of the eight are this phase's.
+ *
+ * WHAT IS AT STAKE, stated as the consequence rather than the mechanism: the token is
+ * a per-process loopback bearer, but it is written to `$GITHUB_ENV`, so it is live in
+ * every subsequent step's environment and reachable by captured terminal output on a
+ * PUBLIC repository. `::add-mask::` redacts only from the moment it is PROCESSED, so
+ * a mask that lands AFTER its write leaves a window in which the value is live and
+ * unregistered. Until this clause, the protection was carried entirely by D-03's
+ * verbatim-copy discipline across eight hand-maintained copies -- one careless
+ * "cleanup" reordering away from a real leak, with the three `cacheClient` clauses
+ * above and all 24 other Windows-leg clauses still green, because nothing read the
+ * mask line at all.
+ *
+ * WHOLE-FILE AND PAIRWISE, deliberately, rather than the per-leg `jobBlock` scoping
+ * every other clause in this file uses. The usual reason for scoping does not apply:
+ * a file-wide `toContain('::add-mask::')` would be vacuous because the token appears
+ * eight times, but a PAIRWISE ORDERING WITH COUNT EQUALITY is the stronger claim, not
+ * the weaker one -- it says every mask/write pair in the file is correctly ordered,
+ * which no per-job clause can say, and it cannot be satisfied by an unrelated
+ * occurrence. It also covers the five PRE-EXISTING sites that no phase owns, which a
+ * three-leg version would leave exactly as unguarded as they are today.
+ *
+ * NOW DERIVED PER SIDECAR BLOCK, and that is the fix rather than a refinement. The clause
+ * previously paired masks to writes by WHOLE-FILE POSITION -- `maskAt[i] < writeAt[i]` over
+ * two flat arrays -- and claimed soundness "in both failure directions" while being unable to
+ * say WHICH block regressed. Worse, a positional pairing cannot localize at all: one sidecar
+ * block losing its mask shifts every later index by one, so the failure surfaces as some
+ * other block's comparison or as a bare count mismatch. The blocks are now enumerated and
+ * each is asserted to carry its OWN mask before its OWN write, with the failure naming the
+ * block.
+ *
+ * THE PINNED COUNT IS GONE, and no replacement number is authored. It used to be spelled out
+ * here with a standing instruction to "RE-MEASURE and update this count HERE in the same
+ * commit" -- which is an instruction to hand-author a count, the drift source rather than a
+ * guard against it. What the count was protecting is the under-sweep direction, and the
+ * per-block derivation gives that for free: a block with no mask is a block that fails, so
+ * there is no floor to be satisfied by the first pair. The block count itself is now DERIVED
+ * from the token writes, which is a claim about pairing rather than about size.
+ *
+ * `codeLines` is comment-stripped, which is load-bearing here in the usual direction:
+ * `ci.yml` mentions `::add-mask::` in several prose comments explaining the rule, so a raw
+ * read would pair prose against shell and the result would be garbage.
+ */
 describe('ci.yml masks the sidecar token before writing it (T-12-05)', () => {
-  it('every sidecar block registers the token for redaction BEFORE it reaches $GITHUB_ENV', () => {
-    const maskAt: number[] = [];
-    const writeAt: number[] = [];
+  it('every sidecar block registers the token for redaction BEFORE its own write', () => {
+    // ONE PASS, SPLIT INTO BLOCKS. A sidecar block is delimited by its token WRITE: the
+    // write is the event being protected, so every write opens a region that must already
+    // have seen its own mask. Anything else -- pairing by index, or scoping to the whole file
+    // -- is what made the old clause unable to name a block.
+    const MASK = /^\s+echo "::add-mask::\$\{token\}"$/;
+    const WRITE =
+      /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=\$\{token\}" >> "\$GITHUB_ENV"$/;
+
+    const blocks: { write: number; mask: number | undefined }[] = [];
+    let pendingMask: number | undefined;
 
     codeLines.forEach((line, index) => {
-      if (/^\s+echo "::add-mask::\$\{token\}"$/.test(line)) {
-        maskAt.push(index);
+      if (MASK.test(line)) {
+        pendingMask = index;
+
+        return;
       }
 
-      if (
-        /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=\$\{token\}" >> "\$GITHUB_ENV"$/.test(
-          line,
-        )
-      ) {
-        writeAt.push(index);
+      if (WRITE.test(line)) {
+        blocks.push({ write: index, mask: pendingMask });
+        pendingMask = undefined;
       }
     });
 
-    // POSITIVE CONTROLS FIRST, and both are needed. Two empty arrays are trivially
-    // equal in length and trivially pairwise-ordered, so without these the ordering
-    // assertion below is satisfied by a `ci.yml` that masks nothing at all.
+    // POSITIVE CONTROL, and it is the whole non-vacuity argument. An empty `blocks` array
+    // makes every per-block assertion below trivially true, so the token write must be
+    // proven present first. `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` is what gives Nx a
+    // remote cache client at all: losing every site would silently drop every wired job to
+    // local-cache-only, which no other clause in this file reads.
     expect(
-      writeAt,
-      `ci.yml no longer writes NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN to $GITHUB_ENV at ${MASKED_TOKEN_SITES} sites. That variable is what gives Nx a remote cache client; losing a site silently drops that job to local-cache-only, and it also makes the ordering assertion below vacuous. RE-MEASURE and update MASKED_TOKEN_SITES in the same commit if a sidecar block was legitimately added or removed.`,
-    ).toHaveLength(MASKED_TOKEN_SITES);
+      blocks.length,
+      'ci.yml no longer writes NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN to $GITHUB_ENV ' +
+        'anywhere. That variable is what gives Nx a remote cache client, so losing it drops ' +
+        'every wired job to local-cache-only -- and it also makes every assertion in this ' +
+        'clause vacuous, since there is no write left to protect. Restore the writes rather ' +
+        'than relaxing this clause. No count is pinned here deliberately: the number of ' +
+        'sidecar blocks is derived, so adding or removing one legitimately needs no edit.',
+    ).toBeGreaterThan(0);
 
-    expect(
-      maskAt,
-      `ci.yml has ${maskAt.length} \`::add-mask::\` lines for ${writeAt.length} token writes. Every write must be preceded by its own mask: the value is a bearer token written into $GITHUB_ENV on a PUBLIC repository, and ::add-mask:: redacts only from the moment it is processed. A missing mask is a real disclosure, not a tidiness lapse.`,
-    ).toHaveLength(writeAt.length);
+    // PER BLOCK, so the failure names WHICH one. A missing mask and a late mask are
+    // different faults and are reported as such.
+    for (const { write, mask } of blocks) {
+      expect(
+        mask,
+        `the ci.yml sidecar block writing NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN at ` +
+          `comment-stripped line index ${write} has NO \`echo "::add-mask::\${token}"\` of ` +
+          'its own before it. The value is a bearer token written into $GITHUB_ENV on a ' +
+          'PUBLIC repository, and ::add-mask:: redacts only from the moment it is processed, ' +
+          'so this block leaks the token into every log line emitted after the write. A ' +
+          'missing mask is a real disclosure, not a tidiness lapse. Add the mask to THIS ' +
+          'block -- a mask in a neighbouring block does not cover it, which is exactly what ' +
+          'the previous whole-file positional pairing could not tell you.',
+      ).not.toBeUndefined();
 
-    // THE ORDERING ITSELF. Compared pair by pair rather than as a whole, so the
-    // failure names WHICH block regressed instead of reporting a bare false.
-    expect(
-      maskAt.map((mask, index) => mask < writeAt[index]),
-      `at least one ci.yml sidecar block writes NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN to $GITHUB_ENV BEFORE masking it. mask line indices ${maskAt.join(', ')} against write line indices ${writeAt.join(', ')} (comment-stripped). The masked value is live and unredacted for every log line emitted in that window. The fix is to move the \`echo "::add-mask::\${token}"\` back above the write, never to relax this clause.`,
-    ).toEqual(Array<boolean>(MASKED_TOKEN_SITES).fill(true));
+      expect(
+        mask,
+        `the ci.yml sidecar block at comment-stripped line index ${write} masks the token ` +
+          `at index ${String(mask)} -- at or AFTER its own write. ::add-mask:: redacts only ` +
+          'from the moment it is processed, so the value is live and unredacted for every ' +
+          'log line in that window. Move the `echo "::add-mask::${token}"` back above the ' +
+          'write, never relax this clause.',
+      ).toBeLessThan(write);
+    }
   });
 });
 

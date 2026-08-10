@@ -621,11 +621,16 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
    *
    * `codeLines` strips every `#` line, so each clause below is asserted against real
    * shell rather than against the comment that explains it -- verified by dumping the
-   * stripped block. TEN separate cases, not one, because each mechanism survives or
-   * falls independently and a combined assertion would report ten regressions
-   * identically. THIS COUNT IS LOAD-BEARING PROSE AND HAS ALREADY GONE STALE TWICE: if a
-   * clause is added or removed below, correct it in the SAME commit, and sweep the
-   * sibling count in the sink block further down -- that is the exact pair that drifted.
+   * stripped block. SEPARATE CASES, not one, because each mechanism survives or falls
+   * independently and a combined assertion would report every regression identically.
+   *
+   * THE COUNT IS DELETED, DELIBERATELY, and no replacement number is authored. It used to
+   * be spelled out here, it "HAD ALREADY GONE STALE TWICE" by its own admission, and it
+   * instructed a same-commit hand correction plus a sweep of two sibling counts -- so it was
+   * a standing instruction to author a fresh number, which is the drift source rather than a
+   * guard against it. The argument does not depend on any figure: one case per mechanism,
+   * whatever the mechanisms number. This is the disposition
+   * `windows-regression-detector.yml`'s header took for its own job count in this same PR.
    */
   it('compares .key for EXACT equality and constrains the ref to an ALLOWLIST -- ?key= is a prefix match', () => {
     expect(
@@ -675,6 +680,46 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
         'is what faults. The container guard is NOT redundant with it and must stay: only ' +
         'that one can tell an API or permissions fault apart from a genuinely empty result.',
     ).toMatch(/\[\.actions_caches\[\] \| select\(type == "object"\) \|/);
+  });
+
+  // THE JOBS-API PIPELINE'S ELEMENT GUARD, which had NO clause at all. The sibling above
+  // pins it for the CACHES pipeline and its `toMatch` is anchored to that expression, so the
+  // jobs extraction -- presented as mirrored, and dereferencing TWO levels rather than one --
+  // was revertible in silence. Modelled on that sibling because the reasoning is identical
+  // one endpoint over.
+  //
+  // BOTH INDEXED LEVELS are guarded, not just the outer array: the expression dereferences
+  // `.jobs[]` and then `.steps[]`, so a non-object at either level is what faults. The
+  // container check one line up already proves `.jobs` IS an array and says nothing about
+  // what is in it.
+  it('rejects a non-object JOB and a non-object STEP before indexing either', () => {
+    expect(
+      jobBlock('o3-witness'),
+      'The jobs-API step extraction must guard the type of every element it INDEXES, at ' +
+        'both levels: `.jobs[] | select(type == "object")` and `.steps[] | select(type == ' +
+        '"object")`. Each guard must come FIRST at its level -- placed after the name ' +
+        'comparison it never runs, because indexing a scalar is what faults. The `.jobs` ' +
+        'container guard above is NOT redundant with these and must stay: only that one can ' +
+        'tell an API or permissions fault apart from a genuinely absent step, which is the ' +
+        'misattribution this whole extraction was split up to avoid. The sibling caches ' +
+        'pipeline carries the same shape and the two are presented as mirrored, so a guard ' +
+        'on one and not the other is the drift this clause exists to catch.',
+    ).toMatch(
+      /first\(\.jobs\[\] \| select\(type == "object"\) \| select\(\.name ==/,
+    );
+
+    // The inner level, asserted separately because the two guards fail independently: a
+    // rewrite can drop either one alone, and the job name contains parentheses, so one
+    // regex spanning both would have to match across it.
+    expect(
+      jobBlock('o3-witness'),
+      'The jobs-API step extraction must guard the STEP element type too -- ' +
+        '`.steps[] | select(type == "object")`, before the step-name comparison. The outer ' +
+        'job guard does not cover it: a well-formed job object may still carry a non-object ' +
+        'in its `steps` array, and that is the second level this expression indexes.',
+    ).toMatch(
+      /\| \.steps\[\] \| select\(type == "object"\) \| select\(\.name ==/,
+    );
   });
 
   // THE ARG THE ALLOWLIST ARM READS, pinned separately from the arm itself because the two
@@ -828,11 +873,13 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
   });
 
   /**
-   * M4, AND IT IS THE POINT OF THE CASE-B WIDENING. The ORIGINAL five clauses -- the five
-   * enumerated in the block comment at the head of this group, not "the other clauses
-   * here", of which there are now nine -- cover the mutations that were possible BEFORE
-   * the widening; none of them forbids the
-   * empty-result branch from becoming a skip. A witness that skips when it finds nothing
+   * M4, AND IT IS THE POINT OF THE CASE-B WIDENING. The ORIGINAL clauses -- specifically the
+   * ones ENUMERATED in the block comment at the head of this group, which is a different set
+   * from "the other clauses here" -- cover the mutations that were possible BEFORE the
+   * widening; none of them forbids the
+   * empty-result branch from becoming a skip. (Both counts that used to appear in this
+   * sentence are deleted with the header's: the distinction that matters is WHICH SET, and
+   * naming the set by where it is enumerated survives a clause being added.) A witness that skips when it finds nothing
    * is disabled on precisely the runs it is hardest to satisfy -- the guard-green-because-
    * it-asserts-nothing failure mode, arriving through the fix rather than through neglect.
    *
@@ -927,8 +974,8 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
   /**
    * THE SINK'S ABSENCE (T-11-28), and it is the one direction every clause above leaves
    * open. CR-01's fix was a DELETION rather than a filter: the `$GITHUB_ENV` export step is
-   * gone and `h_linux` is read inside its one consuming step. The TEN body clauses above
-   * assert what the job now DOES -- including that the shape check is present -- but nothing
+   * gone and `h_linux` is read inside its one consuming step. The body clauses above assert
+   * what the job now DOES -- including that the shape check is present -- but nothing
    * asserted what it must never do again, so an editor could reinstate
    * `echo "H_LINUX=${h_linux}" >> "$GITHUB_ENV"` and the whole suite would stay green.
    *

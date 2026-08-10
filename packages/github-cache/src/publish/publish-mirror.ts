@@ -42,16 +42,21 @@ export const RELEASE_ASSET_CAP = 1000;
  * measured baseline the rate is read against and for why the denominator is the full
  * enumeration.
  *
- * EXPORTED SO A SPEC CAN PIN THE VALUE -- not so it can derive a boundary from it, and
- * the distinction matters because the weaker of those two is what actually shipped. The
- * boundary fixtures in `publish-mirror.spec.ts` are computed for THIS rule at THIS rate:
- * a 10-entry enumeration with 9 misses (bound 0.5958, fires) and with 8 (bound 0.4902,
- * silent). The second sits 0.0098 under the rate, which is what lets the pair catch an
- * off-by-one or a mis-transcribed z. Changing this constant INVALIDATES those fixtures
- * rather than merely moving them, so it must be changed here and in them together -- which
- * is exactly what the pin makes loud.
+ * MODULE-PRIVATE. It was exported so a spec could pin the value against a literal, and
+ * that pin is gone: the project's own VERIFICATION.md classified it as a fixture-coupling
+ * lock rather than a behaviour gate. What guards this constant is the BEHAVIOUR pair in
+ * `publish-mirror.spec.ts`, which is strictly the stronger of the two and was never the
+ * export's doing -- a 10-entry enumeration with 9 misses (bound 0.5958, fires) and with 8
+ * (bound 0.4902, silent). The second sits 0.0098 under the rate, which is what lets the
+ * pair catch an off-by-one or a mis-transcribed z, and either direction of a change to
+ * this number reddens one of them. Changing it INVALIDATES those fixtures rather than
+ * merely moving them, so it must be changed here and in them together.
+ *
+ * Do not re-export it to reinstate a value pin: an export with no consumer is dead surface
+ * that `fallow:ci` reddens on, and the pin it existed for asserted less than the two
+ * fixtures already do.
  */
-export const PARTIAL_READ_MISS_WARN_RATIO = 0.5;
+const PARTIAL_READ_MISS_WARN_RATIO = 0.5;
 
 /**
  * The two-sided 95% normal quantile. Named rather than inlined so the one number a reader

@@ -137,9 +137,24 @@ function read(runJson: unknown) {
   };
 }
 
+/**
+ * The accepted-fixture run, spawned AT MOST ONCE and only if a clause asks for it. Two clauses
+ * below assert on it, and each was running a full `spawnSync` of the same fixture through the
+ * same deterministic helper.
+ *
+ * A LAZY MEMO RATHER THAN A DESCRIBE-SCOPE `const`, and that is a constraint. Vitest evaluates
+ * describe bodies at COLLECTION time, so a bare `const accepted = read(ACCEPTED);` inside the
+ * describe would move a `spawnSync` into collection -- where a failure surfaces as a COLLECTION
+ * ERROR rather than as a test failure, destroying the framing of the first clause, whose title
+ * is literally the control for every rejection below. A hook would work too and is more
+ * machinery than two lines need.
+ */
+let acceptedResult: ReturnType<typeof read> | undefined;
+const acceptedRun = () => (acceptedResult ??= read(ACCEPTED));
+
 describe('read-integration-hash.mjs accepts a real integration run (XOS-03, TEST-09)', () => {
   it('exits 0 and writes the BARE hash with no trailing newline -- the control for every rejection below', () => {
-    const result = read(ACCEPTED);
+    const result = acceptedRun();
 
     expect(
       result.status,
@@ -155,7 +170,7 @@ describe('read-integration-hash.mjs accepts a real integration run (XOS-03, TEST
   });
 
   it('prints the structured cacheStatus, which is the remote-vs-local discrimination `Cache: n/m hit` cannot make (D-24)', () => {
-    expect(read(ACCEPTED).stdout).toContain(
+    expect(acceptedRun().stdout).toContain(
       'integration hash=18442367512424001648 cacheStatus=remote-cache-hit',
     );
   });

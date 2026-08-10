@@ -370,11 +370,30 @@ jobs:
       - run: npm ci
       # Sidecar dogfood block. Rationale, and the traps it avoids, are documented
       # once above the build job (whose copy also carries the inline trap notes).
-      # The EXECUTABLE shell must stay identical across all seven wired jobs --
-      # build, typecheck, test, integration, build-windows, typecheck-windows and
-      # test-windows -- only the final `npm run <target>` line may differ, and only
-      # build's copy carries extra comments. Keep it that way, so the windows-11-arm
-      # legs never drift from the ubuntu producers they exist to reuse.
+      #
+      # THE INVARIANT, RESTATED IN A FORM THAT IS TRUE. It previously said the executable
+      # shell is identical across all seven wired jobs and that "only the final
+      # `npm run <target>` line may differ". Both clauses were false, and the normalisation
+      # they invited is DANGEROUS -- see below. What actually holds is:
+      #
+      # The `Pre-set the Nx cache client vars for the sidecar` step is identical across the
+      # seven wired jobs EXCEPT that the three consumer legs -- build-windows,
+      # typecheck-windows, test-windows -- write one additional line, `CACHE_READ_ONLY=1`.
+      # That line is LOAD-BEARING, not incidental formatting.
+      #
+      # And the target invocation is not a single trailing line on every leg. The three
+      # consumer legs run a NAMED, tee'd step (`Run the <target> target and tee its output`)
+      # and then an ENTIRE ADDITIONAL gate step that reads the tee'd log. One of them also
+      # carries extra comments the ubuntu copies do not.
+      #
+      # WHY DELETING `CACHE_READ_ONLY` IS FORBIDDEN, so the invited repair is visibly wrong
+      # rather than merely undocumented. This file's own argument at the build-windows gate
+      # spells it out: a leg that CAN save launders its own failure. A broken cross-OS
+      # restore makes it MISS, execute the target and SAVE its own entry; a re-run of the
+      # same commit then HITs that self-produced entry and the floor check goes green with
+      # cross-OS reuse still dead. All three Windows gates rest on that knob, so
+      # "normalising" the three consumer legs to match the ubuntu producers silently
+      # un-sounds every one of them and leaves three gates that read as coverage.
       #
       # SEVEN WIRED JOBS, EIGHT COPIES, and those are two different sets on purpose.
       # The step occurs EIGHT times in this file; the eighth copy is in
@@ -385,14 +404,13 @@ jobs:
       # set than the invariant governs. Do not weaken the invariant to accommodate the
       # three new copies.
       #
-      # This is an unguarded invariant: nothing fails
-      # if it drifts. CORRECTED, and the replacement fact rather than a bare deletion:
-      # this note used to say ci.yml was NOT in nx.json's test inputs, so such a guard
-      # would first need it registered there. PARITY-08 registered it in
-      # targetDefaults.test.inputs, and
-      # dogfood-cross-os.spec.ts and docs-same-os-claims.spec.ts now both assert on this
-      # file, so the precondition is already met -- only the drift guard itself would be
-      # new work. cleanup-workflow.spec.ts remains the precedent for the shape.
+      # THE SHELL-IDENTITY HALF IS UNGUARDED: nothing fails if the seven copies drift apart.
+      # The CACHE_READ_ONLY half is a different matter -- see the forbidden-repair note above
+      # for why that one must not be normalised away. A drift guard for the shell itself is
+      # possible and is only new work, not blocked: PARITY-08 registered this file in
+      # nx.json's targetDefaults.test.inputs, and dogfood-cross-os.spec.ts and
+      # docs-same-os-claims.spec.ts both already assert on it, so the precondition is met.
+      # cleanup-workflow.spec.ts remains the precedent for the shape.
       - name: Pre-set the Nx cache client vars for the sidecar
         shell: bash
         run: |

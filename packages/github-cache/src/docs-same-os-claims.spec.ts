@@ -57,7 +57,7 @@ import { readRepoFile } from './test/repo-file.js';
  * rejected argument, and one row with nine phrases would not tell those two apart in a
  * failure report.
  *
- * EVERY PHRASE IN THIS TABLE MUST FIT ON ONE LINE OF ITS FILE. `read()` returns the raw
+ * EVERY PHRASE IN THIS TABLE MUST FIT ON ONE LINE OF ITS FILE. `readRepoFile()` returns the raw
  * text, so a phrase spanning a hard wrap matches NOTHING and the row would be a silent
  * false PASS in the additive direction. That is why the `ci.yml` phrases below look
  * arbitrarily clipped: each was checked against a single comment line before being
@@ -432,7 +432,7 @@ const DOCS_08_SITES = [
       // asset is its own SEED and its real-task count is ZERO. Three phrases, each
       // pinning one half of the corrected claim, because a single phrase let the count
       // and its CAUSE drift apart. Every phrase is deliberately WITHIN ONE LINE of the
-      // wrapped comment: `read()` is a raw file read and this is `toContain`, so a phrase
+      // wrapped comment: `readRepoFile()` is a raw file read and this is `toContain`, so a phrase
       // spanning a line break would have to embed the `#` continuation prefix and would
       // then redden on a pure re-wrap.
       'THE WINDOWS LEG STILL MIRRORS EXACTLY ONE ASSET -- ITS OWN PUBLISH SEED',
@@ -695,7 +695,8 @@ const DOCS_08_SITES = [
  *
  * `packages/github-cache/src/lib/release-asset-name.integration.spec.ts` has now joined
  * too. The previous revision of this comment held it out on SEQUENCING grounds -- it did
- * not exist yet, and `read()` is a `readFileSync` that THROWS on a missing path, so an
+ * not exist yet, and `readRepoFile()` wraps a `readFileSync` that THROWS on a missing path
+ * (memoizing SUCCESSFUL reads only, so the throw still re-fires on every call), so an
  * early entry would blow up rather than guard -- and asked the plan that created it to add
  * it in the same commit. That is not quite what happened: the RED plan created the file
  * ADD-only, one commit ahead of the rename, and this entry lands with the rename instead.
@@ -717,15 +718,13 @@ const EDITED_FILES = [
   'packages/github-cache/src/cleanup/cleanup.ts',
 ] as const;
 
-const read = readRepoFile;
-
 describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS-04, XOS-07, D-31, D-32)', () => {
   for (const { file, bucket, required, forbidden } of DOCS_08_SITES) {
     describe(`${file} -- ${bucket}: ${required[0]}`, () => {
       for (const phrase of required) {
         it(`still contains \`${phrase}\``, () => {
           expect(
-            read(file),
+            readRepoFile(file),
             `${file} no longer contains the exact phrase \`${phrase}\`. This table is keyed on FILE + PHRASE on purpose -- these six edits shift each other's lines in one commit, so a line number would rot. If the site was legitimately reworded, update its ROW here in the SAME commit; do not delete the assertion to make the suite green.`,
           ).toContain(phrase);
         });
@@ -739,7 +738,7 @@ describe('every DOCS-08 site says what is true after VER-01/VER-03 (DOCS-08, OBS
           // search could no longer tell this guard apart from a regression. The
           // bracket splits the token without changing what the regex matches.
           expect(
-            read(file),
+            readRepoFile(file),
             `${file} matches ${String(pattern)}, which its ROW in DOCS_08_SITES proves absent. The rows carry different claims -- read the row's own docstring for why this text was retracted. If it is genuinely needed again, update that ROW here in the SAME commit and say why.`,
           ).not.toMatch(pattern);
         });
@@ -807,7 +806,7 @@ describe('Phase 11 row A locks BOTH ci.yml blocks, not just the first (DOCS-08, 
    * satisfying a containment check against an empty string.
    */
   function commentBlockAbove(jobKey: string): string {
-    const lines = read('.github/workflows/ci.yml').split('\n');
+    const lines = readRepoFile('.github/workflows/ci.yml').split('\n');
     const keyAt = lines.indexOf(`  ${jobKey}:`);
 
     if (keyAt < 0) {
@@ -848,7 +847,7 @@ describe('Phase 11 row A locks BOTH ci.yml blocks, not just the first (DOCS-08, 
     'occurs in ci.yml exactly twice: `%s`',
     (phrase) => {
       expect(
-        read('.github/workflows/ci.yml').split(phrase).length - 1,
+        readRepoFile('.github/workflows/ci.yml').split(phrase).length - 1,
         `ci.yml must carry the phrase \`${phrase}\` in BOTH comment blocks -- above hash-parity AND above hash-parity-compare. Row A of DOCS_08_SITES asserts it with toContain, which is satisfied by the FIRST occurrence alone, so deleting the replacement reason from either block would otherwise stay GREEN. Both blocks previously claimed the OPPOSITE (that ci.yml is NOT an nx.json test input); removing the correction from one of them leaves a future reader holding a documented argument for REMOVING the registration, and removing it turns every ci.yml content guard in this file and in dogfood-cross-os.spec.ts into a replay of a pass computed before its subject existed. If a block was legitimately reworded or added, update this expected count in the SAME commit; do not delete the assertion to make the suite green.`,
       ).toBe(2);
     },
@@ -890,7 +889,7 @@ describe('the retracted producer-attribution claim appears in no edited file (OB
 
   it.each([...EDITED_FILES])('%s makes no such claim', (file) => {
     expect(
-      claimsProducerAttribution(read(file)),
+      claimsProducerAttribution(readRepoFile(file)),
       `${file} claims the mirror answers which producer's bytes a reader received. OBS-03 explicitly RETRACTS that claim -- the label is the PUBLISHING leg's OS, not the producing one. Remove the claim; do not widen this guard's escape hatch.`,
     ).toBe(false);
   });

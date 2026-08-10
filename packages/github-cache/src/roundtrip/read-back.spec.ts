@@ -196,7 +196,30 @@ function decoyRows(count: number): AssetRow[] {
 // TypeError instead of on its merits.
 const ORIGINAL_ENV = process.env;
 
+// THE CLOCK IS PINNED, and it is a correctness fix rather than hygiene. The reader calls
+// `shardTagsForWindow(resolveMaxAgeDays(process.env))` internally, so the shard window it
+// asks for is derived from `new Date()`. `retention.ts` walks month-start to month-start, so
+// on day 31 of a 31-day month the default 30-day window collapses to a SINGLE tag: `now =
+// 2026-08-31` gives `oldest = 2026-08-01`, whose month start is also `2026-08-01`. The
+// fixture below needs TWO distinct tags -- the current shard 404s and an OLDER shard holds
+// the asset -- so it was deterministically RED on those seven days a year, with the real
+// message `no shard in [nx-cache-202608] holds an asset named ...`.
+//
+// The same idiom and the same literal as the two sibling specs that already pin
+// (`cleanup/cleanup.spec.ts`, `backend/releases-backend.spec.ts`), so the three read as one
+// pinned clock. `2026-07-15T00:00:00Z` with the default 30-day window yields exactly
+// `['nx-cache-202607', 'nx-cache-202606']` -- two distinct tags, mid-month -- so the
+// fixture's intent holds by construction rather than by calendar luck. Naming the two
+// produced tags is what makes the date auditable instead of arbitrary.
+//
+// Plain `vi.useFakeTimers()` with no `toFake` narrowing and no `shouldAdvanceTime`:
+// `read-back.ts`'s `AbortSignal.timeout` runs on an internal unref'd timer the fake clock
+// does not drive, and `fetchMock` resolves synchronously, so nothing waits on a timer.
+const PINNED_NOW = new Date('2026-07-15T00:00:00Z');
+
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(PINNED_NOW);
   vi.clearAllMocks();
   process.env = { ...ORIGINAL_ENV };
   process.env.GITHUB_RUN_ID = HASH;
@@ -209,6 +232,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   process.env = ORIGINAL_ENV;
   vi.unstubAllGlobals();
 });

@@ -45,10 +45,45 @@ export function repoFileUrl(relativePath: string): URL {
 }
 
 /**
+ * Successful reads, keyed on the relative path string exactly as the caller spelled it.
+ *
+ * NO INVALIDATION, and the soundness is MEASURED rather than assumed. `readRepoFile` is
+ * anchored on `import.meta.url`, and the complete set of filesystem writers anywhere under
+ * the package source tree is five files -- every one of which writes under `.nx/cache` or the
+ * OS temp directory, both disjoint from the read set (`nx.json`, `package.json`, the package
+ * manifests, `README.md`, `.gitattributes`, `ppe/action.yml`, the workflows, `docs/**`, and
+ * `.ts` sources). Nothing under `.nx/` is ever read through here.
+ *
+ * THE ONE NEAR-MISS, named explicitly because it is the shape that would falsify the above:
+ * one writer does create a file called `nx.json`, but it targets a `mkdtemp` directory under
+ * `.nx/cache`, not the workspace-root `nx.json` that `readRepoFile('nx.json')` resolves.
+ *
+ * Every caller passes a constant literal, so no path normalisation is needed for the key to
+ * be stable.
+ *
+ * SUCCESSFUL READS ONLY. See `readRepoFile` for why the miss path must stay uncached.
+ */
+const REPO_FILE_CACHE = new Map<string, string>();
+
+/**
  * Read a repo-relative file as UTF-8. The three docs specs each authored this, byte for
  * byte, against three separately-computed roots -- and so did `lint-scope-drift.spec.ts` and
  * `public-surface.spec.ts`, which is why the claim above needed its scope stated. Both are
  * routed here now.
+ *
+ * MEMOIZED, because the callers are read-only content scans and several of them scan the
+ * same tree: three specs loop over every package module, and `.github/workflows/ci.yml`
+ * alone is read at four sites across four files.
+ *
+ * THE THROW ON A MISSING PATH IS PRESERVED, and it is load-bearing rather than incidental --
+ * `docs-same-os-claims.spec.ts` documents relying on it. Caching SUCCESSFUL reads only is
+ * what preserves it: a miss never enters the map, so the throw re-fires on every call. The
+ * thrown error is deliberately NOT cached; that would be more code for no gain. Both
+ * properties are pinned by controls in `repo-file.spec.ts`, added alongside this memo,
+ * because a memo that cached a sentinel on the miss path would otherwise ship green.
+ *
+ * `repoFileUrl` is deliberately NOT memoized: it returns a MUTABLE `URL`, so handing one
+ * instance to two callers would be a new aliasing hazard for no gain.
  *
  * Anchored on `import.meta.url`, never on `process.cwd()`: under `nx test` the merged
  * target configuration sets the cwd to the PROJECT root, and `workspace-root-cwd.ts`
@@ -56,7 +91,17 @@ export function repoFileUrl(relativePath: string): URL {
  * differently depending on which hooks a spec happened to install.
  */
 export function readRepoFile(relativePath: string): string {
-  return readFileSync(repoFileUrl(relativePath), 'utf8');
+  const cached = REPO_FILE_CACHE.get(relativePath);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const contents = readFileSync(repoFileUrl(relativePath), 'utf8');
+
+  REPO_FILE_CACHE.set(relativePath, contents);
+
+  return contents;
 }
 
 /** The package source root, workspace-relative. */

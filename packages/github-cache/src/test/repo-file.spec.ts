@@ -160,6 +160,19 @@ describe('readRepoFile resolves from the workspace root (T4-6)', () => {
   it('reads a workspace-root file, proving the four-levels-up walk lands where it claims', () => {
     expect(readRepoFile('nx.json')).toContain('targetDefaults');
   });
+
+  // THE TWO CLAUSES THE MEMO NEEDS, and neither existed before it. `readRepoFile` is a bare
+  // `readFileSync` plus a cache, so both of its load-bearing properties were previously
+  // unguarded: nothing in this file asserted the throw, and nothing asserted that a repeated
+  // read still returns the content. A memo that cached a sentinel on the MISS path -- or one
+  // that returned a stale empty string -- would have shipped green through the whole suite.
+  it('throws on a missing path rather than returning a sentinel the memo could cache', () => {
+    expect(() => readRepoFile('no-such-file.txt')).toThrow();
+  });
+
+  it('returns equal content on a repeated read, so the memo cannot serve something else', () => {
+    expect(readRepoFile('nx.json')).toBe(readRepoFile('nx.json'));
+  });
 });
 
 /**

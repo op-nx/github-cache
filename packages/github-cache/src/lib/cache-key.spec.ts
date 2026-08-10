@@ -85,7 +85,6 @@ describe('HASH_PATTERN bounds (SRV-03, shared home)', () => {
   });
 });
 
-/** The package source root, resolved from this file rather than from the cwd. */
 /**
  * Every non-spec TypeScript module under the package source root, as paths relative to
  * that root.

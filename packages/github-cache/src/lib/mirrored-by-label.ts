@@ -2,9 +2,12 @@ import type { CacheOs } from './release-asset-name.js';
 
 /**
  * The publisher-attribution Release LABEL prefix (OBS-03). Exported as well as the builder
- * below because the READER needs the prefix alone -- it strips it off a label GitHub hands
- * back to recover the OS -- while the writer and every fixture need the whole string. One
- * authored copy either way.
+ * below ONLY because `read-back.spec.ts` pins its VALUE -- no production consumer imports
+ * it any more. `read-back.ts` used to compose the label from it and now calls
+ * `mirroredByLabel` instead, so the reason given here previously ("the READER needs the
+ * prefix alone -- it strips it off a label GitHub hands back") describes neither the
+ * reader's behaviour (it compares whole labels, it never stripped anything) nor any current
+ * caller. Deleting the export would delete that live value assertion, which is why it stays.
  */
 export const MIRRORED_BY_PREFIX = 'mirrored-by: ';
 

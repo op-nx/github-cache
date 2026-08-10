@@ -808,17 +808,45 @@ describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)'
   // still fail -- which is the point, because a second authored copy is how the
   // single choke point stops being single.
   it('routes its throw path through the comparator collapse, not a raw error.message', () => {
+    // THE IMPORT AND THE CALL ARE TWO CLAUSES, because neither implies the other.
+    // `typecheck` catches an UNIMPORTED identifier, so it was once argued that the call
+    // clause below subsumes this one. It does not: a locally re-authored
+    // `function collapseToOneLine(s: string) { return s; }` in assert-parity.ts resolves
+    // the name, satisfies the call clause, and passes typecheck, lint and fallow alike
+    // (fallow still credits compare.ts's export, which compare.spec.ts consumes). The
+    // single-choke-point invariant this `it` exists for is exactly the difference between
+    // IMPORTED and RE-AUTHORED, so it needs a clause that can see it.
+    //
+    // Asserted as a PATTERN over the import block, not as the literal Prettier layout the
+    // earlier version pinned -- a reflow of the member list is not a defect, and pinning
+    // it made this clause redden on formatting. The pattern additionally pins the module
+    // SPECIFIER, which the literal never did.
     expect(
       assertParitySource,
-      'assert-parity.ts must import `collapseToOneLine` from ./compare.js and wrap ' +
-        'the caught error in it. compare.ts calls itself "THE SINGLE PLACE untrusted ' +
-        'record content is neutralised"; a raw `error.message` on the catch makes that ' +
-        'false for the one path that does not go through fail(), and leaves the ' +
-        "success-prefix injection blocked only by V8's cap on the snippet it quotes " +
-        'back -- a runtime detail, not a control. THE CALL IS WHAT PINS THE IMPORT: a ' +
-        'source containing this call cannot compile without importing the symbol, and ' +
-        '`typecheck` is what makes that pin sufficient -- which is why no separate ' +
-        'assertion on the import STATEMENT is needed here.',
+      'assert-parity.ts must IMPORT `collapseToOneLine` from `./compare.js`. The call ' +
+        'clause below cannot tell an import from a local re-authoring: a local ' +
+        'declaration of the same name compiles, satisfies that clause, and passes ' +
+        'typecheck, lint and fallow -- at which point compare.ts is no longer "THE ' +
+        'SINGLE PLACE untrusted record content is neutralised". Matched as a pattern, ' +
+        'so reflowing or reordering the import members cannot redden this.',
+    ).toMatch(
+      /import\s*\{[^}]*\bcollapseToOneLine\b[^}]*\}\s*from\s*'\.\/compare\.js'/,
+    );
+    expect(
+      assertParitySource,
+      'assert-parity.ts must not DECLARE `collapseToOneLine` itself. A second authored ' +
+        'copy is how the single choke point stops being single, and it is invisible to ' +
+        'every other gate in the battery -- it typechecks, it lints, and it leaves ' +
+        "compare.ts's export credited. Delete the local declaration and import the " +
+        'symbol from `./compare.js`.',
+    ).not.toMatch(/(?:function|const|let|var|class)\s+collapseToOneLine\b/);
+    expect(
+      assertParitySource,
+      'assert-parity.ts must wrap the caught error in `collapseToOneLine`. compare.ts ' +
+        'calls itself "THE SINGLE PLACE untrusted record content is neutralised"; a raw ' +
+        '`error.message` on the catch makes that false for the one path that does not go ' +
+        "through fail(), and leaves the success-prefix injection blocked only by V8's " +
+        'cap on the snippet it quotes back -- a runtime detail, not a control.',
     ).toContain(
       'collapseToOneLine(error instanceof Error ? error.message : String(error))',
     );

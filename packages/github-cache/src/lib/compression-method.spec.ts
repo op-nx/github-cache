@@ -2,7 +2,7 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveCompressionMethod } from './compression-method.js';
-import { stripLineComments } from '../test/repo-file.js';
+import { probeTokenOf, stripLineComments } from '../test/repo-file.js';
 
 /**
  * VER-05. `resolveCompressionMethod` is an independent re-implementation of
@@ -261,15 +261,6 @@ const FORBIDDEN_RESULT_MEMBERS = [
   /probe[.]st[a]tus/,
   /probe[.]err[o]r/,
 ] as const;
-
-/**
- * The probe token DERIVED from the needle's own source, so the non-vacuity fixtures below
- * cannot drift away from the thing they are meant to trip -- and this file still spells
- * nothing verbatim.
- */
-function probeTokenOf(needle: RegExp): string {
-  return needle.source.replaceAll('[', '').replaceAll(']', '');
-}
 
 /**
  * The subject with its comments removed, through the SHARED stripper. REQUIRED rather than

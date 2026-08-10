@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
-import { stripLineComments } from '../test/repo-file.js';
+import { probeTokenOf, stripLineComments } from '../test/repo-file.js';
 import type { Hash } from './cache-key.js';
 
 // VER-01/VER-02, non-vacuous: the expected path below is spelled out as a string
@@ -111,16 +111,6 @@ const FORBIDDEN = [
   /\bpl[a]tform\b/,
   /\bar[c]h\b/,
 ] as const;
-
-// The probe token is DERIVED from the needle's own source by removing the brackets and
-// the word-boundary escapes, so the non-vacuity fixture cannot drift away from the thing
-// it is meant to trip -- and this file still spells nothing verbatim.
-function probeTokenOf(needle: RegExp): string {
-  return needle.source
-    .replaceAll('\\b', '')
-    .replaceAll('[', '')
-    .replaceAll(']', '');
-}
 
 describe('cacheArchivePath (VER-01, VER-02)', () => {
   it('returns exactly .nx/cache/nx-github-cache-abc123.tar for hash abc123 (VER-01)', () => {

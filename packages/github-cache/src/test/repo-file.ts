@@ -99,6 +99,39 @@ export function packageSourceFiles(
 }
 
 /**
+ * The plain token a bracket-obfuscated needle is really looking for, DERIVED from the
+ * needle's own source rather than spelled a second time.
+ *
+ * WHY THE DERIVATION EXISTS AT ALL. The callers assert that their subject does NOT contain
+ * some token, and a guard like that is worthless if the needle has quietly stopped matching
+ * anything. So each caller builds a non-vacuity fixture from this and checks the needle
+ * trips on it. Deriving it means the fixture cannot drift away from the needle it is meant
+ * to trip -- and the calling specs, whose whole discipline is that they spell nothing
+ * verbatim, do not have to break that discipline to get a fixture.
+ *
+ * That discipline is why NO token is written out anywhere in this docstring either. The
+ * helper now sits BETWEEN two specs that each carry the rule, so spelling an example here
+ * would defeat both of them at once.
+ *
+ * TWO COPIES ARE REPLACED and this is the SUPERSET of them: same bracket removal, plus a
+ * word-boundary-escape strip applied first. Measured before merging: neither needle in the
+ * second caller contains a word-boundary escape, so the extra strip is a no-op there and both
+ * derived tokens are byte-identical to what the local copy produced.
+ *
+ * ITS POSITIVE CONTROL LIVES AT THE CALL SITES, deliberately, and it already exists: each
+ * caller has a clause asserting that its needle matches the token derived from itself. That
+ * is a stronger control than anything this module could assert about a token it must not
+ * name, and this module's stated discipline -- a primitive without a positive control is the
+ * defect one layer down -- is satisfied by it.
+ */
+export function probeTokenOf(needle: RegExp): string {
+  return needle.source
+    .replaceAll('\\b', '')
+    .replaceAll('[', '')
+    .replaceAll(']', '');
+}
+
+/**
  * A YAML source with every line-leading `#` comment removed, so a content guard cannot be
  * satisfied by a comment. This idiom was authored five times across the workflow and
  * action specs.

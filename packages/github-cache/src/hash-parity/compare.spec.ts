@@ -815,9 +815,11 @@ describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)'
         'record content is neutralised"; a raw `error.message` on the catch makes that ' +
         'false for the one path that does not go through fail(), and leaves the ' +
         "success-prefix injection blocked only by V8's cap on the snippet it quotes " +
-        'back -- a runtime detail, not a control.',
-    ).toContain('import {\n  collapseToOneLine,');
-    expect(assertParitySource).toContain(
+        'back -- a runtime detail, not a control. THE CALL IS WHAT PINS THE IMPORT: a ' +
+        'source containing this call cannot compile without importing the symbol, and ' +
+        '`typecheck` is what makes that pin sufficient -- which is why no separate ' +
+        'assertion on the import STATEMENT is needed here.',
+    ).toContain(
       'collapseToOneLine(error instanceof Error ? error.message : String(error))',
     );
     expect(

@@ -50,11 +50,17 @@ const saveCache = vi.mocked(cache.saveCache);
 // memory-degrade backend -- both are read-only, and only one touches @actions/cache.
 const restoreCache = vi.mocked(cache.restoreCache);
 
-// A hash UNIQUE to this spec: the writable-path cases drive the Actions backend's
-// put, which writes cacheArchivePath(HASH) to the shared tmpdir. Vitest runs spec
-// files in parallel workers that share the filesystem, so reusing another spec's
-// hash (e.g. actions-cache-backend.spec.ts's 'abc123') would race on the same
-// temp file. Keep this value distinct from every other spec's hash.
+// A hash UNIQUE to this spec: the writable-path cases drive the Actions backend's put, which
+// writes `cacheArchivePath(HASH)` into the REPO-LOCAL cache directory (`.nx/cache`, see
+// `cache-archive-path.ts`) -- NOT the shared system temp directory, which is what this comment
+// used to say. This PR moved it, and the move makes the hazard the comment reasons about
+// slightly WORSE rather than better: the path is now inside the working tree, so a collision
+// is not only shared by every parallel vitest worker but also PERSISTS between runs and is
+// visible to Nx, instead of being swept by the OS.
+//
+// Vitest runs spec files in parallel workers that share the filesystem, so reusing another
+// spec's hash (e.g. actions-cache-backend.spec.ts's 'abc123') would race on the same archive
+// file. Keep this value distinct from every other spec's hash.
 const HASH = 'selectbackendfixture' as Hash;
 
 // VER-04's spec accommodation, the same three lines as actions-cache-backend.spec.ts and
@@ -374,12 +380,18 @@ describe('TRUST-05: no caller-facing mode surface', () => {
   });
 
   it('behavioral: an untrusted env bag carrying override-shaped extra keys still yields a forbidden put (TRUST-05)', async () => {
-    // Non-vacuous: NOT an identity check against a factory (a smuggled flag could
-    // pass that while still returning the writable backend). We spread several
-    // plausible mode-switch keys onto an UNTRUSTED env and drive the REAL put; if
-    // any of them could steer the decision, put would not be 'forbidden'. This
-    // repo has already shipped a tautological security test (01-REVIEW.md WR-01);
-    // this half exists so that failure mode cannot recur for TRUST-05.
+    // Non-vacuous, and this states WHERE the non-vacuity comes from, because an earlier
+    // version of this comment claimed something the body does not do. It said the case
+    // "drives the REAL put"; it does not -- it calls the real `selectBackend` and the real
+    // narrowing predicate `isWritableBackend`, and stops there. No put is issued.
+    //
+    // The narrowing is what carries the weight. It is NOT an identity check against a factory
+    // (a smuggled flag could pass that while still returning the writable backend): several
+    // plausible mode-switch keys are spread onto an UNTRUSTED env, and if any of them could
+    // steer the decision the returned backend would satisfy `isWritableBackend`. This repo has
+    // already shipped a tautological security test (01-REVIEW.md WR-01); this half exists so
+    // that failure mode cannot recur for TRUST-05, and the citation stands -- what changed is
+    // the honest account of the mechanism, not the claim that there is one.
     //
     // Under TRUST-01 widening pull_request became host-gated, so it would be
     // WRITABLE on a github.com host and no longer prove the point. Use

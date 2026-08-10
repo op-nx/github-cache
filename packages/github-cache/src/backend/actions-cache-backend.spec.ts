@@ -289,7 +289,7 @@ describe('createActionsCacheBackend put (ROBUST-03)', () => {
     expect(warning.mock.calls[0][0]).toContain(cacheKeyFor(HASH));
   });
 
-  it('still removes the temp archive on the ambiguous-denial branch (T-2-11) (ROBUST-03)', async () => {
+  it('still removes the repo-local archive on the ambiguous-denial branch (T-2-11) (ROBUST-03)', async () => {
     saveCache.mockResolvedValue(-1);
     restoreCache.mockResolvedValue(undefined);
     const backend = createActionsCacheBackend();
@@ -319,7 +319,7 @@ describe('createActionsCacheBackend put (ROBUST-03)', () => {
     );
   });
 
-  it('removes the temp archive after put on the success path (ROBUST-03)', async () => {
+  it('removes the repo-local archive after put on the success path (ROBUST-03)', async () => {
     saveCache.mockResolvedValue(42);
     const backend = createActionsCacheBackend();
 
@@ -328,7 +328,7 @@ describe('createActionsCacheBackend put (ROBUST-03)', () => {
     expect(existsSync(cacheArchivePath(HASH))).toBe(false);
   });
 
-  it('removes the temp archive after put on the propagating-error path (ROBUST-03)', async () => {
+  it('removes the repo-local archive after put on the propagating-error path (ROBUST-03)', async () => {
     saveCache.mockRejectedValue(new Error('network down'));
     const backend = createActionsCacheBackend();
 

@@ -79,6 +79,14 @@ function jobBlock(name: string): string {
  */
 const WINDOWS_RUNNER = 'windows-11-arm';
 
+/**
+ * The ONE OS-sensitive Nx target. Every other target is portable BY DEFINITION of this
+ * milestone's central decision (D2-01): the store is OS-invariant and OS discrimination lives
+ * exclusively in the declared platform discriminator on this target. So the partition below
+ * derives portability from this single name rather than enumerating the portable ones.
+ */
+const OS_SENSITIVE_TARGET = 'integration';
+
 /** One job as the read-only-knob partition needs to see it. */
 interface JobCensusRow {
   readonly name: string;
@@ -146,7 +154,18 @@ function jobCensus(): JobCensusRow[] {
         (/\$\{\{\s*matrix\.os\s*\}\}/.test(runsOnValue) &&
           body.includes(WINDOWS_RUNNER)),
       sidecar: /-\s*uses:\s*\.\/start-cache-server/.test(body),
-      portable: /npm run (build|typecheck|test)(\s|$)/m.test(body),
+      // PORTABLE IS DERIVED, NOT ENUMERATED. Three literal target names would read a future
+      // Windows sidecar consumer on any OTHER portable target -- `lint` is the obvious
+      // candidate -- as NOT portable, land it in the out-of-set partition, and redden that
+      // clause over its own CORRECT knob write, with a message telling the author their
+      // producer had stopped writing. A false RED on a conforming addition is the inverse of
+      // the cardinality defect this partition replaced, and ci.yml's own rule is that a
+      // tripwire firing on correct work gets disabled -- OBS-04 is this repo's record of that
+      // happening. So portability follows the ONE declared discriminator instead: every Nx
+      // target is portable EXCEPT `OS_SENSITIVE_TARGET`.
+      portable: [...body.matchAll(/npm run ([a-z][a-z0-9:-]*)/g)].some(
+        (match) => match[1] !== OS_SENSITIVE_TARGET,
+      ),
       knobSites: body
         .split('\n')
         .filter((inner) => inner.includes('CACHE_READ_ONLY')).length,
@@ -2194,11 +2213,10 @@ describe('ci.yml keeps exactly the two record-only diagnostics XOS-09 did not co
         'comment-stripped `ci.yml`. FEWER means an over-sweep deleted a claim that is still ' +
         'true (T-13-05-D1). MORE means a new [remote cache] record landed UNGATED somewhere ' +
         'the three per-leg clauses do not read, which is the launderable shape XOS-09 exists ' +
-        'to remove. Pinned exactly rather than as a floor for the same reason ' +
-        'this pin is exact rather than a floor: a floor of 2 is satisfied by the two ' +
-        'survivors alone and ' +
-        'would let a third record appear in silence. If a record is legitimately added or ' +
-        'converted, RE-MEASURE and update this constant HERE in the same commit.',
+        'to remove. Pinned exactly rather than as a floor because a floor is satisfied by ' +
+        'the known survivors alone and would let a further record appear in silence. If a ' +
+        'record is legitimately added or converted, RE-MEASURE and update this constant HERE ' +
+        'in the same commit.',
     ).toHaveLength(RECORD_ONLY_SURVIVOR_SITES);
   });
 });

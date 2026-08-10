@@ -1,11 +1,51 @@
 ---
 slug: publish-verify-422-empty-shard
-status: awaiting_human_verify
+status: resolved
+resolved: 2026-08-11
+resolved_by: /gsd:complete-milestone v0.0.2 pre-close resolution
+resolved_note: >-
+  E10 -- the blocker this file ends on -- was fixed and proven live by quick 260803-fcd.
+  See the RESOLUTION block immediately below the frontmatter.
 trigger: "publish-verify fails on BOTH legs at the Phase 13 tip (run 30767511870: 24 success / 2 failure, both publish-verify legs failing at the round-trip read-back). It succeeded on all five prior main pushes. The job is push-gated (on.push branches: [main]) so it is structurally invisible to every PR run -- it was only found via the temporary main push in quick 260802-toz. Measured so far: the cache-mirror-202608 shard exists with ZERO assets; every asset upload returned 422 and was swallowed as benign; the seed asset is unique per run so its 422 cannot mean already-exists. The month-boundary hypothesis is UNCONFIRMED -- the shard predates the run. Mechanism NOT established. This blocks PR #16. Maintainer has authorised whatever it takes including another temporary main push window (same close-the-PR-first sequencing as 260802-toz) if read-only investigation stalls."
 goal: find_and_fix
 created: 2026-08-03
-updated: 2026-08-03
+updated: 2026-08-11
 ---
+
+> **RESOLVED 2026-08-11.** This file ends mid-investigation, on E10: the `e96670e` classifier fix
+> had closed the upload-site defect but left its sibling in `ensureShardRelease` standing, and that
+> sibling became the next blocker. **Both the fix and the live confirmation this session was
+> awaiting have since landed**, in quick `260803-fcd` -- the same day, downstream of this file's
+> last entry.
+>
+> **The E10 fix shipped as named.** `ensureShardRelease` now takes the race path ONLY on an
+> explicit `already_exists` fault code (`publish-mirror.ts:351`), and every other 422 propagates
+> with GitHub's real code quoted rather than being inferred as absence
+> (`publish-mirror.ts:428`). `260803-fcd` went further than this session's "next move": it added a
+> loud NON-FATAL skip for the one 422 that is neither race nor worth failing for -- GitHub
+> reporting the tag name burned by an immutable release -- and then renamed `SHARD_TAG_PREFIX`
+> from `cache-mirror-` to `nx-cache-`, sequencing the rename FIRST so the skip guard was exercised
+> against a live burned name instead of only a mock.
+>
+> **Human verification is DONE, on real runs, and is why this no longer sits at
+> `awaiting_human_verify`.** Window A (run `30803953260`, `1e5bc10`): `publish` green on both legs
+> with exactly one warning per leg quoting GitHub verbatim, `publish-verify` red -- the shape
+> pre-registered BEFORE the result, since a skipped shard mirrors nothing. Window B (run
+> `30807461616`, `70064f5`): **full green, zero failed jobs** -- both `publish` legs, both
+> `publish-verify` legs, `o3-witness` and `format-check` -- against a fresh `nx-cache-202608`
+> shard holding 69 assets. That is this session's original symptom inverted and proven fixed. Run
+> `31305961054` (2026-08-09) reconfirmed it later still.
+>
+> **What is NOT closed, deliberately.** The underlying design limitation stands: immutable
+> releases and the monthly-shard mirror are structurally incompatible, and the draft -> attach ->
+> publish workaround is closed off because a draft release is not anonymously readable while
+> anonymous read is the mirror's contract. That was deferred to a later milestone by maintainer
+> decision and is recorded in `STATE.md` Deferred Items as a **standing exposure** -- anyone
+> re-enabling the setting at repo or org level degrades the mirror again. `260803-fcd` MITIGATED
+> it (degrade instead of break, with a proven cheap recovery: rotate the tag prefix) but did not
+> remove it. That deferral is milestone-scoped debt, not an open debug session.
+>
+> Everything below is the original investigation, preserved unedited.
 
 # Debug: publish-verify fails on both legs; shard has zero assets and every upload 422s
 

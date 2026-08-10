@@ -6,7 +6,19 @@ target: .planning/REQUIREMENTS.md (ROBUST-04)
 blocked_by: v0.0.2 milestone freeze
 amended: 2026-08-09
 amended_by: quick 260809-iqe
+status: complete
+resolved: 2026-08-11
+resolved_by: /gsd:complete-milestone v0.0.2 pre-close resolution
 ---
+
+> **RESOLVED 2026-08-11.** The blocker named above -- the v0.0.2 milestone freeze -- lifted at
+> milestone close, and the correction was applied to `REQUIREMENTS.md` (ROBUST-04) BEFORE the file
+> was archived, so the v0.0.2 archive carries the accurate surfacing clause rather than the false
+> one. The replacement states what this capture established: drift leaves `mirrored >= 1` through
+> the `dist/`-built internal action, so the all-restore-MISS gate structurally cannot fire; the
+> proportional partial warning is expected-silent mid-month and misattributes at rollover; and
+> `action-bundle-drift` is the mitigation that actually catches drift. Per the "Note on scope"
+> section below, ROBUST-04's mitigation and its ticked checkbox were left untouched.
 
 # ROBUST-04's "only as the all-restore-MISS warning" clause is false
 

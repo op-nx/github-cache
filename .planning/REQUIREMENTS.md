@@ -334,9 +334,16 @@ This repo currently has NO linter (no ESLint, no Biome). Adopting one is its own
   comment-locked helpers and `getCacheVersion`'s `windows-only` branch, and four `ci.yml` sidecar
   jobs run that committed bundle from the git ref rather than a build output. Drift means the
   sidecar writes at one cache version while the publish action restores at another -- **the mirror
-  silently stops receiving anything**, surfacing only as the all-restore-MISS warning that OBS-04
-  has just told everyone to expect exactly once. `action-bundle-drift` catches it, but only on push,
-  after the misleading signal has already been rationalised.
+  stops receiving real cache content, and does so with no runtime signal of its own**. It does NOT
+  surface as the all-restore-MISS warning: `action.yml` declares `main: dist/action/index.js`, so
+  the same `publish` job still seeds and mirrors its own entry through a freshly built dist that
+  bundle drift cannot touch, leaving `mirrored >= 1` -- and that gate needs `mirrored === 0` to
+  fire. The proportional partial warning added on 2026-08-09 does not cover it either: mid-month a
+  shard-resident entry is skipped into `alreadyPresent` before any restore is attempted, and at
+  month-shard rollover the warning fires naming causes that do not include drift.
+  `action-bundle-drift` is the mitigation that actually catches drift, and it is unaffected -- but
+  only on push. (Surfacing clause corrected 2026-08-11 from the captured todo
+  `robust-04-all-restore-miss-clause-is-false`; the mitigation and this checkbox are untouched.)
 
 - [x] **VER-08**: The read-only Actions-cache backend is the SAME implementation as the writable
   one's read path, per D-01. Exactly ONE `cache.restoreCache(...)` READ call site survives in the

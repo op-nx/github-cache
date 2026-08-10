@@ -25,6 +25,7 @@ import {
   cacheArchivePath,
 } from '../lib/cache-archive-path.js';
 import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
+import { stripLineComments } from '../test/repo-file.js';
 import { enterWorkspaceRootCwd } from '../test/workspace-root-cwd.js';
 import {
   createActionsCacheBackend,
@@ -341,17 +342,22 @@ describe('createActionsCacheBackend put (ROBUST-03)', () => {
 describe('createReadOnlyActionsCacheBackend is read-only BY CONSTRUCTION (VER-08)', () => {
   // BEHAVIOURAL, never an identity check against a factory. `expect(backend).toBe(...)` or
   // a comparison against the factory reference passes while a smuggled flag still hands
-  // back something writable -- the failure mode select-backend.spec.ts:307-335 records
-  // having shipped once. `isWritableBackend` reads the SAME structural fact the server
+  // back something writable -- the failure mode `select-backend.spec.ts` records having
+  // shipped once, in its TRUST-05 no-caller-facing-mode group (01-REVIEW.md WR-01, the
+  // tautological security test). `isWritableBackend` reads the SAME structural fact the server
   // reads when it answers a PUT with the contract's 403 (`'put' in backend`, the
   // discriminator `isWritableBackend` in `backend/types.ts`), so a green here is the
   // property the server actually depends on.
   //
-  // ANCHORED BY NAME, not by line. This used to cite a line range in that module, and a
-  // 37-line insertion IN THE SAME CHANGESET moved the definition out from under it -- so
-  // the citation pointed at unrelated text. This package's own convention two modules over
-  // already says to reference by name for exactly that reason: a line range decays on the
-  // next edit above it, silently.
+  // ANCHORED BY NAME, not by line, and BOTH citations in this block are -- which took two
+  // passes. The first re-anchored the `backend/types.ts` discriminator after a 37-line
+  // insertion IN THE SAME CHANGESET moved the definition out from under its line range, and
+  // then declared the block name-anchored while leaving the OTHER citation beside it as a line
+  // range. That range had already decayed: it held a cold-cache-degrade warning clause, not
+  // the record it was cited for, and the paragraph asserting name-anchoring is exactly what
+  // stops a reader re-checking. This package's own convention two modules over says to
+  // reference by name for that reason: a line range decays on the next edit above it,
+  // silently -- and a block that claims to follow the convention has to follow it everywhere.
   it('has NO put, so isWritableBackend is false and a write is unrepresentable (VER-08)', () => {
     const backend = createReadOnlyActionsCacheBackend();
 
@@ -686,26 +692,22 @@ describe('enableCrossOsArchive is hardcoded true at all three call sites (VER-03
   });
 });
 
-// The six-line comment-strip helper is DUPLICATED here rather than extracted, and that is
-// deliberate: .planning/codebase/TESTING.md reserves the package-source root for facts
-// spanning multiple files, and this is a fact about ONE module -- as is the VER-02 scan in
-// cache-archive-path.spec.ts. The repo already carries this idiom three times for exactly
-// that reason (lint-scope-drift.spec.ts, cleanup-workflow.spec.ts, ppe-action.spec.ts).
+// ROUTED THROUGH THE SHARED STRIPPER, and the local copy that used to stand here argued
+// against exactly that. Its argument -- ".planning/codebase/TESTING.md reserves the
+// package-source root for facts spanning multiple files, and this is a fact about ONE module"
+// -- was about the wrong thing: a comment stripper is a PRIMITIVE, not a fact about any
+// module, and `src/test/` is the layer for primitives (it is where `stripYamlComments` already
+// lives). The copy also cited lint-scope-drift.spec.ts and cache-archive-path.spec.ts as peers
+// carrying the idiom "for exactly that reason" -- and both were routed through the shared
+// helper by the same pass that left this one standing, so the citation was falsified prose of
+// precisely the class that pass existed to remove.
 //
-// All four markers are dropped, not just `//`: this module's call-site locks are `//` lines
-// but its module header is a `/** */` block, whose interior lines begin with `*`.
-const BACKEND_COMMENT_MARKERS = ['//', '/*', '*/', '*'] as const;
-
-const strippedBackendSource = readFileSync(
-  new URL('./actions-cache-backend.ts', import.meta.url),
-  'utf8',
-)
-  .split('\n')
-  .filter(
-    (line) =>
-      !BACKEND_COMMENT_MARKERS.some((marker) => line.trim().startsWith(marker)),
-  )
-  .join('\n');
+// All four line-leading markers are still dropped, which is what the shared helper's default
+// mode does: this module's call-site locks are `//` lines but its module header is a `/** */`
+// block, whose interior lines begin with `*`.
+const strippedBackendSource = stripLineComments(
+  readFileSync(new URL('./actions-cache-backend.ts', import.meta.url), 'utf8'),
+);
 
 describe('the module reaches @actions/cache at exactly three places (VER-03 clause 2)', () => {
   // Clause 1 above only sees sites the specs EXECUTE. This clause sees a fourth site on a
@@ -794,26 +796,20 @@ function nonSpecModules(): string[] {
  * red before the phase changed anything -- and a spurious red on a drift guard is how a
  * later reader talks themselves into weakening it.
  *
- * `strippedBackendSource` is deliberately NOT rewired through this helper. The two are not
- * the same shape -- that one strips a single named file eagerly at module scope for the
- * VER-03 clauses, this one strips an arbitrary file lazily inside an `it` -- so unifying them
- * would mean making the eager read lazy, which is a change to the VER-03 clauses' input for
- * no saving. (The previous version of this paragraph pointed at ":501-510" for that pipeline,
- * which was already wrong when it landed: those lines are the `toStrictEqual` discussion.
- * Referenced by NAME here, because a line range decays on the next edit above it.)
+ * BOTH SITES NOW CALL THE SHARED `stripLineComments`, so there is one strip in the package
+ * rather than a per-file re-authoring. What stays separate is the READ, not the strip:
+ * `strippedBackendSource` reads a single named file eagerly at module scope for the VER-03
+ * clauses, this reads an arbitrary file lazily inside an `it` (the workspace-root cwd hook has
+ * not run at collection time). That difference is a constraint and unifying it would change
+ * the VER-03 clauses' input for no saving. (An earlier version of this paragraph pointed at
+ * ":501-510" for that pipeline, which was already wrong when it landed: those lines are the
+ * `toStrictEqual` discussion. Referenced by NAME here, because a line range decays on the next
+ * edit above it.)
  */
 function importsActionsCache(file: string): boolean {
-  const code = readFileSync(file, 'utf8')
-    .split('\n')
-    .filter(
-      (line) =>
-        !BACKEND_COMMENT_MARKERS.some((marker) =>
-          line.trim().startsWith(marker),
-        ),
-    )
-    .join('\n');
-
-  return ACTIONS_CACHE_SPECIFIER.test(code);
+  return ACTIONS_CACHE_SPECIFIER.test(
+    stripLineComments(readFileSync(file, 'utf8')),
+  );
 }
 
 describe('exactly ONE module in the whole package reaches @actions/cache (VER-09)', () => {

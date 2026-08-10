@@ -71,9 +71,17 @@ const REPO_FILE_CACHE = new Map<string, string>();
  * `public-surface.spec.ts`, which is why the claim above needed its scope stated. Both are
  * routed here now.
  *
- * MEMOIZED, because the callers are read-only content scans and several of them scan the
- * same tree: three specs loop over every package module, and `.github/workflows/ci.yml`
- * alone is read at four sites across four files.
+ * MEMOIZED, and the memo's reach is WITHIN ONE FILE. The rationale that stood here --
+ * "three specs loop over every package module, and `.github/workflows/ci.yml` alone is read
+ * at four sites across four files" -- is false in BOTH halves, for one reason: vitest
+ * isolates per FILE by default, so each spec gets its own module registry and its own
+ * REPO_FILE_CACHE. Reads in different spec files cannot dedupe against each other, so
+ * neither a cross-file loop count nor a cross-file ci.yml site count is a saving this map
+ * can make.
+ *
+ * It still earns its keep on the reads it CAN see: `docs-same-os-claims.spec.ts` alone reads
+ * `ci.yml` many times over, and a package-wide module loop re-reads within its own file too.
+ * That is the whole claim -- do not restore a cross-file one.
  *
  * THE THROW ON A MISSING PATH IS PRESERVED, and it is load-bearing rather than incidental --
  * `docs-same-os-claims.spec.ts` documents relying on it. Caching SUCCESSFUL reads only is

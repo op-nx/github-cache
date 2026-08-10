@@ -32,9 +32,18 @@ import {
  *    TYPE error here rather than a silently unsampled OS.
  *
  * How the two split, which is why both are here: the LITERAL catches a marker change
- * and a slot reordering. The DERIVED check catches an index that is no longer taken
- * from the real tuple -- a hardcoded 0/1/2 mapping satisfies every literal in this file
- * and fails only there.
+ * and a slot reordering.
+ *
+ * WHAT THE DERIVED CHECK CATCHES, corrected because the claim that stood here -- "a
+ * hardcoded 0/1/2 mapping satisfies every literal in this file and fails only there" --
+ * is MEASURED FALSE. Replacing the implementation's lookup with a hardcoded
+ * `{windows:0, macos:1, linux:2}` map passes 22 of 22. It has to: that map returns
+ * identical output for every input, so it is not an OBSERVABLE mutation and no test can
+ * catch a hardcode alone. What the derived check UNIQUELY catches is the COMPOSITE --
+ * a hardcode PLUS a tuple reorder. Reorder CACHE_OS_VALUES to
+ * `[linux, macos, windows]` against that map and the pinned literals still pass while
+ * the derived check reddens, because it reads the index from the REAL tuple and the
+ * hardcoded map no longer agrees with it.
  */
 const RUN_ID = '30401077417';
 

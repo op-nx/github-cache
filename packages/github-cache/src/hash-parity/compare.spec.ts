@@ -806,10 +806,22 @@ describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)'
     // `typecheck` catches an UNIMPORTED identifier, so it was once argued that the call
     // clause below subsumes this one. It does not: a locally re-authored
     // `function collapseToOneLine(s: string) { return s; }` in assert-parity.ts resolves
-    // the name, satisfies the call clause, and passes typecheck, lint and fallow alike
-    // (fallow still credits compare.ts's export, which compare.spec.ts consumes). The
-    // single-choke-point invariant this `it` exists for is exactly the difference between
-    // IMPORTED and RE-AUTHORED, so it needs a clause that can see it.
+    // the name and satisfies the call clause. The single-choke-point invariant this `it`
+    // exists for is exactly the difference between IMPORTED and RE-AUTHORED, so it needs a
+    // clause that can see it.
+    //
+    // WHAT TYPECHECK DOES AND DOES NOT SEE, MEASURED, because an earlier version of this
+    // block claimed a re-authoring "passes typecheck, lint and fallow alike" and that is
+    // false in both of TODAY'S reachable states. A top-level re-declaration alongside the
+    // kept import is `TS2440: Import declaration conflicts with local declaration`, and a
+    // function-scoped shadowing of the ONE use site is `TS6133: 'collapseToOneLine' is
+    // declared but its value is never read` -- plus the no-DECLARE clause below, the single
+    // failing test of 46. So typecheck reaches both states and the no-DECLARE clause is
+    // SUBSUMED today. It is kept because the subsumption is contingent on there being one
+    // use site: add a SECOND, and shadowing one of them no longer leaves the import unread,
+    // TS6133 goes quiet, and this clause becomes the unique catcher. Six lines of insurance
+    // against a live future state, on a guard the A12 precedent already saw deleted once on
+    // exactly this reasoning and restored after measurement.
     //
     // Asserted as a PATTERN over the import block, not as the literal Prettier layout the
     // earlier version pinned -- a reflow of the member list is not a defect, and pinning
@@ -829,10 +841,13 @@ describe('the hash-parity-compare gate agrees with the bin it runs (D-19, D-23)'
     expect(
       assertParitySource,
       'assert-parity.ts must not DECLARE `collapseToOneLine` itself. A second authored ' +
-        'copy is how the single choke point stops being single, and it is invisible to ' +
-        'every other gate in the battery -- it typechecks, it lints, and it leaves ' +
-        "compare.ts's export credited. Delete the local declaration and import the " +
-        'symbol from `./compare.js`.',
+        'copy is how the single choke point stops being single. Typecheck DOES see both ' +
+        'of the shapes reachable today -- TS2440 on a top-level re-declaration beside the ' +
+        'import, TS6133 on a function-scoped shadowing of the only use site -- so this ' +
+        'clause is subsumed for now and kept anyway: it becomes the unique catcher the ' +
+        'moment a SECOND use site exists, because shadowing one of two no longer leaves ' +
+        'the import unread. Delete the local declaration and import the symbol from ' +
+        '`./compare.js`.',
     ).not.toMatch(/(?:function|const|let|var|class)\s+collapseToOneLine\b/);
     expect(
       assertParitySource,

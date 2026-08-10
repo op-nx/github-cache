@@ -10,9 +10,23 @@ permissions:
   contents: read
 
 # Supersede an in-flight run only when a NEWER commit lands on the SAME pull request.
-# This workflow fans out to twenty-two jobs, three of which are multi-minute Windows-arm
-# legs, so a rapid re-push otherwise pays for the whole matrix twice with the first copy
-# already obsolete.
+# This workflow fans out across many jobs, several of them multi-minute Windows-arm legs,
+# so a rapid re-push otherwise pays for the whole matrix twice with the first copy already
+# obsolete.
+#
+# BOTH NUMBERS ARE DELIBERATELY GONE, and no replacement figure is authored here -- that
+# is the point, not an omission. This sentence used to spell out a job total and a
+# Windows-leg count, and both were wrong for one mechanical reason: several jobs reach a
+# Windows runner through a two-way OS matrix, so their Windows halves are INVISIBLE to any
+# count of literal `runs-on: windows-11-arm` declarations. The Windows figure was therefore
+# an undercount, which made this a COST argument understating its own cost -- the one
+# direction a cost argument must not be wrong in.
+#
+# `windows-regression-detector.yml`'s header dropped its own job count in this same PR for
+# exactly this reason: an unguarded number in a comment rots, and a comment carrying a
+# false claim is a documented argument for undoing the thing it describes. Writing a fresh
+# number here would just restart that clock. The argument -- a rapid re-push pays for a
+# wide, partly slow matrix twice -- holds at any leg count.
 #
 # `cancel-in-progress` IS CONDITIONAL, and the condition is the load-bearing part. On a
 # `push` to main this workflow WRITES: `publish` uploads Release assets and `dogfood-seed`
@@ -1483,8 +1497,9 @@ jobs:
             # upstream failure that actually happened. Splitting the extraction is what
             # lets each cause carry its own message.
             # PAGED EXPLICITLY, because per_page=100 is the endpoint's MAXIMUM and not a
-            # guarantee of completeness. This workflow already runs ~25 job legs; crossing
-            # 100 (a wider matrix, more jobs) would silently TRUNCATE the response, drop the
+            # guarantee of completeness. This workflow's leg count is already a sizeable
+            # fraction of one page; crossing 100 (a wider matrix, more jobs) would silently
+            # TRUNCATE the response, drop the
             # Windows leg off the page, and make a CORRECT run fail with the absent-step
             # message below -- the same misattribution one layer up. MEASURED against a
             # fixture whose first page is 100 filler jobs: the single-page form returns the

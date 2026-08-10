@@ -57,11 +57,17 @@ const restoreCache = vi.mocked(cache.restoreCache);
 const HASH = 'selectbackendfixture' as Hash;
 
 // VER-04's spec accommodation, the same three lines as actions-cache-backend.spec.ts and
-// serve.spec.ts. This file is CONFIRMED to need it, not "probably" (09-RESEARCH.md's
-// per-spec table hedges): it mocks @actions/cache but NOT the backend module, so its four
-// write-trusted call sites (:58, :64, :156, :170 -- five runtime invocations, the last an
-// it.each of two) reach the REAL createActionsCacheBackend() and hit VER-04's guard, whose
-// first conjunct is false under `nx test`.
+// serve.spec.ts. This file needs it, and the reason is the non-obvious one: it mocks
+// @actions/cache but NOT the backend module, so its write-trusted cases reach the REAL
+// createActionsCacheBackend() and hit VER-04's guard, whose first conjunct is false under
+// `nx test`.
+//
+// THE COUNT AND ITS FOUR LINE REFERENCES ARE DELETED. The references pointed at a comment
+// fragment, two closing braces and another comment -- they had decayed, which is the failure
+// mode this package's own convention two modules over warns about ("reference by NAME
+// because a line range decays on the next edit above it"). No replacement number is
+// authored: the hook is needed because the real factory is reachable from here at all, which
+// is a property of the module mocking above and not of how many cases exercise it.
 //
 // NOT the contradiction it looks like. This is also the file whose "never mutates
 // process.env" test below asserts process-global hygiene, and this repo has zero other

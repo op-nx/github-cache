@@ -88,22 +88,28 @@ const warning = vi.mocked(core.warning);
 
 const HASH = 'abc123' as Hash;
 
-// VER-04's spec accommodation. This file constructs the REAL backend 16 times
-// (:40,52,63,74,85,106,116,127,138,147,156,165,255,289,319,343 at the pre-Phase-9
-// numbering), and VER-04's guard asserts the cwd IS the Nx workspace root -- which is
-// FALSE under `nx test`, whose merged config carries `options.cwd:
-// "packages/github-cache"`. The hook also mkdirs the archive directory, because the
-// pre-write below runs BEFORE the construction that would create it.
+// VER-04's spec accommodation. This file constructs the REAL backend at many sites, and
+// VER-04's guard asserts the cwd IS the Nx workspace root -- which is FALSE under `nx test`,
+// whose merged config carries `options.cwd: "packages/github-cache"`. The hook also mkdirs
+// the archive directory, because the pre-write below runs BEFORE the construction that would
+// create it.
 //
-// CENSUS CORRECTION, comment-locked rather than silently applied (the house pattern for a
-// miscount, cf. lint-rules.spec.ts's ROADMAP SC3 lock): 09-RESEARCH.md's per-spec table
-// says this file constructs the real backend 15 times and calls select-backend.spec.ts a
-// "probably". Both are wrong. The real figures are 16 here plus 1 in serve.spec.ts = 17
-// DIRECT constructions, and select-backend.spec.ts is CONFIRMED -- it mocks
-// @actions/cache but NOT this module, so its 4 call sites (5 runtime invocations, one
-// being an it.each of two) reach the real factory. 21 construction sites across THREE
-// files. publish-mirror.spec.ts module-mocks the backend factory itself, so the guard
-// never runs there and it must NOT get this hook.
+// THE COUNTS AND THE LINE LIST ARE DELETED, and no replacement figure is authored. A block
+// titled "CENSUS CORRECTION", existing to fix a prior miscount, stated a hand-counted total
+// that was itself wrong -- three reviewers independently measured three DIFFERENT totals for
+// this file. The line list decayed on the first edit above it, as this package's own
+// convention two modules over already warns ("reference by NAME because a line range decays
+// on the next edit above it").
+//
+// The number served no reader either way. What the hook needs is stated by WHICH FILES need
+// it and why, which does not rot:
+//
+//   - THIS file and `serve.spec.ts` construct the real backend directly.
+//   - `select-backend.spec.ts` needs it too, and that is the non-obvious one: it mocks
+//     `@actions/cache` but NOT this module, so its write-trusted cases reach the real
+//     factory and hit VER-04's guard.
+//   - `publish-mirror.spec.ts` module-mocks the backend factory itself, so the guard never
+//     runs there and it must NOT get this hook.
 let restoreCwd: () => void;
 
 beforeAll(() => {

@@ -975,6 +975,60 @@ describe('publishMirror fault discrimination (ROBUST-01, TEST-03)', () => {
     expect(core.setFailed).not.toHaveBeenCalled();
   });
 
+  // THE HOISTED SENTINEL'S TWO PROPERTIES, neither of which held while the block sat BELOW
+  // the D-12 size check and below the restore. The case above cannot see either: its three
+  // entries all restore at the default size, so an oversized post-burn entry and a
+  // post-burn restore are both unexercised.
+  it('skips an OVERSIZED post-burn entry with failed 0, and issues NO further restore', async () => {
+    const fake = client({
+      listCacheEntries: vi.fn(async () => [
+        { key: 'nx-cache-aa11' },
+        { key: 'nx-cache-bb22' },
+        { key: 'nx-cache-cc33' },
+      ]),
+      getReleaseByTag: vi.fn(async () => {
+        throw octokitFault(404);
+      }),
+      createRelease: vi.fn(async () => {
+        throw octokitFault(422, {
+          message: 'Validation Failed',
+          errors: [
+            PRE_RECEIVE_DECOY,
+            BURNED_TAG_NAME_ENTRY,
+            NO_VALID_TAG_ENTRY,
+          ],
+        });
+      }),
+    });
+    // The FIRST entry restores at a normal size -- it is the one that resolves the shard and
+    // so the one that discovers the burn. Every entry AFTER it is oversized, which is the
+    // shape that used to reach D-12's `core.error` + `failed++`.
+    getMock.mockResolvedValueOnce(hit());
+    getMock.mockResolvedValue(hit(RELEASE_ASSET_MAX_BYTES + 1));
+
+    const result = await publishMirror(fake, { now: NOW });
+
+    // PROPERTY 1: `failed` stays 0, which is what the sentinel's comment claims and what was
+    // false before the hoist. An oversized entry post-burn is skipped, not counted as a
+    // fault -- nothing is uploaded either way, so ROBUST-02's never-truncate guarantee is
+    // untouched.
+    expect(result.failed).toBe(0);
+    expect(result.skipped).toBe(result.scanned);
+    expect(core.error).not.toHaveBeenCalled();
+    expect(core.setFailed).not.toHaveBeenCalled();
+
+    // PROPERTY 2: the restore is issued for the shard-resolving entry ONLY. Every remaining
+    // hash used to pay a full Actions-cache round-trip whose result was then discarded, and
+    // that restore is also what incremented `readMisses` for post-burn entries -- which it
+    // no longer can, because it is no longer reached.
+    expect(getMock).toHaveBeenCalledOnce();
+    expect(result.readMisses).toBe(0);
+    // Still the same single loud signal for the whole leg.
+    expect(fake.createRelease).toHaveBeenCalledOnce();
+    expect(core.warning).toHaveBeenCalledOnce();
+    expect(fake.uploadReleaseAsset).not.toHaveBeenCalled();
+  });
+
   it('still FAILS the run on a 422 carrying ONLY the pre_receive ruleset entry -- the decoy is not a burned name', async () => {
     // A2, and it is the load-bearing half of the pair. The decoy's wording ("Cannot create
     // ref due to creations being restricted") reads exactly like a tag ruleset, and on the

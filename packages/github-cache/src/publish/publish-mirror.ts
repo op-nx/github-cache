@@ -830,6 +830,43 @@ export async function publishMirror(
   for (const hash of hashes) {
     const name = releaseAssetName(hash);
 
+    // The shard's tag name is permanently burned (see ensureShardRelease): every remaining
+    // entry is unmirrorable for the same reason, so skip it with NO further API call. The
+    // counts stay honest -- `skipped` rises, `mirrored` stays 0, `failed` stays 0 -- so the
+    // aggregate setFailed below does not fire and the leg is GREEN by design, with the
+    // single warning as the only thing distinguishing it from a healthy run and
+    // publish-verify as the downstream red gate.
+    //
+    // FIRST BRANCH IN THE LOOP, and the position is what makes that claim true. It used to
+    // sit BELOW the D-12 size check and below the restore, so the two properties it states
+    // were both false. This is an ORDER-ONLY move: nothing above it can be reached with the
+    // sentinel set, because a burned tag means `ensureShardRelease` returned undefined, so
+    // the shard NEVER resolves and the D3 membership branch cannot fire while the sentinel
+    // is set. It is placed immediately after the asset name is derived because nothing here
+    // reads the name -- only the ordering matters.
+    //
+    // TWO AGGREGATE CONSEQUENCES, named because this file's house rule is that a reorder
+    // names the counts it moves (the sibling reorder above does exactly that).
+    //
+    // (1) The D-12 oversize branch's `core.error` and `failed++` no longer fire for a
+    // post-burn oversized entry. That is the POINT: it is what restores the "`failed` stays
+    // 0" property this block claims. Nothing is uploaded either way, so no artifact is
+    // truncated or dropped -- the ROBUST-02 guarantee is untouched.
+    //
+    // (2) `readMisses` STOPS INCREMENTING for every post-burn entry, because the restore
+    // that classified them is no longer reached. This is the consequence a reader will miss
+    // and the one that shifts a reported number, so: it CANNOT affect the total-case gate
+    // below. That gate needs `readMisses === hashes.length`, and a burned tag means the
+    // shard never resolved, so no entry was ever mirrored on that leg either -- the leg has
+    // nothing to report but the single warning, which is already its signal. The saved work
+    // is one Actions-cache round-trip per remaining hash, which is the other reason the
+    // block belongs here rather than three branches down.
+    if (burnedShardTag) {
+      skipped++;
+
+      continue;
+    }
+
     // D3: MEMBERSHIP BEFORE THE RESTORE. The enabling fact is that the asset name is a
     // function of the hash ALONE -- releaseAssetName needs no bytes -- so an entry already
     // in the shard can be skipped without an Actions-cache round-trip. Measured on run
@@ -914,18 +951,6 @@ export async function publishMirror(
         `github-cache: asset ${name} is ${bytes.byteLength} bytes, over the ~2 GiB Releases ceiling; refusing to upload (never truncate).`,
       );
       failed++;
-
-      continue;
-    }
-
-    // The shard's tag name is permanently burned (see ensureShardRelease): every remaining
-    // entry is unmirrorable for the same reason, so skip it with NO further API call. The
-    // counts stay honest -- `skipped` rises, `mirrored` stays 0, `failed` stays 0 -- so the
-    // aggregate setFailed below does not fire and the leg is GREEN by design, with the
-    // single warning as the only thing distinguishing it from a healthy run and
-    // publish-verify as the downstream red gate.
-    if (burnedShardTag) {
-      skipped++;
 
       continue;
     }

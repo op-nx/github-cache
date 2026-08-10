@@ -502,15 +502,16 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
   });
 
   // THE MULTI-ENTRY BODY, which neither of the two cases around this one constructs -- both
-  // are single-entry, which is exactly how the order-dependence survived. The discriminator
-  // reads the WHOLE errors array (hasFaultCode), so the verdict cannot turn on which entry
-  // GitHub happened to put first.
+  // are single-entry, which is exactly how the masking survived. This is the measured
+  // run-30767511870 payload shape: an `already_exists` beside a permanent immutability
+  // rejection.
   //
-  // This is the SILENT-GREEN direction and the more dangerous of the two: with a first-code
-  // read, the `already_exists` at index 0 wins, every permanently-rejected upload counts as
-  // `skipped`, `failed` stays 0, the aggregate setFailed never fires, and the leg exits
-  // GREEN having mirrored nothing -- the shape of run 30767511870, one entry over.
-  it('does not let an already_exists entry mask a fatal sibling in the SAME body', async () => {
+  // The discriminator is a CONJUNCTION over the whole errors array (hasOnlyFaultCode), so a
+  // recognised duplicate signature no longer absolves an unrecognised sibling. Under the ANY
+  // scan this body classified as a benign skip: every permanently-rejected upload counted as
+  // `skipped`, `failed` stayed 0, the aggregate setFailed never fired, and the leg exited
+  // GREEN having mirrored nothing. It is now FATAL, which is the point.
+  it('counts a 422 whose already_exists sits BESIDE an unrecognised sibling as a fault', async () => {
     const fake = client({
       uploadReleaseAsset: vi.fn(async () => {
         throw octokitFault(422, {
@@ -529,11 +530,22 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
 
     const result = await publishMirror(fake);
 
-    // Still a benign skip: GitHub DID say already_exists, and D-05's first-write-wins no-op
-    // is what that means. The property under test is that the answer is the same whichever
-    // order the entries arrive in -- asserted by its twin below.
-    expect(result.skipped).toBe(1);
-    expect(result.failed).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.skipped).toBe(0);
+    // The warning names the status, GitHub's own code and GitHub's own message, so the next
+    // occurrence diagnoses itself from the job log.
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('422'));
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('already_exists'),
+    );
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Release assets are immutable under this ruleset',
+      ),
+    );
+    // The aggregate gate fires: the leg goes RED rather than reporting a green mirror that
+    // wrote nothing.
+    expect(core.setFailed).toHaveBeenCalled();
   });
 
   it('reaches the same verdict when already_exists is NOT the first entry', async () => {
@@ -551,12 +563,18 @@ describe('publishMirror first-write-wins (TRUST-07, D-05)', () => {
 
     const result = await publishMirror(fake);
 
-    // The half that fails CLOSED under a first-code read: `custom` would win, the genuine
-    // duplicate-upload race would be counted as a fault, and the publish job would redden on
-    // a race D-05 defines as benign. Order-independence is the whole claim.
-    expect(result.skipped).toBe(1);
-    expect(result.failed).toBe(0);
-    expect(core.warning).not.toHaveBeenCalled();
+    // ORDER-INDEPENDENCE IS STILL THE WHOLE CLAIM, and it still holds -- what changed is the
+    // verdict both orders reach. The conjunction cannot turn on which entry GitHub put first,
+    // because it asks about every entry.
+    //
+    // The fail-closed outcome is DELIBERATE and is the accepted trade: a genuine
+    // duplicate-upload race arriving alongside an unrecognised sibling now reddens the
+    // publish leg. That is strictly preferable to the alternative this body demonstrates,
+    // where a permanent policy rejection exits GREEN having mirrored nothing. Do NOT narrow
+    // the predicate to make this pair benign again -- that silently restores the masking.
+    expect(result.failed).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(core.setFailed).toHaveBeenCalled();
   });
 
   it('counts a 422 that is NOT already_exists as a real fault, never a benign skip', async () => {

@@ -164,13 +164,20 @@ export type GitHubErrorCode =
  * directions. It is also asymmetric with the same function's `message`, which deliberately
  * scans the WHOLE array; the code lookup reads like it does the same and does not.
  *
- * Both directions are real on a multi-entry body, and the benign one is worse:
- * `[{code:'already_exists'}, {code:'custom', message:'Release assets are immutable under
- * this ruleset'}]` resolves to `already_exists` from entry 0, so a caller treats a permanent
- * policy rejection as a duplicate no-op, `failed` stays 0, and the leg exits GREEN having
- * mirrored nothing -- verbatim the shape of run 30767511870, which is the run that caused
- * status-only discrimination to be removed in the first place. The other direction merely
- * fails closed: an unrelated earlier code makes a genuine duplicate-upload race fatal.
+ * WHAT THE WHOLE-ARRAY SCAN ACTUALLY BUYS, stated precisely because an earlier revision of
+ * this block credited it with closing a hole it only WIDENS. Scanning removes the
+ * ORDER-DEPENDENCE of a first-code read: the verdict no longer turns on which entry GitHub
+ * happened to put first. It does not narrow the benign set -- it enlarges it, because a body
+ * is now benign whenever the code appears ANYWHERE, including behind a permanent policy
+ * rejection. On `[{code:'already_exists'}, {code:'custom', message:'Release assets are
+ * immutable under this ruleset'}]` a first-code read and an ANY scan both answer benign, and
+ * both are wrong: that is the shape of run 30767511870. Narrowing it back is
+ * `hasOnlyFaultCode` below, which is what the asset-upload path uses.
+ *
+ * So this predicate is correct only where a benign sibling cannot co-occur with a fatal one,
+ * or where fatal siblings are excluded by some OTHER condition. `ensureShardRelease`'s create
+ * race is that case: an `already_exists` there means the release exists, which the branch
+ * then re-reads and proves, so a decoy sibling cannot make the re-read succeed.
  *
  * A BOOLEAN, not a code, and deliberately not a general "codes()" accessor: every caller
  * asks a yes/no question about ONE documented code, and returning the set would just move
@@ -180,6 +187,48 @@ export type GitHubErrorCode =
  */
 export function hasFaultCode(error: unknown, code: GitHubErrorCode): boolean {
   return faultErrors(error).some((entry) => entryField(entry, 'code') === code);
+}
+
+/**
+ * Is EVERY `errors[]` entry exactly this code, on a NON-EMPTY array?
+ *
+ * The CONJUNCTION `hasFaultCode` cannot express, and the one a fail-closed benign branch
+ * needs. `hasFaultCode` asks whether GitHub said this ANYWHERE, so one recognised entry
+ * absolves every unrecognised sibling in the same body; this asks whether the recognised
+ * signature is ALL GitHub said. A single unrecognised sibling therefore makes the whole body
+ * fatal, which is the rule for the asset-upload path: the measured run-30767511870 payload
+ * carried a benign `already_exists` beside a `code: custom` immutability rejection and was
+ * classified a duplicate no-op, so 65 permanently-rejected uploads exited GREEN.
+ *
+ * NON-EMPTY IS LOAD-BEARING, not defensive tidiness. `[].every(...)` is vacuously true, so
+ * without the length test an absent body, a null body, a non-array `errors` and an empty
+ * `errors` would all collapse to the EMPTY array from `faultErrors` and answer benign --
+ * reintroducing the guess this module exists to forbid, at the one call site whose whole
+ * purpose is to stop guessing. Per the header's standing rule, undefined is not benign, so
+ * every unreadable shape must return false and fall through to the caller's fault branch.
+ *
+ * READS NO MESSAGE, deliberately. The field-scoped, textually-anchored accessor
+ * (`faultMessageForField`) governs the paths whose benign signal IS a message -- there the
+ * decoy bites, because `faultReason().message` yields the first message-carrying entry. Here
+ * the signal is a CODE, so a code-set conjunction is structurally immune to that decoy rather
+ * than merely careful about it. A message read on this path would be the defect, not the
+ * safeguard. If a future benign signature on such a path needs a message, the field-scoped
+ * accessor becomes mandatory again for it.
+ *
+ * An entry carrying NO readable code fails the comparison and so makes the body fatal --
+ * a `{resource, field, message}` entry is a real shape and it is not a recognised benign
+ * signature.
+ */
+export function hasOnlyFaultCode(
+  error: unknown,
+  code: GitHubErrorCode,
+): boolean {
+  const errors = faultErrors(error);
+
+  return (
+    errors.length > 0 &&
+    errors.every((entry) => entryField(entry, 'code') === code)
+  );
 }
 
 /**

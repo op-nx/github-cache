@@ -11,6 +11,7 @@ import {
   faultMessageForField,
   faultReason,
   hasFaultCode,
+  hasOnlyFaultCode,
 } from '../lib/octokit-fault-reason.js';
 import { statusOf } from '../lib/octokit-status.js';
 import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
@@ -986,19 +987,44 @@ export async function publishMirror(
       // publish-verify, naming the wrong subsystem. An UNREADABLE body is not benign
       // either -- it falls through to the fault branch, because guessing benign is the
       // defect (see `lib/octokit-fault-reason.ts`).
-      // SCANNED ACROSS THE WHOLE `errors[]` (see hasFaultCode), never `reason.code`. The
-      // benign direction is the dangerous one here: with an order-dependent read, an
-      // `already_exists` entry sitting AHEAD of a `custom` immutability rejection makes
-      // every rejected upload count as `skipped`, `failed` stays 0, the aggregate setFailed
-      // below never fires, and the leg exits GREEN having mirrored nothing -- which is run
-      // 30767511870, the run this whole branch was rewritten for. `reason` is still read
-      // just below, for the log line, where FIRST-code is the right answer.
+      // A CONJUNCTION OVER THE WHOLE `errors[]` (hasOnlyFaultCode), never `reason.code` and
+      // no longer the ANY scan. The ANY scan removed the ORDER-DEPENDENCE of a first-code
+      // read and WIDENED the benign set doing it: a body became benign whenever
+      // `already_exists` appeared anywhere, including behind a permanent policy rejection.
+      // That is run 30767511870 -- an `already_exists` beside a `custom` immutability
+      // rejection classified all 65 rejected uploads as `skipped`, `failed` stayed 0, the
+      // aggregate setFailed below never fired, and both legs exited GREEN having mirrored
+      // nothing. The conjunction is what narrows it back: benign only when the recognised
+      // duplicate signature is ALL GitHub said. Order-independence is preserved -- both
+      // orders of that body reach the same verdict -- and the verdict is what changed.
+      //
+      // NO MESSAGE IS READ HERE, and that is the rule rather than an omission. The
+      // field-scoped, textually-anchored accessor governs the paths whose benign signal IS a
+      // message -- `ensureShardRelease`'s burned tag, where `faultReason().message` returns
+      // the `pre_receive` decoy. On THIS path the signal is a CODE, so a code-set conjunction
+      // is structurally immune to that decoy rather than merely careful about it: it satisfies
+      // the fail-closed rule structurally, not literally. There is nothing to scope a message
+      // read to here, so adding one would be the defect. If a future benign signature on this
+      // path needs a message, the field-scoped accessor becomes mandatory again for it.
+      //
+      // THE ACCEPTED TRADE, so it is not rediscovered as a bug: a genuine duplicate-upload
+      // race that arrives ALONGSIDE an unrecognised sibling in the SAME body now fails
+      // closed and reddens the leg. That is deliberate and bounded -- the recorded exposure
+      // is a repository setting whose re-enablement SHOULD be loud -- and it is strictly
+      // preferable to a permanent policy rejection exiting GREEN having mirrored nothing.
+      // An UNREADABLE body is not benign either: `hasOnlyFaultCode` requires a NON-EMPTY
+      // array, so an absent, non-array or empty `errors` falls through to the fault branch.
+      // `reason` is still read just below, for the log line, where FIRST-code is the right
+      // answer.
       // COUNTED INTO `skipped` ONLY, deliberately never into `alreadyPresent` (D4). The
       // name was absent when this leg listed the shard and another leg wrote it in
       // between: that is a WRITE-race outcome, whereas `alreadyPresent` answers "how much
       // of this enumeration was already done before the leg started". Folding this in
       // would make that number stop answering the one question it exists for.
-      if (statusOf(error) === 422 && hasFaultCode(error, 'already_exists')) {
+      if (
+        statusOf(error) === 422 &&
+        hasOnlyFaultCode(error, 'already_exists')
+      ) {
         skipped++;
 
         continue;

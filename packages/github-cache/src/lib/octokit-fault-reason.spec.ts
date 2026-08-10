@@ -3,6 +3,7 @@ import {
   faultMessageForField,
   faultReason,
   hasFaultCode,
+  hasOnlyFaultCode,
 } from './octokit-fault-reason.js';
 
 /**
@@ -151,6 +152,108 @@ describe('hasFaultCode scans the WHOLE errors array (D-05, ROBUST-01)', () => {
     'returns false for %s -- an unreadable body earns no benign branch',
     (_s, error) => {
       expect(hasFaultCode(error, 'already_exists')).toBe(false);
+    },
+  );
+});
+
+describe('hasOnlyFaultCode requires EVERY entry to be the code (D-05, ROBUST-04)', () => {
+  // THE PAIRING THAT NAMES THE DIFFERENCE. Both predicates see the same body; the ANY scan
+  // absolves the immutability rejection and the conjunction does not. This is the whole
+  // reason the second predicate exists, so the two verdicts are asserted side by side rather
+  // than in separate cases.
+  it('rejects a body where a benign entry sits BESIDE an unrecognised sibling', () => {
+    const error = bodyOf({
+      message: 'Validation Failed',
+      errors: [
+        { resource: 'ReleaseAsset', code: 'already_exists' },
+        {
+          resource: 'ReleaseAsset',
+          code: 'custom',
+          message: 'Release assets are immutable under this ruleset',
+        },
+      ],
+    });
+
+    expect(hasOnlyFaultCode(error, 'already_exists')).toBe(false);
+    // The contrast: the ANY scan calls the same body benign. That is the widening the
+    // conjunction narrows back, and it is the measured run-30767511870 shape.
+    expect(hasFaultCode(error, 'already_exists')).toBe(true);
+  });
+
+  // ORDER-INDEPENDENCE SURVIVES: what changed is the verdict both orders reach, not that one
+  // order reaches a different one. Same two entries, reversed.
+  it('reaches the same rejection with the entries in the OPPOSITE order', () => {
+    expect(
+      hasOnlyFaultCode(
+        bodyOf({
+          errors: [
+            { resource: 'ReleaseAsset', code: 'custom', message: 'decoy' },
+            { resource: 'ReleaseAsset', code: 'already_exists' },
+          ],
+        }),
+        'already_exists',
+      ),
+    ).toBe(false);
+  });
+
+  it('accepts a lone entry carrying the code', () => {
+    expect(
+      hasOnlyFaultCode(
+        bodyOf({ errors: [{ code: 'already_exists' }] }),
+        'already_exists',
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts SEVERAL entries when every one of them carries the code', () => {
+    expect(
+      hasOnlyFaultCode(
+        bodyOf({
+          errors: [
+            { resource: 'ReleaseAsset', code: 'already_exists' },
+            { resource: 'ReleaseAsset', code: 'already_exists' },
+          ],
+        }),
+        'already_exists',
+      ),
+    ).toBe(true);
+  });
+
+  // An entry with no readable code is NOT a recognised benign signature. `{resource, field,
+  // message}` is a real GitHub shape, so this is a live case rather than a defensive one.
+  it('rejects a body whose sibling entry carries NO code at all', () => {
+    expect(
+      hasOnlyFaultCode(
+        bodyOf({
+          errors: [
+            { code: 'already_exists' },
+            { resource: 'ReleaseAsset', field: 'name', message: 'nope' },
+          ],
+        }),
+        'already_exists',
+      ),
+    ).toBe(false);
+  });
+
+  // THE EMPTY-ARRAY TRAP, and the reason the length test is load-bearing rather than tidy:
+  // `[].every(...)` is vacuously TRUE, so without it every unreadable shape below would
+  // answer benign -- the exact guess this module forbids, at the call site that exists to
+  // stop guessing.
+  it.each([
+    ['an absent body', undefined],
+    ['a null body', null],
+    ['a body with no data', { response: {} }],
+    ['errors that are not an array', bodyOf({ errors: 'nope' })],
+    ['an EMPTY errors array', bodyOf({ errors: [] })],
+    ['a primitive entry', bodyOf({ errors: [42] })],
+    ['a null entry', bodyOf({ errors: [null] })],
+    ['a non-string code', bodyOf({ errors: [{ code: 7 }] })],
+    ['an EMPTY code', bodyOf({ errors: [{ code: '' }] })],
+    ['a top-level message only', bodyOf({ message: 'already_exists' })],
+  ])(
+    'returns false for %s -- an unreadable body earns no benign branch',
+    (_shape, error) => {
+      expect(hasOnlyFaultCode(error, 'already_exists')).toBe(false);
     },
   );
 });

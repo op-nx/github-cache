@@ -1,10 +1,18 @@
 ---
 phase: quick-260810-kuo
 verified: 2026-08-10T16:10:00Z
-status: human_needed
-score: 6/7 must-haves verified
-behavior_unverified: 1
+status: passed
+score: 7/7 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
+status_basis: >-
+  `passed` follows the measurement, it is not asserted alongside it. Truth 6 was the only thing
+  holding `human_needed`, and quick 260810-v1g measured it: 22 of 22 commits in 4518787..1b06816
+  green on all EIGHT gates, uncached, on the main checkout, every verdict attributable to a captured
+  log. Evidence: 260810-v1g-SWEEP.md. Zero red commits and zero bundle drift, so there is no finding
+  to keep the status open. The second human_verification item -- the SUMMARY reconciliation -- was
+  closed by the same task. Had the sweep found a red commit or a failing gate, this would have stayed
+  `human_needed` with the finding named; see the third dated section at the end of this file.
 re_verification:
   previous_status: human_needed
   previous_score: 6/7
@@ -17,8 +25,17 @@ re_verification:
     - "The orphaned docstring at cache-key.spec.ts:88 flagged in the first pass"
   gaps_remaining: []
   regressions: []
-behavior_unverified_items:
-  - truth: "Every commit leaves all six gates green, so the sequence is bisect-safe."
+behavior_unverified_items: []
+# The entry below is RETAINED VERBATIM as the superseded record of why truth 6 was open. It is moved
+# under a superseded key rather than deleted, so a machine reading `behavior_unverified_items` sees
+# the corrected empty list while a reader keeps the original reasoning. Closed 2026-08-10 by quick
+# 260810-v1g: 22 of 22 commits, all eight gates, green. See 260810-v1g-SWEEP.md.
+behavior_unverified_items_superseded:
+  - superseded_by: >-
+      quick 260810-v1g, 2026-08-10. The sweep ran all 22 commits of 4518787..1b06816 on all eight
+      gates uncached on the main checkout: 22 of 22 green, 88 recorded exit codes all 0, no bundle
+      drift. 260810-v1g-SWEEP.md carries the matrix and the absolute log directory.
+    truth: "Every commit leaves all six gates green, so the sequence is bisect-safe."
     test: "Run the gate battery at each of the 22 commits, not only at HEAD."
     expected: "Every commit green on the gates that apply to the files it touches."
     why_human: >-
@@ -28,8 +45,18 @@ behavior_unverified_items:
       1b06816). The other twelve commits, and the remaining five gates at per-commit
       granularity, were not exercised. SUMMARY.md now states this limit accurately rather
       than claiming bisect safety outright.
-human_verification:
-  - test: >-
+human_verification: []
+# Both entries below are RETAINED VERBATIM as the superseded record. Both were closed on 2026-08-10
+# by quick 260810-v1g -- the first by running the measurement, the second by making the edits.
+human_verification_superseded:
+  - superseded_by: >-
+      CLOSED by measurement, quick 260810-v1g. The cost framing in `why_human` below was written
+      without ever timing the battery and is now measured FALSE as a reason to defer: the entire
+      22-commit sweep took 369 seconds, 6 minutes 9 seconds of wall clock end to end, about 17 seconds
+      per commit including the checkout. The maintainer judgement about cost was never needed. All 22
+      commits ran on all EIGHT gates, a superset of the six the claim names, so the spot check did not
+      have to discharge anything. 22 of 22 green.
+    test: >-
       Run the gate battery at the twelve commits not spot-checked, or accept the ten-point
       spot check as sufficient evidence of bisect safety.
     expected: "Every commit in 4518787..HEAD green on all applicable gates."
@@ -38,7 +65,16 @@ human_verification:
       not discharge a six-gate claim. Whether the ten-point spot check -- which covers every
       commit that altered an assertion in the review-fix pass -- discharges it is a
       maintainer judgement about cost.
-  - test: >-
+  - superseded_by: >-
+      CLOSED by quick 260810-v1g. Measured first, edited second: all three named stale references
+      were ALREADY fixed downstream (`read-back.spec.ts:363` reads `:360` in both SUMMARY.md and
+      260810-kuo-deferred-items.md; the frontmatter already reads commits 22 and test_count 1184; the
+      bisect prose already reads "10 of the 22 commits, on `test` only"). What was still stale, and is
+      now fixed, is SUMMARY.md's two commit-counting Self-Check bullets (17 -> 22, both re-measured),
+      its untracked-document count (three -> five), and its "was not run" claim on per-commit gating,
+      which now points at the sweep. SUMMARY.md records which references were already closed so the
+      next reader does not re-open them.
+    test: >-
       Reconcile SUMMARY.md's frontmatter metrics with HEAD, and fix three small stale
       references (listed in the Re-Verification section below).
     expected: >-
@@ -80,6 +116,13 @@ cleanup review of PR #16, with no guard weakened and no forbidden edit.
 | 7 | `nx.json` is byte-unchanged | VERIFIED | Blob `580d962a165f952fa8d49c24c62c52547737d807` at both `4518787` and HEAD; `git diff --exit-code` over the range silent. |
 
 **Score:** 6/7 truths verified (1 present, behavior-unverified)
+
+> **SUPERSEDED 2026-08-10 by quick 260810-v1g, on truth 6 only.** Truth 6's row above records what was
+> measured at the time and is left standing as that record. The measurement it lacked now exists: all
+> 22 commits of `4518787..1b06816` were gated on all EIGHT gates, uncached, on the main checkout, and
+> the result is **22 of 22 green**. Truth 6 is VERIFIED, so the score is 7/7 and
+> `behavior_unverified` is 0. Evidence and the full matrix:
+> `260810-v1g-SWEEP.md`. The third dated section at the end of this file carries the detail.
 
 > **CORRECTION, from the re-verification below.** Truth 2 as recorded here was WRONG at `b6580ad`.
 > A12 deleted an assertion on a false subsumption argument; nothing in the eight-gate battery
@@ -421,3 +464,93 @@ Both are cheap for a human to close, and neither is a code defect.
 
 _Re-verified: 2026-08-10_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+# Third Pass -- 2026-08-10, the 22-commit eight-gate sweep (quick 260810-v1g)
+
+**What changed:** nothing in the code. The one measurement this report twice declined to assert was
+run. **Status after this pass: `passed`. Score: 7/7. `behavior_unverified`: 0.**
+
+## What was measured
+
+All 22 commits of `4518787..1b06816`, oldest first, each gated on all eight gates, uncached, on the
+main checkout (never a worktree). Result: **22 of 22 green.** Every one of the 88 recorded process exit
+codes is 0.
+
+| Gate | Result across all 22 commits |
+|------|------------------------------|
+| `nx run-many -t build typecheck test integration lint --skip-nx-cache` | exit 0, 22 of 22 |
+| the five-target `Successfully ran targets` line | present exactly once in each of the 22 `nx` logs |
+| `npm run format:check` | exit 0, 22 of 22 |
+| `npm run check:action` | exit 0, 22 of 22 -- zero bundle drift at any commit |
+| `npm run fallow:ci` | exit 0, 22 of 22 |
+
+Evidence:
+`.planning/quick/260810-v1g-close-the-two-substantive-v0-0-2-audit-i/260810-v1g-SWEEP.md`, which
+carries the 22-row matrix, the eight gate commands verbatim, and the absolute log directory. 88
+per-gate logs plus `RESULTS.tsv` live outside the repo, because `.planning/` is tracked and its content
+changes under every checkout.
+
+## Why this closes truth 6 rather than merely improving on it
+
+Truth 6 reads "every commit leaves all six gates green". The artifacts never enumerate which six, so
+the sweep ran the full **eight**-gate battery instead of guessing: eight is a superset of any reading of
+six, so the measurement cannot under-deliver against the claim. The claim is therefore discharged, not
+approximated.
+
+Three details that make the result mean something rather than merely look green:
+
+- `--skip-nx-cache` on every invocation. `.nx/cache` is gitignored and survives every checkout, so a
+  warm cache replays a prior commit's terminal output and a per-commit gate would prove nothing.
+- The oldest-first order. A truncated sweep would then be a contiguous prefix, which is what a
+  bisect-safety claim needs to be; a cherry-picked subset proves nothing about bisect safety. This
+  sweep was not truncated.
+- `check:action` ran in the main tree, never in a worktree. A junctioned `node_modules` makes esbuild
+  rewrite hundreds of module paths with no source edit, so a worktree yields a false drift verdict. And
+  `start-cache-server/index.js` is untouched by every commit in the range, so drift at a mid-range
+  commit would have been a genuine finding. There was none.
+
+## The cost framing that kept this open was false
+
+This report's own `why_human` read "Full per-commit verification is 22 checkouts x 6 gates, and even 22
+`test` runs would not discharge a six-gate claim", and routed the question to a maintainer judgement
+about cost. **That framing predates any measurement of the battery.** Measured from the sweep's own
+file timestamps: the whole 22-commit sweep took **369 seconds, 6 minutes 9 seconds** of wall clock end
+to end, about 17 seconds per commit including the checkout, with the `nx` phase printing `Run duration`
+between 3.6s and 5.9s. No install was needed at any point -- `package.json` and
+`package-lock.json` are byte-unchanged across the range, so the main tree's existing install served all
+22 checkouts. There was never a cost reason to leave this open, and the maintainer judgement the item
+asked for was never actually required.
+
+## One INSTRUMENT finding, in the probe and not in any commit
+
+The sweep's in-loop assertion on the `Successfully ran targets` line measured 0 on all 22 commits while
+`nx` exited 0 on all 22 -- which under the sweep's own rule is the missing-target failure mode and had
+to be treated as red rather than waved past. It resolved to a defect in the probe: Nx emits each target
+name wrapped in SGR bold escapes, so the plain literal needle cannot match. Recounted over the same
+captured logs with the escapes stripped, the line is present exactly once in each of the 22 logs, with
+three controls (unstripped literal matches 0 logs; the stripped needle with one target dropped matches
+0; the needle against a log that has no such line matches 0). SWEEP.md carries the verbatim
+escape-visible line and states plainly that an INSTRUMENT classification is falsifiable by a reader
+rather than mechanically gated.
+
+## The second human item is closed too
+
+SUMMARY.md was reconciled in the same task. All three stale references this report named had already
+been fixed downstream and were re-measured rather than re-edited; what was actually still stale -- two
+Self-Check bullets counting 17, an untracked-document count of three, and the "was not run" claim --
+is fixed, and SUMMARY.md now records which references were already closed so the next reader does not
+re-open them.
+
+## Limits, stated
+
+The sweep is a local Windows-arm64 measurement on the maintainer's workstation. Nothing was pushed and
+no CI run was created by it, so this is not evidence about runner behaviour. The log directory is a
+session scratchpad path outside the repo, durable for that session rather than forever; SWEEP.md's
+matrix and `RESULTS.tsv`'s 22 rows are the record that survives.
+
+---
+
+_Third pass: 2026-08-10_
+_Measured by: quick 260810-v1g_

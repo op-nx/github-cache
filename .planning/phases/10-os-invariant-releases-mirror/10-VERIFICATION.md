@@ -2,17 +2,50 @@
 phase: 10-os-invariant-releases-mirror
 verified: 2026-07-29T00:00:00Z
 status: passed
-score: 13/13 code-level must-haves verified; all 3 Live-CI-only items SAMPLED 2026-08-08 (2 closed, 1 closed-with-one-clause-falsified)
+score: >-
+  13/13 code-level must-haves verified; all 3 Live-CI-only items CLOSED. Two closed 2026-08-08 by
+  quick 260808-wxg (run 31281406708, temporary main window). The third -- the one whose readMisses
+  clause was FALSIFIED at that sampling -- closed 2026-08-09 by run 31305961054 at head e3bf98b,
+  which measured readMisses 43 of scanned 112 on the ubuntu leg (job 93226687998) and 43 of 113 on
+  the windows leg (job 93226687984), with both publish-verify legs green. Superseded 2026-08-10 by
+  quick 260810-v1g: the prior wording of this key read "1 closed-with-one-clause-falsified", which
+  described the state before that run and contradicted the row directly below it.
 behavior_unverified: 0
 overrides_applied: 0
 live_ci_sampled_by: "quick 260808-wxg, run 31281406708 (head b276bdc, event push, conclusion success), under a temporary main window opened 22:19:01Z and closed 23:24:26Z"
 live_ci_evidence: ".planning/quick/260808-wxg-close-the-two-open-by-design-observation/260808-wxg-EVIDENCE.md"
 live_ci_only_items:
   - test: "Push to main, then read the ubuntu publish leg's OBS-01 summary and the shard census for cache-mirror-<YYYYMM>."
-    expected: "Nonzero mirrored count, readMisses 0, no all-restore-MISS warning; nx-cache-* names present; legacy <hash>-<os> names stop growing (CORR-02 warm-mirror precondition owed to Phase 11)."
+    expected: >-
+      Nonzero mirrored count; readMisses 43 of scanned 112 on publish (ubuntu-24.04-arm) and 43 of 113
+      on publish (windows-11-arm), both MEASURED on run 31305961054 at head e3bf98b; no
+      all-restore-MISS warning; nx-cache-* names present; legacy <hash>-<os> names stop growing
+      (CORR-02 warm-mirror precondition owed to Phase 11). The figure carries its denominator on
+      purpose: publish-mirror.ts states the rule this codebase already follows, that the observable is
+      readMisses / scanned and never a bare readMisses, because the count alone is consistent only at
+      one denominator and scanned moves. Every figure carries its run id for the same reason.
+    expected_original: >-
+      SUPERSEDED 2026-08-10 by quick 260810-v1g, retained verbatim because it is the expectation the
+      row was measured against and falsified on: "Nonzero mirrored count, readMisses 0, no
+      all-restore-MISS warning; nx-cache-* names present; legacy <hash>-<os> names stop growing
+      (CORR-02 warm-mirror precondition owed to Phase 11)." The readMisses 0 clause was already
+      contradicted by a measured number in the same milestone when it was written -- see
+      open_sub_item_closed below.
     why_not_pre_merge: "publish / publish-verify are push-gated to main; no PR run samples them at any rate (by design)."
-    status: "SAMPLED -- 4 of 5 clauses MET, 1 FALSIFIED. Job 93163556127 summary: scanned 149 / mirrored 8 / skipped 141 / restore-MISS 63 / failed 0. MET: mirrored nonzero (8); no all-restore-MISS warning (rg exit 1, positive control passes); 87/87 asset names match ^nx-cache-; zero legacy <hash>-<os> names, unchanged from the 78/78-and-zero baseline taken before the push. FALSIFIED: readMisses is 63, not 0."
-    open_sub_item: "readMisses 63. NOT novel and NOT a regression from this window -- 09-VALIDATION.md's OBS-04 section already recorded 41/41 on run 30400231720 (2026-07-28), so this expectation contradicted a measured number in the same milestone when it was written. The symmetry (63 == 63, as 41 == 41) still matches that section's pre-registered VER-01 PATH fingerprint. What is unexplained is that the count grew rather than draining to the predicted all-HIT steady state. Needs its own triage against the publishMirror scan/restore path; both runs are permanent. TRIAGED AND FIXED 2026-08-09 by quick 260809-2s6: 48 of the 63 were prior runs' single-use CI seed entries, which the mirror enumerated as if they were cache content; only 15 were real Nx task hashes, all in the pre-47597a6 rotation cohort. The accrual is stopped at the source. This row's `expected: readMisses 0` is DELIBERATELY NOT rewritten to a post-fix number -- the correct value is itself unobservable until a real push to main, and substituting a DERIVED figure into a measured-evidence record would swap one unverified expectation for another. Close it from the same live window that closes the three unobserved items in 260809-2s6-VERIFICATION.md."
+    status: >-
+      CLOSED 2026-08-09 by run 31305961054 at head e3bf98b, event push, headBranch main, conclusion
+      success. The post-fix figure is MEASURED, with its denominator and its run id: readMisses
+      43 of 112 enumerated on publish (ubuntu-24.04-arm), job 93226687998 (mirrored 10,
+      alreadyPresent 59), and 43 of 113 on publish (windows-11-arm), job 93226687984 (mirrored 1,
+      alreadyPresent 69). Both jobs success; both publish-verify legs (93227111969, 93227112032)
+      success. This is the value the row was waiting for, and it supersedes the SAMPLED-and-falsified
+      verdict below rather than replacing its text. PRIOR VERDICT, retained: "SAMPLED -- 4 of 5
+      clauses MET, 1 FALSIFIED. Job 93163556127 summary: scanned 149 / mirrored 8 / skipped 141 /
+      restore-MISS 63 / failed 0. MET: mirrored nonzero (8); no all-restore-MISS warning (rg exit 1,
+      positive control passes); 87/87 asset names match ^nx-cache-; zero legacy <hash>-<os> names,
+      unchanged from the 78/78-and-zero baseline taken before the push. FALSIFIED: readMisses is 63,
+      not 0."
+    open_sub_item_closed: "CLOSED 2026-08-10 by quick 260810-v1g, from run 31305961054. The key is renamed from `open_sub_item` so a machine reading this frontmatter no longer sees an open sub-item, and the whole original reasoning is kept verbatim below because it is the record of WHY the row was left un-rewritten -- that reasoning was CORRECT, and its own closing instruction was SATISFIED rather than overruled. Its instruction was to close the row from the same live window that closes 260809-2s6's three unobserved items; that window happened on 2026-08-09, head e3bf98b, run 31305961054, and all three of those items closed with it. The standing rule it states was honoured to the letter: the substituted figure is MEASURED, never derived -- readMisses 43 of scanned 112 on ubuntu job 93226687998 and 43 of 113 on windows job 93226687984. Provenance stated honestly rather than implying a fresh read: those five counts reach the job summary only and never the step log, so they were read from the job summary at the time by the task that ran the window and transcribed into tracked source with their run id (`publish-mirror.ts`, `publish-mirror.spec.ts`). They are measured, not derived -- 260809-2s6 explicitly contrasts them against a DERIVED 33% and a review's corrected 41%, both wrong by the DENOMINATOR while the miss count of 43 was right in both. A fresh first-hand re-read would need a browser against that run's page and is not required to close this. The irony worth having on record: the one code path that would put these numbers into the step log is the partial-read warning, which fires only when the Wilson lower bound clears the threshold -- at this healthy baseline the bound is 0.299 and the branch stays silent, so success is exactly what makes the number unobservable via `gh`. ORIGINAL REASONING, retained verbatim: readMisses 63. NOT novel and NOT a regression from this window -- 09-VALIDATION.md's OBS-04 section already recorded 41/41 on run 30400231720 (2026-07-28), so this expectation contradicted a measured number in the same milestone when it was written. The symmetry (63 == 63, as 41 == 41) still matches that section's pre-registered VER-01 PATH fingerprint. What is unexplained is that the count grew rather than draining to the predicted all-HIT steady state. Needs its own triage against the publishMirror scan/restore path; both runs are permanent. TRIAGED AND FIXED 2026-08-09 by quick 260809-2s6: 48 of the 63 were prior runs' single-use CI seed entries, which the mirror enumerated as if they were cache content; only 15 were real Nx task hashes, all in the pre-47597a6 rotation cohort. The accrual is stopped at the source. This row's `expected: readMisses 0` is DELIBERATELY NOT rewritten to a post-fix number -- the correct value is itself unobservable until a real push to main, and substituting a DERIVED figure into a measured-evidence record would swap one unverified expectation for another. Close it from the same live window that closes the three unobserved items in 260809-2s6-VERIFICATION.md."
   - test: "Read both publish-verify leg logs after the same push."
     expected: "publish-verify (windows-11-arm) logs a windows-produced payload and label mirrored-by: windows; publish-verify (ubuntu-24.04-arm) logs linux for both; publish (windows) summary reports mirrored: 1, not 0 (OBS-05)."
     why_not_pre_merge: "Same push-gate; OBS-05's live half cannot run pre-merge."
@@ -158,6 +191,34 @@ is the correct, expected shape for this phase -- not a verification gap.
 > contradicted by this milestone's own evidence before it was written. Carried forward as an
 > open sub-item in the frontmatter, not silently closed. Full record:
 > `.planning/quick/260808-wxg-close-the-two-open-by-design-observation/260808-wxg-EVIDENCE.md`.
+
+> **ADDENDUM 3, 2026-08-10 (quick `260810-v1g`) -- L3's open sub-item is CLOSED, from run
+> `31305961054`.** The frontmatter row's own instruction was to close it from the same live window
+> that closes 260809-2s6's three unobserved items. That window happened: 2026-08-09, head `e3bf98b`,
+> event `push`, headBranch `main`, conclusion `success`, and all three of those items closed with it.
+> The measured post-fix figure, carrying its denominator and its run id as the codebase's own rule
+> requires: **`readMisses` 43 of `scanned` 112** on `publish (ubuntu-24.04-arm)`, job `93226687998`
+> (`mirrored` 10, `alreadyPresent` 59), and **43 of 113** on `publish (windows-11-arm)`, job
+> `93226687984` (`mirrored` 1, `alreadyPresent` 69). Both `publish-verify` legs (`93227111969`,
+> `93227112032`) green.
+>
+> **The reasoning that kept the row un-rewritten was correct and is preserved, not overruled.** It
+> refused to substitute a DERIVED number into a measured-evidence record; the number substituted here
+> is measured. Provenance stated rather than implied: these five counts reach the job summary only and
+> never the step log, so they were read from the job summary at the time by the task that ran the
+> window and transcribed into tracked source with their run id. 260809-2s6 explicitly contrasts them
+> against a derived 33% and a review's corrected 41%, both wrong by the DENOMINATOR while the miss
+> count of 43 was right in both. A fresh first-hand re-read would need a browser against that run's
+> page, and is not required to close this.
+>
+> **The irony worth having on record:** the one code path that would put these numbers into the step
+> log is the partial-read warning, which fires only when the Wilson lower bound clears the threshold.
+> At this healthy baseline the bound is 0.299 and the branch stays silent -- so success is exactly
+> what makes the number unobservable via `gh`.
+>
+> The frontmatter `score:` key moved with this closure: it had read "1
+> closed-with-one-clause-falsified", which described the state before this run and contradicted the
+> row directly below it.
 
 ## Requirements checkbox sanity (REQUIREMENTS.md)
 

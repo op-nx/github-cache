@@ -92,9 +92,19 @@ What WAS independently measured, by the verifier, is a **spot check of 10 of the
 only** -- the five highest-risk commits of the A1..A15 pass (`de95090`, `5968d51`, `e4f7f71`, `ffb7f96`,
 `31bb47b`) plus all five review-fix commits (`af53734`, `9709a2b`, `fd8fa7a`, `c02f0d6`, `1b06816`).
 
-**The other twelve commits are NOT measured, and no commit in the range is gated on all six gates.**
-Full per-commit gating is 22 checkouts x 6 gates, which was not run and is the open cost call recorded
-in VERIFICATION.md. The full eight-gate battery ran uncached at the baseline and at HEAD; HEAD is green.
+**The other twelve commits were NOT measured when this task closed, and no commit in the range was
+gated on all six gates at that point.** Full per-commit gating was framed here as 22 checkouts x 6
+gates, "not run", and left as the open cost call recorded in VERIFICATION.md. The full eight-gate
+battery ran uncached at the baseline and at HEAD; HEAD is green.
+
+**SUPERSEDED 2026-08-10 by quick 260810-v1g: the sweep was run, and it is 22 of 22 on all EIGHT
+gates.** Every commit of `4518787..1b06816`, oldest first, uncached, on the main checkout, with every
+verdict attributable to a captured log file by path. Evidence:
+`.planning/quick/260810-v1g-close-the-two-substantive-v0-0-2-audit-i/260810-v1g-SWEEP.md`. The cost
+framing above was written without ever measuring the battery: the whole 22-commit sweep took **369
+seconds, 6 minutes 9 seconds** of wall clock end to end, about 17 seconds per commit including the
+checkout, so there was never a cost reason to leave this open. The measurement is local Windows-arm64,
+not CI.
 
 C16 and C17 were reworded after they first landed. Their pre-reword hashes (`65d36e1`, `703a261`) are
 now dangling objects: they still resolve in `git log --all`, which is why the self-check below did not
@@ -360,14 +370,31 @@ Test count after the pass: **1184 / 44 files** (+7 from WR-01: one extraction co
 ## Self-Check: PASSED
 
 - Both created files exist on disk.
-- `git merge-base --is-ancestor <sha> HEAD` holds for all 17 commit hashes in the table, and
-  `git log 4518787..HEAD` counted exactly 17 at the time the task closed. Resolution in
-  `git log --all` is NOT the check -- a pre-reword hash still resolves, which is how two dangling
-  SHAs survived the first pass of this list.
+- `git merge-base --is-ancestor <sha> HEAD` holds for all 22 commit hashes this file names -- the
+  17-row table above plus the five review-fix SHAs. Re-measured 2026-08-10 by quick 260810-v1g over
+  `git rev-list 4518787..1b06816`: 22 checked, 0 non-ancestors. The count was 17 when the A1..A15
+  pass closed and `git log 4518787..HEAD` returned 17 then; the full range `4518787..1b06816` is 22,
+  so the 17 is superseded rather than falsified. Resolution in `git log --all` is NOT the check -- a
+  pre-reword hash still resolves, which is how two dangling SHAs survived the first pass of this
+  list, and both (`65d36e1`, `703a261`) still correctly FAIL `--is-ancestor`, re-measured in the same
+  pass.
 - `nx.json` blob at HEAD equals the value recorded in task 1.
 - `ci.yml` and the detector workflow are byte-unchanged across the range.
 - The `260810-bxj` deferred-items record is untouched, verified range-scoped.
 - The deferral record carries 9 unique `## U<N>` headings and 9 `Deferred because` occurrences, one
   per item.
-- All 17 commit messages and every added source line are ASCII-only.
-- Working tree carries only the three untracked planning documents the orchestrator owns.
+- All 22 commit messages and every added source line are ASCII-only. Re-measured 2026-08-10 over
+  `git log --format=%B 4518787..1b06816`: zero lines matching `[^\x00-\x7F]`, with a positive control
+  confirming the scanner does fire on a non-ASCII byte. A count correction, not a re-audit -- the
+  re-verification had already recorded the five review-fix messages as ASCII-clean.
+- Working tree carries only the five untracked planning documents the orchestrator owns. Corrected
+  from "three" on the authority of this task's own re-verification (VERIFICATION.md section 8, item
+  4). The tree state it describes no longer exists and was not re-measured.
+- **The v0.0.2 milestone audit named three stale references in this file. All three were already
+  closed downstream before quick 260810-v1g looked at them, and were re-measured rather than
+  re-edited -- blindly "correcting" a corrected file is how records rot.** The `read-back.spec.ts:363`
+  citation already reads `:360` both here and in `260810-kuo-deferred-items.md`; the frontmatter
+  metrics already read `commits: 22` and `test_count: 1184`; and the bisect prose already reads "10 of
+  the 22 commits, on `test` only". What WAS still stale, and is fixed above, is the two
+  commit-counting Self-Check bullets, the untracked-document count, and the "was not run" claim on
+  per-commit gating. Do not re-open the three.

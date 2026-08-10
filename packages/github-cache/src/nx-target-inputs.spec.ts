@@ -841,17 +841,9 @@ describe('ci.yml is a test input, so no spec can assert on a replayed ci.yml (PA
   //    Phase 7 decision that does mention this file (D-01) describes it
   //    CORRECTLY.
 
-  // Clause 1 -- the literal pin, with the same honest limit as the four pins
-  // above: `filterUsingGlobPatterns` substitutes `{projectRoot}` ONLY, so a
-  // `{workspaceRoot}` pattern survives literally and matches no probe path. There
-  // is no resolver to delegate to here -- the entry IS the invariant -- so a
-  // literal is the honest form rather than a weaker assertion dressed up as
-  // delegation.
-  it('nx.json declares ci.yml as a test input', () => {
-    expect(nxJson.targetDefaults.test.inputs).toContain(
-      '{workspaceRoot}/.github/workflows/ci.yml',
-    );
-  });
+  // Clause 1 is the ci.yml literal pin. It is the FIRST ROW of the registration table
+  // at the end of this describe, alongside the four other entry pins, and its own
+  // reasoning travels with that row.
 
   // Clause 2 -- the configuration Nx actually HASHES (Phase 8 NF-02). Clause 1
   // reads `nx.json` alone, and `targetDefaults` is only the BASE of the merge: a
@@ -924,110 +916,138 @@ describe('ci.yml is a test input, so no spec can assert on a replayed ci.yml (PA
     expect(mergedTest(hostile).inputs).toEqual(['default']);
   });
 
-  // The same registration, one workflow file over, and it lands in the SAME
-  // COMMIT as the guard that reads that file (D-09). PARITY-08's lesson is
-  // that a brand-new workflow file starts out unregistered and repeats the
-  // stale-PASS defect exactly: `windows-regression-detector.spec.ts` asserts
-  // on the detector workflow's CONTENT, so without this entry an edit to that
-  // workflow would not rotate the `test` hash and Nx would serve the verdict
-  // computed before the assertion's subject existed. There is no ordering
-  // instruction to remember -- `{workspaceRoot}/nx.json` is itself a `test`
-  // input, so the line is effective on the run that introduces it.
+  // THE FIVE ENTRY PINS, as ONE TABLE with three columns -- target list, entry path and
+  // the reason a maintainer reads on a red.
   //
-  // Explicit path, NOT `{workspaceRoot}/.github/workflows/**`, for the reason
-  // stated in full at lock fact 3 above: a glob is equivalent NOW and would
-  // silently adopt whatever workflow lands there next, which is the part that
-  // is not equivalent. It is placed immediately after the ci.yml entry in
-  // nx.json so the two workflow entries stay adjacent.
+  // ONE `it` PER ROW, WHICH IS WHY THIS IS NOT THE LOOP THE OLD COMMENT REJECTED. That
+  // comment argued: "Two clauses, not one parameterised loop over the pair: they key on
+  // DIFFERENT targets (`test` vs `integration`) and a combined failure would not say
+  // which list lost its entry." The objection is sound against a single `it` iterating a
+  // pair, and `it.each` is not that -- it generates a SEPARATE `it` per row with the row
+  // interpolated into the title, so a red names the target and the entry. The
+  // localization the argument demands is preserved, which is why the argument is restated
+  // and answered here rather than left standing next to code that contradicts it.
   //
-  // The merged-configuration clause is NOT duplicated for this entry. Clauses
-  // 2 and 3 above already discharge it for the WHOLE `test` list -- a
-  // `project.json` `targets.test.inputs` array replaces the list wholesale, so
-  // it drops every entry or none, and a second copy per new entry would test
-  // the same mechanism again.
-  it('nx.json declares the windows-regression-detector workflow as a test input', () => {
-    expect(nxJson.targetDefaults.test.inputs).toContain(
-      '{workspaceRoot}/.github/workflows/windows-regression-detector.yml',
-    );
-  });
+  // THREE COLUMNS, not one, because the five rows are NOT five identical assertions: four
+  // key on `test` and the fifth on `integration`, and three carried bespoke reason
+  // strings while two carried none.
+  //
+  // EVERY REASON IS PRESERVED, AND THE TWO MISSING ONES ARE WRITTEN. Each reason names
+  // the SPECIFIC spec that would replay a stale PASS, which is the whole value of the
+  // message on a red; collapsing them into one generic string would have been a net loss
+  // of diagnostic text, so the two rows that lacked a reason got one.
+  //
+  // The merged-configuration clause is NOT duplicated per row. Clauses 2 and 3 above
+  // discharge it for the WHOLE `test` list -- a `project.json` `targets.test.inputs`
+  // array replaces the list wholesale, so it drops every entry or none, and a copy per
+  // entry would test the same mechanism five times.
+  //
+  // Every row's own explanatory block sits immediately above it. Those blocks are NOT
+  // interchangeable -- each argues why THAT entry exists -- so they are not merged.
+  it.each([
+    // ROW 1, clause 1 -- the ci.yml literal pin, with the same honest limit as the four
+    // pins earlier in this file: `filterUsingGlobPatterns` substitutes `{projectRoot}`
+    // ONLY, so a `{workspaceRoot}` pattern survives literally and matches no probe path.
+    // There is no resolver to delegate to here -- the entry IS the invariant -- so a
+    // literal is the honest form rather than a weaker assertion dressed up as delegation.
+    {
+      target: 'test',
+      entry: '{workspaceRoot}/.github/workflows/ci.yml',
+      reason:
+        'nx.json no longer declares {workspaceRoot}/.github/workflows/ci.yml as a `test` input, so every spec that asserts on ci.yml -- dogfood-cross-os.spec.ts, docs-same-os-claims.spec.ts, hash-parity/compare.spec.ts -- can replay a PASS computed before the workflow it asserts on was edited. That is PARITY-08 itself. Restore the entry; do not weaken the guard.',
+    },
 
-  // The same registration one FILE TYPE over, and it lands in the SAME COMMIT as
-  // the doc it covers (DOCS-07). `docs-cross-os.spec.ts` asserts on
-  // `docs/cross-os.md`'s CONTENT -- that it renders the discriminator `nx.json`
-  // declares, that the safe default precedes the portability checklist, and that
-  // the checklist has five items -- and `docs/` lives OUTSIDE this project's
-  // graph, so without this entry an edit to the doc would not rotate the `test`
-  // hash and Nx would serve the verdict computed before the assertion's subject
-  // existed. That is PARITY-08's defect exactly, and this repo has already
-  // shipped it twice (enumerated once at the `eslint.config.mjs` pin above).
-  //
-  // Explicit path, NOT `{workspaceRoot}/docs/**`, for the reason stated in full
-  // at lock fact 3 above: a glob is equivalent NOW and would silently adopt
-  // whatever lands in `docs/` next. The six sibling docs entries are each named
-  // individually for the same reason, and this one is placed immediately after
-  // `docs/configuration.md` so the seven `docs/` entries stay one CONTIGUOUS
-  // RUN.
-  //
-  // CONTIGUOUS, not alphabetical, and the distinction is worth the line because
-  // this comment used to claim the latter (IN-02). MEASURED: the run reads
-  // configuration, cross-os, advanced, trust-and-security, versioning,
-  // examples/minimal-ci.yml, examples/README.md -- which is not alphabetical,
-  // and was not alphabetical BEFORE this entry was inserted either
-  // (configuration, advanced, ...). So the old wording described a convention
-  // the file never had, and a reader "restoring" it would reorder five entries
-  // for nothing. Adjacency is the real and useful invariant: it is what makes a
-  // missing docs entry visible by reading one block.
-  //
-  // The merged-configuration clause is NOT duplicated here either: clauses 2 and
-  // 3 above discharge it for the WHOLE `test` list, since a `project.json`
-  // `targets.test.inputs` array replaces the list wholesale and so drops every
-  // entry or none.
-  it('nx.json declares the cross-os recipe doc as a test input', () => {
-    expect(
-      nxJson.targetDefaults.test.inputs,
-      'nx.json no longer declares {workspaceRoot}/docs/cross-os.md as a `test` input, so docs-cross-os.spec.ts can replay a PASS computed before the doc it asserts on was edited. Restore the entry; do not weaken the guard.',
-    ).toContain('{workspaceRoot}/docs/cross-os.md');
-  });
+    // ROW 2 -- the same registration, one workflow file over, and it landed in the SAME
+    // COMMIT as the guard that reads that file (D-09). PARITY-08's lesson is that a
+    // brand-new workflow file starts out unregistered and repeats the stale-PASS defect
+    // exactly: `windows-regression-detector.spec.ts` asserts on the detector workflow's
+    // CONTENT, so without this entry an edit to that workflow would not rotate the `test`
+    // hash and Nx would serve the verdict computed before the assertion's subject
+    // existed. There is no ordering instruction to remember -- `{workspaceRoot}/nx.json`
+    // is itself a `test` input, so the line is effective on the run that introduces it.
+    //
+    // Explicit path, NOT `{workspaceRoot}/.github/workflows/**`, for the reason stated in
+    // full at lock fact 3 above: a glob is equivalent NOW and would silently adopt
+    // whatever workflow lands there next, which is the part that is not equivalent. It is
+    // placed immediately after the ci.yml entry in nx.json so the two workflow entries
+    // stay adjacent.
+    {
+      target: 'test',
+      entry:
+        '{workspaceRoot}/.github/workflows/windows-regression-detector.yml',
+      reason:
+        'nx.json no longer declares {workspaceRoot}/.github/workflows/windows-regression-detector.yml as a `test` input, so windows-regression-detector.spec.ts can replay a PASS computed before the detector workflow it asserts on was edited -- and that detector is the only thing separating a genuine remote-cache hit from a Windows leg that never ran the code. Restore the entry; do not weaken the guard.',
+    },
 
-  // THE TWO WORKSPACE-ROOT INSTRUMENTS, and they were the only registrations in
-  // either list that no clause here read. Every sibling entry above is pinned;
-  // these two arrived later, from a different direction -- each closing a
-  // stale-cached-PASS hole its OWN spec had recorded against itself in a
-  // STALENESS CAVEAT -- and the pin that keeps them from silently regressing did
-  // not arrive with them.
-  //
-  // WHAT DELETING EITHER COSTS, and why the absence of a pin is worse for these
-  // two than for a docs entry. `capture-hashes-cli.spec.ts` and
-  // `read-integration-hash.integration.spec.ts` assert on the CLI BEHAVIOUR of
-  // two workspace-root `.mjs` files: which argument combinations are refused,
-  // and which guards throw. `nx.json` enumerates workspace-root inputs as
-  // explicit paths and carries no `{workspaceRoot}/*.mjs` glob, so without these
-  // entries a LONE edit to either instrument rotates no hash at all and Nx
-  // replays the verdict computed before the edit. The instrument can be weakened
-  // -- a refusal removed, a throw softened -- and its own spec never runs to say
-  // so. That is PARITY-08's defect exactly, in the two files whose headers
-  // describe it most precisely.
-  //
-  // The `integration` entry is the sharper of the two: `read-integration-hash.mjs`
-  // feeds the O3 existence proof, so a replayed PASS there is a proof asserting
-  // over a record its own reader may no longer produce.
-  //
-  // Two clauses, not one parameterised loop over the pair: they key on DIFFERENT
-  // targets (`test` vs `integration`) and a combined failure would not say which
-  // list lost its entry. The merged-configuration clause is not duplicated for
-  // either, for the reason given twice above -- a `project.json` inputs array
-  // replaces its list wholesale, so it drops every entry or none.
-  it('nx.json declares capture-hashes.mjs as a test input', () => {
-    expect(
-      nxJson.targetDefaults.test.inputs,
-      'nx.json no longer declares {workspaceRoot}/capture-hashes.mjs as a `test` input, so capture-hashes-cli.spec.ts can replay a PASS computed before the instrument it asserts on was edited -- the exact staleness its own header records as CLOSED. Restore the entry; do not weaken the guard.',
-    ).toContain('{workspaceRoot}/capture-hashes.mjs');
-  });
+    // ROW 3 -- the same registration one FILE TYPE over, and it landed in the SAME COMMIT
+    // as the doc it covers (DOCS-07). `docs-cross-os.spec.ts` asserts on
+    // `docs/cross-os.md`'s CONTENT -- that it renders the discriminator `nx.json`
+    // declares, that the safe default precedes the portability checklist, and that the
+    // checklist has five items -- and `docs/` lives OUTSIDE this project's graph, so
+    // without this entry an edit to the doc would not rotate the `test` hash and Nx would
+    // serve the verdict computed before the assertion's subject existed. That is
+    // PARITY-08's defect exactly, and this repo has already shipped it twice (enumerated
+    // once at the `eslint.config.mjs` pin above).
+    //
+    // Explicit path, NOT `{workspaceRoot}/docs/**`, for the reason stated in full at lock
+    // fact 3 above: a glob is equivalent NOW and would silently adopt whatever lands in
+    // `docs/` next. The six sibling docs entries are each named individually for the same
+    // reason, and this one is placed immediately after `docs/configuration.md` so the
+    // seven `docs/` entries stay one CONTIGUOUS RUN.
+    //
+    // CONTIGUOUS, not alphabetical, and the distinction is worth the line because this
+    // comment used to claim the latter (IN-02). MEASURED: the run reads configuration,
+    // cross-os, advanced, trust-and-security, versioning, examples/minimal-ci.yml,
+    // examples/README.md -- which is not alphabetical, and was not alphabetical BEFORE
+    // this entry was inserted either (configuration, advanced, ...). So the old wording
+    // described a convention the file never had, and a reader "restoring" it would
+    // reorder five entries for nothing. Adjacency is the real and useful invariant: it is
+    // what makes a missing docs entry visible by reading one block.
+    {
+      target: 'test',
+      entry: '{workspaceRoot}/docs/cross-os.md',
+      reason:
+        'nx.json no longer declares {workspaceRoot}/docs/cross-os.md as a `test` input, so docs-cross-os.spec.ts can replay a PASS computed before the doc it asserts on was edited. Restore the entry; do not weaken the guard.',
+    },
 
-  it('nx.json declares read-integration-hash.mjs as an integration input', () => {
-    expect(
-      nxJson.targetDefaults.integration.inputs,
-      'nx.json no longer declares {workspaceRoot}/read-integration-hash.mjs as an `integration` input, so read-integration-hash.integration.spec.ts can replay a PASS computed before the instrument it asserts on was edited -- the exact staleness its own header records as CLOSED, on the instrument the O3 proof reads. Restore the entry; do not weaken the guard.',
-    ).toContain('{workspaceRoot}/read-integration-hash.mjs');
-  });
+    // ROWS 4 AND 5 -- THE TWO WORKSPACE-ROOT INSTRUMENTS, and they were the only
+    // registrations in either list that no clause here read. Every sibling entry above is
+    // pinned; these two arrived later, from a different direction -- each closing a
+    // stale-cached-PASS hole its OWN spec had recorded against itself in a STALENESS
+    // CAVEAT -- and the pin that keeps them from silently regressing did not arrive with
+    // them. One block covers both rows because the argument is genuinely about the pair.
+    //
+    // WHAT DELETING EITHER COSTS, and why the absence of a pin is worse for these two
+    // than for a docs entry. `capture-hashes-cli.spec.ts` and
+    // `read-integration-hash.integration.spec.ts` assert on the CLI BEHAVIOUR of two
+    // workspace-root `.mjs` files: which argument combinations are refused, and which
+    // guards throw. `nx.json` enumerates workspace-root inputs as explicit paths and
+    // carries no `{workspaceRoot}/*.mjs` glob, so without these entries a LONE edit to
+    // either instrument rotates no hash at all and Nx replays the verdict computed before
+    // the edit. The instrument can be weakened -- a refusal removed, a throw softened --
+    // and its own spec never runs to say so. That is PARITY-08's defect exactly, in the
+    // two files whose headers describe it most precisely.
+    //
+    // The `integration` entry is the sharper of the two: `read-integration-hash.mjs`
+    // feeds the O3 existence proof, so a replayed PASS there is a proof asserting over a
+    // record its own reader may no longer produce. It is ALSO the row that keys on a
+    // DIFFERENT target, which is what the third column exists for.
+    {
+      target: 'test',
+      entry: '{workspaceRoot}/capture-hashes.mjs',
+      reason:
+        'nx.json no longer declares {workspaceRoot}/capture-hashes.mjs as a `test` input, so capture-hashes-cli.spec.ts can replay a PASS computed before the instrument it asserts on was edited -- the exact staleness its own header records as CLOSED. Restore the entry; do not weaken the guard.',
+    },
+    {
+      target: 'integration',
+      entry: '{workspaceRoot}/read-integration-hash.mjs',
+      reason:
+        'nx.json no longer declares {workspaceRoot}/read-integration-hash.mjs as an `integration` input, so read-integration-hash.integration.spec.ts can replay a PASS computed before the instrument it asserts on was edited -- the exact staleness its own header records as CLOSED, on the instrument the O3 proof reads. Restore the entry; do not weaken the guard.',
+    },
+  ])(
+    'nx.json declares $entry as a $target input',
+    ({ target, entry, reason }) => {
+      expect(nxJson.targetDefaults[target].inputs, reason).toContain(entry);
+    },
+  );
 });

@@ -204,7 +204,7 @@ These are NOT deferrals. Each was an open question at plan time, measured during
 settled. They are recorded because the settled answer is not obvious from the diff alone.
 
 **A9 -- the `MIRRORED_BY_PREFIX` export STAYS, and that is the correct outcome.** The review proposed
-deleting it once `read-back.ts` stopped importing it. Measured: `read-back.spec.ts:363` pins its
+deleting it once `read-back.ts` stopped importing it. Measured: `read-back.spec.ts:360` pins its
 VALUE (`expect(MIRRORED_BY_PREFIX).toBe('mirrored-by: ')`) -- the constant's own value guard. Deleting
 the export to satisfy an unused-export sweep would delete a live assertion. CONTEXT G4 pre-authorised
 exactly this result. `fallow:ci` was run on that commit specifically and is clean: the config credits

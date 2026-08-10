@@ -94,7 +94,8 @@ interface JobCensusRow {
 
 /**
  * EVERY job in `ci.yml`, derived rather than listed. This is what replaces
- * `READ_ONLY_LEG_SITES = 3`, and the replacement is the whole point of T1-5: a CARDINALITY
+ * the retired three-site cardinality constant, and the replacement is the whole point of
+ * T1-5: a CARDINALITY
  * assertion cannot localize. "The knob appears exactly three times" is satisfiable by
  * deletion (drop it from a consumer, add it to a producer, count unchanged) and it is
  * completely blind to a NEW Windows job, which is the case the invariant most needs to
@@ -2318,8 +2319,8 @@ describe('ci.yml starts each sidecar AFTER its leg declined the write (XOS-09, T
 });
 
 /**
- * THE OTHER DIRECTION OF THE SAME KNOB, and the one `READ_ONLY_LEG_SITES = 3` could not
- * express. What makes the three Windows floor gates SOUND is the complementary fact -- that
+ * THE OTHER DIRECTION OF THE SAME KNOB, and the one the retired cardinality constant could
+ * not express. What makes the three Windows floor gates SOUND is the complementary fact -- that
  * the ubuntu PRODUCERS do not carry the knob -- and `ci.yml` stated that premise in prose at
  * the build-windows block ("one line the ubuntu producers deliberately do not carry") while
  * nothing enforced it per job.

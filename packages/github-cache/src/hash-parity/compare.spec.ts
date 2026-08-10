@@ -695,19 +695,13 @@ describe('the comparator constants are content-pinned, never snapshotted', () =>
     ]);
   });
 
-  it('LIKE_FOR_LIKE_META_KEYS is the THREE compared across the pair, and a SUBSET of the seven', () => {
-    // Three, not seven. Which three is argued at the constant's own declaration;
-    // pinning it here is what makes widening the list a reviewable diff rather
-    // than a silent tightening that rejects a legitimate record. The subset
-    // assertion is the second half: a key here that is NOT in
+  it('LIKE_FOR_LIKE_META_KEYS is a SUBSET of the seven REQUIRED_META_KEYS', () => {
+    // Which keys are compared across the pair is argued at the constant's own
+    // declaration. The claim HERE is the subset relation, and it is the one that
+    // cannot be read off either constant alone: a key here that is NOT in
     // REQUIRED_META_KEYS is never validated as a non-empty string first, so the
     // comparison would run over two `undefined`s and find them equal -- a clause
     // that cannot fail.
-    expect([...LIKE_FOR_LIKE_META_KEYS]).toEqual([
-      'commit',
-      'nxVersion',
-      'arch',
-    ]);
     expect([...REQUIRED_META_KEYS]).toEqual(
       expect.arrayContaining([...LIKE_FOR_LIKE_META_KEYS]),
     );

@@ -302,9 +302,11 @@ describe('the two accept branches are mutually exclusive (RETAIN-05b, T-10-01)',
   ] as const;
 
   it('holds 26 rows, so a silently dropped row cannot shrink this proof', () => {
-    // The count is pinned for the same reason the both-true total below is a COUNT
-    // rather than only a per-row assertion: a per-row loop over a shortened table
-    // still passes, and a table trimmed to one row would report full coverage.
+    // This lock and the per-row `it.each` below are the whole disjointness guard,
+    // and neither half is sufficient alone. The per-row check says no name in the
+    // table satisfies both branches; this count says the table it ran over is still
+    // the full 26. Without the count, a per-row loop over a shortened table still
+    // passes, and a table trimmed to one row would report full coverage.
     expect(ADVERSARIAL_NAMES).toHaveLength(26);
   });
 
@@ -316,14 +318,6 @@ describe('the two accept branches are mutually exclusive (RETAIN-05b, T-10-01)',
       ).toBe(false);
     },
   );
-
-  it('pins the both-true count across the whole table to ZERO (RETAIN-05b)', () => {
-    const both = ADVERSARIAL_NAMES.filter(
-      (name) => isCurrentAssetName(name) && isLegacyOsSuffixedAssetName(name),
-    );
-
-    expect(both).toEqual([]);
-  });
 
   it('the union equals exactly the names one branch accepts, so neither branch is dead', () => {
     // Non-vacuous companion to the disjointness pin: a table where BOTH branches

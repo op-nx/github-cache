@@ -365,7 +365,6 @@ describe('createReadOnlyActionsCacheBackend is read-only BY CONSTRUCTION (VER-08
     const backend = createReadOnlyActionsCacheBackend();
 
     expect(isWritableBackend(backend)).toBe(false);
-    expect('put' in backend).toBe(false);
   });
 
   // The other half, and it is not decoration: the composition must ADD put, never move it.

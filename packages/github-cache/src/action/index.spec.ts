@@ -571,9 +571,16 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
    * that reused it would PUT at nx-cache-<run_id> -- and the PUT still returns 200, so
    * nothing fails here and read-back.ts MISSES silently instead.
    *
-   * The assertion is on the WHOLE url and on the final PATH SEGMENT, never
-   * toContain(RUN_ID): the derived seed CONTAINS the run id, so a substring check is
-   * vacuous by construction. That is the one detail that makes this case worth having.
+   * The assertion is on the WHOLE url, never toContain(RUN_ID): the derived seed
+   * CONTAINS the run id, so a substring check is vacuous by construction. That is the
+   * one detail that makes this case worth having.
+   *
+   * That equality derives its expected value from the function under test, so it does
+   * NOT redden if mirrorSeedHash degenerates to the identity. This case does not carry
+   * its own guard against that, and the reason is MEASURED rather than argued: the
+   * identity mutation reddens 13 tests, because mirror-seed.spec.ts catches it five
+   * ways off HAND-AUTHORED literals (:59, :66, :82, :101). Suite level owns it; adding
+   * a second copy here would not.
    */
   describe('the mirror-seed operation (OBS-05, D-12/D-13)', () => {
     const RUN_ID = '30401077417';
@@ -607,7 +614,6 @@ describe('run() dogfood fail-loud canary (T-2-19, T-2-20)', () => {
         expect(String(requestedUrl)).toBe(
           `http://127.0.0.1:1234/v1/cache/${seedHash}`,
         );
-        expect(String(requestedUrl).split('/').at(-1)).not.toBe(RUN_ID);
         expect(init?.method).toBe('PUT');
         // DERIVED rather than hand-authored, and the exception is deliberate: the claim
         // under test is which ARGUMENTS reach the body, not the template. The template

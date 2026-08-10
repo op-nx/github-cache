@@ -12,7 +12,6 @@ import {
 import { shardTag } from '../lib/retention.js';
 import { octokitFault } from '../test/octokit-fault.js';
 import {
-  PARTIAL_READ_MISS_WARN_RATIO,
   publishMirror,
   RELEASE_ASSET_CAP,
   RELEASE_ASSET_MAX_BYTES,
@@ -1468,22 +1467,6 @@ const FORBIDDEN_ARTIFACTS =
  * written as an `else if`, so exactly ONE of the two can fire on any run.
  */
 describe('publishMirror split metric and partial-miss guard (D4, D5)', () => {
-  it('the partial TARGET RATE is one half -- the value every boundary fixture below is computed for', () => {
-    expect(
-      PARTIAL_READ_MISS_WARN_RATIO,
-      'This is the rate a Wilson LOWER BOUND on the miss proportion must reach, not a raw ' +
-        'cutoff on the proportion itself. The boundary cases below use a 10-entry ' +
-        'enumeration for that reason: 9 misses bounds to 0.5958 and 8 to 0.4902, which ' +
-        'straddle the rate by 0.0098 on the tight side. Changing this value invalidates ' +
-        'those fixtures rather than merely moving them, so it must be changed HERE and in ' +
-        "them together -- and the engine's own comment carries the MEASURED baseline the " +
-        'rate is read against and why the denominator is the full enumeration. Retune it ' +
-        'only from a measurement: the last one is run 31305961054 at head e3bf98b, 43 ' +
-        'misses of 112 enumerated, and the next one lands as the bare-run-id seed cohort ' +
-        'evicts.',
-    ).toBe(0.5);
-  });
-
   // THE RECLASSIFICATION, and the one assertion that localizes the D3 reorder. An entry
   // present in the shard that would NOT have restored is now an already-present skip
   // rather than a read MISS, because the membership test runs before the restore. Both

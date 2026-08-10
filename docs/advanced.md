@@ -115,11 +115,23 @@ a per-target exception.
   `<hash>-<os>` is now `nx-cache-<hash>`. The reader derives the new name only
   and has no fallback to the old one, so on the first run after the upgrade
   **every asset mirrored before v0.0.2 reads as a MISS** and stays that way until
-  it is re-mirrored under the new name. Nothing is lost and nothing is wrong:
-  the old assets remain prunable -- cleanup accepts both shapes -- and age out
-  through the normal retention window. This is a one-time cost at the upgrade,
+  it is re-mirrored under the new name. This is a one-time cost at the upgrade,
   and it is a second axis from the cache-version rotation above; the two land in
   the same run, so expect one disrupted publish run, not two.
+
+  **The pre-v0.0.2 assets are NOT reachable by cleanup, and you must delete them
+  by hand.** They sit in shard releases under the superseded `cache-mirror-*`
+  tag prefix, and cleanup's scope filter admits only the current
+  `nx-cache-YYYYMM` shape, so it never opens those releases at all. Nothing
+  prunes them and they never age out through the retention window -- the window
+  only applies to shards cleanup can see. **On a public repository those assets
+  stay world-readable forever until you remove them**, so treat this as a
+  required upgrade step rather than housekeeping: delete the old
+  `cache-mirror-*` releases (which deletes their assets with them) once the
+  first post-upgrade publish run has re-mirrored what you still need. The tag
+  scheme is internal (see `docs/versioning.md`), and the accepter was
+  deliberately not widened to cover the old prefix -- a widened accepter would
+  have to be maintained forever for a population that no longer grows.
 
   It is gated by a **separate** sync allowlist (`isSyncTrusted`: `push` /
   `schedule` on the default branch), never by the write gate -- widening

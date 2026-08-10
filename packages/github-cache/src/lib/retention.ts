@@ -44,11 +44,23 @@ export const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * (I8). Never inline a second copy of this literal.
  *
  * It shares the `nx-cache-` prefix with the Actions-cache KEY namespace, and the reuse is
- * deliberate rather than an oversight. `isServerProducedKey` is applied only to Actions-cache
- * keys and `isShardTag` only to Release tag names -- two different GitHub APIs, two disjoint
- * keyspaces, and neither predicate is ever asked about the other's strings. The sibling
- * decision is already recorded at `release-asset-name.ts`, whose filter is deliberately NOT
- * aliased to `isServerProducedKey` even though the body is identical, for the same reason.
+ * DELIBERATE NON-ALIASING rather than an oversight -- recorded as such at
+ * `release-asset-name.ts`, whose filter is likewise NOT aliased to `isServerProducedKey`
+ * even though the body is identical. Aliasing would COUPLE the Actions-cache KEY namespace to
+ * the Release namespace, so a later change intended for one would silently move both. A prior
+ * revision of this block argued the reuse was safe from an invariant no test enforces; the
+ * argument is now the recorded decision, which does not need one.
+ *
+ * WHAT THE REUSE ACTUALLY COSTS, stated because the previous version omitted it and the
+ * omission is the more useful half. A six-decimal-digit shard tag satisfies the CURRENT
+ * asset-name filter, so `nx-cache-202607` is a syntactically valid current asset NAME as well
+ * as a valid shard TAG. Nothing exploits that today -- `isServerProducedKey` is applied only
+ * to Actions-cache keys and `isShardTag` only to Release tag names, two different GitHub APIs
+ * over two keyspaces, and neither predicate is ever asked about the other's strings -- but the
+ * overlap is latent rather than absent, and a future reader weighing a change here should
+ * know it exists. Do NOT single-source the prefix from the cache-key constant to "fix" it:
+ * quick 260803-fcd retracted that exact collision objection, and the record documents the
+ * identical-bodied filters as deliberately not aliased.
  * The name says what the tag IS -- an Nx cache shard -- rather than what it was temporarily
  * for; a future read-write Releases backend would make a "mirror" spelling a permanent
  * misnomer baked into every tag ever created.
@@ -91,9 +103,14 @@ export const SHARD_TAG_PATTERN = new RegExp('^' + SHARD_TAG_PREFIX + '\\d{6}$');
  * unwidened filter silently stops pruning. That rule is right and does not apply here: a
  * widened accepter has to be maintained forever, and the shards it would cover were ONE
  * hand-deleted release with no adopters outside this repository (the tag scheme is not part
- * of the consumer contract -- `docs/versioning.md` names `shardTag` as internal). Shards
+ * of the consumer contract -- `docs/versioning.md` names `shardTag` as internal).
+ *
+ * THIS ACCEPTER IS THE ROOT OF THE UNREACHABILITY CHAIN, and the chain itself is stated once
+ * at `isLegacyOsSuffixedAssetName` in `release-asset-name.ts` rather than re-derived here --
+ * this file's copy was one of the three the review found. The fact this site owns: shards
  * written under the old prefix became unreadable AND unprunable at the rename, which is a
- * cache MISS rather than data loss, and they were removed by hand instead.
+ * cache MISS rather than data loss, and they were removed by hand instead. `docs/advanced.md`
+ * states that consequence for a CONSUMER, which is where it matters most.
  */
 export function isShardTag(tag: string): boolean {
   return SHARD_TAG_PATTERN.test(tag);

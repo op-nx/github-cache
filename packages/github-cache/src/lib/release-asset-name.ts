@@ -143,19 +143,28 @@ export function isCurrentAssetName(name: string): boolean {
  * HASH_PATTERN for the hash half and CACHE_OS_VALUES for the OS half so neither the
  * hex char-class nor the OS literals are re-authored.
  *
- * DEFENCE-IN-DEPTH, not a live pruning path, and the distinction is the correction.
- * This branch was described as the only thing that could still prune the assets
- * already published under the old shape. It cannot reach them: the SHARD-TAG prefix
- * rename made old-prefix shards unreadable AND unprunable, and `retention.ts` records
- * that they were removed BY HAND instead. `cleanup.ts` scopes on the new shard-tag
- * pattern, so it never visits an old-prefix release at all, and every new-prefix month
- * shard postdates the asset rename and can therefore only hold new-shape names.
+ * DEFENCE-IN-DEPTH, not a live pruning path. THIS IS THE CANONICAL STATEMENT of that
+ * argument, kept in the module that owns the predicate; `cleanup.ts` and `retention.ts`
+ * point here instead of re-deriving it, because three independent copies of one
+ * reachability proof is three things to keep true.
+ *
+ * THE ARGUMENT. This branch was once described as the only thing that could still prune the
+ * assets already published under the old shape. It cannot reach them, and the chain is:
+ *
+ *   1. `cleanup.ts` scopes on `isShardTag`, which admits only the CURRENT
+ *      `nx-cache-YYYYMM` tag pattern.
+ *   2. So the cleanup loop never opens a pre-rename `cache-mirror-*` release at all.
+ *      `retention.ts` records that those shards became unreadable AND unprunable at the
+ *      prefix rename, and that they were removed BY HAND.
+ *   3. Every shard the loop DOES visit postdates the ASSET rename, so it can only hold
+ *      new-shape names.
  *
  * The branch is cheap, provably disjoint from branch A (see below) and harmless to
  * KEEP, so it stays -- as cover for any old-shape asset that turns out to survive in a
  * current shard, not as the caretaker of a population that is no longer reachable. Do
  * not delete it on the strength of this paragraph; do not re-describe it as a live
- * pruning path either.
+ * pruning path either. Deleting the exported predicate is a consumer-contract change and a
+ * separate decision from this one.
  *
  * What it is NOT: not a general "contains a dash" check, and there is deliberately
  * NO third branch for the PoC-era `<hash>.tar.gz` family. That shape is

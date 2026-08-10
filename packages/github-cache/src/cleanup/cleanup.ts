@@ -90,16 +90,15 @@ export async function cleanupMirror(
       // rename: a publisher writing the new name against an unwidened filter
       // silently stops pruning, with no error anywhere.
       //
-      // THE LEGACY BRANCH IS DEFENCE-IN-DEPTH, not the caretaker of a population
-      // this loop can still see. It used to be credited with keeping the old-shape
-      // asset population reachable for pruning; it cannot reach that population. The
-      // scope filter above admits only the NEW shard-tag pattern, so this loop never
-      // visits a pre-rename release at all, and `retention.ts` records that those
-      // shards became unreadable AND unprunable at the prefix rename and were removed
-      // by hand. Every shard this loop does visit postdates the ASSET rename, so it
-      // can only hold new-shape names. The branch is cheap and provably disjoint, so
-      // it stays as cover for a surviving old-shape asset -- but nothing here depends
-      // on it firing.
+      // THE LEGACY BRANCH IS DEFENCE-IN-DEPTH, not the caretaker of a population this loop
+      // can still see -- and the FULL reachability argument is stated once, canonically, at
+      // `isLegacyOsSuffixedAssetName` in `lib/release-asset-name.ts`, which owns the
+      // predicate. It is not re-derived here: three copies of one proof is three things to
+      // keep true, and this file's copy is one of the three the review found.
+      //
+      // The one fact this site contributes to that argument: the scope filter above admits
+      // only the CURRENT shard-tag pattern, so this loop never visits a pre-rename release.
+      // Nothing here depends on the legacy branch firing.
       //
       // Unchanged and still in force: this mirrors the read/write side's
       // isServerProducedKey discipline, so a foreign asset dropped into a genuine

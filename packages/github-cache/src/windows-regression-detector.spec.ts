@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { INVARIANT_TARGETS } from './hash-parity/compare.js';
 import {
   readRepoFile,
   repoFileUrl,
@@ -68,9 +69,19 @@ const codeLines = stripYamlComments(
  * other three. The detector exists to catch an input that became OS-sensitive, and omitting one
  * of the four invariants meant an OS-sensitive `lint` input was the one regression this detector
  * structurally could not see.
+ *
+ * DERIVED FROM `INVARIANT_TARGETS` RATHER THAN RESPELLING IT, which closes a silent hole. This
+ * needle and the run-many one below each hardcoded the four names while the paragraph above
+ * cites `INVARIANT_TARGETS` as canonical -- so a FIFTH invariant target would have left the
+ * detector silently four-of-five, asserting a line that no longer describes the run. Nx filters
+ * the printed list down to targets that resolved, so that failure mode is exactly the
+ * three-of-four blindness this block already warns about, one member further along. Deriving it
+ * makes a widened `INVARIANT_TARGETS` a RED TEST instead of a quiet narrowing.
+ *
+ * The join product is byte-identical to the literal it replaces, so no verdict changes and the
+ * workflow file is not touched.
  */
-const MULTI_TARGET_SUCCESS_LINE =
-  'Successfully ran targets build, typecheck, test, lint for project';
+const MULTI_TARGET_SUCCESS_LINE = `Successfully ran targets ${INVARIANT_TARGETS.join(', ')} for project`;
 
 const RESTORE_NOTE =
   'If the workflow was legitimately reworked, update this describe in the SAME commit; do not ' +
@@ -137,10 +148,19 @@ describe('windows-regression-detector.yml workflow config -- the XOS-05 detector
   // green while the flag MIGRATES onto a different command in a second step -- an
   // `nx reset --skip-nx-cache` warm-up, say -- with the four-target run keeping the cache
   // and replaying Linux artifacts, which this clause's own reason calls "a slower copy of
-  // the ci.yml Windows legs". The literal below contains no `.` and no other metacharacter,
-  // so it can only match CONTIGUOUSLY and therefore only on ONE line. MEASURED against the
-  // written workflow, and measured against the mutation too: dropping the flag from the
-  // run-many line no longer leaves this clause green.
+  // the ci.yml Windows legs".
+  //
+  // THE CONTIGUOUS-MATCH PROPERTY NOW RESTS ON `INVARIANT_TARGETS`, not on a literal, and the
+  // claim is moved rather than left standing over a computed value. This used to read "the
+  // literal below contains no `.` and no other metacharacter, so it can only match
+  // CONTIGUOUSLY and therefore only on ONE line" -- true of a literal, and no longer a
+  // statement about what is written below. The pattern is BUILT from `INVARIANT_TARGETS`, so
+  // the property holds exactly as long as its members stay metacharacter-free; today all four
+  // are `[a-z]+`. A member containing a regex metacharacter would silently widen this pattern,
+  // which is the one way this derivation could go wrong.
+  //
+  // MEASURED against the written workflow, and measured against the mutation too: dropping the
+  // flag from the run-many line no longer leaves this clause green.
   it('bypasses the Nx cache on the SAME invocation that runs the four targets', () => {
     expect(
       codeLines,
@@ -151,7 +171,11 @@ describe('windows-regression-detector.yml workflow config -- the XOS-05 detector
         'all. Asserted as one contiguous line rather than as a file-wide containment, because ' +
         'a containment is satisfied by the flag sitting on any OTHER command in any other ' +
         `step. ${RESTORE_NOTE}`,
-    ).toMatch(/nx run-many -t build typecheck test lint --skip-nx-cache/);
+    ).toMatch(
+      new RegExp(
+        `nx run-many -t ${INVARIANT_TARGETS.join(' ')} --skip-nx-cache`,
+      ),
+    );
   });
 
   it('proves the run happened, rather than inferring it from an exit code', () => {

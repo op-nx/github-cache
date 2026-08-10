@@ -14,6 +14,7 @@ import {
   hasOnlyFaultCode,
 } from '../lib/octokit-fault-reason.js';
 import { statusOf } from '../lib/octokit-status.js';
+import { mirroredByLabel } from '../lib/mirrored-by-label.js';
 import { cachePlatform, releaseAssetName } from '../lib/release-asset-name.js';
 import { shardTag } from '../lib/retention.js';
 
@@ -819,7 +820,12 @@ export async function publishMirror(
   // the hoist is a readability and cost choice, not a correctness invariant. The only
   // thing protecting it is the multi-hash called-ONCE case in publish-mirror.spec.ts;
   // nothing else in the suite would notice the move. Do not read more protection into it.
-  const label = `mirrored-by: ${cachePlatform()}`;
+  // BUILT FROM `lib/mirrored-by-label.js`, which owns the literal. It used to be authored
+  // here and re-authored at the reader's prefix, plus at five fixtures: a writer-side rename
+  // therefore passed every spec while breaking the only mechanism that detects a dead publish
+  // leg. This file already imports from `lib/release-asset-name.js` and the new leaf is
+  // unreachable from `serve()`, so no consumer's dependency set grows.
+  const label = mirroredByLabel(cachePlatform());
 
   for (const hash of hashes) {
     const name = releaseAssetName(hash);

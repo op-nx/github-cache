@@ -5,6 +5,7 @@ import { isSyncTrusted } from '../lib/sync-gate.js';
 import { resolveGitHubToken } from '../lib/github-identity.js';
 import { dogfoodBody } from '../lib/dogfood-body.js';
 import { mirrorSeedHash } from '../lib/mirror-seed.js';
+import { mirroredByLabel } from '../lib/mirrored-by-label.js';
 import { publishMirror } from '../publish/publish-mirror.js';
 import {
   CACHE_OS_VALUES,
@@ -382,9 +383,14 @@ describe('createPublishClient.uploadReleaseAsset label forwarding (OBS-03, D-09)
       rest: { repos: { uploadReleaseAsset } },
     } as unknown as Octokit;
     const bytes = Buffer.from('ab');
+    // BUILT from `lib/mirrored-by-label.js`, which owns the literal, rather than authored
+    // here. Still an INPUT chosen by this test -- the adapter never derives the label -- so
+    // naming an OS explicitly stays correct; what the builder removes is the second authored
+    // copy of the prefix.
+    const label = mirroredByLabel('windows');
 
     const client = createPublishClient(octokit, 'op-nx', 'github-cache', 'ref');
-    await client.uploadReleaseAsset(7, 'nm', bytes, 'mirrored-by: windows');
+    await client.uploadReleaseAsset(7, 'nm', bytes, label);
 
     expect(uploadReleaseAsset).toHaveBeenCalledOnce();
     // ONE assertion over the WHOLE recorded argument object, never a per-property pair
@@ -399,7 +405,7 @@ describe('createPublishClient.uploadReleaseAsset label forwarding (OBS-03, D-09)
       release_id: 7,
       name: 'nm',
       data: bytes,
-      label: 'mirrored-by: windows',
+      label,
       headers: {
         'content-type': 'application/octet-stream',
         'content-length': '2',

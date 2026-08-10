@@ -8,6 +8,10 @@ import {
   resolveRepoIdentity,
 } from '../lib/local-context.js';
 import { mirrorSeedHash } from '../lib/mirror-seed.js';
+import {
+  MIRRORED_BY_PREFIX,
+  mirroredByLabel,
+} from '../lib/mirrored-by-label.js';
 import { shardTag } from '../lib/retention.js';
 import {
   CACHE_OS_VALUES,
@@ -177,9 +181,9 @@ function ownSeedRow(readerOs: CacheOs, label: string | null): AssetRow {
   };
 }
 
-/** The publisher's label value. Pinned as a literal, exactly as publish-mirror.spec.ts does. */
+/** The publisher's label value, built from the leaf that owns it -- not re-authored here. */
 function mirroredBy(os: CacheOs): string {
-  return `mirrored-by: ${os}`;
+  return mirroredByLabel(os);
 }
 
 /** `count` rows that are NOT the asset under test -- page filler, nothing more. */
@@ -343,6 +347,22 @@ describe('round-trip read-back still fails loud on every corruption class (09-08
  * would sample the non-linux legs at rate ZERO.
  */
 describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U-01)', () => {
+  // THE OTHER HALF OF SINGLE-SOURCING THE LABEL, and the one the extraction itself created
+  // the need for. Routing the writer, this reader and all five fixtures through
+  // `lib/mirrored-by-label.js` makes a writer/reader DIVERGENCE structurally impossible --
+  // measured: giving the writer its own literal reddens eight clauses in
+  // publish-mirror.spec.ts. What it cannot catch is a COORDINATED rename of the one authored
+  // copy, which before the extraction took seven consistent edits and now takes one.
+  //
+  // A coordinated rename is not harmless: assets ALREADY IN THE SHARD carry the current
+  // prefix, so a renamed reader finds no label it recognises on any of them and reports a
+  // MISS -- the same silent symptom as a dead publish leg, on a healthy one. The prefix is
+  // therefore a PERSISTED contract, not an internal name, and this pin is what makes changing
+  // it a deliberate two-place edit with this reasoning in front of the author.
+  it('pins the persisted label prefix, which already-published assets carry', () => {
+    expect(MIRRORED_BY_PREFIX).toBe('mirrored-by: ');
+  });
+
   it.each(CACHE_OS_VALUES)(
     'accepts a %s leg asset labelled as published by that same leg',
     async (os) => {

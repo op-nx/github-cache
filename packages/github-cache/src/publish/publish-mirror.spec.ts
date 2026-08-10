@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { hashArray } from 'nx/src/hasher/file-hasher.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Hash } from '../lib/cache-key.js';
+import { mirroredByLabel } from '../lib/mirrored-by-label.js';
 import {
   CACHE_OS_VALUES,
   cachePlatform,
@@ -88,7 +89,7 @@ const cachePlatformMock = vi.mocked(cachePlatform);
  * it.each group below, which mocks all three OSes and so must differ from the ambient one.
  */
 const PUBLISHING_OS = CACHE_OS_VALUES[0];
-const LABEL = `mirrored-by: ${PUBLISHING_OS}`;
+const LABEL = mirroredByLabel(PUBLISHING_OS);
 
 /**
  * A restore HIT whose bytes carry only the byteLength the engine reads before the size
@@ -405,7 +406,7 @@ describe('publishMirror mirrored-by label (OBS-03, D-09/D-10/D-11)', () => {
           SHARD_ID,
           releaseAssetName(HASH),
           expect.anything(),
-          `mirrored-by: ${os}`,
+          mirroredByLabel(os),
         ],
       ]);
     },

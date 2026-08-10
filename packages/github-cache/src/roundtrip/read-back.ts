@@ -11,6 +11,7 @@ import {
   resolveRepoIdentity,
 } from '../lib/local-context.js';
 import { mirrorSeedHash } from '../lib/mirror-seed.js';
+import { MIRRORED_BY_PREFIX } from '../lib/mirrored-by-label.js';
 import {
   cachePlatform,
   releaseAssetName,
@@ -30,17 +31,14 @@ const GITHUB_API = 'https://api.github.com';
 const FETCH_TIMEOUT_MS = 5000;
 const ASSETS_PER_PAGE = 100;
 
-/**
- * The publisher-label prefix. The OTHER home for this literal is publish-mirror.ts's
- * upload, which STAMPS it -- so the writer and this reader must agree, and the pinned-
- * literal discipline (dogfood-body.ts's template, pinned in two files by design) is what
- * this follows rather than a shared constant. Considered and rejected: a lib leaf owning
- * the label. Extracting one would touch publish-mirror.ts, which sits in the publish graph
- * a ROBUST-04 rebuild already covers, to remove a drift whose failure mode is a LOUD
- * publish-verify RED naming both values -- not the silent MISS that justifies single-
- * sourcing the asset NAME. A guard that fails loudly does not need a second mechanism.
- */
-const MIRRORED_BY_PREFIX = 'mirrored-by: ';
+// The publisher-label prefix is IMPORTED from `lib/mirrored-by-label.js`, which owns it, and
+// is no longer authored here. The literal used to be pinned in this file and re-authored at
+// the writer, on the pinned-literal discipline -- whose stated reason was that a drift fails
+// LOUD, naming both values. That reason held for a rename made in BOTH files and not for a
+// rename made in one: this reader then finds no label with the expected prefix and reports a
+// MISS, which reads as a dead publish path rather than as a renamed field. Both this file and
+// the writer already import from `lib/release-asset-name.js`, and the new leaf is unreachable
+// from `serve()`, so neither consumer's dependency set grows.
 
 /**
  * Assert the shard asset this leg just read back was uploaded by THIS leg's own publish

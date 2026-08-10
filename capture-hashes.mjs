@@ -56,12 +56,24 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { readNxJson } from 'nx/src/config/nx-json.js';
-import { createTaskHasher } from 'nx/src/hasher/create-task-hasher.js';
-import { getNativeFileCacheLocation } from 'nx/src/native/native-file-cache-location.js';
-import { createProjectGraphAsync } from 'nx/src/project-graph/project-graph.js';
-import { createTaskGraph } from 'nx/src/tasks-runner/create-task-graph.js';
-import { workspaceDataDirectory } from 'nx/src/utils/cache-directory.js';
+// THE SIX `nx/src/...` SPECIFIERS ARE LOADED LAZILY, at the four sites that use
+// them, and this is a deliberate shape rather than an accident of editing.
+// EVERY argument-rejection path in this file exits before reaching any Nx API,
+// and `capture-hashes-cli.spec.ts` spawns the instrument SEVEN times for exactly
+// those cases. Measured at the tree that made this change: a warm load of the six
+// specifiers costs 687-1507 ms, a full rejection spawn costs roughly 1000 ms, and
+// a bare `node -e "process.exit(0)"` costs 375-526 ms -- so roughly half of every
+// rejection spawn was module load the rejection never used. The move is total
+// rather than partial because the only OTHER static imports here are
+// `node:child_process`, `node:fs` and `node:url`: nothing else in this file pulls
+// the Nx subtree, so deferring all six removes it ENTIRELY from every path that
+// never reaches an Nx API. Deferring SOME of them would leave the subtree loaded
+// by a sibling specifier and buy nothing.
+//
+// This changes module-load TIMING only; it computes no value differently. The
+// record produced after the change was proven byte-identical on `build`,
+// `typecheck`, `integration` and `lint` (`test` rotates, because this file is
+// itself a hashed `test` input -- see nx.json `targetDefaults.test.inputs`).
 
 // A downstream reader that stops early (`| rg -q ...`, `| head`) closes the pipe
 // while the record is still being written, and node's default is to emit an
@@ -264,9 +276,16 @@ function directoryState(directory) {
  * counts. Measured here: the "native file cache" is not a hash cache at all --
  * `native/index.js:96-107` uses it to hold ONE version-prefixed copy of the
  * `.node` addon binary ("we copy the file to a workspace-scoped tmp directory
- * ... to avoid stale files being loaded"), and this file's own static import of
- * `nx/src/project-graph/project-graph.js` puts it there before any measurement
- * can run. Requiring both counts to be zero would therefore make `cold`
+ * ... to avoid stale files being loaded"), and this function's own load of the Nx
+ * subtree puts it there before any measurement can run. That last clause used to
+ * read "this file's own static import of `nx/src/project-graph/project-graph.js`",
+ * which the lazy-import change falsified; it is CORRECTED rather than deleted,
+ * because the conclusion it supports is unchanged and a reader needs to know the
+ * mechanism still holds. The mechanism now: the `await import` of
+ * `nx/src/utils/cache-directory.js` two lines below requires `nx/src/native`,
+ * which performs that copy -- so the native directory is still populated before
+ * `directoryState` reads it, on the very call that reads it. Requiring both
+ * counts to be zero would therefore STILL make `cold`
  * UNREACHABLE and every record permanently `warm`, which is the same class of
  * silent-always-passes defect D-04 exists to prevent. The workspace-data
  * directory is the surface that actually persists the project graph, the file
@@ -274,7 +293,11 @@ function directoryState(directory) {
  * staleness axis is entirely about. The native count stays in the record as
  * evidence; it just cannot discriminate.
  */
-function measureGraphState() {
+async function measureGraphState() {
+  const { getNativeFileCacheLocation } =
+    await import('nx/src/native/native-file-cache-location.js');
+  const { workspaceDataDirectory } =
+    await import('nx/src/utils/cache-directory.js');
   const workspaceData = directoryState(workspaceDataDirectory);
   const nativeFileCache = directoryState(getNativeFileCacheLocation());
 
@@ -355,6 +378,10 @@ function runDiscriminator(command) {
  * void, and writes to the task-details SQLite DB during a measurement.
  */
 async function captureTargets(projectGraph, nxJson) {
+  const { createTaskGraph } =
+    await import('nx/src/tasks-runner/create-task-graph.js');
+  const { createTaskHasher } =
+    await import('nx/src/hasher/create-task-hasher.js');
   const targets = {};
 
   for (const target of TARGETS) {
@@ -412,8 +439,15 @@ async function capture(args) {
     );
   }
 
-  // MEASURED BEFORE the project graph is built (Pitfall 1).
-  const graph = measureGraphState();
+  // MEASURED BEFORE the project graph is built (Pitfall 1), and deliberately
+  // before the two `await import`s below rather than after them -- the lazy-import
+  // change must not quietly move this measurement later in the sequence than the
+  // static imports used to put it.
+  const graph = await measureGraphState();
+
+  const { readNxJson } = await import('nx/src/config/nx-json.js');
+  const { createProjectGraphAsync } =
+    await import('nx/src/project-graph/project-graph.js');
   const nxJson = readNxJson();
   const discriminator = runDiscriminator(readDiscriminatorCommand(nxJson));
 
@@ -518,8 +552,17 @@ async function capture(args) {
  *
  * `projectGraph.nodes` is the workspace-project map; external npm nodes live in
  * `externalNodes` and are not included.
+ *
+ * `createTaskGraph` ARRIVES AS A PARAMETER rather than an import, and that is the
+ * shape the lazy-load change chose deliberately. This is the one SYNCHRONOUS
+ * consumer of the Nx subtree in this file, so an `await import` here would force
+ * it async for no gain, and its only alternative -- a module-scope prime-once
+ * cache -- makes an unprimed read a silent `undefined` instead of a loud failure.
+ * Its only two callers both sit inside `assertGraphPremise`, which awaits the
+ * import ONCE and passes the binding to both, so the dependency is explicit and
+ * the function stays sync.
  */
-function resolvedTaskIds(projectGraph, targets) {
+function resolvedTaskIds(projectGraph, targets, createTaskGraph) {
   const projects = Object.keys(projectGraph.nodes).filter((name) =>
     targets.some((target) => projectGraph.nodes[name].data.targets?.[target]),
   );
@@ -607,6 +650,13 @@ async function assertGraphPremise(args) {
   // field was making the same claim unguarded.
   const workingTreeClean = git('status', '--porcelain').length === 0;
   const commit = git('rev-parse', 'HEAD').trim();
+
+  const { createProjectGraphAsync } =
+    await import('nx/src/project-graph/project-graph.js');
+  // Awaited ONCE here and handed to both `resolvedTaskIds` calls below, which is
+  // what lets that function stay synchronous.
+  const { createTaskGraph } =
+    await import('nx/src/tasks-runner/create-task-graph.js');
   const projectGraph = await createProjectGraphAsync({ exitOnError: false });
 
   // The Windows CI leg's ACTUAL command is `npm run integration`, i.e.
@@ -618,8 +668,16 @@ async function assertGraphPremise(args) {
   const controlTargets = [CONTROL_TARGET];
   const premiseCommand = `nx run-many -t ${premiseTargets.join(' ')}`;
   const controlCommand = `nx run-many -t ${controlTargets.join(' ')}`;
-  const premiseIds = resolvedTaskIds(projectGraph, premiseTargets);
-  const controlIds = resolvedTaskIds(projectGraph, controlTargets);
+  const premiseIds = resolvedTaskIds(
+    projectGraph,
+    premiseTargets,
+    createTaskGraph,
+  );
+  const controlIds = resolvedTaskIds(
+    projectGraph,
+    controlTargets,
+    createTaskGraph,
+  );
 
   // Built once and appended to every throw below, so no failure path can forget
   // to say what was actually observed.

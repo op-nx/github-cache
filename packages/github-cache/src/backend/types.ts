@@ -55,15 +55,12 @@ export interface WritableBackend extends ReadableBackend {
  * so re-opening the hole requires WIDENING a declared return type -- a visible, reviewable
  * diff instead of a silent one.
  *
- * `readonly` is documentation, not the mechanism: it contributes nothing to
- * assignability. Do not describe it as the mechanism.
- *
  * INTERNAL. Deliberately NOT re-exported from `src/index.ts`: D2-02 forbids new package
  * exports this milestone, and `public-surface.spec.ts` asserts over the BARREL alone, so
  * an internal type changes nothing a consumer or that spec can see.
  */
 export interface ReadOnlyBackend extends ReadableBackend {
-  readonly put?: never;
+  put?: never;
 }
 
 /**

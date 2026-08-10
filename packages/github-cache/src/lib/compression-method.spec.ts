@@ -276,9 +276,7 @@ const FORBIDDEN_RESULT_MEMBERS = [
  * else, and every needle below is single-line, so no clause changes verdict. Do not add a needle
  * spanning a blank line.
  */
-const strippedSourceOf = stripLineComments;
-
-const strippedSubject = strippedSourceOf(
+const strippedSubject = stripLineComments(
   readFileSync(new URL('compression-method.ts', import.meta.url), 'utf8'),
 );
 
@@ -317,7 +315,7 @@ describe('the compression-method scanner FIRES rather than being silently blind 
         `export const probe = ${token} === 0;`,
       ].join('\n');
 
-      expect(needle.test(strippedSourceOf(fixture))).toBe(true);
+      expect(needle.test(stripLineComments(fixture))).toBe(true);
     },
   );
 
@@ -333,7 +331,7 @@ describe('the compression-method scanner FIRES rather than being silently blind 
         'export const probe = 1;',
       ].join('\n');
 
-      expect(needle.test(strippedSourceOf(fixture))).toBe(false);
+      expect(needle.test(stripLineComments(fixture))).toBe(false);
     },
   );
 });

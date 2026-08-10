@@ -433,11 +433,6 @@ function outcomeOf(env: NodeJS.ProcessEnv): SelectOutcome {
   }
 }
 
-/** The single forbidden transition: a non-writable outcome becoming writable. */
-function widened(withoutKnob: SelectOutcome, withKnob: SelectOutcome): boolean {
-  return withKnob === 'writable' && withoutKnob !== 'writable';
-}
-
 describe('TRUST-14: CACHE_READ_ONLY is a ROLE signal that can only narrow', () => {
   // ROLE (producer vs consumer), NOT trust: `push` and same-repo `pull_request` are
   // both correctly write-TRUSTED, and no GitHub-supplied env fact distinguishes a leg
@@ -507,12 +502,14 @@ describe('TRUST-14: CACHE_READ_ONLY is a ROLE signal that can only narrow', () =
 
       expect(withoutKnob).toBe(expectedWithoutKnob);
 
-      // The implication `writable(withKnob) => writable(withoutKnob)`, asserted by
-      // negating the QUANTIFIER ("no row widened") rather than a predicate. An
-      // `if (withKnob === 'writable')` guard around the assertion would be the vacuous
-      // form -- it skips every row silently and passes; so would a negated matcher
-      // inside a single call assertion, which this repo has shipped before.
-      expect(widened(withoutKnob, withKnob)).toBe(false);
+      // The single forbidden transition, spelled inline: a non-writable outcome
+      // becoming writable. That is the implication `writable(withKnob) =>
+      // writable(withoutKnob)`, asserted by negating the QUANTIFIER ("no row widened")
+      // rather than a predicate. An `if (withKnob === 'writable')` guard around the
+      // assertion would be the vacuous form -- it skips every row silently and passes;
+      // so would a negated matcher inside a single call assertion, which this repo has
+      // shipped before.
+      expect(withKnob === 'writable' && withoutKnob !== 'writable').toBe(false);
 
       // Throw parity in BOTH directions, not just the knobbed one. A knob that
       // swallowed the fail-closed branch would otherwise read as a successful
@@ -534,8 +531,8 @@ describe('TRUST-14: CACHE_READ_ONLY is a ROLE signal that can only narrow', () =
   // exactly T-13-03-E1's shape -- left the whole suite GREEN at 42 files / 978 tests.
   // The table above is blind to it because `outcomeOf` collapses BOTH read-only
   // outcomes to the single token 'read-only': memory-degrade and read-only-Actions are
-  // indistinguishable to `isWritableBackend`, so `widened()` stays false and the row
-  // passes while the fail-safe branch has been bypassed. (A hoist above the
+  // indistinguishable to `isWritableBackend`, so the widening condition stays false and
+  // the row passes while the fail-safe branch has been bypassed. (A hoist above the
   // repository-identity THROW is caught, by the throw-parity assertion above -- which
   // is why only this one direction needed a new clause.)
   //

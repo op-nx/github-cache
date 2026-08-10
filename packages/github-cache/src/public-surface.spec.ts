@@ -58,10 +58,10 @@ const EXPECTED_ACTION_INPUTS = ['port'];
  * in. A code refactor that renames or drops a knob orphans it from this set and
  * fails the guard (T-06-02-02: a silent cache-MISS class defect).
  *
- * REPO-RELATIVE, because `readSource` now goes through `readRepoFile` instead of
- * re-implementing that read against this spec's own location. One path family for every
- * entry, including the one outside the package -- which the old spec-relative form had to
- * reach with a four-levels-up walk.
+ * REPO-RELATIVE, because these paths are read through the shared `readRepoFile`
+ * instead of a re-implementation resolving against this spec's own location. One path
+ * family for every entry, including the one outside the package -- which the old
+ * spec-relative form had to reach with a four-levels-up walk.
  */
 const KNOB_SOURCE_FILES = [
   'packages/github-cache/src/server/server.ts',
@@ -74,15 +74,6 @@ const KNOB_SOURCE_FILES = [
 
 /** The fixed 2 GiB PUT body cap (SRV-04), a contract limit and NOT an env knob. */
 const EXPECTED_MAX_CACHE_BODY_BYTES = 2_147_483_648;
-
-// THROUGH `readRepoFile`, not a second copy of its body. This function used to
-// re-implement that read verbatim, which is one of the two sites that falsified the
-// helper's canonical-copy claim -- and the hazard is not the duplication but that a
-// re-implementation resolves from THIS file's location, so moving this spec silently
-// changes what it reads while every clause stays green.
-function readSource(relativePath: string): string {
-  return readRepoFile(relativePath);
-}
 
 /**
  * Parse the `export type { ... }` names out of the barrel source. Iterates ALL
@@ -149,7 +140,7 @@ describe('public consumer surface (DOCS-05)', () => {
 
   it('package type exports are exactly the enumerated set (D-04 group c)', () => {
     const typeExports = parseTypeExports(
-      readSource('packages/github-cache/src/index.ts'),
+      readRepoFile('packages/github-cache/src/index.ts'),
     );
 
     expect(typeExports.sort()).toEqual([...EXPECTED_TYPE_EXPORTS].sort());
@@ -157,7 +148,7 @@ describe('public consumer surface (DOCS-05)', () => {
 
   it('consumer action inputs are exactly the enumerated set (D-04 group b)', () => {
     const inputs = parseActionInputKeys(
-      readSource('start-cache-server/action.yml'),
+      readRepoFile('start-cache-server/action.yml'),
     );
 
     expect(inputs.sort()).toEqual([...EXPECTED_ACTION_INPUTS].sort());
@@ -199,7 +190,7 @@ describe('public consumer surface (DOCS-05)', () => {
 });
 
 describe('documented env knobs stay wired in the package source (T-06-02-02)', () => {
-  const knobSource = KNOB_SOURCE_FILES.map((path) => readSource(path)).join(
+  const knobSource = KNOB_SOURCE_FILES.map((path) => readRepoFile(path)).join(
     '\n',
   );
 

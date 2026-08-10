@@ -90,6 +90,24 @@ Thumbs.db
 # so the CI-teed set stays readable as a complete list.
 /test-*.log
 
+# The workspace-ROOT record DIRECTORIES and BINARY PAYLOADS, completing the same set. The
+# rules above enumerate every root log and record FILE and then leave these four unignored,
+# which is what made the "any untracked workspace-root artifact" claim false:
+#
+#   - `hash-parity-records/` and `integration-hash-records/` are `mkdir -p`'d at the root by
+#     ci.yml (the hash-parity and integration jobs) and are the download targets for the
+#     artifacts `assert-parity.ts` reads. This is the sharper half: an untracked record
+#     directory sitting beside a capture pegs `workingTreeClean` to false, and that field is
+#     exactly how a LOCAL hash reproduction proves its own provenance -- so leaving these out
+#     breaks the clean-working-tree signal `capture-hashes.mjs` records, which is the signal a
+#     reproduction rests on.
+#   - `payload.bin` and `roundtrip.bin` are written at the root by the consumer-smoke PUT/GET
+#     probe. Same mechanism, and they are binary, so they are worthless as history besides.
+/hash-parity-records/
+/integration-hash-records/
+/payload.bin
+/roundtrip.bin
+
 # op-nx/github-cache act test harness (test-only, never a runtime dep)
 .act-cache
 .act-artifacts

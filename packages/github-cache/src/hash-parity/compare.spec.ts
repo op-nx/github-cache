@@ -23,10 +23,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import {
-  readRepoFile,
-  stripYamlComments,
-} from '../test/repo-file.js';
+import { readRepoFile, stripYamlComments } from '../test/repo-file.js';
 import {
   collapseToOneLine,
   compareHashParity,

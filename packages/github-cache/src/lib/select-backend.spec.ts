@@ -662,7 +662,9 @@ describe('select-backend.ts keeps the knob LAST and reads it as bare truthiness 
     // guarantee its message states -- "every branch above has already returned read-only or
     // thrown". An anchor against one of three earlier branches does not say that.
     const trust = selectBackendCode.indexOf('isWriteTrusted(env).trusted');
-    const identity = selectBackendCode.indexOf('GITHUB_REPOSITORY_PATTERN.test');
+    const identity = selectBackendCode.indexOf(
+      'GITHUB_REPOSITORY_PATTERN.test',
+    );
     const token = selectBackendCode.indexOf('resolveGitHubToken(env)');
     const knob = selectBackendCode.indexOf('env.CACHE_READ_ONLY');
     const writable = selectBackendCode.indexOf(

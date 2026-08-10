@@ -178,10 +178,7 @@ export type GitHubErrorCode =
  * this -- which keeps the module's rule intact: only an explicit code earns a benign branch,
  * and an unreadable body still earns none.
  */
-export function hasFaultCode(
-  error: unknown,
-  code: GitHubErrorCode,
-): boolean {
+export function hasFaultCode(error: unknown, code: GitHubErrorCode): boolean {
   return faultErrors(error).some((entry) => entryField(entry, 'code') === code);
 }
 

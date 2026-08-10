@@ -144,7 +144,9 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
   /** Every fenced block opened with the given info string, bodies only. */
   function fencedBodies(infoString: string): string[] {
     return [
-      ...doc.matchAll(new RegExp(`^\`\`\`${infoString}\\n([\\s\\S]*?)^\`\`\``, 'gm')),
+      ...doc.matchAll(
+        new RegExp(`^\`\`\`${infoString}\\n([\\s\\S]*?)^\`\`\``, 'gm'),
+      ),
     ].map((match) => match[1]);
   }
 

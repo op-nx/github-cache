@@ -2205,7 +2205,7 @@ describe('ci.yml proves the lint target actually RAN, not merely exited 0 (LINT-
   it('greps the lint run log for the target-ran line', () => {
     expect(
       jobBlock('lint'),
-      "ci.yml's `lint` job must grep its run log for `Successfully ran target lint`. `npm run lint` is `nx run-many -t lint`, which with NO matching target anywhere prints \"No tasks were run\" and EXITS 0 -- so without this grep, deleting the four-line @nx/eslint/plugin registration from nx.json converts the entire lint leg into a no-op that reports success. That registration is guarded locally by nx-target-inputs.spec.ts, but only this leg can catch the plugin inferring nothing ON A RUNNER (D-35's deliberately unverified cross-OS risk). Keep the grep UNANCHORED: Nx prints the phrase behind a leading space and its own banner prefix, so a `^` would fail every run.",
+      'ci.yml\'s `lint` job must grep its run log for `Successfully ran target lint`. `npm run lint` is `nx run-many -t lint`, which with NO matching target anywhere prints "No tasks were run" and EXITS 0 -- so without this grep, deleting the four-line @nx/eslint/plugin registration from nx.json converts the entire lint leg into a no-op that reports success. That registration is guarded locally by nx-target-inputs.spec.ts, but only this leg can catch the plugin inferring nothing ON A RUNNER (D-35\'s deliberately unverified cross-OS risk). Keep the grep UNANCHORED: Nx prints the phrase behind a leading space and its own banner prefix, so a `^` would fail every run.',
     ).toMatch(/grep -q 'Successfully ran target lint' \S+\.log$/m);
   });
 });

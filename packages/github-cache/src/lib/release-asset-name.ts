@@ -189,7 +189,14 @@ export function isCurrentAssetName(name: string): boolean {
  * MEASURED: 0 both-true results over a 26-case adversarial table AND 1.6M
  * randomised candidates drawn from `abcdef0123456789-nxcheus`, each wrapped four
  * ways. Both reasons and the table are asserted directly in
- * release-asset-name.spec.ts with the both-true count pinned to 0.
+ * release-asset-name.spec.ts, by a PAIR of clauses neither of which suffices
+ * alone: a per-row `it.each` asserting no name satisfies both branches, plus a
+ * `toHaveLength(26)` lock proving the table it ran over is still the full 26 --
+ * without the size lock, a per-row loop over a silently shortened table still
+ * passes and would report full coverage. The aggregate both-true COUNT that this
+ * paragraph previously cited was deleted by quick task 260810-pvw (item P6) as
+ * redundant against exactly that pair; the property is unchanged, only the
+ * clause that carries it.
  */
 export function isLegacyOsSuffixedAssetName(name: string): boolean {
   const separator = name.lastIndexOf('-');

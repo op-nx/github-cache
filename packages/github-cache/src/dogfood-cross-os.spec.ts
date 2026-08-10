@@ -73,6 +73,105 @@ function jobBlock(name: string): string {
   return (end < 0 ? rest : rest.slice(0, end)).join('\n');
 }
 
+/**
+ * The Windows-arm runner label, and the OS-list member the matrix legs reach it through.
+ * One authored copy, because the census below tests for it in two different shapes.
+ */
+const WINDOWS_RUNNER = 'windows-11-arm';
+
+/** One job as the read-only-knob partition needs to see it. */
+interface JobCensusRow {
+  readonly name: string;
+  /** Reaches a Windows runner -- either declared literally or through an OS matrix. */
+  readonly windowsLeg: boolean;
+  /** Starts the local cache sidecar, so it HAS a remote cache client to configure. */
+  readonly sidecar: boolean;
+  /** Runs an OS-portable Nx target, so a cross-OS restore is the thing being proven. */
+  readonly portable: boolean;
+  /** How many lines mention the knob at all -- the partition asserts on this count. */
+  readonly knobSites: number;
+}
+
+/**
+ * EVERY job in `ci.yml`, derived rather than listed. This is what replaces
+ * `READ_ONLY_LEG_SITES = 3`, and the replacement is the whole point of T1-5: a CARDINALITY
+ * assertion cannot localize. "The knob appears exactly three times" is satisfiable by
+ * deletion (drop it from a consumer, add it to a producer, count unchanged) and it is
+ * completely blind to a NEW Windows job, which is the case the invariant most needs to
+ * catch. The invariant is PER JOB, so the guard has to be per job.
+ *
+ * SLICED FROM THE `jobs:` KEY FIRST, and the slice is required rather than tidy. MEASURED:
+ * without it, `on:`'s trigger children `push:` and `pull_request:` sit at the same two-space
+ * indent with a bare colon and enter the census as PHANTOM JOBS. The only top-level keys in
+ * this file are `name`, `on`, `permissions`, `concurrency` and `jobs`.
+ *
+ * `codeLines` is comment-stripped, which matters in the usual direction: `ci.yml` names the
+ * knob in several prose comments explaining the rule, so a raw read would count them as
+ * sites.
+ */
+function jobCensus(): JobCensusRow[] {
+  const jobsAt = codeLines.findIndex((line) => /^jobs:\s*$/.test(line));
+
+  if (jobsAt < 0) {
+    throw new Error(
+      'ci.yml: no top-level `jobs:` key -- the read-only-knob partition cannot enumerate anything, and an empty census would make both of its clauses pass trivially',
+    );
+  }
+
+  const region = codeLines.slice(jobsAt + 1);
+  const rows: JobCensusRow[] = [];
+
+  region.forEach((line, index) => {
+    const keyed = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line);
+
+    if (keyed === null) {
+      return;
+    }
+
+    const rest = region.slice(index + 1);
+    const end = rest.findIndex((inner) => /^ {2}\S/.test(inner));
+    const body = (end < 0 ? rest : rest.slice(0, end)).join('\n');
+    const runsOn = /^\s+runs-on:\s*(.+)$/m.exec(body);
+    const runsOnValue = runsOn === null ? '' : runsOn[1].trim();
+
+    rows.push({
+      name: keyed[1],
+      // BOTH SHAPES ARE REQUIRED. Three jobs declare the runner literally; the rest reach
+      // it through `runs-on: ${{ matrix.os }}` with the label in the block's own OS list.
+      // A literal-only test sees three Windows legs where there are eight, which is the
+      // same undercount that made ci.yml's header comment wrong.
+      windowsLeg:
+        runsOnValue.includes(WINDOWS_RUNNER) ||
+        (/\$\{\{\s*matrix\.os\s*\}\}/.test(runsOnValue) &&
+          body.includes(WINDOWS_RUNNER)),
+      sidecar: /-\s*uses:\s*\.\/start-cache-server/.test(body),
+      portable: /npm run (build|typecheck|test)(\s|$)/m.test(body),
+      knobSites: body
+        .split('\n')
+        .filter((inner) => inner.includes('CACHE_READ_ONLY')).length,
+    });
+  });
+
+  return rows;
+}
+
+/**
+ * THE PREDICATE IS A THREE-WAY CONJUNCTION, and the third conjunct is not padding. A guard
+ * keyed on "Windows leg AND portable target" alone would FALSELY DEMAND the knob on four
+ * conforming jobs -- hash-parity, dogfood-verify, publish and publish-verify all reach a
+ * Windows runner and all run `npm run build`, while correctly carrying NO knob, because they
+ * have no sidecar step and therefore nothing to configure. `ci.yml` states this in its own
+ * words at the hash-parity block: `npm run build` there "resolves through Nx's LOCAL cache
+ * only, because the cache client is env-driven and this job sets none of those variables".
+ *
+ * `integration` is the MIRROR case and is why the third conjunct is `portable` rather than
+ * "runs any target": it has a sidecar on a Windows leg, but its target is OS-SENSITIVE by
+ * design and not portable, so zero knob sites is correct there too.
+ */
+const readOnlyLegs = jobCensus().filter(
+  (job) => job.windowsLeg && job.sidecar && job.portable,
+);
+
 describe('ci.yml dogfood cross-OS sampling (VER-06)', () => {
   it('scopes to a real, non-empty job block -- the control that makes the no-matrix clause non-vacuous', () => {
     // A `not.toMatch` against an empty string passes trivially, so prove the
@@ -1907,111 +2006,7 @@ describe('ci.yml keeps exactly the two record-only diagnostics XOS-09 did not co
  * `ci.yml` mentions `::add-mask::` in three separate prose comments explaining the
  * rule, so a raw read would count 11 and the pairing would be garbage.
  */
-/**
- * THE OTHER DIRECTION OF THE SAME KNOB, and the one no clause read. The three per-leg
- * `readOnlyLeg` clauses assert `CACHE_READ_ONLY` is PRESENT on each Windows consumer. What
- * makes those three gates SOUND is the complementary fact -- that the ubuntu PRODUCERS do
- * not carry it -- and `ci.yml` states that premise in prose at the build-windows block
- * ("one line the ubuntu producers deliberately do not carry") while nothing enforced it.
- *
- * WHAT A SPREAD COSTS, stated as the consequence. Copy the knob into the ubuntu
- * build/typecheck/test pre-set step during a sweep, or hoist the three copies to a
- * workflow-level `env:` block -- the natural "dedupe this" cleanup -- and every producer
- * stops writing. The Actions cache stops being repopulated on the default branch, the
- * publish job enumerates less each month, and the Releases mirror quietly stops being
- * seeded.
- *
- * THE WINDOWS GATES DO NOT CATCH IT, which is why this clause is not redundant with them.
- * Since the Case-B widening a leg legitimately restores from the DEFAULT-branch scope, so an
- * entry written by an earlier run keeps all three floor-of-1 gates green until the eviction
- * window closes -- and all three `readOnlyLeg` clauses stay green too, because each is
- * block-scoped presence only and says nothing about any other job.
- *
- * COUNT PINNED EXACTLY, never a floor, for the reason `MASKED_TOKEN_SITES` and
- * `RECORD_ONLY_SURVIVOR_SITES` are: a floor of 3 is satisfied by the three consumers alone
- * and would let a fourth site appear in silence, which is the whole failure mode. FEWER
- * means a consumer lost its knob and its gate went unsound. MEASURED against the
- * comment-stripped file -- 3 stripped, 9 raw -- not predicted, and the strip is load-bearing
- * here in the usual direction: six of the nine raw occurrences are prose explaining the
- * rule. If a leg is legitimately added or removed, RE-MEASURE and update this constant HERE
- * in the same commit.
- */
-const READ_ONLY_LEG_SITES = 3;
-
 const MASKED_TOKEN_SITES = 8;
-
-/**
- * THE ORDERING THE KNOB DEPENDS ON, which is exactly one line wide and was guarded by
- * nothing. `$GITHUB_ENV` is processed only when the WRITING STEP COMPLETES, so the echo has
- * to land in a step that finishes BEFORE the sidecar starts. In `ci.yml` those are adjacent
- * lines: the echo closes the pre-set step and `- uses: ./start-cache-server` opens the next.
- *
- * MOVE THE ECHO BELOW THE SIDECAR AND EVERY CLAUSE IN THIS FILE STAYS GREEN. The three
- * `readOnlyLeg` clauses match `/^\s+echo "CACHE_READ_ONLY=1" >> "\$GITHUB_ENV"$/m` against
- * the whole job block with a `\s+` prefix, so they are satisfied from ANY step at ANY indent;
- * the new site-count clause below still counts three; and all three `gatedCount` clauses
- * still find their comparison. Meanwhile the sidecar never sees the knob, `selectBackend`
- * takes the writable branch, and the leg is a WRITER again -- so the gate keeps printing
- * "GATED at a floor of 1" while being satisfiable by a self-produced entry on a re-run.
- * That is precisely the defect XOS-09 was opened to close, reachable by moving one line.
- *
- * SCOPED PER JOB BLOCK, not paired across the whole file, and the distinction is load-
- * bearing rather than stylistic. `ci.yml` carries EIGHT `- uses: ./start-cache-server` steps
- * against three knob writes -- the other five belong to legs that legitimately WRITE -- so a
- * whole-file positional pairing compares a leg's knob against some unrelated job's sidecar.
- * Worse, it would still PASS the regression it exists to catch: move a knob below its own
- * sidecar and the next job's sidecar is still further down the file, so a "first sidecar
- * after this knob" pairing stays satisfied. Within one job block the comparison is exact.
- *
- * INDEX COMPARISON, not a `toMatch`, for the reason T-12-05's mask clause records:
- * order-within-a-block is not something a single regex can read. Both directions fail loud --
- * a deleted echo or a deleted sidecar trips its own positive control (-1), and a reordered
- * pair inverts the comparison.
- *
- * A RUNTIME PROBE WOULD BE STRONGER AND IS DELIBERATELY NOT USED. A `curl -X PUT` expecting
- * the contract's 403 would observe the CONSTRUCTED backend rather than the YAML that selects
- * it. But on the failure it exists to detect the backend is WRITABLE, so the probe itself
- * would STORE an entry under a valid server-produced key -- which `publish-mirror` would
- * then enumerate and mirror to the public Releases shard. A control that corrupts the store
- * on exactly the run it fires is not worth the strength. The behavioural half is covered
- * instead by select-backend.spec.ts, which drives the real `selectBackend` on the real knob.
- */
-/**
- * NO WORKFLOW EXPRESSION MAY APPEAR INSIDE A `run:` BODY -- and this clause exists because
- * violating it took the ENTIRE workflow down, not because it is untidy.
- *
- * GitHub TEMPLATES a `run:` body before the shell ever sees it, so a brace-template
- * expression is evaluated even inside a shell COMMENT. Status functions (`cancelled()`,
- * `success()`, `failure()`) exist only in an `if:`, so one commented `if: <expr>` reference
- * in a run body made GitHub reject the whole file -- "Unrecognized function: 'cancelled'",
- * Invalid workflow file, ZERO jobs created, and no `pull_request` run at all. MEASURED on
- * run 30852881995: the failure surfaces as a startup failure whose run NAME is the file path
- * rather than `CI`, because GitHub could not read `name:` either.
- *
- * NOTHING ELSE IN THE TREE CATCHES IT. `codeLines` strips lines whose TRIMMED form starts
- * with `#`, which is exactly what a shell comment inside a run body looks like -- so every
- * other clause in this file is blind to run-body comments by construction. YAML parses fine
- * (the body is an opaque block scalar), so `format:check`, `lint` and every local target stay
- * green. The first signal is CI refusing to start, after the push.
- *
- * ZERO IS ALSO THE PROJECT'S SECURITY POSTURE, so the count is not merely convenient: this
- * workflow deliberately routes untrusted values through the step ENVIRONMENT rather than
- * interpolating them into scripts (the o3-witness block's own BASH_ENV injection analysis),
- * and an expression templated into a shell body is the canonical script-injection sink. The
- * two reasons point the same way, which is why this is a flat zero rather than an allowlist.
- *
- * SCOPED TO RUN BODIES, not grepped file-wide, and that scoping is REQUIRED rather than
- * tidy: `ci.yml` legitimately carries brace-template expressions in `if:`, `env:` and `with:`
- * values, and THREE of its YAML comments quote one while explaining a rule. A file-wide
- * needle would be red on a correct file, which is how a reader talks themselves into
- * deleting a guard.
- *
- * HAND-ROLLED BLOCK-SCALAR SCAN, deliberately, rather than a YAML parser: neither `js-yaml`
- * nor `yaml` is a declared dependency of this workspace (both are merely transitive), and no
- * spec in the tree parses YAML today. Adding a parser dependency to read one file would cost
- * more than the scan, which is exact for the only shape this file uses -- `run: |` followed
- * by lines indented deeper than the `run:` key itself.
- */
 
 /**
  * Every line inside a `run:` block scalar, with the job it belongs to. A block scalar owns
@@ -2081,6 +2076,42 @@ function runBodyLines(): { job: string; line: string }[] {
 
   return collected;
 }
+/**
+ * NO WORKFLOW EXPRESSION MAY APPEAR INSIDE A `run:` BODY -- and this clause exists because
+ * violating it took the ENTIRE workflow down, not because it is untidy.
+ *
+ * GitHub TEMPLATES a `run:` body before the shell ever sees it, so a brace-template
+ * expression is evaluated even inside a shell COMMENT. Status functions (`cancelled()`,
+ * `success()`, `failure()`) exist only in an `if:`, so one commented `if: <expr>` reference
+ * in a run body made GitHub reject the whole file -- "Unrecognized function: 'cancelled'",
+ * Invalid workflow file, ZERO jobs created, and no `pull_request` run at all. MEASURED on
+ * run 30852881995: the failure surfaces as a startup failure whose run NAME is the file path
+ * rather than `CI`, because GitHub could not read `name:` either.
+ *
+ * NOTHING ELSE IN THE TREE CATCHES IT. `codeLines` strips lines whose TRIMMED form starts
+ * with `#`, which is exactly what a shell comment inside a run body looks like -- so every
+ * other clause in this file is blind to run-body comments by construction. YAML parses fine
+ * (the body is an opaque block scalar), so `format:check`, `lint` and every local target stay
+ * green. The first signal is CI refusing to start, after the push.
+ *
+ * ZERO IS ALSO THE PROJECT'S SECURITY POSTURE, so the count is not merely convenient: this
+ * workflow deliberately routes untrusted values through the step ENVIRONMENT rather than
+ * interpolating them into scripts (the o3-witness block's own BASH_ENV injection analysis),
+ * and an expression templated into a shell body is the canonical script-injection sink. The
+ * two reasons point the same way, which is why this is a flat zero rather than an allowlist.
+ *
+ * SCOPED TO RUN BODIES, not grepped file-wide, and that scoping is REQUIRED rather than
+ * tidy: `ci.yml` legitimately carries brace-template expressions in `if:`, `env:` and `with:`
+ * values, and THREE of its YAML comments quote one while explaining a rule. A file-wide
+ * needle would be red on a correct file, which is how a reader talks themselves into
+ * deleting a guard.
+ *
+ * HAND-ROLLED BLOCK-SCALAR SCAN, deliberately, rather than a YAML parser: neither `js-yaml`
+ * nor `yaml` is a declared dependency of this workspace (both are merely transitive), and no
+ * spec in the tree parses YAML today. Adding a parser dependency to read one file would cost
+ * more than the scan, which is exact for the only shape this file uses -- `run: |` followed
+ * by lines indented deeper than the `run:` key itself.
+ */
 describe('ci.yml keeps workflow expressions OUT of every run: body', () => {
   it('has zero brace-template expressions inside any step script, comments included', () => {
     const body = runBodyLines();
@@ -2120,10 +2151,50 @@ describe('ci.yml keeps workflow expressions OUT of every run: body', () => {
   });
 });
 
+/**
+ * THE ORDERING THE KNOB DEPENDS ON, which is exactly one line wide and was guarded by
+ * nothing. `$GITHUB_ENV` is processed only when the WRITING STEP COMPLETES, so the echo has
+ * to land in a step that finishes BEFORE the sidecar starts. In `ci.yml` those are adjacent
+ * lines: the echo closes the pre-set step and `- uses: ./start-cache-server` opens the next.
+ *
+ * MOVE THE ECHO BELOW THE SIDECAR AND EVERY CLAUSE IN THIS FILE STAYS GREEN. The three
+ * `readOnlyLeg` clauses match `/^\s+echo "CACHE_READ_ONLY=1" >> "\$GITHUB_ENV"$/m` against
+ * the whole job block with a `\s+` prefix, so they are satisfied from ANY step at ANY indent;
+ * the knob PARTITION below still sees one knob site per consumer, since it asks where the
+ * knob is by JOB and not by step; and all three `gatedCount` clauses still find their
+ * comparison. Meanwhile the sidecar never sees the knob, `selectBackend`
+ * takes the writable branch, and the leg is a WRITER again -- so the gate keeps printing
+ * "GATED at a floor of 1" while being satisfiable by a self-produced entry on a re-run.
+ * That is precisely the defect XOS-09 was opened to close, reachable by moving one line.
+ *
+ * SCOPED PER JOB BLOCK, not paired across the whole file, and the distinction is load-
+ * bearing rather than stylistic. `ci.yml` carries EIGHT `- uses: ./start-cache-server` steps
+ * against three knob writes -- the other five belong to legs that legitimately WRITE -- so a
+ * whole-file positional pairing compares a leg's knob against some unrelated job's sidecar.
+ * Worse, it would still PASS the regression it exists to catch: move a knob below its own
+ * sidecar and the next job's sidecar is still further down the file, so a "first sidecar
+ * after this knob" pairing stays satisfied. Within one job block the comparison is exact.
+ *
+ * INDEX COMPARISON, not a `toMatch`, for the reason T-12-05's mask clause records:
+ * order-within-a-block is not something a single regex can read. Both directions fail loud --
+ * a deleted echo or a deleted sidecar trips its own positive control (-1), and a reordered
+ * pair inverts the comparison.
+ *
+ * A RUNTIME PROBE WOULD BE STRONGER AND IS DELIBERATELY NOT USED. A `curl -X PUT` expecting
+ * the contract's 403 would observe the CONSTRUCTED backend rather than the YAML that selects
+ * it. But on the failure it exists to detect the backend is WRITABLE, so the probe itself
+ * would STORE an entry under a valid server-produced key -- which `publish-mirror` would
+ * then enumerate and mirror to the public Releases shard. A control that corrupts the store
+ * on exactly the run it fires is not worth the strength. The behavioural half is covered
+ * instead by select-backend.spec.ts, which drives the real `selectBackend` on the real knob.
+ */
 describe('ci.yml starts each sidecar AFTER its leg declined the write (XOS-09, TRUST-14)', () => {
-  it.each(['build-windows', 'typecheck-windows', 'test-windows'])(
-    '%s writes CACHE_READ_ONLY in a step that COMPLETES before its sidecar step begins',
-    (leg) => {
+  // DRIVEN OFF THE DERIVED LIST, not three literal names, so this ordering clause and the
+  // partition above cannot disagree about which legs are consumers. A new conforming Windows
+  // consumer is asked for the ordering automatically.
+  it.each(readOnlyLegs)(
+    '$name writes CACHE_READ_ONLY in a step that COMPLETES before its sidecar step begins',
+    ({ name: leg }) => {
       const block = jobBlock(leg).split('\n');
       const knobAt = block.findIndex((line) =>
         /^\s+echo "CACHE_READ_ONLY=1" >> "\$GITHUB_ENV"$/.test(line),
@@ -2161,25 +2232,120 @@ describe('ci.yml starts each sidecar AFTER its leg declined the write (XOS-09, T
   );
 });
 
+/**
+ * THE OTHER DIRECTION OF THE SAME KNOB, and the one `READ_ONLY_LEG_SITES = 3` could not
+ * express. What makes the three Windows floor gates SOUND is the complementary fact -- that
+ * the ubuntu PRODUCERS do not carry the knob -- and `ci.yml` stated that premise in prose at
+ * the build-windows block ("one line the ubuntu producers deliberately do not carry") while
+ * nothing enforced it per job.
+ *
+ * WHAT A SPREAD COSTS, stated as the consequence. Copy the knob into the ubuntu
+ * build/typecheck/test pre-set step during a sweep, or hoist the three copies to a
+ * workflow-level `env:` block -- the natural "dedupe this" cleanup -- and every producer
+ * stops writing. The Actions cache stops being repopulated on the default branch, the publish
+ * job enumerates less each month, and the Releases mirror quietly stops being seeded.
+ *
+ * THE WINDOWS GATES DO NOT CATCH IT. Since the Case-B widening a leg legitimately restores
+ * from the DEFAULT-branch scope, so an entry written by an earlier run keeps all three
+ * floor gates green until the eviction window closes.
+ *
+ * WHY THIS IS A PARTITION AND NOT A COUNT. The count it replaces conflated three distinct
+ * regressions and could distinguish none of them, because "appears N times" is not a claim
+ * about WHERE. Each clause below now fails separately and names the job:
+ *
+ *   - a NEW non-conforming Windows consumer reddens the in-set clause, by name;
+ *   - a knob copied onto a producer, or hoisted to a workflow-level `env:` block, reddens
+ *     the out-of-set clause, by name -- which is everything the count protected;
+ *   - a DELETED conforming leg reddens the set-equality control.
+ *
+ * The set equality is also the NON-VACUITY control, and it is the programmatic form the
+ * census rule demands rather than a hard-coded number: a broken slice or a changed indent
+ * yields an EMPTY census, and both partition clauses pass trivially over an empty set. It is
+ * a set of NAMES, so it cannot rot into a wrong integer -- it can only become a wrong list,
+ * which reads as the edit it is.
+ */
 describe('ci.yml keeps the read-only knob on the CONSUMERS only (XOS-09, TRUST-14)', () => {
-  it('carries CACHE_READ_ONLY on exactly the three Windows legs, so no producer stops writing', () => {
-    const sites = codeLines.filter((line) => line.includes('CACHE_READ_ONLY'));
+  it('derives exactly the three Windows sidecar consumers, so neither clause below is vacuous', () => {
+    expect(
+      readOnlyLegs.map((job) => job.name).sort(),
+      'The derived set of jobs that are a Windows leg AND start the sidecar AND run a ' +
+        'portable Nx target is not the three expected consumers. If a conforming leg was ' +
+        'DELETED this is the clause that catches it -- the two partition clauses below are ' +
+        'both satisfied trivially by an empty set, which is why this control exists. If a ' +
+        'conforming Windows consumer was deliberately ADDED, update this expected list HERE ' +
+        'in the same commit; a new leg is a reviewable one-line edit, not a silent widening. ' +
+        'If the list is EMPTY the census itself broke -- most likely the `jobs:` slice or the ' +
+        'two-space job-key indent -- and no clause in this describe means anything.',
+    ).toEqual(['build-windows', 'test-windows', 'typecheck-windows']);
+  });
+
+  it.each(readOnlyLegs)(
+    '$name writes CACHE_READ_ONLY, because it consumes a cross-OS entry it must not produce',
+    (job) => {
+      expect(
+        job.knobSites,
+        `${job.name} is a Windows leg that starts the sidecar and runs a portable Nx ` +
+          'target, but writes CACHE_READ_ONLY nowhere. That makes it a WRITER: a broken ' +
+          'cross-OS restore makes it MISS, execute the target and SAVE its own entry, and a ' +
+          're-run of the same commit then HITs that self-produced entry -- so its floor gate ' +
+          'goes green with cross-OS reuse dead. A gate a re-run can launder is worse than no ' +
+          'gate, because it reads as coverage. Add the knob to this leg rather than relaxing ' +
+          'this clause. If the leg genuinely must write, it does not belong in this set: ' +
+          'remove its sidecar or its portable target, and update the expected list above.',
+      ).toBeGreaterThanOrEqual(1);
+    },
+  );
+
+  // THE ONE THING A PER-JOB PARTITION CANNOT SEE, and the cardinality gate DID: a knob
+  // written OUTSIDE every job block. MEASURED -- adding a workflow-level `env:` block with
+  // the knob in it left all three clauses here green, because the census enumerates only
+  // what is under `jobs:` and a top-level key is not in any job's body. That hoist is the
+  // single most likely regression of the lot: it is the natural "dedupe these three copies"
+  // cleanup, it silently disables EVERY producer at once, and it reads as tidying.
+  //
+  // Stated as an ACCOUNTING identity rather than a count: every knob site in the file must
+  // belong to some job. That is a claim about placement, so it survives legs being added or
+  // removed, and it needs no number of its own.
+  it('accounts for every knob site inside a job, so none can be hoisted above them all', () => {
+    const census = jobCensus();
+    const inJobs = census.reduce((total, job) => total + job.knobSites, 0);
+    const inFile = codeLines.filter((line) =>
+      line.includes('CACHE_READ_ONLY'),
+    ).length;
 
     expect(
-      sites,
-      `Expected exactly ${READ_ONLY_LEG_SITES} CACHE_READ_ONLY sites in the comment-stripped ` +
-        '`ci.yml` -- one per Windows consumer leg, and NONE on the ubuntu producers. MORE ' +
-        'means a producer has been given the knob (a copy-paste sweep, or a "dedupe the three ' +
-        'copies" hoist to a workflow-level `env:` block): that producer stops writing, the ' +
-        'Actions cache stops being repopulated on the default branch, and the Releases mirror ' +
-        'quietly stops being seeded. The three floor-of-1 gates do NOT catch it -- since the ' +
-        'Case-B widening a leg legitimately restores from the DEFAULT-branch scope, so an ' +
-        'entry from an earlier run keeps them green until eviction. FEWER means a consumer ' +
-        'lost its knob, which makes that leg a WRITER and its own gate launderable by a ' +
-        're-run. Pinned exactly rather than as a floor for the same reason MASKED_TOKEN_SITES ' +
-        'is. If a leg was legitimately added or removed, RE-MEASURE and update ' +
-        'READ_ONLY_LEG_SITES in the same commit.',
-    ).toHaveLength(READ_ONLY_LEG_SITES);
+      inFile,
+      `ci.yml mentions CACHE_READ_ONLY on ${inFile} comment-stripped lines but only ` +
+        `${inJobs} of them are inside a job block. The difference is a knob written at ` +
+        'WORKFLOW level -- almost certainly an `env:` block hoisted out of the three ' +
+        'consumer legs as a "dedupe the copies" cleanup. A workflow-level knob applies to ' +
+        'EVERY job, so every ubuntu producer stops writing at once: the Actions cache stops ' +
+        'being repopulated on the default branch and the Releases mirror quietly stops being ' +
+        'seeded. The per-job clauses above cannot see it, because it is in no job. Put the ' +
+        'knob back on the three consumer legs individually.',
+    ).toBe(inJobs);
+  });
+
+  it.each(
+    jobCensus().filter(
+      (job) => !(job.windowsLeg && job.sidecar && job.portable),
+    ),
+  )('$name carries NO read-only knob, so it keeps writing', (job) => {
+    expect(
+      job.knobSites,
+      `${job.name} is not a Windows sidecar consumer, yet it mentions CACHE_READ_ONLY. If ` +
+        'it is a PRODUCER, it has just stopped writing: the Actions cache stops being ' +
+        'repopulated on the default branch, the publish job enumerates less each month, and ' +
+        'the Releases mirror quietly stops being seeded -- and the three Windows floor gates ' +
+        'do NOT catch it, because since the Case-B widening they are satisfied by an entry ' +
+        'from an earlier run until eviction. The two shapes this catches are a copy-paste ' +
+        'sweep and a "dedupe the three copies" hoist to a workflow-level `env:` block; the ' +
+        'hoist is the one that reads as a cleanup. Four Windows legs (hash-parity, ' +
+        'dogfood-verify, publish, publish-verify) run a portable target with NO sidecar and ' +
+        'are CORRECT to carry no knob, and `integration` has a sidecar on a Windows leg but ' +
+        'an OS-sensitive target, so it is correct too. This clause is what keeps all five ' +
+        'that way.',
+    ).toBe(0);
   });
 });
 

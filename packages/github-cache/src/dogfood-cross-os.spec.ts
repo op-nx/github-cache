@@ -1233,6 +1233,13 @@ function windowsLegReasons(
   floor: number,
 ) {
   return {
+    // THE TWO VALUES THE COUNT-PIPELINE CLAUSES NEED, returned alongside the messages so
+    // they are authored ONCE per leg. `floor` was already a parameter here for a measured
+    // reason (a shared literal kept typecheck's floor at 1 while the leg resolved two
+    // tasks); re-spelling it inside each clause's needle would reintroduce exactly that
+    // drift one layer down. `log` is derived from the target for the same reason.
+    floor,
+    log: `${target}-nx.log`,
     presence:
       `jobBlock THROWS when no job is keyed \`  ${leg}:\`, and that throw IS the presence ` +
       `guard: it is what stops ${leg} from being a gate that can be deleted without anything ` +
@@ -1382,6 +1389,8 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     cacheObservation,
     readOnlyLeg,
     gatedCount,
+    floor,
+    log,
     countShape,
     backendToken,
     noIf,
@@ -1567,28 +1576,69 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
   it('gates that count at a floor of 1 rather than only printing it (XOS-09)', () => {
     const block = jobBlock('build-windows');
 
+    // TOKENS, NOT A BYTE-PIN. This used to be one whole-line regex anchored to a
+    // ten-space indent, which asserted the BYTES were unchanged rather than the arithmetic
+    // being right -- and the bytes WERE wrong once: a non-integer count tested false inside
+    // an `if`, where `set -e` is suspended, so the step exited 0 while printing that it had
+    // gated. Reindenting the block must not redden this; deleting the comparison or the exit
+    // must.
+    //
+    // The floor comes from this leg's own parameter, never re-spelled here.
     expect(block, gatedCount).toMatch(
-      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then\n[^\n]*\n {12}exit 1$/m,
+      new RegExp(`if \\[ "\\$\\{count\\}" -lt ${floor} \\]; then`),
+    );
+    // The branch must EXIT NON-ZERO, with the gap bounded to its own single message line
+    // for the reason the M4 o3-witness clause records: an unbounded gap walks past its own
+    // block and satisfies itself from an unrelated `exit 1` further down the job. `\s*`
+    // rather than a counted indent, so the bound is structural and not positional.
+    expect(block, gatedCount).toMatch(
+      new RegExp(
+        `if \\[ "\\$\\{count\\}" -lt ${floor} \\]; then\\n[^\\n]*\\n\\s*exit 1$`,
+        'm',
+      ),
     );
     expect(block, gatedCount).not.toMatch(/exit 0\b/);
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
   });
 
   // THE COMPARISON ABOVE IS ONLY A GATE ON A NUMBER, and neither the clause above nor any
-  // other on this leg reads the two lines that make it one. Both needles are pinned as
-  // WHOLE LINES so a partial revert (dropping `-a` while keeping the shape check, or the
-  // reverse) reddens: each closes a different fail-OPEN route to the same green.
-  // The `case` gap is bounded to ONE line -- the branch's own message -- for the reason
-  // the M4 o3-witness clause records: an unbounded non-greedy gap walks past its own
-  // block and satisfies itself from an unrelated `exit 1` further down the job.
+  // other on this leg reads the lines that make it one. Each load-bearing token is asserted
+  // SEPARATELY rather than as a whole pinned line, so a partial revert (dropping `-a` while
+  // keeping the shape check, or the reverse) reddens exactly the token it removed: each
+  // closes a different fail-OPEN route to the same green.
+  //
+  // WHOLE-LINE PINS WERE THE WRONG INSTRUMENT and are gone. Anchored to a counted indent,
+  // they asserted the bytes were unchanged rather than the properties holding -- so
+  // reindenting the block reddened them while the wrong text pinned just as green, and the
+  // text WAS wrong once. The `case` gap is still bounded to ONE line -- the branch's own
+  // message -- for the reason the M4 o3-witness clause records: an unbounded non-greedy gap
+  // walks past its own block and satisfies itself from an unrelated `exit 1` further down
+  // the job. It is bounded with `\s*` rather than a counted indent.
   it('proves the count is a decimal and reads the log as TEXT, so the gate cannot pass unevaluated (XOS-09)', () => {
     const block = jobBlock('build-windows');
 
+    // SPLIT INTO THE LOAD-BEARING TOKENS, each asserted on its own, replacing two
+    // indentation-anchored whole-line pins. The old shape asserted the bytes; these assert
+    // the properties, so a reindent is green and a partial revert is red -- which is what
+    // the whole-line pins were reaching for and could not have, since any byte change
+    // reddened them equally.
+
+    // `-a` is what makes the count survive a NUL byte in the log: without it grep treats
+    // the file as binary, prints one summary line instead of the matches, and `wc -l`
+    // returns 1 no matter how many restores happened.
+    expect(block, countShape).toMatch(/grep -a -o -F '\[remote cache\]'/);
+    // Counted out of THIS leg's own log, derived from the leg parameter.
+    expect(block, countShape).toContain(log);
+    // `wc -l` over `-o` matches, then `tr` strips the padding some `wc` builds emit --
+    // without which the all-decimal guard below rejects a correct count.
+    expect(block, countShape).toMatch(/\| wc -l \| tr -d '\[:space:\]'/);
+    // THE ALL-DECIMAL SHAPE GUARD, which is what replaced an arithmetic test that could
+    // pass unevaluated. Three tokens, all required: the `case` on the count, the
+    // empty-or-non-digit pattern, and a non-zero exit from that branch.
+    expect(block, countShape).toMatch(/case "\$\{count\}" in/);
+    expect(block, countShape).toMatch(/''\|\*\[!0-9\]\*\)/);
     expect(block, countShape).toMatch(
-      /^ {10}count=\$\(\{ grep -a -o -F '\[remote cache\]' build-nx\.log \|\| true; \} \| wc -l \| tr -d '\[:space:\]'\)$/m,
-    );
-    expect(block, countShape).toMatch(
-      /^ {10}case "\$\{count\}" in\n {12}''\|\*\[!0-9\]\*\)\n[^\n]*\n {14}exit 1$/m,
+      /''\|\*\[!0-9\]\*\)\n[^\n]*\n\s*exit 1$/m,
     );
   });
 
@@ -1619,6 +1669,8 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     cacheObservation,
     readOnlyLeg,
     gatedCount,
+    floor,
+    log,
     countShape,
     backendToken,
     noIf,
@@ -1710,8 +1762,26 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
   it('gates that count at a floor of 2 -- one per cacheable task it resolves (XOS-09)', () => {
     const block = jobBlock('typecheck-windows');
 
+    // TOKENS, NOT A BYTE-PIN. This used to be one whole-line regex anchored to a
+    // ten-space indent, which asserted the BYTES were unchanged rather than the arithmetic
+    // being right -- and the bytes WERE wrong once: a non-integer count tested false inside
+    // an `if`, where `set -e` is suspended, so the step exited 0 while printing that it had
+    // gated. Reindenting the block must not redden this; deleting the comparison or the exit
+    // must.
+    //
+    // The floor comes from this leg's own parameter, never re-spelled here.
     expect(block, gatedCount).toMatch(
-      /^ {10}if \[ "\$\{count\}" -lt 2 \]; then\n[^\n]*\n {12}exit 1$/m,
+      new RegExp(`if \\[ "\\$\\{count\\}" -lt ${floor} \\]; then`),
+    );
+    // The branch must EXIT NON-ZERO, with the gap bounded to its own single message line
+    // for the reason the M4 o3-witness clause records: an unbounded gap walks past its own
+    // block and satisfies itself from an unrelated `exit 1` further down the job. `\s*`
+    // rather than a counted indent, so the bound is structural and not positional.
+    expect(block, gatedCount).toMatch(
+      new RegExp(
+        `if \\[ "\\$\\{count\\}" -lt ${floor} \\]; then\\n[^\\n]*\\n\\s*exit 1$`,
+        'm',
+      ),
     );
     expect(block, gatedCount).not.toMatch(/exit 0\b/);
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
@@ -1720,11 +1790,28 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
   it('proves the count is a decimal and reads the log as TEXT, so the gate cannot pass unevaluated (XOS-09)', () => {
     const block = jobBlock('typecheck-windows');
 
+    // SPLIT INTO THE LOAD-BEARING TOKENS, each asserted on its own, replacing two
+    // indentation-anchored whole-line pins. The old shape asserted the bytes; these assert
+    // the properties, so a reindent is green and a partial revert is red -- which is what
+    // the whole-line pins were reaching for and could not have, since any byte change
+    // reddened them equally.
+
+    // `-a` is what makes the count survive a NUL byte in the log: without it grep treats
+    // the file as binary, prints one summary line instead of the matches, and `wc -l`
+    // returns 1 no matter how many restores happened.
+    expect(block, countShape).toMatch(/grep -a -o -F '\[remote cache\]'/);
+    // Counted out of THIS leg's own log, derived from the leg parameter.
+    expect(block, countShape).toContain(log);
+    // `wc -l` over `-o` matches, then `tr` strips the padding some `wc` builds emit --
+    // without which the all-decimal guard below rejects a correct count.
+    expect(block, countShape).toMatch(/\| wc -l \| tr -d '\[:space:\]'/);
+    // THE ALL-DECIMAL SHAPE GUARD, which is what replaced an arithmetic test that could
+    // pass unevaluated. Three tokens, all required: the `case` on the count, the
+    // empty-or-non-digit pattern, and a non-zero exit from that branch.
+    expect(block, countShape).toMatch(/case "\$\{count\}" in/);
+    expect(block, countShape).toMatch(/''\|\*\[!0-9\]\*\)/);
     expect(block, countShape).toMatch(
-      /^ {10}count=\$\(\{ grep -a -o -F '\[remote cache\]' typecheck-nx\.log \|\| true; \} \| wc -l \| tr -d '\[:space:\]'\)$/m,
-    );
-    expect(block, countShape).toMatch(
-      /^ {10}case "\$\{count\}" in\n {12}''\|\*\[!0-9\]\*\)\n[^\n]*\n {14}exit 1$/m,
+      /''\|\*\[!0-9\]\*\)\n[^\n]*\n\s*exit 1$/m,
     );
   });
 
@@ -1755,6 +1842,8 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     cacheObservation,
     readOnlyLeg,
     gatedCount,
+    floor,
+    log,
     countShape,
     backendToken,
     noIf,
@@ -1839,8 +1928,26 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
   it('gates that count at a floor of 1 rather than only printing it (XOS-09)', () => {
     const block = jobBlock('test-windows');
 
+    // TOKENS, NOT A BYTE-PIN. This used to be one whole-line regex anchored to a
+    // ten-space indent, which asserted the BYTES were unchanged rather than the arithmetic
+    // being right -- and the bytes WERE wrong once: a non-integer count tested false inside
+    // an `if`, where `set -e` is suspended, so the step exited 0 while printing that it had
+    // gated. Reindenting the block must not redden this; deleting the comparison or the exit
+    // must.
+    //
+    // The floor comes from this leg's own parameter, never re-spelled here.
     expect(block, gatedCount).toMatch(
-      /^ {10}if \[ "\$\{count\}" -lt 1 \]; then\n[^\n]*\n {12}exit 1$/m,
+      new RegExp(`if \\[ "\\$\\{count\\}" -lt ${floor} \\]; then`),
+    );
+    // The branch must EXIT NON-ZERO, with the gap bounded to its own single message line
+    // for the reason the M4 o3-witness clause records: an unbounded gap walks past its own
+    // block and satisfies itself from an unrelated `exit 1` further down the job. `\s*`
+    // rather than a counted indent, so the bound is structural and not positional.
+    expect(block, gatedCount).toMatch(
+      new RegExp(
+        `if \\[ "\\$\\{count\\}" -lt ${floor} \\]; then\\n[^\\n]*\\n\\s*exit 1$`,
+        'm',
+      ),
     );
     expect(block, gatedCount).not.toMatch(/exit 0\b/);
     expect(block, gatedCount).not.toContain('RECORDED, never gated');
@@ -1849,11 +1956,28 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
   it('proves the count is a decimal and reads the log as TEXT, so the gate cannot pass unevaluated (XOS-09)', () => {
     const block = jobBlock('test-windows');
 
+    // SPLIT INTO THE LOAD-BEARING TOKENS, each asserted on its own, replacing two
+    // indentation-anchored whole-line pins. The old shape asserted the bytes; these assert
+    // the properties, so a reindent is green and a partial revert is red -- which is what
+    // the whole-line pins were reaching for and could not have, since any byte change
+    // reddened them equally.
+
+    // `-a` is what makes the count survive a NUL byte in the log: without it grep treats
+    // the file as binary, prints one summary line instead of the matches, and `wc -l`
+    // returns 1 no matter how many restores happened.
+    expect(block, countShape).toMatch(/grep -a -o -F '\[remote cache\]'/);
+    // Counted out of THIS leg's own log, derived from the leg parameter.
+    expect(block, countShape).toContain(log);
+    // `wc -l` over `-o` matches, then `tr` strips the padding some `wc` builds emit --
+    // without which the all-decimal guard below rejects a correct count.
+    expect(block, countShape).toMatch(/\| wc -l \| tr -d '\[:space:\]'/);
+    // THE ALL-DECIMAL SHAPE GUARD, which is what replaced an arithmetic test that could
+    // pass unevaluated. Three tokens, all required: the `case` on the count, the
+    // empty-or-non-digit pattern, and a non-zero exit from that branch.
+    expect(block, countShape).toMatch(/case "\$\{count\}" in/);
+    expect(block, countShape).toMatch(/''\|\*\[!0-9\]\*\)/);
     expect(block, countShape).toMatch(
-      /^ {10}count=\$\(\{ grep -a -o -F '\[remote cache\]' test-nx\.log \|\| true; \} \| wc -l \| tr -d '\[:space:\]'\)$/m,
-    );
-    expect(block, countShape).toMatch(
-      /^ {10}case "\$\{count\}" in\n {12}''\|\*\[!0-9\]\*\)\n[^\n]*\n {14}exit 1$/m,
+      /''\|\*\[!0-9\]\*\)\n[^\n]*\n\s*exit 1$/m,
     );
   });
 

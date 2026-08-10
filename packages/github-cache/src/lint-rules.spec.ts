@@ -3,6 +3,7 @@
 // locate its described disable. With zero sites there is nothing to read.
 import { fileURLToPath } from 'node:url';
 import { ESLint, type Linter } from 'eslint';
+import { WORKSPACE_ROOT_URL } from './test/repo-file.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
@@ -63,7 +64,10 @@ import { beforeAll, describe, expect, it } from 'vitest';
 // is a property of the invocation, not of the OS. Overstating the control's
 // coverage in the very file that documents the control is a defect in this
 // house's terms, so the claim is stated as convention.
-const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
+// THE ROOT IS IMPORTED, not recomputed. `src/test/repo-file.ts` owns the one authored
+// four-levels-up walk; a second constant of the same name here made that module's
+// docstring false and, worse, meant the two could disagree about where the root is while
+// each file's own clauses stayed green.
 const WORKSPACE_ROOT = fileURLToPath(WORKSPACE_ROOT_URL);
 
 const eslint = new ESLint({

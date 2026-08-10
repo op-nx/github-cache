@@ -27,8 +27,8 @@
  * the barrel keys excludes them structurally, without naming any of them, so internal
  * refactors do not churn this guard.
  */
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readRepoFile } from './test/repo-file.js';
 import * as barrel from './index.js';
 import { MAX_CACHE_BODY_BYTES } from './server/server.js';
 import {
@@ -56,23 +56,32 @@ const EXPECTED_ACTION_INPUTS = ['port'];
 /**
  * The fixed set of package source files a documented env knob must still appear
  * in. A code refactor that renames or drops a knob orphans it from this set and
- * fails the guard (T-06-02-02: a silent cache-MISS class defect). Paths are
- * resolved from this spec via import.meta.url (the pinned-deps.spec.ts idiom).
+ * fails the guard (T-06-02-02: a silent cache-MISS class defect).
+ *
+ * REPO-RELATIVE, because `readSource` now goes through `readRepoFile` instead of
+ * re-implementing that read against this spec's own location. One path family for every
+ * entry, including the one outside the package -- which the old spec-relative form had to
+ * reach with a four-levels-up walk.
  */
 const KNOB_SOURCE_FILES = [
-  './server/server.ts',
-  './serve.ts',
-  './lib/retention.ts',
-  './lib/github-identity.ts',
-  './lib/select-backend.ts',
-  '../../../start-cache-server/entry.ts',
+  'packages/github-cache/src/server/server.ts',
+  'packages/github-cache/src/serve.ts',
+  'packages/github-cache/src/lib/retention.ts',
+  'packages/github-cache/src/lib/github-identity.ts',
+  'packages/github-cache/src/lib/select-backend.ts',
+  'start-cache-server/entry.ts',
 ];
 
 /** The fixed 2 GiB PUT body cap (SRV-04), a contract limit and NOT an env knob. */
 const EXPECTED_MAX_CACHE_BODY_BYTES = 2_147_483_648;
 
+// THROUGH `readRepoFile`, not a second copy of its body. This function used to
+// re-implement that read verbatim, which is one of the two sites that falsified the
+// helper's canonical-copy claim -- and the hazard is not the duplication but that a
+// re-implementation resolves from THIS file's location, so moving this spec silently
+// changes what it reads while every clause stays green.
 function readSource(relativePath: string): string {
-  return readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+  return readRepoFile(relativePath);
 }
 
 /**
@@ -139,14 +148,16 @@ describe('public consumer surface (DOCS-05)', () => {
   });
 
   it('package type exports are exactly the enumerated set (D-04 group c)', () => {
-    const typeExports = parseTypeExports(readSource('./index.ts'));
+    const typeExports = parseTypeExports(
+      readSource('packages/github-cache/src/index.ts'),
+    );
 
     expect(typeExports.sort()).toEqual([...EXPECTED_TYPE_EXPORTS].sort());
   });
 
   it('consumer action inputs are exactly the enumerated set (D-04 group b)', () => {
     const inputs = parseActionInputKeys(
-      readSource('../../../start-cache-server/action.yml'),
+      readSource('start-cache-server/action.yml'),
     );
 
     expect(inputs.sort()).toEqual([...EXPECTED_ACTION_INPUTS].sort());

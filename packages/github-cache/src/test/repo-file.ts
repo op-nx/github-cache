@@ -1,7 +1,20 @@
 import { readFileSync } from 'node:fs';
 
 /**
- * The workspace root, and the ONE authored copy of the four-levels-up walk.
+ * The workspace root: the ONE authored copy of the walk FOR THE SPECS THAT READ THROUGH THIS
+ * LAYER.
+ *
+ * THE QUALIFICATION IS DELIBERATE and the unqualified claim was false. This docstring used to
+ * assert flatly that it is the one authored copy while THREE constants of that name existed in
+ * the package and two further sites re-implemented `readRepoFile`'s body verbatim. All five are
+ * routed through here now, so the claim holds of this layer -- but six OTHER specs still author
+ * a levels-up walk of their own (`capture-hashes-cli`, `consumer-action-runtime`,
+ * `docs-cross-os`, `governance-docs`, `hash-parity/compare`,
+ * `read-integration-hash.integration`), and they are deliberately out of scope: the defect was
+ * the false claim plus the duplicate READER, not a repo-wide sweep. So the claim is scoped to
+ * what it can honestly cover. Weakening it further -- or dropping the qualification and letting
+ * it be false again -- is worse than no helper, because the next contributor believes the layer
+ * is canonical and does not check.
  *
  * Four levels from `src/test/`: `src/` -> `github-cache/` -> `packages/` -> the workspace
  * root. `workspace-root-cwd.ts` next door IMPORTS this rather than recomputing it -- a
@@ -26,7 +39,9 @@ export function repoFileUrl(relativePath: string): URL {
 
 /**
  * Read a repo-relative file as UTF-8. The three docs specs each authored this, byte for
- * byte, against three separately-computed roots.
+ * byte, against three separately-computed roots -- and so did `lint-scope-drift.spec.ts` and
+ * `public-surface.spec.ts`, which is why the claim above needed its scope stated. Both are
+ * routed here now.
  *
  * Anchored on `import.meta.url`, never on `process.cwd()`: under `nx test` the merged
  * target configuration sets the cwd to the PROJECT root, and `workspace-root-cwd.ts`

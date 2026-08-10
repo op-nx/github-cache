@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
+import { readRepoFile } from './test/repo-file.js';
 import type { NxJsonConfiguration } from 'nx/src/config/nx-json.js';
 import type { TargetConfiguration } from 'nx/src/config/workspace-json-project-json.js';
 import {
@@ -55,9 +56,7 @@ interface NxPluginRegistration {
   readonly options?: { readonly targetName?: string };
 }
 
-const nxJson = JSON.parse(
-  readFileSync(new URL('../../../nx.json', import.meta.url), 'utf8'),
-) as {
+const nxJson = JSON.parse(readRepoFile('nx.json')) as {
   namedInputs: Record<string, TargetInputs>;
   plugins: readonly (string | NxPluginRegistration)[];
   targetDefaults: Record<string, { inputs: TargetInputs; outputs?: string[] }>;
@@ -77,7 +76,7 @@ const nxJson = JSON.parse(
  * instead of replaying a cached PASS.
  */
 const projectJson = JSON.parse(
-  readFileSync(new URL('../project.json', import.meta.url), 'utf8'),
+  readRepoFile('packages/github-cache/project.json'),
 ) as { targets: Record<string, TargetConfiguration> };
 
 /**

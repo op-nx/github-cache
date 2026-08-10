@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readRepoFile } from './test/repo-file.js';
 
 /**
  * ROBUST-03(a): the toolkit runtime dependencies MUST stay pinned to an exact
@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
  */
 describe('pinned toolkit dependencies (ROBUST-03)', () => {
   const manifest = JSON.parse(
-    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    readRepoFile('packages/github-cache/package.json'),
   ) as { dependencies?: Record<string, string> };
 
   const EXACT_SEMVER = /^\d+\.\d+\.\d+$/;
@@ -92,9 +92,9 @@ describe('pinned toolkit dependencies (ROBUST-03)', () => {
  * specifier widens to a range (`^`/`~`/`>=`).
  */
 describe('pinned build tooling (ROBUST-03)', () => {
-  const workspaceManifest = JSON.parse(
-    readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
-  ) as { devDependencies?: Record<string, string> };
+  const workspaceManifest = JSON.parse(readRepoFile('package.json')) as {
+    devDependencies?: Record<string, string>;
+  };
 
   const EXACT_SEMVER = /^\d+\.\d+\.\d+$/;
 

@@ -1,5 +1,10 @@
-import { readFileSync, statSync } from 'node:fs';
-import { stripLineComments } from './test/repo-file.js';
+import { statSync } from 'node:fs';
+import {
+  readRepoFile,
+  repoFileUrl,
+  stripLineComments,
+  WORKSPACE_ROOT_URL,
+} from './test/repo-file.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
@@ -70,18 +75,18 @@ import { beforeAll, describe, expect, it } from 'vitest';
  * through the ESLint Node API rather than reasoning about globs.
  */
 
-// Three levels up from `src/*.spec.ts`: `src/` -> `packages/github-cache/` ->
-// `packages/` -> the workspace root. Never `__dirname`, never `process.cwd()`:
-// the house convention, and its reason is invocation-independence -- a
-// cwd-relative read resolves differently depending on the directory the runner
-// was started from.
+// THE ROOT IS IMPORTED from `src/test/repo-file.ts`, which owns the one authored walk. It
+// used to be recomputed here, which is what made that module's "ONE authored copy"
+// docstring false -- and the real cost is not the duplication but that the two could
+// disagree about where the root is while every clause in both files stayed green.
 //
-// NOT because the rule this file guards would ban it, which is what this comment
-// used to claim. Measured: `process.cwd()` at a unit spec path reports nothing,
-// because no selector reaches a CALL on `process`. CORR-06 is about deriving an
-// expectation from the running MACHINE; the working directory is a property of
-// the invocation.
-const WORKSPACE_ROOT_URL = new URL('../../../', import.meta.url);
+// The reason for anchoring on `import.meta.url` at all is unchanged and lives at the
+// helper: never `__dirname`, never `process.cwd()`, because a cwd-relative read resolves
+// differently depending on the directory the runner was started from. NOT because the rule
+// this file guards would ban it -- measured, `process.cwd()` at a unit spec path reports
+// nothing, since no selector reaches a CALL on `process`. CORR-06 is about deriving an
+// expectation from the running MACHINE; the working directory is a property of the
+// invocation.
 
 interface FlatConfigObject {
   readonly files?: readonly string[];
@@ -232,18 +237,24 @@ function unionShape(globs: readonly string[], label: string): SpecGlobShape {
 // that CommonJS global for a `.mts` module imported from a spec. The import
 // fails immediately and there is nothing to gain by retrying it.
 function strippedConfigSource(relativePath: string): string {
-  // Through the SHARED stripper, which owns the marker set. This copy stripped only `//`;
-  // the shared one also drops block-comment lines, and MEASURED, the stripped view of both
-  // vitest configs is byte-identical either way -- neither carries a block comment today.
-  // Routing it means a block comment added to a config tomorrow cannot satisfy a clause here.
-  return stripLineComments(
-    readFileSync(new URL(relativePath, import.meta.url), 'utf8'),
-  );
+  // THROUGH `readRepoFile` rather than a re-implementation of its body. This function used
+  // to author the read itself, byte for byte, against a separately-computed root -- one of
+  // the two sites that falsified the helper's canonical-copy claim. Paths are now
+  // repo-relative, like every other caller of that layer.
+  //
+  // Through the SHARED stripper too, which owns the marker set. This copy stripped only
+  // `//`; the shared one also drops block-comment lines, and MEASURED, the stripped view of
+  // both vitest configs is byte-identical either way -- neither carries a block comment
+  // today. Routing it means a block comment added to a config tomorrow cannot satisfy a
+  // clause here.
+  return stripLineComments(readRepoFile(relativePath));
 }
 
-const unitConfigCode = strippedConfigSource('../vitest.config.mts');
+const unitConfigCode = strippedConfigSource(
+  'packages/github-cache/vitest.config.mts',
+);
 const integrationConfigCode = strippedConfigSource(
-  '../vitest.integration.config.mts',
+  'packages/github-cache/vitest.integration.config.mts',
 );
 
 /**
@@ -447,7 +458,7 @@ describe('the workspace root has no src/ or lib/ directory (D-08)', () => {
   it.each(['src', 'lib'])(
     'has no %s/ directory at the workspace root',
     (directory) => {
-      const entry = statSync(new URL(directory, WORKSPACE_ROOT_URL), {
+      const entry = statSync(repoFileUrl(directory), {
         throwIfNoEntry: false,
       });
 

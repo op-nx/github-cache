@@ -92,6 +92,12 @@ export type CompressionMethod = 'gzip' | 'zstd-without-long';
  * of requiring a reader's judgement. That is the house pattern for a
  * grep-verifiable absence claim (D-05); do not "tidy" the phrasing back to the
  * literal field names.
+ *
+ * AND IT IS NOW MECHANICALLY CHECKED, which it was not when that claim was written.
+ * `compression-method.spec.ts` scans this file's comment-stripped source for both members and
+ * carries a positive control proving the scan can fire -- because a scan without a control is
+ * the same defect one layer down, reporting "clean" exactly as a correct file does. The strip
+ * is what lets the prose above discuss the fields by name.
  */
 export function resolveCompressionMethod(): CompressionMethod {
   const probe = spawnSync('zstd', ['--quiet', '--version'], {

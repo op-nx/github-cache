@@ -1,4 +1,5 @@
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveCompressionMethod } from './compression-method.js';
 
@@ -223,4 +224,130 @@ describe('resolveCompressionMethod invocation shape (VER-05, T-09-27, D-15)', ()
 
     expect(spawnSyncMock.mock.calls[0][2]).not.toHaveProperty('timeout');
   });
+});
+
+/**
+ * THE "MECHANICALLY CHECKABLE" CLAIM, now actually checked. `compression-method.ts` says of
+ * itself that the two result fields it refuses to consult "are named by DESCRIPTION above and
+ * never spelled, so that searching this file for either identifier returns nothing and the
+ * `structurally unconsulted` claim is mechanically checkable instead of requiring a reader's
+ * judgement" -- and nothing scanned that file. All three sibling modules using this same
+ * convention have a real scan, two of them added in this same PR; this was the one asserting
+ * the property and relying on a reader to verify it.
+ *
+ * WHAT THE TWO FIELDS ARE AND WHY CONSULTING EITHER IS A DEFECT. The subject's own argument
+ * is that the observable contract reduces to ONE bit -- whether the combined trimmed output
+ * is empty -- because upstream `@actions/cache` passes `ignoreReturnCode: true` and never
+ * inspects the exit code, and because a real ENOENT is exactly the broken-but-present-zstd
+ * case VER-05 names. So branching on the spawn's exit status, or on its error object, makes
+ * this probe report `gzip` where the library computed `zstd`: a version mismatch on the one
+ * axis `enableCrossOsArchive` cannot rescue.
+ *
+ * THE NEEDLES SPELL NOTHING VERBATIM, following the sibling's bracket discipline: each wraps
+ * one character in a single-character class, so the regex behaves identically to its plain
+ * form while a repo-wide search for the identifier still returns only REAL occurrences rather
+ * than this guard's own needles. Do not "tidy" the bracket pairs away -- that breaks the
+ * searchability property without breaking the assertion, and spelling a token in the prose
+ * breaks it SILENTLY, which is the direction that matters.
+ */
+const FORBIDDEN_RESULT_MEMBERS = [
+  /probe[.]st[a]tus/,
+  /probe[.]err[o]r/,
+] as const;
+
+/**
+ * The probe token DERIVED from the needle's own source, so the non-vacuity fixtures below
+ * cannot drift away from the thing they are meant to trip -- and this file still spells
+ * nothing verbatim.
+ */
+function probeTokenOf(needle: RegExp): string {
+  return needle.source.replaceAll('[', '').replaceAll(']', '');
+}
+
+/**
+ * The subject with its comments removed. REQUIRED rather than tidy: the subject's own
+ * docstring exists to DISCUSS the fields it refuses to read, so a raw scan would be red on
+ * the correct file the moment that prose spells one -- which is how a reader talks themselves
+ * into deleting a guard.
+ *
+ * A sixth line-leading copy of this primitive, and deliberately so for ONE commit: T2-5
+ * consolidates all of them into a single shared stripper with its own control suite, and this
+ * scan is routed through it there. Adding the copy here keeps each commit independently
+ * green rather than ordering this fix behind the extraction.
+ */
+function strippedSourceOf(source: string): string {
+  return source
+    .split('\n')
+    .filter((line) => {
+      const trimmed = line.trim();
+
+      return (
+        trimmed !== '' &&
+        !trimmed.startsWith('//') &&
+        !trimmed.startsWith('/*') &&
+        !trimmed.startsWith('*') &&
+        !trimmed.startsWith('*/')
+      );
+    })
+    .join('\n');
+}
+
+const strippedSubject = strippedSourceOf(
+  readFileSync(new URL('compression-method.ts', import.meta.url), 'utf8'),
+);
+
+describe('compression-method.ts consults NEITHER result member it claims to refuse (VER-05)', () => {
+  it.each(FORBIDDEN_RESULT_MEMBERS)(
+    'the comment-stripped source matches no %s',
+    (needle: RegExp) => {
+      expect(
+        needle.test(strippedSubject),
+        `compression-method.ts's CODE now matches ${needle.source}. The module's own contract analysis says the observable behaviour reduces to ONE bit -- whether the combined trimmed output is empty -- because upstream @actions/cache passes ignoreReturnCode: true and never inspects the exit code, and because a real ENOENT IS the broken-but-present-zstd case VER-05 exists to describe correctly. Branching on either member makes this probe report gzip where the library computed zstd, which rotates the cache version on one runner and not another. Comments are stripped before this scan, so the subject's own docstring is free to discuss these fields by name -- this is a real code occurrence.`,
+      ).toBe(false);
+    },
+  );
+});
+
+describe('the compression-method scanner FIRES rather than being silently blind (VER-05)', () => {
+  // MANDATORY non-vacuity control. A scan without one is the same defect one layer down:
+  // a broken needle, an over-eager comment filter or a mis-derived probe all report "clean"
+  // exactly as a correct file does.
+  it.each(FORBIDDEN_RESULT_MEMBERS)(
+    '%s matches its own derived probe token',
+    (needle: RegExp) => {
+      expect(needle.test(probeTokenOf(needle))).toBe(true);
+    },
+  );
+
+  it.each(FORBIDDEN_RESULT_MEMBERS)(
+    '%s fires on a fixture carrying the token in CODE, even with the token also in comments',
+    (needle: RegExp) => {
+      const token = probeTokenOf(needle);
+      const fixture = [
+        `// ${token}`,
+        `/* ${token}`,
+        ` * ${token}`,
+        ` */`,
+        `export const probe = ${token} === 0;`,
+      ].join('\n');
+
+      expect(needle.test(strippedSourceOf(fixture))).toBe(true);
+    },
+  );
+
+  it.each(FORBIDDEN_RESULT_MEMBERS)(
+    '%s stays silent when EVERY occurrence is a comment -- so the strip is real, not the scan being blind',
+    (needle: RegExp) => {
+      const token = probeTokenOf(needle);
+      const fixture = [
+        `// ${token}`,
+        `/* ${token}`,
+        ` * ${token}`,
+        ` */`,
+        'export const probe = 1;',
+      ].join('\n');
+
+      expect(needle.test(strippedSourceOf(fixture))).toBe(false);
+    },
+  );
 });

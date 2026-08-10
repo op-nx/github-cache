@@ -124,6 +124,42 @@ const ALL_TARGET_NAMES = [
   ]),
 ];
 
+/**
+ * Every `externalDependencies` name a target declares, sorted, so two targets are comparable
+ * as sets rather than as declaration orders.
+ *
+ * READ FROM THE `targetDefaults` LAYER DELIBERATELY, unlike `effectiveInputsFor` above. The
+ * claim T4-7 makes is about the DUPLICATION IN `nx.json` -- two hand-synced copies of one list
+ * in one file -- so the defaults layer is the correct subject. Going through the merge would
+ * answer a different and weaker question here, because `project.json` declares no
+ * `externalDependencies` for either target and the merge would silently make this clause pass
+ * on a `nx.json` that had lost the list entirely.
+ */
+function externalDependenciesOf(target: string): string[] {
+  return (nxJson.targetDefaults[target]?.inputs ?? [])
+    .flatMap((input) =>
+      typeof input === 'object' && 'externalDependencies' in input
+        ? (input.externalDependencies ?? [])
+        : [],
+    )
+    .sort();
+}
+
+/**
+ * The four ESLint packages whose versions decide what `eslint .` reports, named ONCE and
+ * shared by both clauses that police them -- so this guard cannot itself become a third
+ * hand-synced copy of the list it exists to police. Sorted, to compare as a set.
+ *
+ * `vitest` is deliberately absent: it belongs to `test` alone, and the drift clause pins it
+ * as exactly the difference between the two targets.
+ */
+const ESLINT_TOOLCHAIN = [
+  '@eslint-community/eslint-plugin-eslint-comments',
+  '@eslint/js',
+  'eslint',
+  'typescript-eslint',
+];
+
 /** Every `{ runtime: ... }` command in an inputs list, in declaration order. */
 function runtimeInputsOf(inputs: TargetInputs | undefined): string[] {
   return (inputs ?? []).flatMap((input) =>
@@ -427,19 +463,61 @@ describe('lint declares its full input set (LINT-04)', () => {
   // reports while the `lint` hash never moves, so a cached PASS stands in for
   // an unrun gate.
   it('lists all four ESLint packages as external dependencies', () => {
-    const externalDependencies = nxJson.targetDefaults.lint.inputs.flatMap(
-      (input) =>
-        typeof input === 'object' && 'externalDependencies' in input
-          ? (input.externalDependencies ?? [])
-          : [],
+    expect(externalDependenciesOf('lint')).toEqual(ESLINT_TOOLCHAIN);
+  });
+
+  // T4-7's DRIFT GUARD. `nx.json` authors the four ESLint names TWICE -- once under `test`
+  // and once under `lint` -- so the two copies are hand-synced. Add a fifth ESLint plugin to
+  // `lint` only and `test` stops rotating on ESLint upgrades, which means `lint-rules.spec.ts`
+  // (whose whole job is proving the ban FIRES against the real root config) replays a cached
+  // PASS while the config it lints has moved.
+  //
+  // THE SUBSET RELATION, NOT SET EQUALITY, and this is MEASURED rather than assumed. The two
+  // arrays are NOT equal: `lint` carries the four ESLint names, `test` carries those four PLUS
+  // the test-runner name, which `lint` correctly does not need. A plain set-equality assertion
+  // would therefore be RED on a correct tree -- the exact defect class this whole task exists
+  // to close. Two clauses instead, which together close both drift directions: a fifth ESLint
+  // plugin added to one side and not the other reddens, and so does an unexplained new entry
+  // in `test`, while the deliberate asymmetry stays legal.
+  //
+  // NO ELEMENT COUNT on either side -- that would be the census defect one file over. This is
+  // expressed as set relations over NAMED packages, so a failure says which package drifted.
+  //
+  // THIS IS ONLY THE SECOND HALF OF THE HOUSE PATTERN, which is "single-source-of-truth PLUS a
+  // byte/semantic drift guard beats a hand-synced second copy". The single-sourcing half --
+  // hoisting the four names into an `nx.json` `namedInputs` entry referenced from both targets
+  // -- is DEFERRED, with an ordering constraint, and the deferral is not a preference. Measured:
+  // ANY `nx.json` byte change rotates all five task hashes, because Nx hashes the file's
+  // content into every task through its `workspace:` node -- zero `externalDependencies` nodes
+  // change, so the refactor is semantically neutral and the rotation is the file's bytes. That
+  // rotation makes Phase 11's committed hash records non-reproducible from HEAD, and this
+  // milestone was SEQUENCED expressly to prevent that class of change. So the guard ships at
+  // ZERO `nx.json` bytes changed, and the single-sourcing lands EARLY in the next milestone,
+  // before any new hash record, carrying a Phase 11 provenance note. Do not read this guard as
+  // the whole pattern.
+  it('keeps the test and lint ESLint toolchain sets from drifting apart', () => {
+    expect(
+      externalDependenciesOf('lint'),
+      "nx.json's `lint` externalDependencies is no longer exactly the four ESLint packages. " +
+        'If an ESLint plugin was legitimately adopted, add it to BOTH targets and update ' +
+        'ESLINT_TOOLCHAIN here in the same commit -- a plugin on `lint` alone means `test` ' +
+        'stops rotating on ESLint upgrades, so lint-rules.spec.ts replays a cached PASS against ' +
+        'a config that has moved. A removal is the same hazard mirrored.',
+    ).toEqual(ESLINT_TOOLCHAIN);
+
+    const testOnly = externalDependenciesOf('test').filter(
+      (name) => !ESLINT_TOOLCHAIN.includes(name),
     );
 
-    expect([...externalDependencies].sort()).toEqual([
-      '@eslint-community/eslint-plugin-eslint-comments',
-      '@eslint/js',
-      'eslint',
-      'typescript-eslint',
-    ]);
+    expect(
+      testOnly,
+      "nx.json's `test` externalDependencies minus the ESLint toolchain is no longer exactly " +
+        'the test runner. `test` legitimately carries the runner on top of the four ESLint ' +
+        'names -- that asymmetry is CORRECT and is why this is a subset relation rather than ' +
+        'set equality. What this catches is an ESLint plugin added to `test` and not `lint` ' +
+        '(the difference shrinks), or an unexplained new external dependency on `test` (it ' +
+        'grows). Neither should land without being named here.',
+    ).toEqual(['vitest']);
   });
 
   // `eslint .` with no --output-file writes nothing, so an empty array is the

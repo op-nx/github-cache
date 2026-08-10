@@ -301,10 +301,19 @@ export default [
       // The only rule of the two that can see a DESTRUCTURED NAMED IMPORT -- and
       // `cache-archive-path.spec.ts:1` is exactly that shape.
       //
-      // FOUR entries, not two: the source match is an exact string lookup, so the
-      // prefixed and bare specifiers are independent keys. The repo writes
-      // `node:`-prefixed specifiers everywhere today; the bare forms cost one line
-      // each and close the shape a future contributor will reach for.
+      // BOTH SPECIFIER SPELLINGS PER MODULE, not one: the source match is an exact
+      // string lookup, so the prefixed and bare specifiers are independent keys. The
+      // repo writes `node:`-prefixed specifiers everywhere today; the bare forms
+      // close the shape a future contributor will reach for.
+      //
+      // DERIVED FROM THE THREE PAIRS rather than spelled six times. The pairing is
+      // the whole content of the duplication -- every entry differs only in which
+      // module it names and which accessor list goes with it, and the six hand-written
+      // entries were three chances to update one spelling and forget its twin. The
+      // flatMap output is deep-equal to those six entries, `message` and `importNames`
+      // included, which is what keeps `lint-rules.spec.ts`'s real-ESLint verdicts and
+      // `lint-scope-drift.spec.ts`'s loaded-object assertions green -- the latter
+      // asserts on the number of config OBJECTS, which this does not change.
       //
       // Per-name, not whole-module: `import { basename, dirname } from 'node:path'`
       // stays legitimate and is asserted so. A NAMESPACE import is reported anyway,
@@ -314,37 +323,16 @@ export default [
         'error',
         {
           paths: [
-            {
-              name: 'node:os',
-              importNames: BANNED_OS_ACCESSORS,
+            ['os', BANNED_OS_ACCESSORS],
+            ['path', BANNED_PATH_ACCESSORS],
+            ['process', BANNED_PROCESS_ACCESSORS],
+          ].flatMap(([module, importNames]) =>
+            [`node:${module}`, module].map((name) => ({
+              name,
+              importNames,
               message: BAN_MESSAGE,
-            },
-            {
-              name: 'os',
-              importNames: BANNED_OS_ACCESSORS,
-              message: BAN_MESSAGE,
-            },
-            {
-              name: 'node:path',
-              importNames: BANNED_PATH_ACCESSORS,
-              message: BAN_MESSAGE,
-            },
-            {
-              name: 'path',
-              importNames: BANNED_PATH_ACCESSORS,
-              message: BAN_MESSAGE,
-            },
-            {
-              name: 'node:process',
-              importNames: BANNED_PROCESS_ACCESSORS,
-              message: BAN_MESSAGE,
-            },
-            {
-              name: 'process',
-              importNames: BANNED_PROCESS_ACCESSORS,
-              message: BAN_MESSAGE,
-            },
-          ],
+            })),
+          ),
         },
       ],
 

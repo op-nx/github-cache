@@ -384,6 +384,17 @@ async function captureTargets(projectGraph, nxJson) {
     await import('nx/src/hasher/create-task-hasher.js');
   const targets = {};
 
+  // CONSTRUCTED ONCE, not once per target. Both arguments are loop-invariant, and
+  // this matches Nx's OWN usage: `nx/dist/src/tasks-runner/run-command.js:672`
+  // constructs a single hasher per run and hashes every task with it
+  // (`init-tasks-runner.js:23` likewise). With `NX_DAEMON=false` -- the shape CI
+  // runs this under -- `createTaskHasher` takes the expensive branch, calling
+  // `getFileMap()` and building a fresh `NativeTaskHasherImpl`, so the previous
+  // in-loop construction was doing that FIVE times per capture. `hashTask`
+  // delegates straight through and mutates no per-call state on `this`
+  // (`task-hasher.js:76-77`), which is why one instance serves every target.
+  const hasher = createTaskHasher(projectGraph, nxJson);
+
   for (const target of TARGETS) {
     // The second argument is `extraTargetDependencies`, a target-to-array map.
     // Passing `nxJson.targetDefaults` there throws `flatMap is not a function`.
@@ -409,7 +420,6 @@ async function captureTargets(projectGraph, nxJson) {
       );
     }
 
-    const hasher = createTaskHasher(projectGraph, nxJson);
     const hash = await hasher.hashTask(task, taskGraph, process.env);
 
     // `hash.details.runtime` is deliberately NOT read: in Nx 23.1.0

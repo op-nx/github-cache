@@ -51,15 +51,38 @@ const codeLines = stripYamlComments(
 ).split('\n');
 
 /**
+ * Extracted blocks, keyed on the job name. SUCCESSFUL LOOKUPS ONLY -- see `jobBlock`.
+ */
+const JOB_BLOCK_CACHE = new Map<string, string>();
+
+/**
  * One job's own block: from the `  <name>:` key (jobs are keyed at two spaces) up to
  * the next line at that same indent, exclusive. Throws rather than returning empty
  * when the job is absent, so a renamed or deleted job fails loud here instead of
  * silently satisfying the `not.toMatch` clause below.
+ *
+ * MEMOIZED, and sound because this is a pure function of `codeLines` -- a module-scope
+ * constant computed once at module load and never reassigned -- and no test writes `ci.yml`.
+ * It is called roughly 80 times in this file, dominated by a handful of job names.
+ *
+ * SUCCESSFUL LOOKUPS ONLY, and that is the load-bearing half. The throw above is cited as the
+ * PRESENCE guard at five sites, so a memo that stored and returned `undefined` on a miss would
+ * pass this entire file while silently disarming all five. A miss never enters the map, so the
+ * throw re-fires on every call, and the clause immediately below pins it -- measured before
+ * adding it, all ~80 call sites pass real job keys, so the throw was completely ungated.
  */
 function jobBlock(name: string): string {
-  const start = codeLines.findIndex((line) =>
-    new RegExp(`^ {2}${name}:\\s*$`).test(line),
-  );
+  const cached = JOB_BLOCK_CACHE.get(name);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // Hoisted out of the `findIndex` callback: it interpolates `name`, so module scope is not
+  // available, but it was being reconstructed once PER LINE of the workflow rather than once
+  // per call. The second pattern in this function is already a literal; it is left alone.
+  const key = new RegExp(`^ {2}${name}:\\s*$`);
+  const start = codeLines.findIndex((line) => key.test(line));
 
   if (start < 0) {
     throw new Error(
@@ -69,9 +92,21 @@ function jobBlock(name: string): string {
 
   const rest = codeLines.slice(start + 1);
   const end = rest.findIndex((line) => /^ {2}\S/.test(line));
+  const block = (end < 0 ? rest : rest.slice(0, end)).join('\n');
 
-  return (end < 0 ? rest : rest.slice(0, end)).join('\n');
+  JOB_BLOCK_CACHE.set(name, block);
+
+  return block;
 }
+
+describe('jobBlock is a presence guard, not just an extractor', () => {
+  // THE CONTROL FOR THE MEMO. Five sites rely on `jobBlock` THROWING to prove a job exists,
+  // and nothing asserted that throw before this clause: every other call in this file passes a
+  // real job key, so a memo returning `undefined` on a miss would have shipped green.
+  it('throws on an absent job key rather than returning an empty block', () => {
+    expect(() => jobBlock('no-such-job')).toThrow();
+  });
+});
 
 /**
  * The Windows-arm runner label, and the OS-list member the matrix legs reach it through.

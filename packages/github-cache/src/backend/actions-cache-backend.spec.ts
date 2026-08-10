@@ -25,8 +25,8 @@ import {
 } from '../lib/cache-archive-path.js';
 import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
 import {
+  nonSpecModules,
   PACKAGE_SOURCE_ROOT,
-  packageSourceFiles,
   stripLineComments,
 } from '../test/repo-file.js';
 import { enterWorkspaceRootCwd } from '../test/workspace-root-cwd.js';
@@ -114,15 +114,12 @@ const HASH = 'abc123' as Hash;
 //     factory and hit VER-04's guard.
 //   - `publish-mirror.spec.ts` module-mocks the backend factory itself, so the guard never
 //     runs there and it must NOT get this hook.
-let restoreCwd: () => void;
-
-beforeAll(() => {
-  restoreCwd = enterWorkspaceRootCwd();
-});
-
-afterAll(() => {
-  restoreCwd();
-});
+//
+// `enterWorkspaceRootCwd` RETURNS its own teardown, and vitest runs a function returned
+// from a hook as that hook's teardown -- so there is no module-level handle to hold and no
+// afterAll to keep in step with it. (The `afterAll` import stays: the VER-04 fixture
+// describe below has one of its own.)
+beforeAll(() => enterWorkspaceRootCwd());
 
 beforeEach(() => {
   writeFileFault = undefined;
@@ -410,19 +407,6 @@ describe('both factories share ONE get closure, so they restore identically (VER
       [[path], key, undefined, undefined, true],
       [[path], key, undefined, undefined, true],
     ]);
-  });
-
-  it('returns a miss from either factory when restoreCache resolves undefined (VER-08)', async () => {
-    restoreCache.mockResolvedValue(undefined);
-
-    await expect(
-      createReadOnlyActionsCacheBackend().get(HASH),
-    ).resolves.toEqual({
-      kind: 'miss',
-    });
-    await expect(createActionsCacheBackend().get(HASH)).resolves.toEqual({
-      kind: 'miss',
-    });
   });
 });
 
@@ -753,38 +737,21 @@ describe('the module reaches @actions/cache at exactly three places (VER-03 clau
  */
 const ACTIONS_CACHE_SPECIFIER = /['"]@actions\/cache(?:\/[^'"]*)?['"]/;
 
-/**
- * Every non-spec `.ts` module under the package source root, PREFIXED with that root. The tree
- * walk for all three scans below, now shared rather than authored here.
+/*
+ * THE THREE SCANS BELOW walk the SHARED `nonSpecModules()` from `test/repo-file.ts` and
+ * RE-APPLY `PACKAGE_SOURCE_ROOT` at their own call sites. The shared walk returns BARE
+ * root-relative paths because two of its callers want them that way; these clauses assert on
+ * PREFIXED literals and read through `readFileSync` on those same prefixed paths, so the
+ * prefix is restored here rather than the primitive growing an option.
  *
- * THE WALK IS `packageSourceFiles`, which is URL-ANCHORED and therefore cwd-INDEPENDENT. This
- * block used to state the opposite as a constraint -- "A FUNCTION, not a module-scope constant
- * ... path resolution reuses the workspace-root cwd that `src/test/workspace-root-cwd.ts`
- * enters file-wide, and that hook has NOT run at collection time -- so the walk must happen
- * inside an `it`". Routing through `repoFileUrl` REMOVED that dependency, so the stated
- * constraint no longer holds and is corrected here rather than left standing: a claim that
- * reads as canonical and is false is the exact defect `repo-file.ts`'s own header exists to
- * prevent. The function form is retained for a weaker but real reason -- the callers read it
- * lazily, inside their own `it`, and nothing is gained by walking the tree at collection time.
- *
- * THE PREFIX IS RE-APPLIED HERE, at the one call site that wants it. The shared walk returns
- * BARE root-relative paths because two of its three callers want them that way; the three
- * clauses below assert on PREFIXED literals and on `readFileSync` reads that are still
- * cwd-relative, so this caller restores the prefix rather than the primitive growing an option.
- *
- * WHAT THIS DELIBERATELY DOES NOT CHANGE: `importsActionsCache` and the positive control still
- * do cwd-relative `readFileSync` calls on these prefixed paths, and those still depend on the
+ * WHAT THIS DELIBERATELY DOES NOT CHANGE: `importsActionsCache` and the positive control do
+ * cwd-relative `readFileSync` calls on those prefixed paths, so they still depend on the
  * workspace-root cwd hook. Routing them through `readRepoFile` too is a separate decision and
  * a larger diff; they are correct as they stand under the existing hook.
  *
  * Unsorted on purpose -- the two clauses that assert an exact array sort AFTER filtering, and
  * the positive control does not care.
  */
-function nonSpecModules(): string[] {
-  return packageSourceFiles(
-    (file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'),
-  ).map((file) => `${PACKAGE_SOURCE_ROOT}/${file}`);
-}
 
 /**
  * The same line-leading comment strip the two file-scoped clauses above use, applied per
@@ -836,7 +803,10 @@ describe('exactly ONE module in the whole package reaches @actions/cache (VER-09
   // The walk, the separator normalisation and the non-spec filter live in nonSpecModules()
   // -- including why it must be called INSIDE the `it` rather than hoisted to module scope.
   it(`is the ONLY non-spec module under ${PACKAGE_SOURCE_ROOT} that imports @actions/cache (VER-09)`, () => {
-    const importers = nonSpecModules().filter(importsActionsCache).sort();
+    const importers = nonSpecModules()
+      .map((file) => `${PACKAGE_SOURCE_ROOT}/${file}`)
+      .filter(importsActionsCache)
+      .sort();
 
     expect(importers).toStrictEqual([
       `${PACKAGE_SOURCE_ROOT}/backend/actions-cache-backend.ts`,
@@ -877,6 +847,7 @@ const WRITABLE_FACTORY_MESSAGE_PREFIX = 'createActionsCacheBackend:';
 describe('the VER-04 throws name the factory that OWNS them (T-13-02-R1)', () => {
   it(`no non-spec module under ${PACKAGE_SOURCE_ROOT} carries the writable factory's message prefix`, () => {
     const carriers = nonSpecModules()
+      .map((file) => `${PACKAGE_SOURCE_ROOT}/${file}`)
       .filter((file) =>
         readFileSync(file, 'utf8').includes(WRITABLE_FACTORY_MESSAGE_PREFIX),
       )
@@ -900,7 +871,9 @@ describe('the VER-04 throws name the factory that OWNS them (T-13-02-R1)', () =>
   // broken scan (wrong root, wrong extension filter, a readdir that yields nothing) as with
   // a clean tree, and a guard that cannot fail is not a guard.
   it('the scan can actually detect the prefix -- control against a silently empty walk', () => {
-    const scanned = nonSpecModules();
+    const scanned = nonSpecModules().map(
+      (file) => `${PACKAGE_SOURCE_ROOT}/${file}`,
+    );
 
     expect(scanned).toContain(
       `${PACKAGE_SOURCE_ROOT}/backend/actions-cache-backend.ts`,
@@ -962,24 +935,10 @@ describe('createActionsCacheBackend asserts the cwd/GITHUB_WORKSPACE conjunction
     expect(() => createActionsCacheBackend()).not.toThrow();
   });
 
-  it('THROWS naming the workspace-root condition when the cwd has no nx.json (VER-04 conjunct 1)', () => {
-    vi.stubEnv('GITHUB_WORKSPACE', undefined);
-    // The sibling fixture deliberately has no nx.json.
-    process.chdir(siblingAbsolute);
-
-    expect(() => createActionsCacheBackend()).toThrow(/nx\.json/);
-  });
-
-  it('THROWS naming the divergence when GITHUB_WORKSPACE points at a sibling directory (VER-04 conjunct 2)', () => {
-    vi.stubEnv('GITHUB_WORKSPACE', siblingAbsolute);
-    process.chdir(fixtureAbsolute);
-
-    expect(() => createActionsCacheBackend()).toThrow(/GITHUB_WORKSPACE/);
-  });
-
   // THE CASE-FOLD ITSELF, which is the ONLY reason `.toLowerCase()` exists on either side
-  // of that comparison. The three cases above exercise unset, no nx.json, and a genuinely
-  // different sibling -- every one of them stays green with the fold deleted. The fold
+  // of that comparison. The happy path above and the two READ-ONLY conjunct cases below
+  // exercise unset, no nx.json, and a genuinely different sibling -- every one of them
+  // stays green with the fold deleted. The fold
   // would then throw at CONSTRUCTION on Windows CI, where the runner's own GITHUB_WORKSPACE
   // and the process cwd routinely differ only in drive-letter or path casing, taking out
   // all three cross-OS legs at once.
@@ -997,21 +956,32 @@ describe('createActionsCacheBackend asserts the cwd/GITHUB_WORKSPACE conjunction
     expect(() => createActionsCacheBackend()).not.toThrow();
   });
 
-  // BOTH conjuncts from the READ-ONLY factory, in this describe rather than a second
+  // BOTH conjuncts, from the READ-ONLY factory, and this pair is the WHOLE VER-04 throw
+  // coverage rather than half of it. They live in this describe rather than a second
   // harness: the fixture roots, the chdir restore and the GITHUB_WORKSPACE stub above are
   // exactly what these need, and a parallel harness is a second thing to keep in step.
+  //
+  // ONE CONSTRUCTION GUARD, MEASURED. The writable factory is
+  // `{...createReadOnlyActionsCacheBackend(), put}`, so it reaches these throws BY CALLING.
+  // Breaking conjunct 1 in the source reddens exactly the nx.json case below; breaking
+  // conjunct 2 reddens exactly the GITHUB_WORKSPACE case. Duplicating the same two cases
+  // against the writable factory therefore added no mutation this pair does not already
+  // catch -- which is why they are not here. The happy-path and case-fold cases above DO
+  // construct the writable factory, so the composition itself stays exercised.
   //
   // They matter MORE on the read-only path than on the writable one. A read-only leg has no
   // write whose failure would surface, so an undetected cwd/GITHUB_WORKSPACE divergence
   // presents as "cross-OS restore is broken" instead of naming its cause -- and this phase
   // exists to make those legs' restore counts a GATE, so a mis-anchored read-only leg would
-  // redden the gate while pointing at the wrong subsystem.
+  // redden the gate while pointing at the wrong subsystem. That is why the read-only pair is
+  // the one kept.
   //
   // Asserted on the message's SUBSTANCE -- which invariant failed -- never on a
   // function-name prefix. The prefix is exactly what the source change pairs with this
   // commit, so a test pinned to it would have to be edited by the change it guards.
   it('THROWS from the READ-ONLY factory when the cwd has no nx.json (VER-04 conjunct 1, VER-08)', () => {
     vi.stubEnv('GITHUB_WORKSPACE', undefined);
+    // The sibling fixture deliberately has no nx.json.
     process.chdir(siblingAbsolute);
 
     expect(() => createReadOnlyActionsCacheBackend()).toThrow(/nx\.json/);

@@ -7,6 +7,7 @@ import {
   parseHash,
   type Hash,
 } from './cache-key.js';
+import { forbiddenLeafImports } from '../test/repo-file.js';
 import { mirrorSeedHash } from './mirror-seed.js';
 import {
   CACHE_OS_VALUES,
@@ -147,10 +148,14 @@ describe('mirrorSeedHash (OBS-05 per-leg publish seed, D-12)', () => {
       'utf8',
     );
 
-    expect(source).not.toMatch(/from '\.\.\/backend/);
-    expect(source).not.toMatch(/from '\.\.\/publish/);
-    expect(source).not.toMatch(/from '\.\.\/server/);
-    expect(source).not.toMatch(/from '\.\.\/action/);
-    expect(source).not.toMatch(/from '\.\/select-backend/);
+    expect(
+      forbiddenLeafImports(source, [
+        '../backend',
+        '../publish',
+        '../server',
+        '../action',
+        './select-backend',
+      ]),
+    ).toEqual([]);
   });
 });

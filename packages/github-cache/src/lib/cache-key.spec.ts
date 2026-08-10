@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import {
+  forbiddenLeafImports,
+  nonSpecModules,
   PACKAGE_SOURCE_ROOT,
-  packageSourceFiles,
   readRepoFile,
   stripLineComments,
 } from '../test/repo-file.js';
@@ -85,24 +86,6 @@ describe('HASH_PATTERN bounds (SRV-03, shared home)', () => {
   });
 });
 
-/**
- * Every non-spec TypeScript module under the package source root, as paths relative to
- * that root.
- *
- * The walk itself is the SHARED `packageSourceFiles`, so the separator normalisation and
- * the URL anchoring live in one place rather than in three. Both details are load-bearing
- * here: `readdirSync(recursive: true)` yields backslashes on Windows, so an unnormalised
- * path would make the allowlist keys below match on one OS and miss on the other; and the
- * URL anchoring is what lets this spec walk the tree without a workspace-root chdir hook,
- * since vitest runs it with the PROJECT root as the cwd and a workspace-relative literal
- * would scan `packages/github-cache/packages/github-cache/src` and throw ENOENT.
- */
-function nonSpecModules(): string[] {
-  return packageSourceFiles(
-    (file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'),
-  );
-}
-
 describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
   it('authors the prefix literal exactly once within cache-key.ts (comment-stripped)', () => {
     const source = readFileSync(
@@ -119,10 +102,14 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
       'utf8',
     );
 
-    expect(source).not.toMatch(/from '\.\.\/backend/);
-    expect(source).not.toMatch(/from '\.\.\/publish/);
-    expect(source).not.toMatch(/from '\.\.\/server/);
-    expect(source).not.toMatch(/from '\.\/select-backend/);
+    expect(
+      forbiddenLeafImports(source, [
+        '../backend',
+        '../publish',
+        '../server',
+        './select-backend',
+      ]),
+    ).toEqual([]);
   });
 
   it('authors the prefix literal in exactly the TWO allowlisted production modules (strict cross-file single source)', () => {
@@ -130,9 +117,10 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
     // this replaced named four files, so it could see neither the copy that already
     // existed outside it nor a FIFTH module inlining the literal tomorrow -- and a
     // single-source guard that cannot see a new source is not a single-source guard.
-    // The walk is the same `nonSpecModules()` shape `actions-cache-backend.spec.ts`
-    // uses for its VER-09 clause; the allowlist below is what the map used to be, but
-    // now it constrains a complete enumeration instead of standing in for one.
+    // The walk is the SHARED `nonSpecModules()` in `test/repo-file.ts`, the same one
+    // `actions-cache-backend.spec.ts` uses for its VER-09 clause; the allowlist below is
+    // what the map used to be, but now it constrains a complete enumeration instead of
+    // standing in for one.
     //
     // TWO SITES, NOT ONE. The wording this replaced claimed a single production home
     // for the literal, and that was already FALSE when it was written.

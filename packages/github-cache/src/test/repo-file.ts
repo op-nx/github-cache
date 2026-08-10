@@ -144,6 +144,53 @@ export function packageSourceFiles(
 }
 
 /**
+ * Every non-spec `.ts` module under the package source root -- the ONE predicate two of
+ * `packageSourceFiles`'s callers share, authored once instead of twice.
+ *
+ * BARE root-relative paths, for the reason `packageSourceFiles` already records: the caller
+ * that asserts on PREFIXED literals re-prefixes with `PACKAGE_SOURCE_ROOT` at its own call
+ * sites, which is a smaller contract than an options bag. The two copies this replaces
+ * differed by exactly that `.map`, so a shared helper had to pick a side; this is the side
+ * the layer had already chosen.
+ *
+ * A FUNCTION, not a module-scope constant, because both callers walk lazily inside their own
+ * `it` and nothing is gained by walking the tree at collection time.
+ */
+export function nonSpecModules(): string[] {
+  return packageSourceFiles(
+    (file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'),
+  );
+}
+
+/**
+ * Which of the FORBIDDEN import prefixes a leaf module's source actually imports from --
+ * empty when the module really is a leaf.
+ *
+ * IT RETURNS THE MATCHES RATHER THAN ASSERTING, because nothing from vitest may be imported
+ * here (the constraint the rest of this module records: `src/test/` is inside
+ * `tsconfig.lib.json`'s `src/**` include). The caller asserts `toEqual([])`, which is the
+ * conjunction of the per-prefix clauses it replaces and names the offending prefix on
+ * failure instead of only the first one to trip.
+ *
+ * THE PREFIX LIST IS THE PARAMETER because that is where the two callers genuinely differ:
+ * `mirror-seed.ts` forbids five prefixes, `cache-key.ts` four. A plain substring test, not a
+ * regex, since every needle those copies used was a literal -- so there is no escaping to get
+ * wrong.
+ *
+ * NOT A BLANKET REPLACEMENT for a leaf scan. `cache-archive-path.spec.ts` asserts an EXACT
+ * import-list equality instead, which is strictly stronger -- it fails on a builder reached
+ * through a module no forbidden list anticipated -- and is deliberately left alone.
+ */
+export function forbiddenLeafImports(
+  source: string,
+  forbiddenPrefixes: readonly string[],
+): string[] {
+  return forbiddenPrefixes.filter((prefix) =>
+    source.includes(`from '${prefix}`),
+  );
+}
+
+/**
  * The plain token a bracket-obfuscated needle is really looking for, DERIVED from the
  * needle's own source rather than spelled a second time.
  *

@@ -209,21 +209,24 @@ describe('cleanupMirror DELETE phase prune/retain by created_at (TEST-06)', () =
   });
 });
 
-// The MEASURED census of shard `cache-mirror-202607` (the PRE-RENAME tag scheme; the tag
-// name is left exactly as it was READ, because renaming a recorded measurement would claim
-// it was taken against a tag that never existed) -- release id 354838660, read live
-// 2026-07-29 and recorded in 10-EVIDENCE-PRE-RENAME.md. 122 assets total: 50 PoC-era
-// `<hash>.tar.gz`, 46 `<hash>-linux`, 26 `<hash>-windows`, ZERO `<hash>-macos`, ZERO
-// anything else. The shard tag is named here on purpose -- it rolls over 2026-08-01 and a
-// bare count is unattributable afterwards.
+// MODELLED ON THE MEASURED CENSUS of shard `cache-mirror-202607` (the PRE-RENAME tag
+// scheme; the tag name is left exactly as it was READ, because renaming a recorded
+// measurement would claim it was taken against a tag that never existed) -- release id
+// 354838660, read live 2026-07-29 and recorded in 10-EVIDENCE-PRE-RENAME.md. 122 assets
+// total: 50 PoC-era `<hash>.tar.gz`, 46 `<hash>-linux`, 26 `<hash>-windows`, ZERO
+// `<hash>-macos`, ZERO anything else. The shard tag is named here on purpose -- it rolls
+// over 2026-08-01 and a bare count is unattributable afterwards.
 //
-// These are real numbers, so the fixture below models a shard that actually exists rather
-// than one invented to suit the filter, and the three counts are locked against the
-// measured total inside the test so a later edit cannot quietly reshape it.
-const CENSUS_TAR_GZ = 50;
-const CENSUS_LINUX = 46;
-const CENSUS_WINDOWS = 26;
-const CENSUS_TOTAL = 122;
+// THE FIXTURE REPRODUCES THE SHAPE, NOT THE SCALE, and the measured numbers stay above
+// because they are what makes the FAMILIES real rather than invented to suit the filter.
+// The accept predicate is STATELESS and per-asset, so row 2 of a family exercises exactly
+// what row 1 did and 122 rows prove nothing 7 do not. The counts below are the FIXTURE's own
+// and are locked against their own total inside the test, so a family edited without the
+// total still fails loud.
+const FIXTURE_TAR_GZ = 3;
+const FIXTURE_LINUX = 2;
+const FIXTURE_WINDOWS = 2;
+const FIXTURE_TOTAL = 7;
 
 // Absent from the census by construction: the shard predates CORR-02, so no
 // `nx-cache-<hash>` asset has ever been written to it. Four is enough to be a FAMILY
@@ -260,17 +263,17 @@ function mixedShard(): MixedShard {
   // 122 of a per-shard 1000 cap on a shard that stops taking writes. Retained: widening
   // the filter to reach it would widen a DELETE filter to a shape indistinguishable from
   // a foreign asset.
-  for (let index = 0; index < CENSUS_TAR_GZ; index++) {
+  for (let index = 0; index < FIXTURE_TAR_GZ; index++) {
     seed(`${censusHash(index)}.tar.gz`, EXPIRED, false);
   }
 
   // RETAIN-04's legacy branch: today's `<hash>-<os>` shape. CORR-02 stops PRODUCING it
-  // but cleanup must keep PRUNING it, or these 72 aged assets become immortal.
-  for (let index = 0; index < CENSUS_LINUX; index++) {
+  // but cleanup must keep PRUNING it, or the shard's 72 aged assets become immortal.
+  for (let index = 0; index < FIXTURE_LINUX; index++) {
     seed(`${censusHash(index)}-linux`, EXPIRED, true);
   }
 
-  for (let index = 0; index < CENSUS_WINDOWS; index++) {
+  for (let index = 0; index < FIXTURE_WINDOWS; index++) {
     seed(`${censusHash(index)}-windows`, EXPIRED, true);
   }
 
@@ -312,14 +315,16 @@ describe('cleanupMirror over a MIXED shard (RETAIN-04, RETAIN-05, T-10-01)', () 
     });
 
     // Fixture-shape locks, asserted BEFORE the act: the three family counts must still
-    // sum to the measured 122, and the two expectation sets must still have the sizes
+    // sum to the fixture total, and the two expectation sets must still have the sizes
     // the families above imply. Without these a mis-flagged family would silently
     // rewrite the expectation instead of failing.
-    expect(CENSUS_TAR_GZ + CENSUS_LINUX + CENSUS_WINDOWS).toBe(CENSUS_TOTAL);
-    expect(prunable).toHaveLength(
-      CENSUS_LINUX + CENSUS_WINDOWS + NEW_FORM_EXPIRED,
+    expect(FIXTURE_TAR_GZ + FIXTURE_LINUX + FIXTURE_WINDOWS).toBe(
+      FIXTURE_TOTAL,
     );
-    expect(retained).toHaveLength(CENSUS_TAR_GZ + 3);
+    expect(prunable).toHaveLength(
+      FIXTURE_LINUX + FIXTURE_WINDOWS + NEW_FORM_EXPIRED,
+    );
+    expect(retained).toHaveLength(FIXTURE_TAR_GZ + 3);
 
     const result = await cleanupMirror(shardClient, 30);
 

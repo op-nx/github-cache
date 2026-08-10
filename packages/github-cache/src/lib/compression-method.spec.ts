@@ -296,42 +296,14 @@ describe('the compression-method scanner FIRES rather than being silently blind 
   // MANDATORY non-vacuity control. A scan without one is the same defect one layer down:
   // a broken needle, an over-eager comment filter or a mis-derived probe all report "clean"
   // exactly as a correct file does.
+  //
+  // WHAT THIS CLAUSE DOES NOT RE-PROVE: that `stripLineComments` fires on code and stays
+  // silent on comments. Those are properties of the SHARED stripper, not of this module's
+  // needles, and `repo-file.spec.ts` owns them under those names.
   it.each(FORBIDDEN_RESULT_MEMBERS)(
     '%s matches its own derived probe token',
     (needle: RegExp) => {
       expect(needle.test(probeTokenOf(needle))).toBe(true);
-    },
-  );
-
-  it.each(FORBIDDEN_RESULT_MEMBERS)(
-    '%s fires on a fixture carrying the token in CODE, even with the token also in comments',
-    (needle: RegExp) => {
-      const token = probeTokenOf(needle);
-      const fixture = [
-        `// ${token}`,
-        `/* ${token}`,
-        ` * ${token}`,
-        ` */`,
-        `export const probe = ${token} === 0;`,
-      ].join('\n');
-
-      expect(needle.test(stripLineComments(fixture))).toBe(true);
-    },
-  );
-
-  it.each(FORBIDDEN_RESULT_MEMBERS)(
-    '%s stays silent when EVERY occurrence is a comment -- so the strip is real, not the scan being blind',
-    (needle: RegExp) => {
-      const token = probeTokenOf(needle);
-      const fixture = [
-        `// ${token}`,
-        `/* ${token}`,
-        ` * ${token}`,
-        ` */`,
-        'export const probe = 1;',
-      ].join('\n');
-
-      expect(needle.test(stripLineComments(fixture))).toBe(false);
     },
   );
 });

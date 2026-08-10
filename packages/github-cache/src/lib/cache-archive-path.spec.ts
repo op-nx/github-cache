@@ -155,44 +155,17 @@ describe('cache-archive-path.ts imports EXACTLY the type-only Hash (VER-02 claus
   });
 });
 
-describe('the scanner FIRES on a fixture carrying the forbidden shape (VER-02 clause 2c)', () => {
+describe('the scanner FIRES on its own derived probe token (VER-02 clause 2c)', () => {
   // MANDATORY non-vacuity control: a broken regex, an over-eager comment filter or a
   // mis-derived probe all pass clause 2a SILENTLY. This is the
   // filterUsingGlobPatterns-returns-everything lesson (nx-target-inputs.spec.ts:150-161)
   // one mechanism over -- assert the instrument can fire before trusting its silence.
+  //
+  // WHAT THIS CLAUSE DOES NOT RE-PROVE: that `stripLineComments` fires on code and stays
+  // silent on comments. Those are properties of the SHARED stripper, not of this module's
+  // needles, and `repo-file.spec.ts` owns them under those names -- re-deriving them once
+  // per needle here proved the same two facts sixteen more times.
   it.each(FORBIDDEN)('%s matches its own derived probe token', (needle) => {
     expect(needle.test(probeTokenOf(needle))).toBe(true);
   });
-
-  it.each(FORBIDDEN)(
-    '%s fires on a fixture carrying the token in CODE, even with the token also in comments',
-    (needle) => {
-      const token = probeTokenOf(needle);
-      const fixture = [
-        `// ${token}`,
-        `/* ${token}`,
-        ` * ${token}`,
-        ` */`,
-        `export const probe = '${token}';`,
-      ];
-
-      expect(needle.test(strippedSourceOf(fixture))).toBe(true);
-    },
-  );
-
-  it.each(FORBIDDEN)(
-    '%s stays silent when EVERY occurrence is a comment -- so the strip is real, not the scan being blind',
-    (needle) => {
-      const token = probeTokenOf(needle);
-      const fixture = [
-        `// ${token}`,
-        `/* ${token}`,
-        ` * ${token}`,
-        ` */`,
-        'export const probe = 1;',
-      ];
-
-      expect(needle.test(strippedSourceOf(fixture))).toBe(false);
-    },
-  );
 });

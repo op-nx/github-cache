@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import { faultReason } from '../lib/octokit-fault-reason.js';
+import { faultSuffix } from '../lib/octokit-fault-reason.js';
 import { statusOf } from '../lib/octokit-status.js';
 import { isServerProducedAssetName } from '../lib/release-asset-name.js';
 import { isShardTag, MS_PER_DAY } from '../lib/retention.js';
@@ -157,11 +157,9 @@ export async function cleanupMirror(
       // setting) arrives as `custom` with the entire diagnostic in `message`, and this site
       // gets the same body a publish fault does. Only the asset name, the numeric status,
       // that code and that message are logged -- never a token, never a raw workflow command.
-      const reason = faultReason(error);
-
       failed++;
       core.warning(
-        `github-cache cleanup: failed to delete ${asset.name} (status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${reason.message ?? 'unknown'}); continuing.`,
+        `github-cache cleanup: failed to delete ${asset.name} ${faultSuffix(error)}; continuing.`,
       );
     }
   }

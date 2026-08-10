@@ -26,6 +26,8 @@
  * needed.
  */
 
+import { statusOf } from './octokit-status.js';
+
 /**
  * The shape of the only part of a fault's body this module reads. Declared rather than
  * inlined so the cast in `faultData` is one expression instead of several nested `typeof`
@@ -133,6 +135,34 @@ export function faultReason(error: unknown): FaultReason {
         .find((message) => message !== undefined) ??
       stringOrUndefined(faultData(error)?.message),
   };
+}
+
+/**
+ * The parenthesised `(status ..., code ..., message ...)` tail every fault log line in this
+ * package ends with -- the STATUS half and the BODY half rendered together, once.
+ *
+ * THREE CALL SITES AUTHORED IT, and a renderer is what keeps them one line rather than three
+ * that drift: the cleanup delete failure, the per-asset mirror failure and the createRelease
+ * rejection all print the same three fields with the same three `?? 'unknown'` fallbacks. The
+ * rendered string is BYTE-IDENTICAL to what they authored, which is why the message-string
+ * assertions in `cleanup.spec.ts` and `publish-mirror.spec.ts` are this extraction's oracle:
+ * they were not touched and must stay green.
+ *
+ * `messageOverride` IS A POSITIONAL OPTIONAL, not an options bag -- the smaller contract this
+ * layer's convention already prefers. Exactly one caller passes it: the createRelease
+ * rejection prefers its `tag_name`-scoped message over `faultReason().message`, which returns
+ * the first message-carrying entry ANYWHERE and on the measured burned-tag payload is the
+ * `pre_receive` DECOY. Passing the override is what keeps that site on this renderer instead
+ * of hand-authoring a fourth copy.
+ *
+ * NOT A LOG WRITER. It returns a string; the caller decides whether that is a `core.warning`,
+ * a `core.error` or neither, and the caller's own comment records what it may and may not
+ * log. No new field is interpolated, so the disclosure surface is exactly what it was.
+ */
+export function faultSuffix(error: unknown, messageOverride?: string): string {
+  const reason = faultReason(error);
+
+  return `(status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${messageOverride ?? reason.message ?? 'unknown'})`;
 }
 
 /**

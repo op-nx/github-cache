@@ -7,10 +7,13 @@
  *   change to the consumer env contract still lands as a reviewable diff there.
  * - docs-adoption.spec.ts asserts each knob is documented in configuration.md.
  *
- * D-04 group (c), the package value and type exports, on exactly the same footing and
- * for exactly the same reason:
- * - public-surface.spec.ts asserts them for EXACT equality against the parsed barrel,
- *   and pins each against an inline sorted literal for the same reviewable-diff reason.
+ * D-04 group (c), the package value and type exports -- the same two-sided shape, reached
+ * differently because this group HAS a code-side counterpart:
+ * - public-surface.spec.ts asserts them for EXACT equality against the parsed barrel. That
+ *   equality is what makes an intentional change land as a reviewable diff, so no inline
+ *   sorted literal is pinned beside it: a third copy of the same list adds no failure the
+ *   barrel equality does not already produce. Group (a) has no barrel to compare against,
+ *   which is why its inline pin is mandated and kept.
  * - docs-adoption.spec.ts asserts each export name appears in versioning.md.
  *
  * The two export arrays moved here because group (c) was pinned against the CODE and

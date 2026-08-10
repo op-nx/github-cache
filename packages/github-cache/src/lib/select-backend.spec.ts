@@ -4,7 +4,6 @@ import { stripLineComments } from '../test/repo-file.js';
 import * as cache from '@actions/cache';
 import * as core from '@actions/core';
 import {
-  afterAll,
   afterEach,
   beforeAll,
   beforeEach,
@@ -82,15 +81,11 @@ const HASH = 'selectbackendfixture' as Hash;
 // not conflict and that assertion stays exactly as strong as it was. The reconciliation is
 // stated here because an ASYMMETRICAL hook in THIS file -- or a missing one -- would be the
 // most visible possible inconsistency in the package.
-let restoreCwd: () => void;
-
-beforeAll(() => {
-  restoreCwd = enterWorkspaceRootCwd();
-});
-
-afterAll(() => {
-  restoreCwd();
-});
+//
+// `enterWorkspaceRootCwd` RETURNS its own teardown, and vitest runs a function returned
+// from a hook as that hook's teardown -- so there is no module-level handle to hold and no
+// afterAll to keep in step with it.
+beforeAll(() => enterWorkspaceRootCwd());
 
 // A well-formed trusted CI context: Actions on, a trusted event, a valid
 // owner/name repo, and a resolvable token. Individual tests spread over this to

@@ -41,17 +41,20 @@ import {
 // edits the lists below; that edit IS the human-readable diff a reviewer sees. ---
 
 // D-04 group (c): the package value and type exports. Sourced from the shared
-// test/consumer-contract.ts so this guard and docs-adoption.spec.ts cannot drift;
-// the inline sorted-literal self-checks below are the human-reviewable pins. They
-// are what preserves this file's stated property after the move -- without them an
-// intentional surface change would no longer land as a reviewable diff HERE.
+// test/consumer-contract.ts so this guard and docs-adoption.spec.ts cannot drift.
+// NO inline sorted-literal pin, unlike group (a): this group is asserted for EXACT
+// equality against the PARSED BARREL below, and that equality is what makes an
+// intentional surface change land as a reviewable diff HERE. A third copy of the
+// same list would add no failure the barrel equality does not already produce.
 
 /** D-04 group (b): the consumer JS action inputs. */
 const EXPECTED_ACTION_INPUTS = ['port'];
 
 // D-04 group (a): the consumer-set process.env knobs. Sourced from the shared
 // test/consumer-contract.ts so this guard and docs-adoption.spec.ts cannot drift;
-// the inline sorted-literal self-check below is the human-reviewable pin.
+// the inline sorted-literal self-check below is the human-reviewable pin, and it is
+// MANDATED (DOCS-10) rather than optional -- there is no parsed barrel to compare
+// this group against, so the literal is the only reviewable diff it can produce.
 
 /**
  * The fixed set of package source files a documented env knob must still appear
@@ -152,21 +155,6 @@ describe('public consumer surface (DOCS-05)', () => {
     );
 
     expect(inputs.sort()).toEqual([...EXPECTED_ACTION_INPUTS].sort());
-  });
-
-  it('the package value-export set is exactly the D-04 group-c contract list', () => {
-    expect([...EXPECTED_VALUE_EXPORTS].sort()).toEqual(['createCacheServer']);
-  });
-
-  it('the package type-export set is exactly the D-04 group-c contract list', () => {
-    expect([...EXPECTED_TYPE_EXPORTS].sort()).toEqual([
-      'CacheBackend',
-      'GetHit',
-      'GetResult',
-      'PutResult',
-      'ReadableBackend',
-      'WritableBackend',
-    ]);
   });
 
   it('the documented env-knob set is exactly the D-04 group-a contract list', () => {

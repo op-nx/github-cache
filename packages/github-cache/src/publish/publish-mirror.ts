@@ -9,7 +9,7 @@ import {
 } from '../lib/cache-key.js';
 import {
   faultMessageForField,
-  faultReason,
+  faultSuffix,
   hasFaultCode,
   hasOnlyFaultCode,
 } from '../lib/octokit-fault-reason.js';
@@ -338,9 +338,7 @@ async function ensureShardRelease(
 
     return release.id;
   } catch (error) {
-    const reason = faultReason(error);
-
-    // SCANNED ACROSS THE WHOLE `errors[]`, never `reason.code`, which is the FIRST string
+    // SCANNED ACROSS THE WHOLE `errors[]`, never `faultReason().code`, which is the FIRST string
     // code anywhere in the array and therefore order-dependent in both directions. See
     // hasFaultCode: an `already_exists` sitting behind an unrelated earlier code would make
     // a genuine create race fatal here, killing the run on the one case this branch exists
@@ -366,7 +364,7 @@ async function ensureShardRelease(
     // THE TAG NAME IS BURNED: skip the shard loudly instead of failing the run. The
     // predicate is a 422 carrying an `errors[]` entry whose `field` is `tag_name` and whose
     // message contains `immutable release` -- read through the FIELD-SCOPED accessor and not
-    // through `reason.message`, which returns the first entry carrying a message and on the
+    // through `faultReason().message`, which returns the first entry carrying a message and on the
     // measured payload is the `pre_receive` DECOY, so the obvious substring test could never
     // have fired.
     //
@@ -414,14 +412,15 @@ async function ensureShardRelease(
     // Only the tag, the numeric status, GitHub's own code and GitHub's own message are
     // logged -- never a token, never a raw workflow-command string.
     //
-    // The MESSAGE prefers the `tag_name`-scoped entry over `reason.message`, which is the
+    // The MESSAGE prefers the `tag_name`-scoped entry, passed to `faultSuffix` as its
+    // override, over `faultReason().message`, which is the
     // first entry carrying one ANYWHERE in the array. On a payload carrying both entries
     // that first one is the `pre_receive` decoy, so this log printed the generic ruleset
     // wording for precisely the tag-name failure it exists to diagnose -- the string a future
     // reader would take away from the job log. On a decoy-only payload the two are identical,
     // so this is a strict improvement with no behaviour change where nothing was wrong.
     core.error(
-      `github-cache: createRelease ${tag} was rejected (status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${burnedTagMessage ?? reason.message ?? 'unknown'}); this is NOT a create race -- only an explicit already_exists is.`,
+      `github-cache: createRelease ${tag} was rejected ${faultSuffix(error, burnedTagMessage)}; this is NOT a create race -- only an explicit already_exists is.`,
     );
 
     throw error;
@@ -1015,8 +1014,6 @@ export async function publishMirror(
       shard.names.add(name);
       mirrored++;
     } catch (error) {
-      const reason = faultReason(error);
-
       // D-05 first-write-wins: a duplicate-upload race (another leg wrote the same
       // byte-identical name between our list and our upload) is a benign no-op -- but
       // ONLY when GitHub says so. `already_exists` is the one 422 this endpoint
@@ -1030,7 +1027,7 @@ export async function publishMirror(
       // publish-verify, naming the wrong subsystem. An UNREADABLE body is not benign
       // either -- it falls through to the fault branch, because guessing benign is the
       // defect (see `lib/octokit-fault-reason.ts`).
-      // A CONJUNCTION OVER THE WHOLE `errors[]` (hasOnlyFaultCode), never `reason.code` and
+      // A CONJUNCTION OVER THE WHOLE `errors[]` (hasOnlyFaultCode), never `faultReason().code` and
       // no longer the ANY scan. The ANY scan removed the ORDER-DEPENDENCE of a first-code
       // read and WIDENED the benign set doing it: a body became benign whenever
       // `already_exists` appeared anywhere, including behind a permanent policy rejection.
@@ -1057,8 +1054,8 @@ export async function publishMirror(
       // preferable to a permanent policy rejection exiting GREEN having mirrored nothing.
       // An UNREADABLE body is not benign either: `hasOnlyFaultCode` requires a NON-EMPTY
       // array, so an absent, non-array or empty `errors` falls through to the fault branch.
-      // `reason` is still read just below, for the log line, where FIRST-code is the right
-      // answer.
+      // The body IS read again just below, through `faultSuffix` for the log line, where
+      // FIRST-code is the right answer.
       // COUNTED INTO `skipped` ONLY, deliberately never into `alreadyPresent` (D4). The
       // name was absent when this leg listed the shard and another leg wrote it in
       // between: that is a WRITE-race outcome, whereas `alreadyPresent` answers "how much
@@ -1084,7 +1081,7 @@ export async function publishMirror(
       // -- never a token, never a raw workflow-command string.
       failed++;
       core.warning(
-        `github-cache: failed to mirror ${name} (status ${statusOf(error) ?? 'unknown'}, code ${reason.code ?? 'unknown'}, message ${reason.message ?? 'unknown'}); continuing.`,
+        `github-cache: failed to mirror ${name} ${faultSuffix(error)}; continuing.`,
       );
     }
   }

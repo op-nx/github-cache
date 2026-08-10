@@ -2284,9 +2284,12 @@ describe('ci.yml keeps workflow expressions OUT of every run: body', () => {
  * That is precisely the defect XOS-09 was opened to close, reachable by moving one line.
  *
  * SCOPED PER JOB BLOCK, not paired across the whole file, and the distinction is load-
- * bearing rather than stylistic. `ci.yml` carries EIGHT `- uses: ./start-cache-server` steps
- * against three knob writes -- the other five belong to legs that legitimately WRITE -- so a
- * whole-file positional pairing compares a leg's knob against some unrelated job's sidecar.
+ * bearing rather than stylistic. `ci.yml` carries MORE `- uses: ./start-cache-server` steps
+ * than knob writes -- the surplus belongs to legs that legitimately WRITE -- so a whole-file
+ * positional pairing compares a leg's knob against some unrelated job's sidecar. (No figure is
+ * spelled out for either side: the knob partition below derives its consumer set and the
+ * T-12-05 clause derives its sidecar set, so a number here would be a fourth hand-authored
+ * count with nothing asserting it.)
  * Worse, it would still PASS the regression it exists to catch: move a knob below its own
  * sidecar and the next job's sidecar is still further down the file, so a "first sidecar
  * after this knob" pairing stays satisfied. Within one job block the comparison is exact.
@@ -2466,13 +2469,14 @@ describe('ci.yml keeps the read-only knob on the CONSUMERS only (XOS-09, TRUST-1
 });
 
 /**
- * T-12-05's ORDERING, which was correct in all eight sidecar blocks and guarded in
+ * T-12-05's ORDERING, which was correct in every sidecar block and guarded in
  * NONE of them until this clause. `12-SECURITY.md`'s `## Residual 1` names it and
  * hands over this exact shape: the mask's index must be less than the token write's
- * index. It is recorded there as a RATCHET rather than a static gap -- Phase 11's
- * audit logged it as PRE-EXISTING surface at five masked-token sites, and Phase 12
- * took the file to EIGHT by copying the sidecar block onto `build-windows`,
- * `typecheck-windows` and `test-windows`. Three of the eight are this phase's.
+ * index. It is recorded there as a RATCHET rather than a static gap: Phase 11's
+ * audit logged the surface as PRE-EXISTING, and Phase 12 widened it by copying the
+ * sidecar block onto `build-windows`, `typecheck-windows` and `test-windows`. No
+ * total is spelled out on either side of that -- the counts this paragraph used to
+ * carry were hand-authored and unasserted, and the clause derives its own block set.
  *
  * WHAT IS AT STAKE, stated as the consequence rather than the mechanism: the token is
  * a per-process loopback bearer, but it is written to `$GITHUB_ENV`, so it is live in
@@ -2480,19 +2484,19 @@ describe('ci.yml keeps the read-only knob on the CONSUMERS only (XOS-09, TRUST-1
  * PUBLIC repository. `::add-mask::` redacts only from the moment it is PROCESSED, so
  * a mask that lands AFTER its write leaves a window in which the value is live and
  * unregistered. Until this clause, the protection was carried entirely by D-03's
- * verbatim-copy discipline across eight hand-maintained copies -- one careless
+ * verbatim-copy discipline across every hand-maintained copy -- one careless
  * "cleanup" reordering away from a real leak, with the three `cacheClient` clauses
- * above and all 24 other Windows-leg clauses still green, because nothing read the
+ * above and every other Windows-leg clause still green, because nothing read the
  * mask line at all.
  *
- * WHOLE-FILE AND PAIRWISE, deliberately, rather than the per-leg `jobBlock` scoping
+ * WHOLE-FILE AND PER BLOCK, deliberately, rather than the per-leg `jobBlock` scoping
  * every other clause in this file uses. The usual reason for scoping does not apply:
  * a file-wide `toContain('::add-mask::')` would be vacuous because the token appears
- * eight times, but a PAIRWISE ORDERING WITH COUNT EQUALITY is the stronger claim, not
- * the weaker one -- it says every mask/write pair in the file is correctly ordered,
- * which no per-job clause can say, and it cannot be satisfied by an unrelated
- * occurrence. It also covers the five PRE-EXISTING sites that no phase owns, which a
- * three-leg version would leave exactly as unguarded as they are today.
+ * at many sites, whereas a PER-BLOCK ORDERING is the stronger claim, not the weaker
+ * one -- it says every mask/write pair in the file is correctly ordered, which no
+ * per-job clause can say, and it cannot be satisfied by an unrelated occurrence. It
+ * also covers the PRE-EXISTING sites that no phase owns, which a three-leg version
+ * would leave exactly as unguarded as they are today.
  *
  * NOW DERIVED PER SIDECAR BLOCK, and that is the fix rather than a refinement. The clause
  * previously paired masks to writes by WHOLE-FILE POSITION -- `maskAt[i] < writeAt[i]` over
@@ -2506,26 +2510,126 @@ describe('ci.yml keeps the read-only knob on the CONSUMERS only (XOS-09, TRUST-1
  * THE PINNED COUNT IS GONE, and no replacement number is authored. It used to be spelled out
  * here with a standing instruction to "RE-MEASURE and update this count HERE in the same
  * commit" -- which is an instruction to hand-author a count, the drift source rather than a
- * guard against it. What the count was protecting is the under-sweep direction, and the
- * per-block derivation gives that for free: a block with no mask is a block that fails, so
- * there is no floor to be satisfied by the first pair. The block count itself is now DERIVED
- * from the token writes, which is a claim about pairing rather than about size.
+ * guard against it.
  *
- * `codeLines` is comment-stripped, which is load-bearing here in the usual direction:
- * `ci.yml` mentions `::add-mask::` in several prose comments explaining the rule, so a raw
- * read would pair prose against shell and the result would be garbage.
+ * TWO SUBJECTS, DERIVED INDEPENDENTLY, and that split is the correction rather than a
+ * refinement. The first replacement derived blocks FROM the token writes and claimed the
+ * deleted count's under-sweep coverage came with it "for free". It did not: with the writes as
+ * the subject, a MISSING write simply produces one fewer block, so deleting a write -- or all
+ * but one of the pairs -- left the clause green, which is the harm the deleted assertion message
+ * named verbatim ("losing a site silently drops that job to local-cache-only"). Derivation gave
+ * the MASK under-sweep for free and lost the WRITE under-sweep entirely. So:
+ *
+ *   - every SIDECAR STEP must have its own mask and its own write before it. The sidecar steps
+ *     are an independent subject -- they are not derived from the writes -- so a deleted write
+ *     reddens the block that lost it, BY NAME, with no count authored anywhere.
+ *   - every TOKEN WRITE must have its own mask before it. This is the original T-12-05
+ *     property, and it is kept on its own subject because a write is what the mask protects:
+ *     a write in some future job with no sidecar step still needs its mask.
+ *
+ * A sidecar step DELETED along with its pair is invisible here by construction (the block
+ * simply is not enumerated), and that is correct division of labour rather than a hole: the
+ * T1-5 partition owns leg membership and reddens on a leg losing its sidecar, naming the leg.
+ *
+ * `codeLines` is comment-stripped, which is load-bearing in both directions here: `ci.yml`
+ * mentions `::add-mask::` in several prose comments explaining the rule and names
+ * `uses: ./start-cache-server` in a comment describing the consumer shape, so a raw read would
+ * enumerate a phantom block and pair prose against shell.
  */
 describe('ci.yml masks the sidecar token before writing it (T-12-05)', () => {
-  it('every sidecar block registers the token for redaction BEFORE its own write', () => {
-    // ONE PASS, SPLIT INTO BLOCKS. A sidecar block is delimited by its token WRITE: the
-    // write is the event being protected, so every write opens a region that must already
-    // have seen its own mask. Anything else -- pairing by index, or scoping to the whole file
-    // -- is what made the old clause unable to name a block.
-    const MASK = /^\s+echo "::add-mask::\$\{token\}"$/;
-    const WRITE =
-      /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=\$\{token\}" >> "\$GITHUB_ENV"$/;
+  // The three line shapes, named once and shared by both clauses so neither can drift into
+  // reading a different subject than the other.
+  const MASK = /^\s+echo "::add-mask::\$\{token\}"$/;
+  const WRITE =
+    /^\s+echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=\$\{token\}" >> "\$GITHUB_ENV"$/;
+  // The sidecar STEP, at step indentation. Anchored on the step indent rather than on `\s+`
+  // deliberately: the subject IS a step of a job, and a `- uses:` at any other depth is not
+  // one. That is a semantic anchor, not a byte-pin -- a reindent of the run BODY cannot
+  // satisfy or break it, and moving steps to another indent is not a formatting change.
+  const SIDECAR = /^ {6}- uses: \.\/start-cache-server$/;
 
-    const blocks: { write: number; mask: number | undefined }[] = [];
+  it('every sidecar step has its own mask AND its own token write before it', () => {
+    // BLOCKS DERIVED FROM THE SIDECAR STEPS, which is the whole point: the sidecar set is an
+    // INDEPENDENT subject, so a deleted token write leaves its block enumerated and reddens it
+    // by name. Deriving blocks from the writes -- the shape this replaced -- made a deleted
+    // write produce one fewer block and go green.
+    const blocks: {
+      sidecar: number;
+      mask: number | undefined;
+      write: number | undefined;
+    }[] = [];
+    let pendingMask: number | undefined;
+    let pendingWrite: number | undefined;
+
+    codeLines.forEach((line, index) => {
+      if (MASK.test(line)) {
+        pendingMask = index;
+
+        return;
+      }
+
+      if (WRITE.test(line)) {
+        pendingWrite = index;
+
+        return;
+      }
+
+      if (SIDECAR.test(line)) {
+        blocks.push({ sidecar: index, mask: pendingMask, write: pendingWrite });
+        pendingMask = undefined;
+        pendingWrite = undefined;
+      }
+    });
+
+    // POSITIVE CONTROL, and it is the whole non-vacuity argument. An empty `blocks` array
+    // makes every per-block assertion below trivially true. The subject here is the sidecar
+    // STEP, so this control also cannot be satisfied by the thing it is checking for.
+    expect(
+      blocks.length,
+      'ci.yml has no `- uses: ./start-cache-server` step at step indentation at all, so ' +
+        'every assertion in this clause is vacuous -- there is no sidecar block left to ' +
+        'check. Either the sidecar wiring was removed (which the T1-5 partition also ' +
+        'reddens, naming the leg) or the step shape moved. Fix the file or the shape, never ' +
+        'this control. No count is pinned deliberately: the block set is derived, so adding ' +
+        'or removing a leg legitimately needs no edit here.',
+    ).toBeGreaterThan(0);
+
+    for (const { sidecar, mask, write } of blocks) {
+      // THE WRITE, and this is the assertion the deleted count used to carry. A block whose
+      // token write is gone gets its Nx remote cache client from nowhere: that leg runs
+      // local-cache-only for every subsequent run, silently, and no other clause in this file
+      // reads the write. The mask assertions below would be satisfied by such a block.
+      expect(
+        write,
+        `the ci.yml sidecar step at comment-stripped line index ${sidecar} has NO ` +
+          '`echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"` of ' +
+          'its own before it. That variable is what gives Nx a remote cache client, so this ' +
+          'leg starts its sidecar and then runs LOCAL-CACHE-ONLY for every subsequent run, ' +
+          'reporting success the whole time. Add the write to THIS block -- a write in a ' +
+          'neighbouring block does not carry over, since each is a separate job. This is the ' +
+          'under-sweep direction, and it is why the block set is derived from the sidecar ' +
+          'steps rather than from the writes themselves.',
+      ).not.toBeUndefined();
+
+      expect(
+        mask,
+        `the ci.yml sidecar step at comment-stripped line index ${sidecar} has NO ` +
+          '`echo "::add-mask::${token}"` of its own before it. The value is a bearer token ' +
+          'written into $GITHUB_ENV on a PUBLIC repository, and ::add-mask:: redacts only ' +
+          'from the moment it is processed, so this block leaks the token into every log ' +
+          'line emitted after the write. A missing mask is a real disclosure, not a tidiness ' +
+          'lapse. Add the mask to THIS block -- a mask in a neighbouring block does not ' +
+          'cover it.',
+      ).not.toBeUndefined();
+    }
+  });
+
+  it('every token write is preceded by its own mask', () => {
+    // THE ORIGINAL T-12-05 PROPERTY, kept on its own subject. A write is what the mask
+    // protects, so the writes are enumerated here even though the clause above enumerates
+    // sidecar steps: a future token write in a job with NO sidecar step would be invisible to
+    // that derivation and still needs its mask.
+    const writes: { write: number; mask: number | undefined }[] = [];
     let pendingMask: number | undefined;
 
     codeLines.forEach((line, index) => {
@@ -2536,48 +2640,33 @@ describe('ci.yml masks the sidecar token before writing it (T-12-05)', () => {
       }
 
       if (WRITE.test(line)) {
-        blocks.push({ write: index, mask: pendingMask });
+        writes.push({ write: index, mask: pendingMask });
         pendingMask = undefined;
       }
     });
 
-    // POSITIVE CONTROL, and it is the whole non-vacuity argument. An empty `blocks` array
-    // makes every per-block assertion below trivially true, so the token write must be
-    // proven present first. `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` is what gives Nx a
-    // remote cache client at all: losing every site would silently drop every wired job to
-    // local-cache-only, which no other clause in this file reads.
     expect(
-      blocks.length,
+      writes.length,
       'ci.yml no longer writes NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN to $GITHUB_ENV ' +
-        'anywhere. That variable is what gives Nx a remote cache client, so losing it drops ' +
-        'every wired job to local-cache-only -- and it also makes every assertion in this ' +
-        'clause vacuous, since there is no write left to protect. Restore the writes rather ' +
-        'than relaxing this clause. No count is pinned here deliberately: the number of ' +
-        'sidecar blocks is derived, so adding or removing one legitimately needs no edit.',
+        'anywhere, which makes this clause vacuous. The clause above reddens per sidecar ' +
+        'block for the same regression and names the block; fix the file, not this control.',
     ).toBeGreaterThan(0);
 
-    // PER BLOCK, so the failure names WHICH one. A missing mask and a late mask are
-    // different faults and are reported as such.
-    for (const { write, mask } of blocks) {
+    for (const { write, mask } of writes) {
       expect(
         mask,
-        `the ci.yml sidecar block writing NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN at ` +
-          `comment-stripped line index ${write} has NO \`echo "::add-mask::\${token}"\` of ` +
-          'its own before it. The value is a bearer token written into $GITHUB_ENV on a ' +
-          'PUBLIC repository, and ::add-mask:: redacts only from the moment it is processed, ' +
-          'so this block leaks the token into every log line emitted after the write. A ' +
-          'missing mask is a real disclosure, not a tidiness lapse. Add the mask to THIS ' +
-          'block -- a mask in a neighbouring block does not cover it, which is exactly what ' +
-          'the previous whole-file positional pairing could not tell you.',
+        `the ci.yml token write at comment-stripped line index ${write} has no ` +
+          '`echo "::add-mask::${token}"` of its own before it -- so the value is live and ' +
+          'unregistered from this line onward.',
       ).not.toBeUndefined();
 
       expect(
         mask,
-        `the ci.yml sidecar block at comment-stripped line index ${write} masks the token ` +
-          `at index ${String(mask)} -- at or AFTER its own write. ::add-mask:: redacts only ` +
-          'from the moment it is processed, so the value is live and unredacted for every ' +
-          'log line in that window. Move the `echo "::add-mask::${token}"` back above the ' +
-          'write, never relax this clause.',
+        `the ci.yml token write at comment-stripped line index ${write} is masked at index ` +
+          `${String(mask)} -- at or AFTER the write. ::add-mask:: redacts only from the ` +
+          'moment it is processed, so the value is live and unredacted for every log line in ' +
+          'that window. Move the `echo "::add-mask::${token}"` back above the write, never ' +
+          'relax this clause.',
       ).toBeLessThan(write);
     }
   });

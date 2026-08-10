@@ -11,7 +11,7 @@ import {
   resolveRepoIdentity,
 } from '../lib/local-context.js';
 import { mirrorSeedHash } from '../lib/mirror-seed.js';
-import { MIRRORED_BY_PREFIX } from '../lib/mirrored-by-label.js';
+import { mirroredByLabel } from '../lib/mirrored-by-label.js';
 import {
   cachePlatform,
   releaseAssetName,
@@ -31,8 +31,14 @@ const GITHUB_API = 'https://api.github.com';
 const FETCH_TIMEOUT_MS = 5000;
 const ASSETS_PER_PAGE = 100;
 
-// The publisher-label prefix is IMPORTED from `lib/mirrored-by-label.js`, which owns it, and
-// is no longer authored here. The literal used to be pinned in this file and re-authored at
+// The publisher label is BUILT BY `mirroredByLabel` from `lib/mirrored-by-label.js`, which owns
+// it, and is no longer composed here. This file used to import the PREFIX and concatenate the
+// reader OS onto it at two sites -- which is the same composition the leaf already performs, so
+// the two sites were re-implementing the leaf's one-line body rather than calling it. Byte-identical
+// either way; calling it means a change to the label's SHAPE, not just its prefix, reaches this
+// reader.
+//
+// The literal used to be pinned in this file and re-authored at
 // the writer, on the pinned-literal discipline -- whose stated reason was that a drift fails
 // LOUD, naming both values. That reason held for a rename made in BOTH files and not for a
 // rename made in one: this reader then finds no label with the expected prefix and reports a
@@ -182,7 +188,7 @@ async function assertPublishedByThisLeg(
     );
   }
 
-  const expected = `${MIRRORED_BY_PREFIX}${readerOs}`;
+  const expected = mirroredByLabel(readerOs);
 
   // ONE comparison covers all three rejection classes -- a different publisher, an EMPTY
   // label, and a null one. The empty case is not hypothetical: all 122 assets in the live
@@ -498,7 +504,7 @@ export async function run(): Promise<void> {
   core.info(
     `github-cache round-trip read-back: cache HIT for ${hash} on ${readerOs} with bytes ` +
       `matching the '${readerOs}'-produced payload this leg seeded, published by this same ` +
-      `leg (label '${MIRRORED_BY_PREFIX}${readerOs}'); the real publisher/reader ` +
+      `leg (label '${mirroredByLabel(readerOs)}'); the real publisher/reader ` +
       'round-trip is closed.',
   );
 }

@@ -83,8 +83,25 @@ export function stripYamlComments(source: string): string {
  */
 const LINE_COMMENT_MARKERS = ['//', '/*', '*/', '*'] as const;
 
-/** The trailing marker, and the one space that has to precede it. See `stripLineComments`. */
-const TRAILING_COMMENT_MARKER = ' //';
+/**
+ * The trailing marker: a `//` that is NOT preceded by a colon, plus any whitespace in front of
+ * it and everything after it.
+ *
+ * THE DISCRIMINATOR IS THE COLON, not whitespace, and that correction closed a real
+ * false-GREEN shape. Requiring a preceding SPACE kept `https://` intact -- but it also left
+ * `code();// note` completely unstripped, which reopens the hole the trailing mode exists to
+ * close: a comment naming the very token a caller's clause matches on would survive into the
+ * "comment-stripped" view and satisfy the clause with the code gone. That shape was
+ * uncontrolled and prevented today only by `format:check` (Prettier inserts the space), which
+ * is a load-bearing dependency on an unrelated gate. The colon lookbehind needs no such help:
+ * `://` is the URL scheme separator and is the only reason the whitespace rule was there.
+ *
+ * TWO RESIDUALS, stated rather than discovered: a PROTOCOL-RELATIVE URL literal (`'//cdn...'`)
+ * is truncated, and a `//` written directly after a colon in non-URL code is not stripped.
+ * Neither shape exists in any caller's subject, and `repo-file.spec.ts` pins both the URL
+ * survival and the no-space strip so a regression in either direction reddens.
+ */
+const TRAILING_COMMENT = /\s*(?<!:)\/\/.*$/;
 
 /**
  * A JS/TS source with its comments removed, so a content guard cannot be satisfied -- or
@@ -102,11 +119,14 @@ const TRAILING_COMMENT_MARKER = ' //';
  * any value containing a URL scheme, silently shortening the text a clause matches against,
  * which is a false GREEN.
  *
- * THE TRAILING MODE IS OPT-IN, and it requires the marker to be preceded by WHITESPACE. That
- * is what makes `https://example.com` survive intact while ` // a note` is removed, and it is
- * the whole reason the mode is safe to offer at all. A bare `//` needle would truncate at the
- * scheme separator. Only a caller whose CLAIM is that prose can neither satisfy nor break its
- * assertions needs this mode; everything else is better served by the default.
+ * THE TRAILING MODE IS OPT-IN, and it strips any `//` NOT preceded by a colon. That is what
+ * makes `https://example.com` survive intact while both ` // a note` and `;// a note` are
+ * removed, and it is the whole reason the mode is safe to offer at all. A bare `//` needle
+ * would truncate at the scheme separator; a whitespace-anchored one leaves the no-space shape
+ * standing, which is a false GREEN in the other direction. See `TRAILING_COMMENT` for the two
+ * residuals and the controls that pin them. Only a caller whose CLAIM is that prose can
+ * neither satisfy nor break its assertions needs this mode; everything else is better served
+ * by the default.
  *
  * Blank lines are dropped in both modes -- a line that was nothing but a comment must not
  * leave an empty line behind that a multi-line needle could match across.
@@ -122,13 +142,7 @@ export function stripLineComments(
   return source
     .split('\n')
     .map((line) => {
-      if (!trailing) {
-        return line;
-      }
-
-      const at = line.indexOf(TRAILING_COMMENT_MARKER);
-
-      return at < 0 ? line : line.slice(0, at);
+      return trailing ? line.replace(TRAILING_COMMENT, '') : line;
     })
     .filter((line) => {
       const trimmed = line.trim();

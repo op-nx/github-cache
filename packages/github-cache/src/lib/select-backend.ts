@@ -44,9 +44,16 @@ import { isWriteTrusted } from './trust.js';
  * would redden a correct file, and deleting the knob branch while leaving any trailing comment
  * containing the branch text would pass the positive clause with the knob gone. The spec now
  * opts into the shared stripper's trailing mode (`src/test/repo-file.ts`), which removes a
- * trailing note but requires WHITESPACE before the marker -- so a value carrying a URL scheme
- * survives intact rather than being truncated at the scheme separator, which would be a false
- * GREEN of exactly the kind this correction closes.
+ * trailing note wherever it appears -- with `://` as the ONE exception, so a value carrying a
+ * URL scheme survives intact rather than being truncated at the scheme separator, which would
+ * be a false GREEN of exactly the kind this correction closes.
+ *
+ * THE FIRST VERSION OF THAT MODE ANCHORED ON WHITESPACE and was still false in the second
+ * direction: `code();// note`, with no space, was not stripped at all, so the knob branch could
+ * be deleted and its text restored from a no-space comment with every clause green. Prettier
+ * inserting the space was the only thing preventing that shape, which made a claim about THIS
+ * file depend on `format:check`. The colon exception replaces the whitespace anchor, both
+ * directions are pinned in `repo-file.spec.ts`, and this claim no longer leans on another gate.
  */
 export function selectBackend(
   env: NodeJS.ProcessEnv = process.env,

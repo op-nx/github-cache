@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 /**
  * The workspace root: the ONE authored copy of the walk FOR THE SPECS THAT READ THROUGH THIS
@@ -57,6 +57,45 @@ export function repoFileUrl(relativePath: string): URL {
  */
 export function readRepoFile(relativePath: string): string {
   return readFileSync(repoFileUrl(relativePath), 'utf8');
+}
+
+/** The package source root, workspace-relative. */
+export const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
+
+/**
+ * Every entry under the package source root, recursively, as BARE root-relative paths with
+ * the separator normalised, filtered by the caller's own predicate.
+ *
+ * THREE SPECS AUTHORED THIS WALK, and one of their own docstrings states the cost: three
+ * copies of it are three chances to get the one correctness detail wrong in a way that makes
+ * a guard silently scan nothing on one OS. The PREDICATE is the parameter because that is
+ * where the three genuinely differ -- and they differ substantively, not by spelling: two
+ * select non-spec `.ts`, the third selects every `.ts` outside this layer's own directory,
+ * which is a DISJOINT set (it excludes non-spec modules here and includes every `.spec.ts`
+ * elsewhere).
+ *
+ * ANCHORED ON `repoFileUrl`, so it does not depend on the process cwd. One of the three
+ * copies walked a cwd-relative string literal and needed the workspace-root cwd hook to have
+ * run; routing it here removes that dependency.
+ *
+ * BARE paths, not prefixed with the root. Two of the three callers want them bare; the one
+ * that asserts on prefixed literals re-prefixes at its own call site, which is a smaller and
+ * clearer contract than an options bag.
+ *
+ * The separator transform is a fixed, unconditional replace and deliberately NOT `node:path`'s
+ * `sep`, which LINT-02/CORR-06 bans in a unit spec because it derives an expectation from the
+ * running machine: `readdirSync` emits a backslash on Windows and a forward slash elsewhere,
+ * so the same tree must yield the same array either way.
+ */
+export function packageSourceFiles(
+  predicate: (file: string) => boolean,
+): string[] {
+  return readdirSync(repoFileUrl(PACKAGE_SOURCE_ROOT), {
+    encoding: 'utf8',
+    recursive: true,
+  })
+    .map((entry) => entry.replaceAll('\\', '/'))
+    .filter(predicate);
 }
 
 /**

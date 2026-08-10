@@ -1,8 +1,8 @@
-import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  PACKAGE_SOURCE_ROOT,
+  packageSourceFiles,
   readRepoFile,
-  repoFileUrl,
   stripLineComments,
   stripYamlComments,
 } from './repo-file.js';
@@ -163,14 +163,6 @@ describe('readRepoFile resolves from the workspace root (T4-6)', () => {
 });
 
 /**
- * The package source root, workspace-relative. Read through `repoFileUrl` rather than as a
- * cwd-relative literal, for the reason `readRepoFile`'s own docstring gives: this suite
- * installs no cwd hook, so a cwd-relative walk would resolve differently here than in the
- * specs that do.
- */
-const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
-
-/**
  * The specs that author their OWN walk up to the workspace root instead of importing this
  * layer. Named ONCE, and set-asserted below rather than described in prose.
  *
@@ -198,20 +190,23 @@ const WORKSPACE_ROOT_WALK_EXCEPTIONS = [
 
 /**
  * Every `.ts` module under the package source root except this layer's own directory, as
- * workspace-relative paths with the separator normalised.
+ * root-relative paths with the separator normalised.
  *
- * The separator transform is a fixed, unconditional replace and deliberately NOT `node:path`'s
- * `sep`, which LINT-02/CORR-06 bans in a unit spec because it derives an expectation from the
- * running machine: `readdirSync` emits `\` on Windows and `/` elsewhere, so the same tree must
- * yield the same array either way.
+ * A ONE-LINE WRAPPER over the shared walk rather than an inlined call at each of its two use
+ * sites, and the name is kept deliberately: both guards below refer to `packageModules` in
+ * their own failure messages, and the non-vacuity clause covers the shared primitive
+ * transitively through it. Inlining would re-point two clauses for no gain.
+ *
+ * ITS PREDICATE SELECTS A DISJOINT SET from the other two callers of the shared walk. The
+ * other two take non-spec `.ts`; this one excludes this layer's whole directory (including
+ * non-spec modules such as `workspace-root-cwd.ts`) and INCLUDES every `.spec.ts` elsewhere.
+ * That is why the predicate is the primitive's parameter -- it is the axis on which the three
+ * genuinely differ.
  */
 function packageModules(): string[] {
-  return readdirSync(repoFileUrl(PACKAGE_SOURCE_ROOT), {
-    encoding: 'utf8',
-    recursive: true,
-  })
-    .map((entry) => entry.replaceAll('\\', '/'))
-    .filter((file) => file.endsWith('.ts') && !file.startsWith('test/'));
+  return packageSourceFiles(
+    (file) => file.endsWith('.ts') && !file.startsWith('test/'),
+  );
 }
 
 /** How many `../` a module needs to reach the workspace root from its own directory. */

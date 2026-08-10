@@ -1,5 +1,10 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { stripLineComments } from '../test/repo-file.js';
+import { readFileSync } from 'node:fs';
+import {
+  PACKAGE_SOURCE_ROOT,
+  packageSourceFiles,
+  readRepoFile,
+  stripLineComments,
+} from '../test/repo-file.js';
 import { describe, expect, it } from 'vitest';
 import {
   cacheKeyFor,
@@ -81,30 +86,22 @@ describe('HASH_PATTERN bounds (SRV-03, shared home)', () => {
 });
 
 /** The package source root, resolved from this file rather than from the cwd. */
-const SOURCE_ROOT_URL = new URL('../', import.meta.url);
-
-/** The same root spelled workspace-relative, for readable allowlist keys and messages. */
-const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
-
 /**
  * Every non-spec TypeScript module under the package source root, as paths relative to
  * that root.
  *
- * The walk shape is `actions-cache-backend.spec.ts`'s VER-09 clause, separator
- * normalisation included -- `readdirSync(recursive: true)` yields backslashes on Windows,
- * so an unnormalised path would make the allowlist keys below match on one OS and miss on
- * the other. It is rooted at `import.meta.url` rather than at a cwd-relative literal
- * because this spec has no workspace-root chdir hook: vitest runs it with the PROJECT root
- * as the cwd, so the workspace-relative spelling would scan
- * `packages/github-cache/packages/github-cache/src` and throw ENOENT.
+ * The walk itself is the SHARED `packageSourceFiles`, so the separator normalisation and
+ * the URL anchoring live in one place rather than in three. Both details are load-bearing
+ * here: `readdirSync(recursive: true)` yields backslashes on Windows, so an unnormalised
+ * path would make the allowlist keys below match on one OS and miss on the other; and the
+ * URL anchoring is what lets this spec walk the tree without a workspace-root chdir hook,
+ * since vitest runs it with the PROJECT root as the cwd and a workspace-relative literal
+ * would scan `packages/github-cache/packages/github-cache/src` and throw ENOENT.
  */
 function nonSpecModules(): string[] {
-  return readdirSync(SOURCE_ROOT_URL, {
-    encoding: 'utf8',
-    recursive: true,
-  })
-    .map((entry) => entry.replaceAll('\\', '/'))
-    .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'));
+  return packageSourceFiles(
+    (file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'),
+  );
 }
 
 describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
@@ -168,7 +165,7 @@ describe('cache-key.ts single source (TRUST-08, T-05-08-02)', () => {
 
     for (const file of nonSpecModules()) {
       const count = countAuthored(
-        readFileSync(new URL(file, SOURCE_ROOT_URL), 'utf8'),
+        readRepoFile(`${PACKAGE_SOURCE_ROOT}/${file}`),
         CACHE_KEY_PREFIX,
       );
 

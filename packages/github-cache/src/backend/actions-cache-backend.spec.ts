@@ -1,7 +1,6 @@
 import {
   existsSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -25,7 +24,11 @@ import {
   cacheArchivePath,
 } from '../lib/cache-archive-path.js';
 import { cacheKeyFor, type Hash } from '../lib/cache-key.js';
-import { stripLineComments } from '../test/repo-file.js';
+import {
+  PACKAGE_SOURCE_ROOT,
+  packageSourceFiles,
+  stripLineComments,
+} from '../test/repo-file.js';
 import { enterWorkspaceRootCwd } from '../test/workspace-root-cwd.js';
 import {
   createActionsCacheBackend,
@@ -743,9 +746,6 @@ describe('the module reaches @actions/cache at exactly three places (VER-03 clau
   });
 });
 
-/** The package source root, workspace-relative -- see the VER-09 clause on why. */
-const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
-
 /**
  * The module specifier in any quoted form, including a deep subpath -- an
  * `@actions/cache/lib/internal/...` import reaches the same library and would evade a
@@ -755,37 +755,36 @@ const PACKAGE_SOURCE_ROOT = 'packages/github-cache/src';
 const ACTIONS_CACHE_SPECIFIER = /['"]@actions\/cache(?:\/[^'"]*)?['"]/;
 
 /**
- * Every non-spec `.ts` module under the package source root, workspace-relative. The tree walk
- * for all three scans below, authored ONCE.
+ * Every non-spec `.ts` module under the package source root, PREFIXED with that root. The tree
+ * walk for all three scans below, now shared rather than authored here.
  *
- * A FUNCTION, not a module-scope constant, and that is a constraint rather than a preference:
- * path resolution reuses the workspace-root cwd that `src/test/workspace-root-cwd.ts` enters
- * file-wide, and that hook has NOT run at collection time -- so the walk must happen inside an
- * `it`. Every path it yields is workspace-relative by construction, which is why the expected
- * literals need no normalisation beyond the separator.
+ * THE WALK IS `packageSourceFiles`, which is URL-ANCHORED and therefore cwd-INDEPENDENT. This
+ * block used to state the opposite as a constraint -- "A FUNCTION, not a module-scope constant
+ * ... path resolution reuses the workspace-root cwd that `src/test/workspace-root-cwd.ts`
+ * enters file-wide, and that hook has NOT run at collection time -- so the walk must happen
+ * inside an `it`". Routing through `repoFileUrl` REMOVED that dependency, so the stated
+ * constraint no longer holds and is corrected here rather than left standing: a claim that
+ * reads as canonical and is false is the exact defect `repo-file.ts`'s own header exists to
+ * prevent. The function form is retained for a weaker but real reason -- the callers read it
+ * lazily, inside their own `it`, and nothing is gained by walking the tree at collection time.
  *
- * `encoding` is named rather than left to the default so the overload resolves to `string[]`;
- * without it the return type widens to `string[] | Buffer[]` and the normalisation does not
- * typecheck.
+ * THE PREFIX IS RE-APPLIED HERE, at the one call site that wants it. The shared walk returns
+ * BARE root-relative paths because two of its three callers want them that way; the three
+ * clauses below assert on PREFIXED literals and on `readFileSync` reads that are still
+ * cwd-relative, so this caller restores the prefix rather than the primitive growing an option.
  *
- * The separator transform is a FIXED, unconditional string replace and deliberately NOT
- * `node:path`'s `sep`, which LINT-02/CORR-06 bans in a unit spec because it derives an
- * expectation from the running machine. `readdirSync` emits `\` on Windows and none on POSIX,
- * so the same tree yields the same array either way -- the whole point of an OS-invariant
- * guard, and the reason this normalisation must not be duplicated: three copies of it are
- * three chances to get the one correctness detail wrong in a way that makes a guard silently
- * scan nothing on one OS.
+ * WHAT THIS DELIBERATELY DOES NOT CHANGE: `importsActionsCache` and the positive control still
+ * do cwd-relative `readFileSync` calls on these prefixed paths, and those still depend on the
+ * workspace-root cwd hook. Routing them through `readRepoFile` too is a separate decision and
+ * a larger diff; they are correct as they stand under the existing hook.
  *
  * Unsorted on purpose -- the two clauses that assert an exact array sort AFTER filtering, and
  * the positive control does not care.
  */
 function nonSpecModules(): string[] {
-  return readdirSync(PACKAGE_SOURCE_ROOT, {
-    encoding: 'utf8',
-    recursive: true,
-  })
-    .map((entry) => `${PACKAGE_SOURCE_ROOT}/${entry.replaceAll('\\', '/')}`)
-    .filter((file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'));
+  return packageSourceFiles(
+    (file) => file.endsWith('.ts') && !file.endsWith('.spec.ts'),
+  ).map((file) => `${PACKAGE_SOURCE_ROOT}/${file}`);
 }
 
 /**

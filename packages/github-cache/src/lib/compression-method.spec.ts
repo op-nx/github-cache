@@ -277,10 +277,13 @@ function probeTokenOf(needle: RegExp): string {
  * scan would be red on the correct file the moment that prose spells one -- which is how a
  * reader talks themselves into deleting a guard.
  *
- * The local copy this replaced was the sixth of its kind and lived here for exactly one
- * commit, so the T2-7 scan could land without waiting on this extraction. The shared helper
- * has the same marker set and carries the positive control; measured, the stripped view is
- * byte-identical.
+ * The local copy this replaced lived here for exactly one commit, so the T2-7 scan could land
+ * without waiting on this extraction. The shared helper has the same marker set and carries the
+ * positive control. MEASURED, and the first version of this line claimed the stripped view is
+ * BYTE-IDENTICAL, which is false: the shared helper also drops BLANK lines and the local copy
+ * did not (451 -> 446 chars on this subject). The difference is dropped blank lines and nothing
+ * else, and every needle below is single-line, so no clause changes verdict. Do not add a needle
+ * spanning a blank line.
  */
 const strippedSourceOf = stripLineComments;
 

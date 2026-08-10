@@ -114,11 +114,26 @@ const TRAILING_COMMENT = /\s*(?<!:)\/\/.*$/;
  * A JS/TS source with its comments removed, so a content guard cannot be satisfied -- or
  * broken -- by prose.
  *
- * THIS PRIMITIVE EXISTED IN FIVE COPIES with three different marker sets, all line-leading,
- * and the copy backing the strongest claim in the package had NO positive control. It is a
- * primitive rather than a fact about any one module, which is why it belongs here beside
- * `stripYamlComments` rather than in the spec that happens to need it most. Compose it the
- * way the YAML one already established: `stripLineComments(readRepoFile(path))`.
+ * THIS PRIMITIVE WAS RE-AUTHORED IN EVERY SPEC THAT NEEDED IT, with three different marker
+ * sets, all line-leading, and the copy backing the strongest claim in the package had NO
+ * positive control. It is a primitive rather than a fact about any one module, which is why it
+ * belongs here beside `stripYamlComments` rather than in the spec that happens to need it most.
+ * Compose it the way the YAML one already established:
+ * `stripLineComments(readRepoFile(path))`. (No copy count is spelled out: the first version of
+ * this docstring said "five", the consolidation then turned out to have missed one, and the
+ * number answers no reader's question.)
+ *
+ * HOW THE VIEW DIFFERS FROM THE COPIES IT REPLACED, measured rather than asserted, because
+ * four callers shipped a claim of BYTE-IDENTITY that is false. This one drops BLANK lines and
+ * none of the copies did. MEASURED across every subject, old local view vs this one:
+ * `vitest.config.mts` 741 -> 739 chars, `vitest.integration.config.mts` 397 -> 395,
+ * `lib/cache-key.ts` 559 -> 552, `lib/cache-archive-path.ts` 210 -> 207,
+ * `lib/select-backend.ts` 1846 -> 1837, `lib/compression-method.ts` 451 -> 446,
+ * `backend/actions-cache-backend.ts` 3658 -> 3634. In EVERY case the difference is dropped
+ * blank lines and nothing else -- verified by comparing the blank-stripped old view against
+ * this one, which is equal on all seven. So no needle asserted through this helper changes
+ * verdict TODAY, because every one of them is single-line. DO NOT ADD A NEEDLE THAT SPANS A
+ * BLANK LINE and expect the file's line structure back: it is not preserved here.
  *
  * LINE-LEADING IS THE DEFAULT, and that is a deliberate narrowing rather than the lazy
  * option. Four of the five copies need exactly this, and a blanket trailing strip is

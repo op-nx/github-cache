@@ -242,11 +242,15 @@ function strippedConfigSource(relativePath: string): string {
   // the two sites that falsified the helper's canonical-copy claim. Paths are now
   // repo-relative, like every other caller of that layer.
   //
-  // Through the SHARED stripper too, which owns the marker set. This copy stripped only
-  // `//`; the shared one also drops block-comment lines, and MEASURED, the stripped view of
-  // both vitest configs is byte-identical either way -- neither carries a block comment
-  // today. Routing it means a block comment added to a config tomorrow cannot satisfy a
-  // clause here.
+  // Through the SHARED stripper too, which owns the marker set. This copy stripped only `//`;
+  // the shared one also drops block-comment lines AND blank lines. MEASURED, and the first
+  // version of this paragraph claimed the two views are BYTE-IDENTICAL, which is false in the
+  // blank-line direction: `vitest.config.mts` 741 -> 739 chars and
+  // `vitest.integration.config.mts` 397 -> 395. Neither config carries a block comment today,
+  // so THAT half of the difference is currently zero; the whole measured delta is dropped blank
+  // lines. Every needle asserted here is single-line, so no clause changes verdict -- do not
+  // add one spanning a blank line. Routing it means a block comment added to a config tomorrow
+  // cannot satisfy a clause here.
   return stripLineComments(readRepoFile(relativePath));
 }
 

@@ -49,7 +49,10 @@ const SUBJECT_LINES = readFileSync(
 // THE MARKER LOGIC IS NO LONGER AUTHORED HERE. `stripLineComments` in `src/test/repo-file.ts`
 // owns it, with its own control suite -- this was one of five copies with three different
 // marker sets, and a comment stripper is a PRIMITIVE rather than a fact about one module.
-// MEASURED: this file's stripped view is byte-identical before and after the routing.
+// MEASURED, and the first version of this line claimed BYTE-IDENTITY, which is false: the
+// shared helper also drops BLANK lines and the local copy did not (210 -> 207 chars on this
+// subject). The difference is dropped blank lines and nothing else, so every clause here keeps
+// its verdict -- each needle is single-line. Do not add a needle spanning a blank line.
 //
 // Concatenated with `reduce` rather than the obvious Array-to-string method, because that
 // method's NAME is one of the tokens this file must never spell verbatim -- see the bracket

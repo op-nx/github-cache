@@ -855,12 +855,24 @@ export async function publishMirror(
     //
     // (2) `readMisses` STOPS INCREMENTING for every post-burn entry, because the restore
     // that classified them is no longer reached. This is the consequence a reader will miss
-    // and the one that shifts a reported number, so: it CANNOT affect the total-case gate
-    // below. That gate needs `readMisses === hashes.length`, and a burned tag means the
-    // shard never resolved, so no entry was ever mirrored on that leg either -- the leg has
-    // nothing to report but the single warning, which is already its signal. The saved work
-    // is one Actions-cache round-trip per remaining hash, which is the other reason the
-    // block belongs here rather than three branches down.
+    // and the one that shifts a reported number, so: it CANNOT make the total-case gate
+    // below reachable -- and the reason is the SENTINEL'S OWN PRECONDITION, not `mirrored`.
+    // (An earlier version of this paragraph argued from `mirrored === 0`, which is a
+    // PRECONDITION of that gate: "no entry was ever mirrored" argues FOR the gate firing,
+    // not against it. The conclusion was right and the reason was backwards, which is the
+    // falsified-prose class this comment was itself written to fix.)
+    //
+    // The fact that holds: `burnedShardTag` is set only inside the `shard === undefined`
+    // branch, which is reached only after `restored.kind !== 'miss'` -- the miss branch
+    // `continue`s above it. So the entry that DISCOVERS the burn was a restore HIT and never
+    // counted as a miss, which puts `readMisses <= hashes.length - 1` on any burned leg both
+    // before and after this move. The gate needs `readMisses === hashes.length`, so it was
+    // already unreachable, and the hoist only lowers `readMisses` further -- strictly less
+    // reachable, never more. The leg has nothing to report but the single warning, which is
+    // already its signal.
+    //
+    // The saved work is one Actions-cache round-trip per remaining hash, which is the other
+    // reason the block belongs here rather than three branches down.
     if (burnedShardTag) {
       skipped++;
 

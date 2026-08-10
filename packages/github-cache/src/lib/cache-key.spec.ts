@@ -18,8 +18,11 @@ import {
  */
 function countAuthored(source: string, needle: string): number {
   // Through the SHARED stripper (`src/test/repo-file.ts`), which owns the marker set and
-  // carries the positive control. This was one of five hand-authored copies; measured, the
-  // stripped view here is byte-identical before and after.
+  // carries the positive control. This was one of several hand-authored copies. MEASURED, and
+  // the first version of this line claimed BYTE-IDENTITY, which is false: the shared helper
+  // also drops BLANK lines and the copy did not (559 -> 552 chars on `lib/cache-key.ts`). The
+  // difference is dropped blank lines and nothing else, and this function counts occurrences of
+  // a single-line needle, so no count moves.
   const code = stripLineComments(source);
 
   return code.split(needle).length - 1;

@@ -181,11 +181,6 @@ function ownSeedRow(readerOs: CacheOs, label: string | null): AssetRow {
   };
 }
 
-/** The publisher's label value, built from the leaf that owns it -- not re-authored here. */
-function mirroredBy(os: CacheOs): string {
-  return mirroredByLabel(os);
-}
-
 /** `count` rows that are NOT the asset under test -- page filler, nothing more. */
 function decoyRows(count: number): AssetRow[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -232,7 +227,9 @@ beforeEach(() => {
   resolveLocalReadTokenMock.mockResolvedValue(TOKEN);
   resolveRepoIdentityMock.mockResolvedValue(REPO);
   vi.stubGlobal('fetch', fetchMock);
-  serveShard([[ownSeedRow(DEFAULT_READER_OS, mirroredBy(DEFAULT_READER_OS))]]);
+  serveShard([
+    [ownSeedRow(DEFAULT_READER_OS, mirroredByLabel(DEFAULT_READER_OS))],
+  ]);
 });
 
 afterEach(() => {
@@ -248,7 +245,7 @@ describe('round-trip read-back derives its OWN leg seed and accepts only that le
       cachePlatformMock.mockReturnValue(os);
       const seed = mirrorSeedHash(HASH, os);
       get.mockResolvedValue({ kind: 'hit', bytes: dogfoodBody(seed, os) });
-      serveShard([[ownSeedRow(os, mirroredBy(os))]]);
+      serveShard([[ownSeedRow(os, mirroredByLabel(os))]]);
 
       await expect(run()).resolves.toBeUndefined();
 
@@ -371,7 +368,7 @@ describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U
         kind: 'hit',
         bytes: dogfoodBody(mirrorSeedHash(HASH, os), os),
       });
-      serveShard([[ownSeedRow(os, mirroredBy(os))]]);
+      serveShard([[ownSeedRow(os, mirroredByLabel(os))]]);
 
       await expect(run()).resolves.toBeUndefined();
     },
@@ -387,7 +384,7 @@ describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U
         kind: 'hit',
         bytes: dogfoodBody(mirrorSeedHash(HASH, readerOs), readerOs),
       });
-      serveShard([[ownSeedRow(readerOs, mirroredBy(publisherOs))]]);
+      serveShard([[ownSeedRow(readerOs, mirroredByLabel(publisherOs))]]);
 
       const message = await run().catch((error: unknown) =>
         error instanceof Error ? error.message : String(error),
@@ -396,8 +393,8 @@ describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U
       // BOTH values named, so an operator reading the failed job does not have to guess
       // which leg published it. Asserted as two separate containments rather than one
       // whole-message equality, which would break on any rewording.
-      expect(message).toContain(mirroredBy(publisherOs));
-      expect(message).toContain(mirroredBy(readerOs));
+      expect(message).toContain(mirroredByLabel(publisherOs));
+      expect(message).toContain(mirroredByLabel(readerOs));
     },
   );
 
@@ -435,7 +432,7 @@ describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U
       });
       serveShard([
         decoyRows(ASSETS_PER_PAGE),
-        [ownSeedRow(os, mirroredBy(os))],
+        [ownSeedRow(os, mirroredByLabel(os))],
       ]);
 
       await expect(run()).resolves.toBeUndefined();
@@ -517,7 +514,9 @@ describe('round-trip read-back proves its OWN leg published the asset (OBS-05, U
         );
       }
 
-      return Promise.resolve(jsonResponse([ownSeedRow(os, mirroredBy(os))]));
+      return Promise.resolve(
+        jsonResponse([ownSeedRow(os, mirroredByLabel(os))]),
+      );
     });
 
     await expect(run()).resolves.toBeUndefined();

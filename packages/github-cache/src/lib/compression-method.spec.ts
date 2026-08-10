@@ -2,6 +2,7 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveCompressionMethod } from './compression-method.js';
+import { stripLineComments } from '../test/repo-file.js';
 
 /**
  * VER-05. `resolveCompressionMethod` is an independent re-implementation of
@@ -265,32 +266,17 @@ function probeTokenOf(needle: RegExp): string {
 }
 
 /**
- * The subject with its comments removed. REQUIRED rather than tidy: the subject's own
- * docstring exists to DISCUSS the fields it refuses to read, so a raw scan would be red on
- * the correct file the moment that prose spells one -- which is how a reader talks themselves
- * into deleting a guard.
+ * The subject with its comments removed, through the SHARED stripper. REQUIRED rather than
+ * tidy: the subject's own docstring exists to DISCUSS the fields it refuses to read, so a raw
+ * scan would be red on the correct file the moment that prose spells one -- which is how a
+ * reader talks themselves into deleting a guard.
  *
- * A sixth line-leading copy of this primitive, and deliberately so for ONE commit: T2-5
- * consolidates all of them into a single shared stripper with its own control suite, and this
- * scan is routed through it there. Adding the copy here keeps each commit independently
- * green rather than ordering this fix behind the extraction.
+ * The local copy this replaced was the sixth of its kind and lived here for exactly one
+ * commit, so the T2-7 scan could land without waiting on this extraction. The shared helper
+ * has the same marker set and carries the positive control; measured, the stripped view is
+ * byte-identical.
  */
-function strippedSourceOf(source: string): string {
-  return source
-    .split('\n')
-    .filter((line) => {
-      const trimmed = line.trim();
-
-      return (
-        trimmed !== '' &&
-        !trimmed.startsWith('//') &&
-        !trimmed.startsWith('/*') &&
-        !trimmed.startsWith('*') &&
-        !trimmed.startsWith('*/')
-      );
-    })
-    .join('\n');
-}
+const strippedSourceOf = stripLineComments;
 
 const strippedSubject = strippedSourceOf(
   readFileSync(new URL('compression-method.ts', import.meta.url), 'utf8'),

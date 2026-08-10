@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { cacheArchivePath } from './cache-archive-path.js';
+import { stripLineComments } from '../test/repo-file.js';
 import type { Hash } from './cache-key.js';
 
 // VER-01/VER-02, non-vacuous: the expected path below is spelled out as a string
@@ -45,21 +46,17 @@ const SUBJECT_LINES = readFileSync(
 // would redden on the documentation instead of the code. The intended consequence is the
 // other half of the same fact -- the implementation IS free to name the builders in its
 // comment, and only THIS FILE's regex source has to be contorted.
-const COMMENT_MARKERS = ['//', '/*', '*/', '*'] as const;
-
-function isCommentLine(line: string): boolean {
-  const trimmed = line.trim();
-
-  return COMMENT_MARKERS.some((marker) => trimmed.startsWith(marker));
-}
-
-// Concatenated with `reduce` rather than the obvious Array-to-string method, because
-// that method's NAME is one of the tokens this file must never spell verbatim -- see
-// the bracket lock on FORBIDDEN below. Same reason the assertions never say the words.
+// THE MARKER LOGIC IS NO LONGER AUTHORED HERE. `stripLineComments` in `src/test/repo-file.ts`
+// owns it, with its own control suite -- this was one of five copies with three different
+// marker sets, and a comment stripper is a PRIMITIVE rather than a fact about one module.
+// MEASURED: this file's stripped view is byte-identical before and after the routing.
+//
+// Concatenated with `reduce` rather than the obvious Array-to-string method, because that
+// method's NAME is one of the tokens this file must never spell verbatim -- see the bracket
+// lock on FORBIDDEN below. Same reason the assertions never say the words. The shared helper
+// takes a string, so the reduce stays here for exactly that reason.
 function strippedSourceOf(lines: readonly string[]): string {
-  return lines
-    .filter((line) => !isCommentLine(line))
-    .reduce((all, line) => `${all}\n${line}`, '');
+  return stripLineComments(lines.reduce((all, line) => `${all}\n${line}`, ''));
 }
 
 const strippedSubject = strippedSourceOf(SUBJECT_LINES);

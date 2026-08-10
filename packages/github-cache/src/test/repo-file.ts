@@ -58,3 +58,70 @@ export function stripYamlComments(source: string): string {
     .filter((line) => !line.trim().startsWith('#'))
     .join('\n');
 }
+
+/**
+ * The JS/TS comment markers a LINE-LEADING strip removes. The bare asterisk already subsumes
+ * the block-comment CLOSER, since a trimmed line opening with the closer opens with an
+ * asterisk -- which is why the five copies this replaces were equivalent despite spelling
+ * three different marker sets. (The closer is not written out in this docstring for the
+ * obvious reason.)
+ */
+const LINE_COMMENT_MARKERS = ['//', '/*', '*/', '*'] as const;
+
+/** The trailing marker, and the one space that has to precede it. See `stripLineComments`. */
+const TRAILING_COMMENT_MARKER = ' //';
+
+/**
+ * A JS/TS source with its comments removed, so a content guard cannot be satisfied -- or
+ * broken -- by prose.
+ *
+ * THIS PRIMITIVE EXISTED IN FIVE COPIES with three different marker sets, all line-leading,
+ * and the copy backing the strongest claim in the package had NO positive control. It is a
+ * primitive rather than a fact about any one module, which is why it belongs here beside
+ * `stripYamlComments` rather than in the spec that happens to need it most. Compose it the
+ * way the YAML one already established: `stripLineComments(readRepoFile(path))`.
+ *
+ * LINE-LEADING IS THE DEFAULT, and that is a deliberate narrowing rather than the lazy
+ * option. Four of the five copies need exactly this, and a blanket trailing strip is
+ * DANGEROUS in the same direction as the defect being fixed: a trailing `//` strip truncates
+ * any value containing a URL scheme, silently shortening the text a clause matches against,
+ * which is a false GREEN.
+ *
+ * THE TRAILING MODE IS OPT-IN, and it requires the marker to be preceded by WHITESPACE. That
+ * is what makes `https://example.com` survive intact while ` // a note` is removed, and it is
+ * the whole reason the mode is safe to offer at all. A bare `//` needle would truncate at the
+ * scheme separator. Only a caller whose CLAIM is that prose can neither satisfy nor break its
+ * assertions needs this mode; everything else is better served by the default.
+ *
+ * Blank lines are dropped in both modes -- a line that was nothing but a comment must not
+ * leave an empty line behind that a multi-line needle could match across.
+ *
+ * NOTHING FROM VITEST is imported here, the same hard constraint the rest of this module
+ * records: `src/test/` is inside `tsconfig.lib.json`'s `src/**` include, so a vitest import
+ * would start emitting a vitest require into `dist`.
+ */
+export function stripLineComments(
+  source: string,
+  { trailing = false }: { trailing?: boolean } = {},
+): string {
+  return source
+    .split('\n')
+    .map((line) => {
+      if (!trailing) {
+        return line;
+      }
+
+      const at = line.indexOf(TRAILING_COMMENT_MARKER);
+
+      return at < 0 ? line : line.slice(0, at);
+    })
+    .filter((line) => {
+      const trimmed = line.trim();
+
+      return (
+        trimmed !== '' &&
+        !LINE_COMMENT_MARKERS.some((marker) => trimmed.startsWith(marker))
+      );
+    })
+    .join('\n');
+}

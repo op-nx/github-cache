@@ -35,8 +35,18 @@ import { isWriteTrusted } from './trust.js';
  * "the 'it is last' guarantee is checked mechanically by first-occurrence position, so a
  * second mention up here would defeat the check". No such check existed -- it was an ad-hoc
  * `indexOf` comparison run once during plan 13-03 that never became a clause. It exists now,
- * in select-backend.spec.ts, and it reads the COMMENT-STRIPPED source, so prose cannot
- * satisfy or break it and the documentation cost is gone.
+ * in select-backend.spec.ts.
+ *
+ * AND THE STRIP IT READS THROUGH IS NOW STRONG ENOUGH FOR THAT CLAIM, which it was not when
+ * the claim was written. The guard reads the comment-stripped source so prose can neither
+ * satisfy nor break it -- but the stripper was LINE-LEADING only, which made the claim false
+ * in both directions: a legitimate TRAILING note anywhere in this file survived the strip and
+ * would redden a correct file, and deleting the knob branch while leaving any trailing comment
+ * containing the branch text would pass the positive clause with the knob gone. The spec now
+ * opts into the shared stripper's trailing mode (`src/test/repo-file.ts`), which removes a
+ * trailing note but requires WHITESPACE before the marker -- so a value carrying a URL scheme
+ * survives intact rather than being truncated at the scheme separator, which would be a false
+ * GREEN of exactly the kind this correction closes.
  */
 export function selectBackend(
   env: NodeJS.ProcessEnv = process.env,

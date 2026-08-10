@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
+import { stripLineComments } from '../test/repo-file.js';
 import * as cache from '@actions/cache';
 import * as core from '@actions/core';
 import {
@@ -628,21 +629,24 @@ describe('TRUST-14: CACHE_READ_ONLY is a ROLE signal that can only narrow', () =
  * Read via import.meta.url (the pinned-deps / cleanup-workflow idiom), never process.cwd(),
  * so the subject resolves from this file's own location rather than the runner's cwd.
  */
-const selectBackendCode = readFileSync(
-  new URL('./select-backend.ts', import.meta.url),
-  'utf8',
-)
-  .split('\n')
-  .filter((line) => {
-    const trimmed = line.trim();
-
-    return (
-      !trimmed.startsWith('//') &&
-      !trimmed.startsWith('*') &&
-      !trimmed.startsWith('/*')
-    );
-  })
-  .join('\n');
+//
+// THE ONLY CALLER THAT OPTS INTO THE TRAILING MODE, and the only one that needs to. The
+// subject's own claim is that this guard reads the comment-stripped source "so prose cannot
+// satisfy or break it" -- and a LINE-LEADING strip made that false in BOTH directions. A
+// legitimate trailing note on the knob branch survived the strip and would redden a correct
+// file; deleting the knob branch while leaving any trailing comment containing the branch
+// text passed the positive clause with the knob GONE. Only a claim of that strength earns
+// the trailing mode; every other caller is better served by the default, because a blanket
+// trailing strip truncates any value carrying a URL scheme.
+//
+// The trailing marker requires PRECEDING WHITESPACE, which is what keeps a URL scheme
+// intact -- see the truncation controls in `src/test/repo-file.spec.ts`. Measured: this
+// subject contains no `://` today, so the hazard is latent rather than live here, and the
+// whitespace requirement is what stops it from becoming live.
+const selectBackendCode = stripLineComments(
+  readFileSync(new URL('./select-backend.ts', import.meta.url), 'utf8'),
+  { trailing: true },
+);
 
 /**
  * BRANCH ORDER AND KNOB FORM, made mechanical.

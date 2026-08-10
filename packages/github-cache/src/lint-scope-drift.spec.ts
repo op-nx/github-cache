@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
+import { stripLineComments } from './test/repo-file.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
@@ -231,10 +232,13 @@ function unionShape(globs: readonly string[], label: string): SpecGlobShape {
 // that CommonJS global for a `.mts` module imported from a spec. The import
 // fails immediately and there is nothing to gain by retrying it.
 function strippedConfigSource(relativePath: string): string {
-  return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('//'))
-    .join('\n');
+  // Through the SHARED stripper, which owns the marker set. This copy stripped only `//`;
+  // the shared one also drops block-comment lines, and MEASURED, the stripped view of both
+  // vitest configs is byte-identical either way -- neither carries a block comment today.
+  // Routing it means a block comment added to a config tomorrow cannot satisfy a clause here.
+  return stripLineComments(
+    readFileSync(new URL(relativePath, import.meta.url), 'utf8'),
+  );
 }
 
 const unitConfigCode = strippedConfigSource('../vitest.config.mts');

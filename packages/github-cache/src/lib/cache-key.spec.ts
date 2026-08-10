@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { stripLineComments } from '../test/repo-file.js';
 import { describe, expect, it } from 'vitest';
 import {
   cacheKeyFor,
@@ -16,18 +17,10 @@ import {
  * no others (TRUST-08 / T-05-08-02).
  */
 function countAuthored(source: string, needle: string): number {
-  const code = source
-    .split('\n')
-    .filter((line) => {
-      const trimmed = line.trim();
-
-      return (
-        !trimmed.startsWith('*') &&
-        !trimmed.startsWith('//') &&
-        !trimmed.startsWith('/*')
-      );
-    })
-    .join('\n');
+  // Through the SHARED stripper (`src/test/repo-file.ts`), which owns the marker set and
+  // carries the positive control. This was one of five hand-authored copies; measured, the
+  // stripped view here is byte-identical before and after.
+  const code = stripLineComments(source);
 
   return code.split(needle).length - 1;
 }

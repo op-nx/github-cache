@@ -128,8 +128,17 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
   // fails on that target's own clause, and a deleted target fails on the key set. A `toContain`
   // here would be the `>= 1` floor this file already rejects once.
   //
-  // If the doc legitimately grows another target, add it to the expected KEY SET here in the
+  // If the doc legitimately grows another target, add it to `SNIPPET_TARGETS` below in the
   // SAME commit. Do not relax either clause to make the suite green.
+
+  /**
+   * The targets section 1's snippet must declare. Named ONCE: the key-set equality and the
+   * per-target clause below both derive from it, so a fourth target cannot be added to one
+   * and missed by the other. Two independent literals here would reproduce, one file over,
+   * the "hardcoded twice while a canonical constant exists" hole A8 was written to close in
+   * `windows-regression-detector.spec.ts` -- a guard silently going three-of-N.
+   */
+  const SNIPPET_TARGETS = ['build', 'test', 'lint'] as const;
 
   /** Every fenced block opened with the given info string, bodies only. */
   function fencedBodies(infoString: string): string[] {
@@ -151,23 +160,47 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
       `docs/cross-os.md must carry exactly one \`\`\`json fence -- the copy-pasteable nx.json snippet. ${REWORD_ADVICE}`,
     ).toBe(1);
 
-    const snippet = JSON.parse(snippets[0]) as {
-      targetDefaults: Record<string, { inputs?: readonly unknown[] }>;
+    // BOTH DEREFERENCES BELOW ARE NAMED FIRST. `JSON.parse` and `Object.keys` each crash
+    // anonymously on a doc edit an author would plausibly make -- a `//` comment inside the
+    // fence (legal in nx.json, which IS JSONC, and this fence is an nx.json snippet), or a
+    // fence narrowed to just the `targetDefaults` sub-object. Every other clause in this
+    // file carries a REWORD_ADVICE-bearing message; a bare SyntaxError or "Cannot convert
+    // undefined or null to object" is the unnamed crash `hash-parity/compare.ts` calls out
+    // as a defect in its own right.
+    let snippet: {
+      targetDefaults?: Record<string, { inputs?: readonly unknown[] }>;
     };
+
+    try {
+      snippet = JSON.parse(snippets[0]) as typeof snippet;
+    } catch (error) {
+      throw new Error(
+        "docs/cross-os.md's ```json fence must PARSE -- this guard reads the target " +
+          'keys out of it rather than counting occurrences in it. nx.json accepts JSONC ' +
+          `comments; this fence cannot carry them. ${REWORD_ADVICE} (${String(error)})`,
+      );
+    }
+
+    expect(
+      snippet.targetDefaults,
+      `docs/cross-os.md's \`\`\`json fence must be a whole nx.json shape with a \`targetDefaults\` key -- narrowing it to the sub-object breaks the copy-pasteable claim section 1 makes. ${REWORD_ADVICE}`,
+    ).toBeDefined();
+
+    const targetDefaults = snippet.targetDefaults ?? {};
 
     // THE TARGET KEYS THEMSELVES, by set equality. This is what the occurrence count could
     // not do: a snippet that dropped `lint` and doubled `build` kept the count at three.
     expect(
-      Object.keys(snippet.targetDefaults).sort(),
-      `The copy-pasteable nx.json snippet in docs/cross-os.md must declare targetDefaults for exactly build, test and lint -- section 1's heading is "declare the discriminator on every cacheable target", and a snippet naming fewer targets demonstrates the opposite of its own heading (CR-01). ${REWORD_ADVICE}`,
-    ).toEqual(['build', 'lint', 'test']);
+      Object.keys(targetDefaults).sort(),
+      `The copy-pasteable nx.json snippet in docs/cross-os.md must declare targetDefaults for exactly ${SNIPPET_TARGETS.join(', ')} -- section 1's heading is "declare the discriminator on every cacheable target", and a snippet naming fewer targets demonstrates the opposite of its own heading (CR-01). ${REWORD_ADVICE}`,
+    ).toEqual([...SNIPPET_TARGETS].sort());
 
     // EACH key carries the discriminator, EXACTLY ONCE. `toEqual([command])` rather than
     // `toContain` so both presence and cardinality are pinned per target, which keeps the
     // exact-count discipline while moving it to a level that can localize.
-    for (const target of ['build', 'test', 'lint']) {
+    for (const target of SNIPPET_TARGETS) {
       expect(
-        runtimeInputsOf(snippet.targetDefaults[target].inputs),
+        runtimeInputsOf(targetDefaults[target]?.inputs),
         `The \`${target}\` target in docs/cross-os.md's nx.json snippet must carry the discriminator nx.json declares (\`${command}\`) exactly once. D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. ${REWORD_ADVICE}`,
       ).toEqual([command]);
     }

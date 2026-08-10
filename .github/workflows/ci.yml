@@ -1543,6 +1543,20 @@ jobs:
             # payload (`{"message":"Not Found"}`) yields `length` 0, breaks the loop, and
             # arrives at the absent-step message -- reintroducing exactly the wrong-cause
             # report this block was just corrected for.
+            #
+            # THE INNER CONTAINER IS GUARDED TOO -- `select((.steps | type) == "array")` --
+            # and that is a separate hole from the two ELEMENT guards beside it. Guarding
+            # `.jobs[]` and `.steps[]` element types says nothing about the `.steps`
+            # CONTAINER, and a job object whose `steps` is ABSENT or null is the plausible
+            # shape (a queued or partially-materialised leg). MEASURED with jq 1.8.1
+            # against the guardless expression: an absent `steps` exits 5 with "Cannot
+            # iterate over null", and since `step=$(...)` is a plain assignment under
+            # `set -euo pipefail` that kills the step with a raw jq error and NO
+            # `o3-witness:` verdict -- the same misattribution the extraction was split up
+            # to prevent, arriving through the guards added to prevent it. With the guard,
+            # absent / null / scalar `steps` all contribute nothing (exit 0, empty), so the
+            # walk continues and the absent-step message below reports the real cause.
+            # The outer container has its own check above for the same reason.
             step=''
             page=1
             while [ "${page}" -le 20 ]; do
@@ -1555,7 +1569,7 @@ jobs:
                 echo "o3-witness: FAIL -- the jobs API returned no \`jobs\` array on page ${page}, so the run's job list was never read. This is an API or permissions fault, not a rename and not a missing step." >&2
                 exit 1
               fi
-              step=$(printf '%s' "${body}" | jq -c 'first(.jobs[] | select(type == "object") | select(.name == "integration (windows-11-arm)") | .steps[] | select(type == "object") | select(.name == "Run the integration target and tee its output")) // empty')
+              step=$(printf '%s' "${body}" | jq -c 'first(.jobs[] | select(type == "object") | select(.name == "integration (windows-11-arm)") | select((.steps | type) == "array") | .steps[] | select(type == "object") | select(.name == "Run the integration target and tee its output")) // empty')
               if [ -n "${step}" ]; then
                 break
               fi

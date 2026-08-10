@@ -792,6 +792,17 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
   // `.jobs[]` and then `.steps[]`, so a non-object at either level is what faults. The
   // container check one line up already proves `.jobs` IS an array and says nothing about
   // what is in it.
+  //
+  // AND BOTH CONTAINERS, which is a THIRD thing and was the hole this clause shipped with.
+  // Guarding the two element types leaves the `.steps` CONTAINER unguarded, and the two
+  // faults are unrelated: an element guard cannot help when there is no array to iterate.
+  // MEASURED with jq 1.8.1 on `{"jobs":[{"name":"integration (windows-11-arm)"}]}` -- the
+  // guardless expression exits 5 with "Cannot iterate over null", which under
+  // `set -euo pipefail` kills the step with a raw jq error and no `o3-witness:` verdict;
+  // with `select((.steps | type) == "array")` the absent, null and scalar shapes all exit 0
+  // empty and the walk reaches the absent-step diagnostic. The outer container is checked in
+  // its own `if` one line up; the inner one has to ride inside the pipeline, because there is
+  // no separate statement to hang it off.
   it('rejects a non-object JOB and a non-object STEP before indexing either', () => {
     expect(
       jobBlock('o3-witness'),
@@ -819,6 +830,25 @@ describe('ci.yml o3-witness job exists and keeps its shape (XOS-03, TEST-09)', (
         'in its `steps` array, and that is the second level this expression indexes.',
     ).toMatch(
       /\| \.steps\[\] \| select\(type == "object"\) \| select\(\.name ==/,
+    );
+
+    // The inner CONTAINER, which neither element guard covers. Asserted third and
+    // separately because it fails for a third reason: `null | .[]` and `"x" | .[]` both
+    // abort jq, so a job whose `steps` is absent kills the step under `set -euo pipefail`
+    // before either element guard is reached.
+    expect(
+      jobBlock('o3-witness'),
+      'The jobs-API step extraction must guard the `.steps` CONTAINER -- ' +
+        '`select((.steps | type) == "array")` -- before iterating it. The two element ' +
+        'guards do not cover this: a job object with NO `steps` key, or a null one, is what ' +
+        'a queued or partially-materialised leg returns, and `null | .[]` aborts jq. Under ' +
+        '`set -euo pipefail` that kills the step with a raw "Cannot iterate over null" and ' +
+        'no `o3-witness:` verdict at all -- the misattribution this extraction was split up ' +
+        'to prevent, arriving through the guard added to prevent it. With the container ' +
+        'guard such a job contributes nothing and the absent-step message reports the real ' +
+        'cause. It must come before `.steps[]`; after it, it never runs.',
+    ).toMatch(
+      /select\(\(\.steps \| type\) == "array"\) \| \.steps\[\] \| select\(type == "object"\)/,
     );
   });
 

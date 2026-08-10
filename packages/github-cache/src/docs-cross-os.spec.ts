@@ -105,41 +105,31 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
     ).toHaveLength(1);
   });
 
-  // An EXACT occurrence count, never a bare `toContain` and never a `>= 1` floor.
-  // MEASURED, not predicted: the command renders FOUR times in the doc -- ONCE PER
-  // TARGET in the copy-pasteable `nx.json` snippet, which shows the safe default's
-  // maximum on `build`, `test` AND `lint` (three), plus once as the bare command in
-  // the verification fence (the thing an adopter must RUN on each of their operating
-  // systems). Those are two different jobs and all four have to survive.
+  // ASSERTED BY PARSING THE FENCE, PER TARGET KEY -- not by counting occurrences in it.
   //
-  // The per-target repetition is not incidental, it is the CLAIM. Section 1's heading
-  // says "declare the discriminator on every cacheable target", and the snippet under
-  // it used to declare the discriminator on exactly ONE target -- `integration`, this
-  // repository's EARNED EXCEPTION -- so the only copy-pasteable artifact in the
-  // document demonstrated the opposite of its own heading (CR-01). Collapsing the
-  // snippet back to one target would restore that defect, and this count is what
-  // catches it: a count of 2 means the snippet went back to naming one target.
+  // WHAT THE CLAIM IS, and it is unchanged. Section 1's heading says "declare the
+  // discriminator on every cacheable target", and the snippet under it used to declare the
+  // discriminator on exactly ONE target -- `integration`, this repository's EARNED EXCEPTION --
+  // so the only copy-pasteable artifact in the document demonstrated the opposite of its own
+  // heading (CR-01). The per-target repetition is not incidental, it IS the claim.
   //
-  // A `>= 1` floor is exactly as HALF-LOCKING as the `toContain` it replaced: it is
-  // satisfied by the first occurrence, so deleting the verification fence -- the half
-  // that closes T-12-09, an adopter's discriminator silently collapsing to one value
-  // with no gate of ours to catch it -- would leave this guard green (WR-09).
+  // WHY THE COUNT WAS INSUFFICIENT, which is the correction. This clause used to assert
+  // `snippet.split(command).length - 1 === 3` under a title claiming once per target. A count
+  // of three over the fence BODY as a flat string never proved three DIFFERENT target keys:
+  // deleting the `lint` key and adding a second runtime input under `build` keeps the total at
+  // three, so the exact shape CR-01 was about is SATISFIABLE BY DELETION while the guard stays
+  // green. That is this repository's own recorded lesson -- a green structural guard sitting
+  // over a wrong payload -- reproduced in the guard written to close it. A cardinality gate
+  // cannot localize; the real invariant is one level down and the fence is valid JSON, so it is
+  // trivially reachable.
   //
-  // `split(x).length - 1` counts NON-OVERLAPPING occurrences, which is the right
-  // counter here: this command cannot overlap itself.
+  // THE EXACT-COUNT DISCIPLINE IS PRESERVED, not relaxed into a floor. `toEqual([command])`
+  // per target pins BOTH presence and exactly-once, so a doubled entry under one target now
+  // fails on that target's own clause, and a deleted target fails on the key set. A `toContain`
+  // here would be the `>= 1` floor this file already rejects once.
   //
-  // COUNTED PER FENCE, not over the whole document, and that is the correction. A
-  // single whole-document count of 4 cannot LOCALIZE: deleting the adopter-facing
-  // verification fence and adding a fourth target to the config snippet leaves the
-  // total at 4, so the number survives and the reader-facing instruction does not.
-  // Two different jobs need two different assertions.
-  //
-  // The snippet keeps an EXACT count rather than a floor: a green structural guard
-  // sitting over a wrong payload is the failure this repository has already paid for
-  // once. A FIFTH occurrence in the snippet fails too, deliberately. If the doc
-  // legitimately grows another target, RE-MEASURE and update this expected count HERE
-  // in the SAME commit; do not relax it back to a floor to make the suite green.
-  const SNIPPET_DISCRIMINATOR_SITES = 3;
+  // If the doc legitimately grows another target, add it to the expected KEY SET here in the
+  // SAME commit. Do not relax either clause to make the suite green.
 
   /** Every fenced block opened with the given info string, bodies only. */
   function fencedBodies(infoString: string): string[] {
@@ -161,10 +151,26 @@ describe('docs/cross-os.md renders the discriminator nx.json declares (D-15)', (
       `docs/cross-os.md must carry exactly one \`\`\`json fence -- the copy-pasteable nx.json snippet. ${REWORD_ADVICE}`,
     ).toBe(1);
 
+    const snippet = JSON.parse(snippets[0]) as {
+      targetDefaults: Record<string, { inputs?: readonly unknown[] }>;
+    };
+
+    // THE TARGET KEYS THEMSELVES, by set equality. This is what the occurrence count could
+    // not do: a snippet that dropped `lint` and doubled `build` kept the count at three.
     expect(
-      snippets[0].split(command).length - 1,
-      `The copy-pasteable nx.json snippet in docs/cross-os.md must render the discriminator nx.json declares (\`${command}\`) ONCE PER TARGET -- build, test and lint. D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. A count of 1 means the snippet collapsed back to ONE target, which is CR-01: section 1's only copy-pasteable artifact demonstrating the opposite of section 1's heading. ${REWORD_ADVICE}`,
-    ).toBe(SNIPPET_DISCRIMINATOR_SITES);
+      Object.keys(snippet.targetDefaults).sort(),
+      `The copy-pasteable nx.json snippet in docs/cross-os.md must declare targetDefaults for exactly build, test and lint -- section 1's heading is "declare the discriminator on every cacheable target", and a snippet naming fewer targets demonstrates the opposite of its own heading (CR-01). ${REWORD_ADVICE}`,
+    ).toEqual(['build', 'lint', 'test']);
+
+    // EACH key carries the discriminator, EXACTLY ONCE. `toEqual([command])` rather than
+    // `toContain` so both presence and cardinality are pinned per target, which keeps the
+    // exact-count discipline while moving it to a level that can localize.
+    for (const target of ['build', 'test', 'lint']) {
+      expect(
+        runtimeInputsOf(snippet.targetDefaults[target].inputs),
+        `The \`${target}\` target in docs/cross-os.md's nx.json snippet must carry the discriminator nx.json declares (\`${command}\`) exactly once. D-15 makes the DOCUMENTED command and the CONFIGURED command one string, single-sourced, so widening or re-spelling the config trips this until the doc is updated. Take the literal FROM nx.json; do not retype it. ${REWORD_ADVICE}`,
+      ).toEqual([command]);
+    }
   });
 
   it('the cross-os doc renders that exact command in the adopter-facing verification fence', () => {

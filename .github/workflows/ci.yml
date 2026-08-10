@@ -23,12 +23,29 @@ permissions:
 # only pull-request runs, which write nothing outside their own merge-ref cache scope,
 # are superseded.
 #
-# READ THAT ENUMERATION PRECISELY: since CR-18, `dogfood-seed` PUTs on same-repo PR runs
-# too, so the cancellable runs are exactly the ones that now perform that PUT. It is safe,
-# and the reason is recorded here rather than left to be re-derived: the seed key is
-# nx-cache-bead<GITHUB_RUN_ID>, so a torn PR-side upload leaves at most an absent entry
-# under a run id that is never reused. There is no first-write-wins filename arbitration to
-# poison -- that hazard belongs to the Release-asset uploads, which stay push-only.
+# A PR RUN DOES WRITE CACHE ENTRIES, and the premise above must not be read as saying
+# otherwise. Two families, both cancellable, and neither is poisonable:
+#
+#   - `dogfood-seed`'s run-id-keyed seed. Since CR-18 it PUTs on same-repo PR runs too. The
+#     key is nx-cache-bead<GITHUB_RUN_ID>, so a torn upload leaves at most an ABSENT entry
+#     under a run id that is never reused.
+#   - The TASK-HASH-keyed entries the sidecar-wired jobs write. Any job that runs the
+#     sidecar without `CACHE_READ_ONLY` saves its own task outputs, and the non-push-gated
+#     ones do that on PR runs. This file states the same fact where it matters most, in
+#     `publish`'s own note that build, typecheck, test and integration "now route their
+#     real Nx tasks through the sidecar, so a default-branch push writes real
+#     `nx-cache-<taskhash>` entries too".
+#
+# A torn task-hash entry is a MISS on the next read, not a poisoned one: the Actions cache
+# rejects an incomplete upload rather than serving a partial archive, and a PR run writes
+# into its own merge-ref scope, which cannot be read from `main`. So the CONCLUSION stands
+# -- the worst outcome of cancelling a PR run is a cache MISS -- and only the enumeration of
+# what a PR run writes needed correcting.
+#
+# What makes the push side different is not that it writes and the PR side does not. It is
+# FIRST-WRITE-WINS FILENAME ARBITRATION on Release assets: a torn asset is permanent until
+# the retention window rolls it off, and nothing overwrites it. That hazard is push-only,
+# which is why push runs queue.
 #
 # The group is keyed on `github.ref` so the two event kinds cannot share a group either.
 concurrency:

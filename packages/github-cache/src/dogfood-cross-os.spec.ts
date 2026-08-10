@@ -1248,6 +1248,40 @@ const strippedRunnerLines = codeLines.filter((line) =>
   line.includes('windows-11-arm'),
 ).length;
 
+/**
+ * The whole count pipeline as ONE needle, parameterised by the leg's own log name.
+ *
+ * WHY A COMPOSED NEEDLE AND NOT ONLY THE SPLIT TOKENS. De-byte-pinning the count clauses
+ * replaced two whole-line pins with five INDEPENDENT token assertions over the whole job block,
+ * and that lost a property the whole-line pins had: each token became satisfiable from a
+ * DIFFERENT line. `toContain(log)` in particular is satisfied three times over in every one of
+ * these blocks -- the tee'd step, the count line and the `::error::` message all name the same
+ * log -- so the tokens could not say that the count reads THIS leg's log, while the clause's own
+ * comment claimed exactly that. The split assertions are kept for ATTRIBUTION (a partial revert
+ * reddens the token it removed); this one adds back the COMPOSITION.
+ *
+ * NOT A BYTE-PIN, which is the constraint that killed the pins this replaces. There is no
+ * leading-indent anchor and no `$`, and every gap between tokens is `\s*` -- so reindenting the
+ * run body, or rewrapping it, leaves this green. What it cannot survive is the tokens being
+ * split across separate commands or the log name changing, which is the point.
+ */
+function countPipelineNeedle(log: string): RegExp {
+  return new RegExp(
+    [
+      'count=\\$\\(\\{',
+      "grep -a -o -F '\\[remote cache\\]'",
+      log.replaceAll('.', '\\.'),
+      '\\|\\| true;',
+      '\\}',
+      '\\|',
+      'wc -l',
+      '\\|',
+      "tr -d '\\[:space:\\]'",
+      '\\)',
+    ].join('\\s*'),
+  );
+}
+
 function windowsLegReasons(
   leg: string,
   target: string,
@@ -1300,7 +1334,13 @@ function windowsLegReasons(
       'so a copy-paste leaving the wrong target behind is the single most likely error in ' +
       'authoring them -- and nothing else in this file would catch it. The job would pass, ' +
       `one target would run twice, and ${target} would simply never run on Windows. ` +
-      RENAME_NOTE,
+      'THE TWO EXCLUSIONS ARE DE-ANCHORED (`\\s+`, not a counted indent) WHILE THE POSITIVE ' +
+      'KEEPS ITS INDENT: a byte-pinned NEGATIVE is the dangerous direction, because it goes ' +
+      'VACUOUS rather than red. Reindent this run body, or nest the invocation one level deeper ' +
+      'inside a conditional step, and a counted-indent `not.toMatch` stops matching for the ' +
+      'wrong reason -- so the leg could gain a second target and the exclusivity claim would ' +
+      'stay green. A positive byte-pin at least reddens loudly on the same edit. The exclusions ' +
+      `read this job block alone, so \`\\s+\` does not widen them across jobs. ${RENAME_NOTE}`,
     sidecar:
       `${leg} must carry the sidecar dogfood block -- \`- uses: ./start-cache-server\` and its ` +
       '`- cancel: cache-server` teardown. Without the sidecar the leg has no remote cache ' +
@@ -1384,6 +1424,18 @@ function windowsLegReasons(
       'any other clause on this leg reads either line, so losing them leaves a gate that still ' +
       'LOOKS present and can be satisfied by an encoding artefact. The correct response to a ' +
       `red here is to RESTORE the guard, never to drop it as noise. ${RENAME_NOTE}`,
+    countPipeline:
+      `${leg}'s [remote cache] count must be built in ONE pipeline that reads ${target}-nx.log ` +
+      "-- this leg's own tee'd log. The sibling clauses assert the same tokens SEPARATELY over " +
+      'the whole job block, which is deliberate (a partial revert then reddens the token it ' +
+      'removed) but says nothing about locality: the log name alone appears three times in this ' +
+      'block, so `-a`, the log name, `wc -l` and the shape guard can each be satisfied from a ' +
+      'different line. The concrete regression is the count line copy-pasted between these three ' +
+      "near-identical legs and left reading ANOTHER leg's log: every split token stays green, " +
+      'and the gate then evaluates a log that does not exist on this leg. That outcome is ' +
+      'fail-CLOSED today (`|| true` yields 0 and the floor rejects it), so this clause is about ' +
+      'the gate being READ END TO END rather than about an open hole. NOT byte-pinned: no ' +
+      `indent anchor and \`\\s*\` between every token, so a reindent stays green. ${RENAME_NOTE}`,
     backendToken:
       `${leg} must pass GITHUB_TOKEN into the sidecar step's own \`env:\`, and this clause is ` +
       'SEPARATE from the cacheClient one above because the two produce the SAME green-having-' +
@@ -1423,6 +1475,7 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     floor,
     log,
     countShape,
+    countPipeline,
     backendToken,
     noIf,
   } = windowsLegReasons('build-windows', 'build', 'build', 1);
@@ -1474,8 +1527,8 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     expect(block, ownTarget).toMatch(
       /^ {10}npm run build 2>&1 \| tee build-nx\.log$/m,
     );
-    expect(block, ownTarget).not.toMatch(/^ {10}npm run typecheck 2>&1/m);
-    expect(block, ownTarget).not.toMatch(/^ {10}npm run test 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^\s+npm run typecheck 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^\s+npm run test 2>&1/m);
   });
 
   it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
@@ -1658,7 +1711,10 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     // the file as binary, prints one summary line instead of the matches, and `wc -l`
     // returns 1 no matter how many restores happened.
     expect(block, countShape).toMatch(/grep -a -o -F '\[remote cache\]'/);
-    // Counted out of THIS leg's own log, derived from the leg parameter.
+    // The log name appears, derived from the leg parameter. On its OWN this says nothing about
+    // locality: the name is present three times in every one of these blocks (the tee'd step,
+    // the count line, the `::error::` message). The composition clause below is what binds it
+    // to the count.
     expect(block, countShape).toContain(log);
     // `wc -l` over `-o` matches, then `tr` strips the padding some `wc` builds emit --
     // without which the all-decimal guard below rejects a correct count.
@@ -1671,6 +1727,11 @@ describe('ci.yml build-windows job exists and keeps its shape (XOS-04, XOS-08)',
     expect(block, countShape).toMatch(
       /''\|\*\[!0-9\]\*\)\n[^\n]*\n\s*exit 1$/m,
     );
+
+    // THE TOKENS MUST COMPOSE, which none of the assertions above says. Each is satisfiable
+    // from a different line of the block; this one requires them to be ONE pipeline reading
+    // THIS leg's own log. No indentation anchor, so a reindent is still green.
+    expect(block, countPipeline).toMatch(countPipelineNeedle(log));
   });
 
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
@@ -1703,6 +1764,7 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     floor,
     log,
     countShape,
+    countPipeline,
     backendToken,
     noIf,
   } = windowsLegReasons('typecheck-windows', 'typecheck', 'typecheck', 2);
@@ -1739,8 +1801,8 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     expect(block, ownTarget).toMatch(
       /^ {10}npm run typecheck 2>&1 \| tee typecheck-nx\.log$/m,
     );
-    expect(block, ownTarget).not.toMatch(/^ {10}npm run build 2>&1/m);
-    expect(block, ownTarget).not.toMatch(/^ {10}npm run test 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^\s+npm run build 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^\s+npm run test 2>&1/m);
   });
 
   it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
@@ -1831,7 +1893,10 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     // the file as binary, prints one summary line instead of the matches, and `wc -l`
     // returns 1 no matter how many restores happened.
     expect(block, countShape).toMatch(/grep -a -o -F '\[remote cache\]'/);
-    // Counted out of THIS leg's own log, derived from the leg parameter.
+    // The log name appears, derived from the leg parameter. On its OWN this says nothing about
+    // locality: the name is present three times in every one of these blocks (the tee'd step,
+    // the count line, the `::error::` message). The composition clause below is what binds it
+    // to the count.
     expect(block, countShape).toContain(log);
     // `wc -l` over `-o` matches, then `tr` strips the padding some `wc` builds emit --
     // without which the all-decimal guard below rejects a correct count.
@@ -1844,6 +1909,11 @@ describe('ci.yml typecheck-windows job exists and keeps its shape (XOS-04, XOS-0
     expect(block, countShape).toMatch(
       /''\|\*\[!0-9\]\*\)\n[^\n]*\n\s*exit 1$/m,
     );
+
+    // THE TOKENS MUST COMPOSE, which none of the assertions above says. Each is satisfiable
+    // from a different line of the block; this one requires them to be ONE pipeline reading
+    // THIS leg's own log. No indentation anchor, so a reindent is still green.
+    expect(block, countPipeline).toMatch(countPipelineNeedle(log));
   });
 
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
@@ -1876,6 +1946,7 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     floor,
     log,
     countShape,
+    countPipeline,
     backendToken,
     noIf,
   } = windowsLegReasons('test-windows', 'test', 'test', 1);
@@ -1912,8 +1983,8 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     expect(block, ownTarget).toMatch(
       /^ {10}npm run test 2>&1 \| tee test-nx\.log$/m,
     );
-    expect(block, ownTarget).not.toMatch(/^ {10}npm run build 2>&1/m);
-    expect(block, ownTarget).not.toMatch(/^ {10}npm run typecheck 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^\s+npm run build 2>&1/m);
+    expect(block, ownTarget).not.toMatch(/^\s+npm run typecheck 2>&1/m);
   });
 
   it('carries the sidecar dogfood block, without which it cannot exhibit a HIT', () => {
@@ -1997,7 +2068,10 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     // the file as binary, prints one summary line instead of the matches, and `wc -l`
     // returns 1 no matter how many restores happened.
     expect(block, countShape).toMatch(/grep -a -o -F '\[remote cache\]'/);
-    // Counted out of THIS leg's own log, derived from the leg parameter.
+    // The log name appears, derived from the leg parameter. On its OWN this says nothing about
+    // locality: the name is present three times in every one of these blocks (the tee'd step,
+    // the count line, the `::error::` message). The composition clause below is what binds it
+    // to the count.
     expect(block, countShape).toContain(log);
     // `wc -l` over `-o` matches, then `tr` strips the padding some `wc` builds emit --
     // without which the all-decimal guard below rejects a correct count.
@@ -2010,6 +2084,11 @@ describe('ci.yml test-windows job exists and keeps its shape (XOS-04, XOS-08)', 
     expect(block, countShape).toMatch(
       /''\|\*\[!0-9\]\*\)\n[^\n]*\n\s*exit 1$/m,
     );
+
+    // THE TOKENS MUST COMPOSE, which none of the assertions above says. Each is satisfiable
+    // from a different line of the block; this one requires them to be ONE pipeline reading
+    // THIS leg's own log. No indentation anchor, so a reindent is still green.
+    expect(block, countPipeline).toMatch(countPipelineNeedle(log));
   });
 
   it('passes GITHUB_TOKEN into the sidecar step, without which the backend is a memory stub', () => {
